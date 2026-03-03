@@ -54,7 +54,7 @@ class AudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             .when(
               data: (settings) => settings.continuePlays,
               loading: () => false,
-              error: (_, __) => false,
+              error: (_, _) => false,
             );
 
         if (continuePlays && _queueIndex == _queue.length - 1) {

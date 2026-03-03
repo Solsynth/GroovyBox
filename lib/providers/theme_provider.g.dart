@@ -10,11 +10,11 @@ part of 'theme_provider.dart';
 // ignore_for_file: type=lint, type=warning
 
 @ProviderFor(ThemeNotifier)
-const themeProvider = ThemeNotifierProvider._();
+final themeProvider = ThemeNotifierProvider._();
 
 final class ThemeNotifierProvider
     extends $NotifierProvider<ThemeNotifier, ThemeMode> {
-  const ThemeNotifierProvider._()
+  ThemeNotifierProvider._()
     : super(
         from: null,
         argument: null,
@@ -48,7 +48,6 @@ abstract class _$ThemeNotifier extends $Notifier<ThemeMode> {
   @$mustCallSuper
   @override
   void runBuild() {
-    final created = build();
     final ref = this.ref as $Ref<ThemeMode, ThemeMode>;
     final element =
         ref.element
@@ -58,16 +57,16 @@ abstract class _$ThemeNotifier extends $Notifier<ThemeMode> {
               Object?,
               Object?
             >;
-    element.handleValue(ref, created);
+    element.handleCreate(ref, build);
   }
 }
 
 @ProviderFor(SeedColorNotifier)
-const seedColorProvider = SeedColorNotifierProvider._();
+final seedColorProvider = SeedColorNotifierProvider._();
 
 final class SeedColorNotifierProvider
     extends $NotifierProvider<SeedColorNotifier, Color> {
-  const SeedColorNotifierProvider._()
+  SeedColorNotifierProvider._()
     : super(
         from: null,
         argument: null,
@@ -101,7 +100,6 @@ abstract class _$SeedColorNotifier extends $Notifier<Color> {
   @$mustCallSuper
   @override
   void runBuild() {
-    final created = build();
     final ref = this.ref as $Ref<Color, Color>;
     final element =
         ref.element
@@ -111,17 +109,17 @@ abstract class _$SeedColorNotifier extends $Notifier<Color> {
               Object?,
               Object?
             >;
-    element.handleValue(ref, created);
+    element.handleCreate(ref, build);
   }
 }
 
 @ProviderFor(currentTheme)
-const currentThemeProvider = CurrentThemeProvider._();
+final currentThemeProvider = CurrentThemeProvider._();
 
 final class CurrentThemeProvider
     extends $FunctionalProvider<ThemeData, ThemeData, ThemeData>
     with $Provider<ThemeData> {
-  const CurrentThemeProvider._()
+  CurrentThemeProvider._()
     : super(
         from: null,
         argument: null,
@@ -157,12 +155,12 @@ final class CurrentThemeProvider
 String _$currentThemeHash() => r'29c9080ae24ba144ebb6e0aac60b16bebcc8a919';
 
 @ProviderFor(lightTheme)
-const lightThemeProvider = LightThemeProvider._();
+final lightThemeProvider = LightThemeProvider._();
 
 final class LightThemeProvider
     extends $FunctionalProvider<ThemeData, ThemeData, ThemeData>
     with $Provider<ThemeData> {
-  const LightThemeProvider._()
+  LightThemeProvider._()
     : super(
         from: null,
         argument: null,
@@ -198,12 +196,12 @@ final class LightThemeProvider
 String _$lightThemeHash() => r'be4e02c30ddc60a134ed2a1f7124caf162894889';
 
 @ProviderFor(darkTheme)
-const darkThemeProvider = DarkThemeProvider._();
+final darkThemeProvider = DarkThemeProvider._();
 
 final class DarkThemeProvider
     extends $FunctionalProvider<ThemeData, ThemeData, ThemeData>
     with $Provider<ThemeData> {
-  const DarkThemeProvider._()
+  DarkThemeProvider._()
     : super(
         from: null,
         argument: null,

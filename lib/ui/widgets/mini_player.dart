@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
 import 'package:groovybox/data/db.dart' as db;
@@ -174,7 +175,7 @@ class _MobileMiniPlayer extends HookConsumerWidget {
                               overflow: TextOverflow.ellipsis,
                             ),
                             Text(
-                              currentMetadata?.artist ?? 'Unknown Artist',
+                              currentMetadata?.artist ?? 'unknownArtist'.tr(),
                               style: Theme.of(context).textTheme.bodySmall,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -408,7 +409,7 @@ class _DesktopMiniPlayer extends HookConsumerWidget {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   Text(
-                                    currentMetadata?.artist ?? 'Unknown Artist',
+                                    currentMetadata?.artist ?? 'unknownArtist'.tr(),
                                     style: Theme.of(
                                       context,
                                     ).textTheme.bodySmall,
@@ -604,7 +605,7 @@ class _DesktopMiniPlayer extends HookConsumerWidget {
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
               child: Row(
                 children: [
-                  const Text('Queue', style: TextStyle(fontSize: 20)),
+                  Text('queue'.tr(), style: TextStyle(fontSize: 20)),
                   const Spacer(),
                   IconButton(
                     icon: const Icon(Symbols.close),
@@ -621,7 +622,7 @@ class _DesktopMiniPlayer extends HookConsumerWidget {
                 builder: (context, snapshot) {
                   final playlist = snapshot.data;
                   if (playlist == null || playlist.medias.isEmpty) {
-                    return const Center(child: Text('No tracks in queue'));
+                    return Center(child: Text('noTracksInQueue'.tr()));
                   }
 
                   return ReorderableListView.builder(
@@ -677,8 +678,8 @@ class _DesktopMiniPlayer extends HookConsumerWidget {
                               path: trackPath,
                               title: Uri.parse(media.uri).pathSegments.last,
                               artist:
-                                  media.extras?['artist'] as String? ??
-                                  'Unknown Artist',
+                                          media.extras?['artist'] as String? ??
+                                          'unknownArtist'.tr(),
                               album: media.extras?['album'] as String?,
                               duration: null,
                               artUri: null,
@@ -727,7 +728,7 @@ class _DesktopMiniPlayer extends HookConsumerWidget {
                                       ).pathSegments.last,
                                       artist:
                                           media.extras?['artist'] as String? ??
-                                          'Unknown Artist',
+                                          'unknownArtist'.tr(),
                                       album: media.extras?['album'] as String?,
                                       duration: null,
                                       artUri: null,
@@ -756,3 +757,5 @@ class _DesktopMiniPlayer extends HookConsumerWidget {
     );
   }
 }
+
+

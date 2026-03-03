@@ -10,11 +10,11 @@ part of 'settings_provider.dart';
 // ignore_for_file: type=lint, type=warning
 
 @ProviderFor(SettingsNotifier)
-const settingsProvider = SettingsNotifierProvider._();
+final settingsProvider = SettingsNotifierProvider._();
 
 final class SettingsNotifierProvider
     extends $AsyncNotifierProvider<SettingsNotifier, SettingsState> {
-  const SettingsNotifierProvider._()
+  SettingsNotifierProvider._()
     : super(
         from: null,
         argument: null,
@@ -33,14 +33,13 @@ final class SettingsNotifierProvider
   SettingsNotifier create() => SettingsNotifier();
 }
 
-String _$settingsNotifierHash() => r'7c3a92d9ac94e175b79a3a4485bd9bbcc1e860f9';
+String _$settingsNotifierHash() => r'6825709a9c6ccdb5b2402aac1c75d742f5344527';
 
 abstract class _$SettingsNotifier extends $AsyncNotifier<SettingsState> {
   FutureOr<SettingsState> build();
   @$mustCallSuper
   @override
   void runBuild() {
-    final created = build();
     final ref = this.ref as $Ref<AsyncValue<SettingsState>, SettingsState>;
     final element =
         ref.element
@@ -50,16 +49,16 @@ abstract class _$SettingsNotifier extends $AsyncNotifier<SettingsState> {
               Object?,
               Object?
             >;
-    element.handleValue(ref, created);
+    element.handleCreate(ref, build);
   }
 }
 
 @ProviderFor(ImportModeNotifier)
-const importModeProvider = ImportModeNotifierProvider._();
+final importModeProvider = ImportModeNotifierProvider._();
 
 final class ImportModeNotifierProvider
     extends $NotifierProvider<ImportModeNotifier, ImportMode> {
-  const ImportModeNotifierProvider._()
+  ImportModeNotifierProvider._()
     : super(
         from: null,
         argument: null,
@@ -94,7 +93,6 @@ abstract class _$ImportModeNotifier extends $Notifier<ImportMode> {
   @$mustCallSuper
   @override
   void runBuild() {
-    final created = build();
     final ref = this.ref as $Ref<ImportMode, ImportMode>;
     final element =
         ref.element
@@ -104,16 +102,16 @@ abstract class _$ImportModeNotifier extends $Notifier<ImportMode> {
               Object?,
               Object?
             >;
-    element.handleValue(ref, created);
+    element.handleCreate(ref, build);
   }
 }
 
 @ProviderFor(AutoScanNotifier)
-const autoScanProvider = AutoScanNotifierProvider._();
+final autoScanProvider = AutoScanNotifierProvider._();
 
 final class AutoScanNotifierProvider
     extends $NotifierProvider<AutoScanNotifier, bool> {
-  const AutoScanNotifierProvider._()
+  AutoScanNotifierProvider._()
     : super(
         from: null,
         argument: null,
@@ -147,7 +145,6 @@ abstract class _$AutoScanNotifier extends $Notifier<bool> {
   @$mustCallSuper
   @override
   void runBuild() {
-    final created = build();
     final ref = this.ref as $Ref<bool, bool>;
     final element =
         ref.element
@@ -157,16 +154,16 @@ abstract class _$AutoScanNotifier extends $Notifier<bool> {
               Object?,
               Object?
             >;
-    element.handleValue(ref, created);
+    element.handleCreate(ref, build);
   }
 }
 
 @ProviderFor(WatchForChangesNotifier)
-const watchForChangesProvider = WatchForChangesNotifierProvider._();
+final watchForChangesProvider = WatchForChangesNotifierProvider._();
 
 final class WatchForChangesNotifierProvider
     extends $NotifierProvider<WatchForChangesNotifier, bool> {
-  const WatchForChangesNotifierProvider._()
+  WatchForChangesNotifierProvider._()
     : super(
         from: null,
         argument: null,
@@ -201,7 +198,6 @@ abstract class _$WatchForChangesNotifier extends $Notifier<bool> {
   @$mustCallSuper
   @override
   void runBuild() {
-    final created = build();
     final ref = this.ref as $Ref<bool, bool>;
     final element =
         ref.element
@@ -211,17 +207,17 @@ abstract class _$WatchForChangesNotifier extends $Notifier<bool> {
               Object?,
               Object?
             >;
-    element.handleValue(ref, created);
+    element.handleCreate(ref, build);
   }
 }
 
 @ProviderFor(DefaultPlayerScreenNotifier)
-const defaultPlayerScreenProvider = DefaultPlayerScreenNotifierProvider._();
+final defaultPlayerScreenProvider = DefaultPlayerScreenNotifierProvider._();
 
 final class DefaultPlayerScreenNotifierProvider
     extends
         $NotifierProvider<DefaultPlayerScreenNotifier, DefaultPlayerScreen> {
-  const DefaultPlayerScreenNotifierProvider._()
+  DefaultPlayerScreenNotifierProvider._()
     : super(
         from: null,
         argument: null,
@@ -257,7 +253,6 @@ abstract class _$DefaultPlayerScreenNotifier
   @$mustCallSuper
   @override
   void runBuild() {
-    final created = build();
     final ref = this.ref as $Ref<DefaultPlayerScreen, DefaultPlayerScreen>;
     final element =
         ref.element
@@ -267,16 +262,16 @@ abstract class _$DefaultPlayerScreenNotifier
               Object?,
               Object?
             >;
-    element.handleValue(ref, created);
+    element.handleCreate(ref, build);
   }
 }
 
 @ProviderFor(LyricsModeNotifier)
-const lyricsModeProvider = LyricsModeNotifierProvider._();
+final lyricsModeProvider = LyricsModeNotifierProvider._();
 
 final class LyricsModeNotifierProvider
     extends $NotifierProvider<LyricsModeNotifier, LyricsMode> {
-  const LyricsModeNotifierProvider._()
+  LyricsModeNotifierProvider._()
     : super(
         from: null,
         argument: null,
@@ -311,7 +306,6 @@ abstract class _$LyricsModeNotifier extends $Notifier<LyricsMode> {
   @$mustCallSuper
   @override
   void runBuild() {
-    final created = build();
     final ref = this.ref as $Ref<LyricsMode, LyricsMode>;
     final element =
         ref.element
@@ -321,16 +315,16 @@ abstract class _$LyricsModeNotifier extends $Notifier<LyricsMode> {
               Object?,
               Object?
             >;
-    element.handleValue(ref, created);
+    element.handleCreate(ref, build);
   }
 }
 
 @ProviderFor(ContinuePlaysNotifier)
-const continuePlaysProvider = ContinuePlaysNotifierProvider._();
+final continuePlaysProvider = ContinuePlaysNotifierProvider._();
 
 final class ContinuePlaysNotifierProvider
     extends $NotifierProvider<ContinuePlaysNotifier, bool> {
-  const ContinuePlaysNotifierProvider._()
+  ContinuePlaysNotifierProvider._()
     : super(
         from: null,
         argument: null,
@@ -365,7 +359,6 @@ abstract class _$ContinuePlaysNotifier extends $Notifier<bool> {
   @$mustCallSuper
   @override
   void runBuild() {
-    final created = build();
     final ref = this.ref as $Ref<bool, bool>;
     final element =
         ref.element
@@ -375,6 +368,6 @@ abstract class _$ContinuePlaysNotifier extends $Notifier<bool> {
               Object?,
               Object?
             >;
-    element.handleValue(ref, created);
+    element.handleCreate(ref, build);
   }
 }

@@ -48,7 +48,7 @@ class TrackTile extends StatelessWidget {
         leading: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ?leading,
+            if (leading != null) leading!,
             AspectRatio(
               aspectRatio: 1,
               child: UniversalImage(
@@ -73,11 +73,11 @@ class TrackTile extends StatelessWidget {
           ),
         ),
         subtitle: Text(
-          '${track.artist ?? 'Unknown Artist'} • ${_formatDuration(track.duration)}',
+          "${track.artist ?? 'Unknown Artist'} • ${_formatDuration(track.duration)}",
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
           ),
         ),
         trailing: showTrailingIcon

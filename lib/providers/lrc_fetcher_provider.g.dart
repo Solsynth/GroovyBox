@@ -10,11 +10,11 @@ part of 'lrc_fetcher_provider.dart';
 // ignore_for_file: type=lint, type=warning
 
 @ProviderFor(LyricsFetcher)
-const lyricsFetcherProvider = LyricsFetcherProvider._();
+final lyricsFetcherProvider = LyricsFetcherProvider._();
 
 final class LyricsFetcherProvider
     extends $NotifierProvider<LyricsFetcher, LyricsFetcherState> {
-  const LyricsFetcherProvider._()
+  LyricsFetcherProvider._()
     : super(
         from: null,
         argument: null,
@@ -48,7 +48,6 @@ abstract class _$LyricsFetcher extends $Notifier<LyricsFetcherState> {
   @$mustCallSuper
   @override
   void runBuild() {
-    final created = build();
     final ref = this.ref as $Ref<LyricsFetcherState, LyricsFetcherState>;
     final element =
         ref.element
@@ -58,6 +57,6 @@ abstract class _$LyricsFetcher extends $Notifier<LyricsFetcherState> {
               Object?,
               Object?
             >;
-    element.handleValue(ref, created);
+    element.handleCreate(ref, build);
   }
 }

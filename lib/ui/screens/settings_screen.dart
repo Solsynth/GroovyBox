@@ -1,6 +1,9 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
 import 'package:groovybox/data/track_repository.dart';
+
+
 import 'package:groovybox/providers/settings_provider.dart';
 import 'package:groovybox/providers/watch_folder_provider.dart';
 import 'package:groovybox/providers/remote_provider.dart';
@@ -9,7 +12,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:styled_widget/styled_widget.dart';
 
-class SettingsScreen extends ConsumerWidget {
+class SettingsScreen extends HookConsumerWidget {
   const SettingsScreen({super.key});
 
   @override
@@ -19,7 +22,7 @@ class SettingsScreen extends ConsumerWidget {
     final remoteProvidersAsync = ref.watch(remoteProvidersProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: Text('settingsTitle'.tr())),
       body: settingsAsync.when(
         data: (settings) => Align(
           alignment: Alignment.topCenter,
@@ -37,17 +40,17 @@ class SettingsScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Auto Scan',
-                          style: TextStyle(
+                        Text(
+                          'autoScan'.tr(),
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
                         ).padding(horizontal: 16, top: 16),
                         SwitchListTile(
-                          title: const Text('Auto-scan music libraries'),
-                          subtitle: const Text(
-                            'Automatically scan music libraries for new music files',
+                          title: Text('autoScanMusicLibraries'.tr()),
+                          subtitle: Text(
+                            'autoScanDescription'.tr(),
                           ),
                           shape: const RoundedRectangleBorder(
                             borderRadius: BorderRadius.all(Radius.circular(8)),
@@ -58,9 +61,9 @@ class SettingsScreen extends ConsumerWidget {
                           },
                         ),
                         SwitchListTile(
-                          title: const Text('Watch for changes'),
-                          subtitle: const Text(
-                            'Monitor music libraries for file changes',
+                          title: Text('watchForChanges'.tr()),
+                          subtitle: Text(
+                            'watchForChangesDescription'.tr(),
                           ),
                           shape: const RoundedRectangleBorder(
                             borderRadius: BorderRadius.all(Radius.circular(8)),
@@ -89,9 +92,9 @@ class SettingsScreen extends ConsumerWidget {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text(
-                                  'Music Libraries',
-                                  style: TextStyle(
+                                Text(
+                                  'musicLibraries'.tr(),
+                                  style: const TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -102,7 +105,7 @@ class SettingsScreen extends ConsumerWidget {
                                       onPressed: () =>
                                           _scanLibraries(context, ref),
                                       icon: const Icon(Symbols.refresh),
-                                      tooltip: 'Scan Libraries',
+                                      tooltip: 'scanLibraries'.tr(),
                                       visualDensity: const VisualDensity(
                                         horizontal: -4,
                                         vertical: -4,
@@ -112,7 +115,7 @@ class SettingsScreen extends ConsumerWidget {
                                       onPressed: () =>
                                           _addMusicLibrary(context, ref),
                                       icon: const Icon(Symbols.add),
-                                      tooltip: 'Add Music Library',
+                                      tooltip: 'addMusicLibrary'.tr(),
                                       visualDensity: const VisualDensity(
                                         horizontal: -4,
                                         vertical: -4,
@@ -122,9 +125,9 @@ class SettingsScreen extends ConsumerWidget {
                                 ),
                               ],
                             ),
-                            const Text(
-                              'Add folder libraries to index music files. Files will be copied to internal storage for playback.',
-                              style: TextStyle(
+                            Text(
+                              'addMusicLibraryDescription'.tr(),
+                              style: const TextStyle(
                                 color: Colors.grey,
                                 fontSize: 14,
                               ),
@@ -133,9 +136,9 @@ class SettingsScreen extends ConsumerWidget {
                         ).padding(horizontal: 16, top: 16, bottom: 8),
                         watchFoldersAsync.when(
                           data: (folders) => folders.isEmpty
-                              ? const Text(
-                                  'No music libraries added yet.',
-                                  style: TextStyle(
+                              ? Text(
+                                  'noMusicLibrariesAdded'.tr(),
+                                  style: const TextStyle(
                                     color: Colors.grey,
                                     fontSize: 14,
                                   ),
@@ -207,9 +210,9 @@ class SettingsScreen extends ConsumerWidget {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text(
-                                  'Remote Providers',
-                                  style: TextStyle(
+                                Text(
+                                  'remoteProviders'.tr(),
+                                  style: const TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -220,7 +223,7 @@ class SettingsScreen extends ConsumerWidget {
                                       onPressed: () =>
                                           _indexRemoteProviders(context, ref),
                                       icon: const Icon(Symbols.refresh),
-                                      tooltip: 'Index Remote Providers',
+                                      tooltip: 'indexRemoteProviders'.tr(),
                                       visualDensity: const VisualDensity(
                                         horizontal: -4,
                                         vertical: -4,
@@ -230,7 +233,7 @@ class SettingsScreen extends ConsumerWidget {
                                       onPressed: () =>
                                           _addRemoteProvider(context, ref),
                                       icon: const Icon(Symbols.add),
-                                      tooltip: 'Add Remote Provider',
+                                      tooltip: 'addRemoteProvider'.tr(),
                                       visualDensity: const VisualDensity(
                                         horizontal: -4,
                                         vertical: -4,
@@ -240,9 +243,9 @@ class SettingsScreen extends ConsumerWidget {
                                 ),
                               ],
                             ),
-                            const Text(
-                              'Connect to remote media servers like Jellyfin to access your music library.',
-                              style: TextStyle(
+                            Text(
+                              'remoteProvidersDescription'.tr(),
+                              style: const TextStyle(
                                 color: Colors.grey,
                                 fontSize: 14,
                               ),
@@ -251,9 +254,9 @@ class SettingsScreen extends ConsumerWidget {
                         ).padding(horizontal: 16, top: 16, bottom: 8),
                         remoteProvidersAsync.when(
                           data: (providers) => providers.isEmpty
-                              ? const Text(
-                                  'No remote providers added yet.',
-                                  style: TextStyle(
+                              ? Text(
+                                  'noRemoteProvidersAdded'.tr(),
+                                  style: const TextStyle(
                                     color: Colors.grey,
                                     fontSize: 14,
                                   ),
@@ -319,21 +322,21 @@ class SettingsScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Player Settings',
-                          style: TextStyle(
+                        Text(
+                          'playerSettings'.tr(),
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
                         ).padding(horizontal: 16, top: 16),
-                        const Text(
-                          'Configure player behavior and display options.',
-                          style: TextStyle(color: Colors.grey, fontSize: 14),
+                        Text(
+                          'playerSettingsDescription'.tr(),
+                          style: const TextStyle(color: Colors.grey, fontSize: 14),
                         ).padding(horizontal: 16, bottom: 8),
                         ListTile(
-                          title: const Text('Default Player Screen'),
-                          subtitle: const Text(
-                            'Choose which screen to show when opening the player.',
+                          title: Text('defaultPlayerScreen'.tr()),
+                          subtitle: Text(
+                            'defaultPlayerScreenDescription'.tr(),
                           ),
                           trailing: DropdownButtonHideUnderline(
                             child: DropdownButton<DefaultPlayerScreen>(
@@ -357,9 +360,9 @@ class SettingsScreen extends ConsumerWidget {
                           ),
                         ),
                         ListTile(
-                          title: const Text('Lyrics Mode'),
-                          subtitle: const Text(
-                            'Choose how lyrics are displayed.',
+                          title: Text('lyricsMode'.tr()),
+                          subtitle: Text(
+                            'lyricsModeDescription'.tr(),
                           ),
                           trailing: DropdownButtonHideUnderline(
                             child: DropdownButton<LyricsMode>(
@@ -381,9 +384,9 @@ class SettingsScreen extends ConsumerWidget {
                           ),
                         ),
                         SwitchListTile(
-                          title: const Text('Continue Playing'),
-                          subtitle: const Text(
-                            'Continue playing music after the queue is empty',
+                          title: Text('continuePlaying'.tr()),
+                          subtitle: Text(
+                            'continuePlayingDescription'.tr(),
                           ),
                           shape: const RoundedRectangleBorder(
                             borderRadius: BorderRadius.all(Radius.circular(8)),
@@ -400,27 +403,77 @@ class SettingsScreen extends ConsumerWidget {
                     ),
                   ),
 
+                  // App Settings Section
+                  Card(
+                    margin: EdgeInsets.zero,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'appSettings'.tr(),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ).padding(horizontal: 16, top: 16),
+                        Text(
+                          'appSettingsDescription'.tr(),
+                          style: const TextStyle(color: Colors.grey, fontSize: 14),
+                        ).padding(horizontal: 16, bottom: 8),
+                        ListTile(
+                          title: Text('language'.tr()),
+                          subtitle: Text(
+                            'languageDescription'.tr(),
+                          ),
+                          trailing: DropdownButtonHideUnderline(
+                            child: DropdownButton<Locale>(
+                              value: context.locale,
+                              onChanged: (Locale? value) {
+                                if (value != null) {
+                                  EasyLocalization.of(context)!.setLocale(value);
+                                } else {
+                                  EasyLocalization.of(context)!.resetLocale();
+                                }
+                              },
+                              items: [
+                                DropdownMenuItem(
+                                  value: const Locale('en'),
+                                  child: Text('english'.tr()),
+                                ),
+                                DropdownMenuItem(
+                                  value: const Locale('zh'),
+                                  child: Text('chinese'.tr()),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                    ),
+                  ),
+
                   // Database Management Section
                   Card(
                     margin: EdgeInsets.zero,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Database Management',
-                          style: TextStyle(
+                        Text(
+                          'databaseManagement'.tr(),
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
                         ).padding(horizontal: 16, top: 16),
-                        const Text(
-                          'Manage your music database and cached files.',
-                          style: TextStyle(color: Colors.grey, fontSize: 14),
+                        Text(
+                          'databaseManagementDescription'.tr(),
+                          style: const TextStyle(color: Colors.grey, fontSize: 14),
                         ).padding(horizontal: 16, bottom: 8),
                         ListTile(
-                          title: const Text('Reset Track Database'),
-                          subtitle: const Text(
-                            'Remove all tracks from database and delete cached files. This action cannot be undone.',
+                          title: Text('resetTrackDatabase'.tr()),
+                          subtitle: Text(
+                            'resetTrackDatabaseDescription'.tr(),
                           ),
                           trailing: ElevatedButton(
                             onPressed: () => _resetTrackDatabase(context, ref),
@@ -428,7 +481,7 @@ class SettingsScreen extends ConsumerWidget {
                               backgroundColor: Colors.red,
                               foregroundColor: Colors.white,
                             ),
-                            child: const Text('Reset'),
+            child: Text('reset'.tr()),
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -457,14 +510,12 @@ class SettingsScreen extends ConsumerWidget {
           await service.addWatchFolder(path, recursive: true);
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Added music library: $path')),
+              SnackBar(content: Text('addedMusicLibrary'.tr(args: [path]))),
             );
           }
         } catch (e) {
           if (context.mounted) {
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text('Error adding library: $e')));
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('errorAddingLibrary'.tr(args: [e.toString()]))));
           }
         }
       }
@@ -477,14 +528,14 @@ class SettingsScreen extends ConsumerWidget {
       await service.scanWatchFolders();
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Libraries scanned successfully')),
+          SnackBar(content: Text('librariesScannedSuccessfully'.tr())),
         );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Error scanning libraries: $e')));
+        ).showSnackBar(SnackBar(content: Text('errorScanningLibraries'.tr(args: [e.toString()]))));
       }
     }
   }
@@ -501,8 +552,8 @@ class SettingsScreen extends ConsumerWidget {
           if (activeProviders.isEmpty) {
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('No active remote providers to index'),
+                SnackBar(
+                  content: Text('noActiveRemoteProviders'.tr()),
                 ),
               );
             }
@@ -521,7 +572,7 @@ class SettingsScreen extends ConsumerWidget {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                  'Indexed ${activeProviders.length} remote provider(s)',
+                  'indexedRemoteProviders'.tr(args: [activeProviders.length.toString()]),
                 ),
               ),
             );
@@ -555,27 +606,27 @@ class SettingsScreen extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Add Remote Provider'),
+        title: Text('addRemoteProviderDialog'.tr()),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: serverUrlController,
-              decoration: const InputDecoration(
-                labelText: 'Server URL',
-                hintText: 'https://your-jellyfin-server.com',
+              decoration: InputDecoration(
+                labelText: 'serverUrl'.tr(),
+                hintText: 'serverUrlHint'.tr(),
               ),
               keyboardType: TextInputType.url,
             ),
             const SizedBox(height: 16),
             TextField(
               controller: usernameController,
-              decoration: const InputDecoration(labelText: 'Username'),
+              decoration: InputDecoration(labelText: 'username'.tr()),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: passwordController,
-              decoration: const InputDecoration(labelText: 'Password'),
+              decoration: InputDecoration(labelText: 'password'.tr()),
               obscureText: true,
             ),
           ],
@@ -583,7 +634,7 @@ class SettingsScreen extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+            child: Text('cancel'.tr()),
           ),
           TextButton(
             onPressed: () async {
@@ -593,7 +644,7 @@ class SettingsScreen extends ConsumerWidget {
 
               if (serverUrl.isEmpty || username.isEmpty || password.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('All fields are required')),
+                  SnackBar(content: Text('allFieldsRequired'.tr())),
                 );
                 return;
               }
@@ -605,19 +656,19 @@ class SettingsScreen extends ConsumerWidget {
                   Navigator.of(context).pop();
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Added remote provider: $serverUrl'),
+                      content: Text('addedRemoteProvider'.tr(args: [serverUrl])),
                     ),
                   );
                 }
               } catch (e) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error adding provider: $e')),
+                    SnackBar(content: Text('errorAddingProvider'.tr(args: [e.toString()]))),
                   );
                 }
               }
             },
-            child: const Text('Add'),
+            child: Text('add'.tr()),
           ),
         ],
       ),
@@ -628,14 +679,14 @@ class SettingsScreen extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Reset Track Database'),
-        content: const Text(
-          'This will permanently delete all tracks from the database and remove all cached music files and album art. This action cannot be undone.\n\nAre you sure you want to continue?',
+        title: Text('resetTrackDatabase'.tr()),
+        content: Text(
+          'confirmResetTrackDatabase'.tr(),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+            child: Text('cancel'.tr()),
           ),
           TextButton(
             onPressed: () async {
@@ -647,21 +698,21 @@ class SettingsScreen extends ConsumerWidget {
 
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Track database has been reset'),
+                    SnackBar(
+                      content: Text('trackDatabaseReset'.tr()),
                     ),
                   );
                 }
               } catch (e) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error resetting database: $e')),
+                    SnackBar(content: Text('errorResettingDatabase'.tr(args: [e.toString()]))),
                   );
                 }
               }
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Reset'),
+            child: Text('reset'.tr()),
           ),
         ],
       ),

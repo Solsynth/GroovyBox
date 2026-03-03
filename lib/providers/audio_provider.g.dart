@@ -10,12 +10,12 @@ part of 'audio_provider.dart';
 // ignore_for_file: type=lint, type=warning
 
 @ProviderFor(audioHandler)
-const audioHandlerProvider = AudioHandlerProvider._();
+final audioHandlerProvider = AudioHandlerProvider._();
 
 final class AudioHandlerProvider
     extends $FunctionalProvider<AudioHandler, AudioHandler, AudioHandler>
     with $Provider<AudioHandler> {
-  const AudioHandlerProvider._()
+  AudioHandlerProvider._()
     : super(
         from: null,
         argument: null,
@@ -51,11 +51,11 @@ final class AudioHandlerProvider
 String _$audioHandlerHash() => r'65fbd92e049fe4f3a0763516f1e68e1614f7630f';
 
 @ProviderFor(CurrentTrackNotifier)
-const currentTrackProvider = CurrentTrackNotifierProvider._();
+final currentTrackProvider = CurrentTrackNotifierProvider._();
 
 final class CurrentTrackNotifierProvider
     extends $NotifierProvider<CurrentTrackNotifier, CurrentTrackData?> {
-  const CurrentTrackNotifierProvider._()
+  CurrentTrackNotifierProvider._()
     : super(
         from: null,
         argument: null,
@@ -90,7 +90,6 @@ abstract class _$CurrentTrackNotifier extends $Notifier<CurrentTrackData?> {
   @$mustCallSuper
   @override
   void runBuild() {
-    final created = build();
     final ref = this.ref as $Ref<CurrentTrackData?, CurrentTrackData?>;
     final element =
         ref.element
@@ -100,16 +99,16 @@ abstract class _$CurrentTrackNotifier extends $Notifier<CurrentTrackData?> {
               Object?,
               Object?
             >;
-    element.handleValue(ref, created);
+    element.handleCreate(ref, build);
   }
 }
 
 @ProviderFor(CurrentTrackMetadataNotifier)
-const currentTrackMetadataProvider = CurrentTrackMetadataNotifierProvider._();
+final currentTrackMetadataProvider = CurrentTrackMetadataNotifierProvider._();
 
 final class CurrentTrackMetadataNotifierProvider
     extends $NotifierProvider<CurrentTrackMetadataNotifier, TrackMetadata?> {
-  const CurrentTrackMetadataNotifierProvider._()
+  CurrentTrackMetadataNotifierProvider._()
     : super(
         from: null,
         argument: null,
@@ -145,7 +144,6 @@ abstract class _$CurrentTrackMetadataNotifier
   @$mustCallSuper
   @override
   void runBuild() {
-    final created = build();
     final ref = this.ref as $Ref<TrackMetadata?, TrackMetadata?>;
     final element =
         ref.element
@@ -155,16 +153,16 @@ abstract class _$CurrentTrackMetadataNotifier
               Object?,
               Object?
             >;
-    element.handleValue(ref, created);
+    element.handleCreate(ref, build);
   }
 }
 
 @ProviderFor(RemoteTrackLoadingNotifier)
-const remoteTrackLoadingProvider = RemoteTrackLoadingNotifierProvider._();
+final remoteTrackLoadingProvider = RemoteTrackLoadingNotifierProvider._();
 
 final class RemoteTrackLoadingNotifierProvider
     extends $NotifierProvider<RemoteTrackLoadingNotifier, bool> {
-  const RemoteTrackLoadingNotifierProvider._()
+  RemoteTrackLoadingNotifierProvider._()
     : super(
         from: null,
         argument: null,
@@ -199,7 +197,6 @@ abstract class _$RemoteTrackLoadingNotifier extends $Notifier<bool> {
   @$mustCallSuper
   @override
   void runBuild() {
-    final created = build();
     final ref = this.ref as $Ref<bool, bool>;
     final element =
         ref.element
@@ -209,6 +206,6 @@ abstract class _$RemoteTrackLoadingNotifier extends $Notifier<bool> {
               Object?,
               Object?
             >;
-    element.handleValue(ref, created);
+    element.handleCreate(ref, build);
   }
 }

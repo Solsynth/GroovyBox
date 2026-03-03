@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:gap/gap.dart';
 import 'package:groovybox/data/db.dart';
 import 'package:groovybox/data/playlist_repository.dart';
 import 'package:groovybox/data/track_repository.dart';
+
 import 'package:groovybox/logic/lyrics_parser.dart';
 import 'package:groovybox/logic/window_helpers.dart';
 import 'package:groovybox/providers/audio_provider.dart';
@@ -82,14 +84,14 @@ class LibraryScreen extends HookConsumerWidget {
                   onPressed: clearSelection,
                 ),
                 title: Text(
-                  '${selectedTrackIds.value.length} selected',
+                  'selected'.tr(args: [selectedTrackIds.value.length.toString()]),
                 ).textColor(Theme.of(context).colorScheme.onPrimary),
                 backgroundColor: Theme.of(context).colorScheme.primary,
                 actions: [
                   IconButton(
                     icon: const Icon(Symbols.playlist_add),
                     color: Theme.of(context).colorScheme.onPrimary,
-                    tooltip: 'Add to Playlist',
+                    tooltip: 'addToPlaylist'.tr(),
                     onPressed: () {
                       _batchAddToPlaylist(
                         context,
@@ -102,7 +104,7 @@ class LibraryScreen extends HookConsumerWidget {
                   IconButton(
                     icon: const Icon(Symbols.delete),
                     color: Theme.of(context).colorScheme.onPrimary,
-                    tooltip: 'Delete',
+                    tooltip: 'delete'.tr(),
                     onPressed: () {
                       _batchDelete(
                         context,
@@ -139,7 +141,7 @@ class LibraryScreen extends HookConsumerWidget {
                                 ),
                               ],
                             )
-                          : const Text('Library'),
+                          : Text('library'.tr()),
                       actions: [
                         IconButton(
                           onPressed: () {
@@ -149,7 +151,7 @@ class LibraryScreen extends HookConsumerWidget {
                         ),
                         IconButton(
                           icon: const Icon(Symbols.add_circle_outline),
-                          tooltip: 'Import Files',
+                          tooltip: 'importFiles'.tr(),
                           onPressed: () async {
                             final result = await FilePicker.platform.pickFiles(
                               type: FileType.any,
@@ -207,18 +209,18 @@ class LibraryScreen extends HookConsumerWidget {
                 extended: isExtraLargeScreen,
                 selectedIndex: selectedTab!.value,
                 onDestinationSelected: (index) => selectedTab.value = index,
-                destinations: const [
+                destinations: [
                   NavigationRailDestination(
                     icon: Icon(Symbols.audiotrack),
-                    label: Text('Tracks'),
+                    label: Text('tracks'.tr()),
                   ),
                   NavigationRailDestination(
                     icon: Icon(Symbols.album),
-                    label: Text('Albums'),
+                    label: Text('albums'.tr()),
                   ),
                   NavigationRailDestination(
                     icon: Icon(Symbols.queue_music),
-                    label: Text('Playlists'),
+                    label: Text('playlists'.tr()),
                   ),
                 ],
               ),
@@ -257,13 +259,13 @@ class LibraryScreen extends HookConsumerWidget {
                     onPressed: clearSelection,
                   ),
                   title: Text(
-                    '${selectedTrackIds.value.length} selected',
+                    'selected'.tr(args: [selectedTrackIds.value.length.toString()]),
                   ).textColor(Theme.of(context).colorScheme.onPrimary),
                   backgroundColor: Theme.of(context).colorScheme.primary,
                   actions: [
                     IconButton(
                       icon: const Icon(Symbols.playlist_add),
-                      tooltip: 'Add to Playlist',
+                      tooltip: 'addToPlaylist'.tr(),
                       color: Theme.of(context).colorScheme.onPrimary,
                       onPressed: () {
                         _batchAddToPlaylist(
@@ -276,7 +278,7 @@ class LibraryScreen extends HookConsumerWidget {
                     ),
                     IconButton(
                       icon: const Icon(Symbols.delete),
-                      tooltip: 'Delete',
+                      tooltip: 'delete'.tr(),
                       color: Theme.of(context).colorScheme.onPrimary,
                       onPressed: () {
                         _batchDelete(
@@ -292,12 +294,12 @@ class LibraryScreen extends HookConsumerWidget {
                 )
               : AppBar(
                   centerTitle: true,
-                  title: const Text('Library'),
-                  bottom: const TabBar(
+                  title: Text('library'.tr()),
+                  bottom: TabBar(
                     tabs: [
-                      Tab(text: 'Tracks', icon: Icon(Symbols.audiotrack)),
-                      Tab(text: 'Albums', icon: Icon(Symbols.album)),
-                      Tab(text: 'Playlists', icon: Icon(Symbols.queue_music)),
+                      Tab(text: 'tracks'.tr(), icon: Icon(Symbols.audiotrack)),
+                      Tab(text: 'albums'.tr(), icon: Icon(Symbols.album)),
+                      Tab(text: 'playlists'.tr(), icon: Icon(Symbols.queue_music)),
                     ],
                   ),
                   actions: [
@@ -309,7 +311,7 @@ class LibraryScreen extends HookConsumerWidget {
                     ),
                     IconButton(
                       icon: const Icon(Symbols.add_circle_outline),
-                      tooltip: 'Import Files',
+                      tooltip: 'importFiles'.tr(),
                       onPressed: () async {
                         final result = await FilePicker.platform.pickFiles(
                           type: FileType.any,
@@ -391,12 +393,12 @@ class LibraryScreen extends HookConsumerWidget {
         // Calculate hintText
         String hintText;
         if (!snapshot.hasData || snapshot.hasError) {
-          hintText = 'Search tracks...';
+          hintText = 'searchTracks'.tr();
         } else {
           final tracks = snapshot.data!;
           final totalTracks = tracks.length;
           if (searchQuery.value.isEmpty) {
-            hintText = 'Search tracks... ($totalTracks tracks)';
+            hintText = 'searchTracksWithCount'.tr(args: [totalTracks.toString()]);
           } else {
             final query = searchQuery.value.toLowerCase();
             final filteredCount = tracks.where((track) {
@@ -419,8 +421,9 @@ class LibraryScreen extends HookConsumerWidget {
               }
               return false;
             }).length;
-            hintText =
-                'Search tracks... ($filteredCount of $totalTracks tracks)';
+            hintText = 'searchTracksFiltered'.tr()
+                .replaceAll('{}', filteredCount.toString())
+                .replaceAll('{}', totalTracks.toString());
           }
         }
 
@@ -433,7 +436,7 @@ class LibraryScreen extends HookConsumerWidget {
         } else {
           final tracks = snapshot.data!;
           if (tracks.isEmpty) {
-            mainContent = const Center(child: Text('No tracks yet. Add some!'));
+            mainContent = Center(child: Text('noTracksYet'.tr()));
           } else {
             List<Track> filteredTracks;
             if (searchQuery.value.isEmpty) {
@@ -463,8 +466,8 @@ class LibraryScreen extends HookConsumerWidget {
             }
 
             if (filteredTracks.isEmpty && searchQuery.value.isNotEmpty) {
-              mainContent = const Center(
-                child: Text('No tracks match your search.'),
+              mainContent = Center(
+                child: Text('noTracksMatchSearch'.tr()),
               );
             } else {
               mainContent = ListView.builder(
@@ -491,7 +494,7 @@ class LibraryScreen extends HookConsumerWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                       subtitle: Text(
-                        '${track.artist ?? 'Unknown Artist'} • ${_formatDuration(track.duration)}',
+                        '${track.artist ?? 'unknownArtist'.tr()} - ${_formatDuration(track.duration)}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -513,15 +516,15 @@ class LibraryScreen extends HookConsumerWidget {
                         context: context,
                         builder: (context) {
                           return AlertDialog(
-                            title: const Text('Delete Track?'),
+                            title: Text('deleteTrack'.tr()),
                             content: Text(
-                              'Are you sure you want to delete "${track.title}"? This cannot be undone.',
+                              'confirmDeleteTrack'.tr(args: [track.title]),
                             ),
                             actions: [
                               TextButton(
                                 onPressed: () =>
                                     Navigator.of(context).pop(false),
-                                child: const Text('Cancel'),
+                                child: Text('cancel'.tr()),
                               ),
                               TextButton(
                                 onPressed: () =>
@@ -529,7 +532,7 @@ class LibraryScreen extends HookConsumerWidget {
                                 style: TextButton.styleFrom(
                                   foregroundColor: Colors.red,
                                 ),
-                                child: const Text('Delete'),
+                                child: Text('delete'.tr()),
                               ),
                             ],
                           );
@@ -541,7 +544,11 @@ class LibraryScreen extends HookConsumerWidget {
                           .read(trackRepositoryProvider.notifier)
                           .deleteTrack(track.id);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Deleted "${track.title}"')),
+                        SnackBar(
+                          content: Text(
+                            'deletedTrack'.tr(args: [track.title]),
+                          ),
+                        ),
                       );
                     },
                     child: TrackTile(
@@ -635,7 +642,7 @@ class LibraryScreen extends HookConsumerWidget {
             children: [
               ListTile(
                 leading: const Icon(Symbols.playlist_add),
-                title: const Text('Add to Playlist'),
+                title: Text('addToPlaylist'.tr()),
                 onTap: () {
                   Navigator.pop(context);
                   _showAddToPlaylistDialog(context, ref, track);
@@ -643,7 +650,7 @@ class LibraryScreen extends HookConsumerWidget {
               ),
               ListTile(
                 leading: const Icon(Symbols.info),
-                title: const Text('View Details'),
+                title: Text('viewDetails'.tr()),
                 onTap: () {
                   Navigator.pop(context);
                   _showTrackDetails(context, ref, track);
@@ -651,7 +658,7 @@ class LibraryScreen extends HookConsumerWidget {
               ),
               ListTile(
                 leading: const Icon(Symbols.edit),
-                title: const Text('Edit Metadata'),
+                title: Text('editMetadata'.tr()),
                 onTap: () {
                   Navigator.pop(context);
                   _showEditDialog(context, ref, track);
@@ -659,7 +666,7 @@ class LibraryScreen extends HookConsumerWidget {
               ),
               ListTile(
                 leading: const Icon(Symbols.lyrics),
-                title: const Text('Import Lyrics'),
+                title: Text('importLyrics'.tr()),
                 onTap: () {
                   Navigator.pop(context);
                   _importLyricsForTrack(context, ref, track);
@@ -667,8 +674,8 @@ class LibraryScreen extends HookConsumerWidget {
               ),
               ListTile(
                 leading: const Icon(Symbols.delete, color: Colors.red),
-                title: const Text(
-                  'Delete Track',
+                title: Text(
+                  'deleteTrack'.tr(),
                   style: TextStyle(color: Colors.red),
                 ),
                 onTap: () {
@@ -699,7 +706,7 @@ class LibraryScreen extends HookConsumerWidget {
         // For simplicity, we'll assume the user wants to pick from *current* playlists.
         // Or we can use a Consumer widget inside the dialog.
         return AlertDialog(
-          title: const Text('Add to Playlist'),
+          title: Text('addToPlaylist'.tr()),
           content: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: screenSize.width * 0.8,
@@ -718,8 +725,8 @@ class LibraryScreen extends HookConsumerWidget {
                     }
                     final playlists = snapshot.data!;
                     if (playlists.isEmpty) {
-                      return const Text(
-                        'No playlists available. Create one first!',
+                      return Text(
+                        'noPlaylistsAvailable'.tr(),
                       );
                     }
 
@@ -736,7 +743,9 @@ class LibraryScreen extends HookConsumerWidget {
                               Navigator.pop(context);
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content: Text('Added to ${playlist.name}'),
+                                  content: Text(
+                                    'addedToPlaylist'.tr(args: [playlist.name]),
+                                  ),
                                 ),
                               );
                             },
@@ -752,7 +761,7 @@ class LibraryScreen extends HookConsumerWidget {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
+              child: Text('cancel'.tr()),
             ),
           ],
         );
@@ -766,9 +775,9 @@ class LibraryScreen extends HookConsumerWidget {
     Track track,
   ) async {
     // Try to get file info
-    String fileSize = 'Unknown';
-    String libraryName = 'Unknown';
-    String dateAdded = 'Unknown';
+    String fileSize = 'unknown'.tr();
+    String libraryName = 'unknown'.tr();
+    String dateAdded = 'unknown'.tr();
 
     try {
       final file = File(track.path);
@@ -802,7 +811,7 @@ class LibraryScreen extends HookConsumerWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Track Details'),
+        title: Text('trackDetails'.tr()),
         content: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: screenSize.width * 0.8),
           child: SingleChildScrollView(
@@ -810,16 +819,16 @@ class LibraryScreen extends HookConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                _buildDetailRow('Title', track.title),
-                _buildDetailRow('Artist', track.artist ?? 'Unknown'),
-                _buildDetailRow('Album', track.album ?? 'Unknown'),
-                _buildDetailRow('Duration', _formatDuration(track.duration)),
-                _buildDetailRow('File Size', fileSize),
-                _buildDetailRow('Library', libraryName),
-                _buildDetailRow('File Path', track.path),
-                _buildDetailRow('Date Added', dateAdded),
+                _buildDetailRow('title'.tr(), track.title),
+                _buildDetailRow('artist'.tr(), track.artist ?? 'Unknown'),
+                _buildDetailRow('album'.tr(), track.album ?? 'Unknown'),
+                _buildDetailRow('duration'.tr(), _formatDuration(track.duration)),
+                _buildDetailRow('fileSize'.tr(), fileSize),
+                _buildDetailRow('library'.tr(), libraryName),
+                _buildDetailRow('filePath'.tr(), track.path),
+                _buildDetailRow('dateAdded'.tr(), dateAdded),
                 if (track.artUri != null)
-                  _buildDetailRow('Album Art', 'Present'),
+                  _buildDetailRow('albumArt'.tr(), 'Present'),
               ],
             ),
           ),
@@ -827,7 +836,7 @@ class LibraryScreen extends HookConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+            child: Text('close'.tr()),
           ),
         ],
       ),
@@ -864,7 +873,7 @@ class LibraryScreen extends HookConsumerWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Edit Track'),
+        title: Text('editTrack'.tr()),
         content: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: screenSize.width * 0.8),
           child: Column(
@@ -873,15 +882,15 @@ class LibraryScreen extends HookConsumerWidget {
             children: [
               TextField(
                 controller: titleController,
-                decoration: const InputDecoration(labelText: 'Title'),
+                decoration: InputDecoration(labelText: 'title'.tr()),
               ),
               TextField(
                 controller: artistController,
-                decoration: const InputDecoration(labelText: 'Artist'),
+                decoration: InputDecoration(labelText: 'artist'.tr()),
               ),
               TextField(
                 controller: albumController,
-                decoration: const InputDecoration(labelText: 'Album'),
+                decoration: InputDecoration(labelText: 'album'.tr()),
               ),
             ],
           ),
@@ -889,7 +898,7 @@ class LibraryScreen extends HookConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text('cancel'.tr()),
           ),
           TextButton(
             onPressed: () {
@@ -903,7 +912,7 @@ class LibraryScreen extends HookConsumerWidget {
                   );
               Navigator.pop(context);
             },
-            child: const Text('Save'),
+            child: Text('save'.tr()),
           ),
         ],
       ),
@@ -929,7 +938,7 @@ class LibraryScreen extends HookConsumerWidget {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Add to Playlist'),
+          title: Text('addToPlaylist'.tr()),
           content: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: screenSize.width * 0.8,
@@ -948,7 +957,7 @@ class LibraryScreen extends HookConsumerWidget {
                     }
                     final playlists = snapshot.data!;
                     if (playlists.isEmpty) {
-                      return const Text('No playlists available.');
+                      return Text('noPlaylistsAvailable'.tr());
                     }
 
                     return SingleChildScrollView(
@@ -970,7 +979,7 @@ class LibraryScreen extends HookConsumerWidget {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text(
-                                    'Added ${trackIds.length} tracks to ${playlist.name}',
+                                    '${'added'.tr()} ${trackIds.length} ${'tracks'.tr()} ${'to'.tr()} ${playlist.name}',
                                   ),
                                 ),
                               );
@@ -987,7 +996,7 @@ class LibraryScreen extends HookConsumerWidget {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
+              child: Text('cancel'.tr()),
             ),
           ],
         );
@@ -1004,20 +1013,20 @@ class LibraryScreen extends HookConsumerWidget {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Tracks?'),
+        title: Text('deleteTracks'.tr()),
         content: Text(
-          'Are you sure you want to delete ${trackIds.length} tracks? '
-          'This will remove them from your device.',
+          '${'confirmDelete'.tr()} ${trackIds.length} ${'tracks'.tr()}? '
+          '${'thisWillRemoveThemFromYourDevice'.tr()}',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text('cancel'.tr()),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
+            child: Text('delete'.tr()),
           ),
         ],
       ),
@@ -1031,7 +1040,11 @@ class LibraryScreen extends HookConsumerWidget {
       onSuccess();
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Deleted ${trackIds.length} tracks')),
+        SnackBar(
+          content: Text(
+            '${'deleted'.tr()} ${trackIds.length} ${'tracks'.tr()}',
+          ),
+        ),
       );
     }
   }
@@ -1063,7 +1076,7 @@ class LibraryScreen extends HookConsumerWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Imported ${lyricsData.lines.length} lyrics lines for "${track.title}"',
+            '${'imported'.tr()} ${lyricsData.lines.length} ${'lyricsLines'.tr()} for "${track.title}"',
           ),
         ),
       );
@@ -1114,7 +1127,7 @@ class LibraryScreen extends HookConsumerWidget {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Batch import complete: $matched matched, $notMatched not matched',
+          '${'batchImportComplete'.tr()} $matched ${'matched'.tr()}, $notMatched ${'notMatched'.tr()}',
         ),
       ),
     );

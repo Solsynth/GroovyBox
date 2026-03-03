@@ -10,11 +10,11 @@ part of 'playlist_repository.dart';
 // ignore_for_file: type=lint, type=warning
 
 @ProviderFor(PlaylistRepository)
-const playlistRepositoryProvider = PlaylistRepositoryProvider._();
+final playlistRepositoryProvider = PlaylistRepositoryProvider._();
 
 final class PlaylistRepositoryProvider
     extends $AsyncNotifierProvider<PlaylistRepository, void> {
-  const PlaylistRepositoryProvider._()
+  PlaylistRepositoryProvider._()
     : super(
         from: null,
         argument: null,
@@ -41,7 +41,6 @@ abstract class _$PlaylistRepository extends $AsyncNotifier<void> {
   @$mustCallSuper
   @override
   void runBuild() {
-    build();
     final ref = this.ref as $Ref<AsyncValue<void>, void>;
     final element =
         ref.element
@@ -51,6 +50,6 @@ abstract class _$PlaylistRepository extends $AsyncNotifier<void> {
               Object?,
               Object?
             >;
-    element.handleValue(ref, null);
+    element.handleCreate(ref, build);
   }
 }

@@ -10,12 +10,12 @@ part of 'db_provider.dart';
 // ignore_for_file: type=lint, type=warning
 
 @ProviderFor(database)
-const databaseProvider = DatabaseProvider._();
+final databaseProvider = DatabaseProvider._();
 
 final class DatabaseProvider
     extends $FunctionalProvider<AppDatabase, AppDatabase, AppDatabase>
     with $Provider<AppDatabase> {
-  const DatabaseProvider._()
+  DatabaseProvider._()
     : super(
         from: null,
         argument: null,

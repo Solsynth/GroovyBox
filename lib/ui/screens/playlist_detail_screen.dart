@@ -1,9 +1,11 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:gap/gap.dart';
 import 'package:groovybox/data/db.dart';
 import 'package:groovybox/data/playlist_repository.dart';
+
 import 'package:groovybox/providers/audio_provider.dart';
 import 'package:groovybox/ui/widgets/track_tile.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -48,10 +50,10 @@ class PlaylistDetailScreen extends HookConsumerWidget {
 
                     final tracks = snapshot.data!;
                     if (tracks.isEmpty) {
-                      return const SizedBox(
+                      return SizedBox(
                         height: 200,
                         child: Center(
-                          child: Text('No tracks in this playlist'),
+                          child: Text('noTracksInPlaylist'.tr()),
                         ),
                       );
                     }
@@ -73,7 +75,7 @@ class PlaylistDetailScreen extends HookConsumerWidget {
                                       _playPlaylist(ref, tracks);
                                     },
                                     icon: const Icon(Symbols.play_arrow),
-                                    label: const Text('Play All'),
+                                    label: Text('playAll'.tr()),
                                   ),
                                 ),
                                 SizedBox(
@@ -83,7 +85,7 @@ class PlaylistDetailScreen extends HookConsumerWidget {
                                       _addToQueue(ref, tracks);
                                     },
                                     icon: const Icon(Symbols.queue_music),
-                                    label: const Text('Add to Queue'),
+                                    label: Text('addToQueue'.tr()),
                                   ),
                                 ),
                               ],
@@ -204,3 +206,5 @@ class PlaylistDetailScreen extends HookConsumerWidget {
     );
   }
 }
+
+
