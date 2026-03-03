@@ -39,7 +39,7 @@ class TrackTile extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: isPlaying
-            ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.2)
+            ? Theme.of(context).colorScheme.primary.withOpacity(0.2)
             : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
       ),
@@ -77,7 +77,7 @@ class TrackTile extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
           ),
         ),
         trailing: showTrailingIcon
