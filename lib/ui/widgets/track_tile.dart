@@ -1,4 +1,3 @@
-import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:groovybox/data/db.dart' as db;
 import 'package:groovybox/ui/widgets/universal_image.dart';
@@ -74,7 +73,7 @@ class TrackTile extends StatelessWidget {
           ),
         ),
         subtitle: Text(
-          '${track.artist ?? context.tr('unknownArtist')} - ${_formatDuration(track.duration)}',
+          "${track.artist ?? 'Unknown Artist'} • ${_formatDuration(track.duration)}",
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(

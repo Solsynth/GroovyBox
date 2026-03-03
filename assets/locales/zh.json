@@ -29,7 +29,6 @@
   "errorLoadingLyrics": "加载歌词时出错：{}",
   "errorParsingLyrics": "解析歌词时出错：{}",
   "noTracksInQueue": "队列中没有曲目",
-  "unknownArtist": "未知艺术家",
   "showLyrics": "显示歌词",
   "showQueue": "显示队列",
   "showCover": "显示封面",

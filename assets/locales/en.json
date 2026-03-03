@@ -29,7 +29,6 @@
   "errorLoadingLyrics": "Error loading lyrics: {}",
   "errorParsingLyrics": "Error parsing lyrics: {}",
   "noTracksInQueue": "No tracks in queue",
-  "unknownArtist": "Unknown Artist",
   "showLyrics": "Show Lyrics",
   "showQueue": "Show Queue",
   "showCover": "Show Cover",
