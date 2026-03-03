@@ -22,7 +22,7 @@ class SettingsScreen extends HookConsumerWidget {
     final remoteProvidersAsync = ref.watch(remoteProvidersProvider);
 
     return Scaffold(
-      appBar: AppBar(title: Text(context.tr('settingsTitle'))),
+      appBar: AppBar(title: Text('settingsTitle'.tr())),
       body: settingsAsync.when(
         data: (settings) => Align(
           alignment: Alignment.topCenter,
@@ -41,16 +41,16 @@ class SettingsScreen extends HookConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          context.tr('autoScan'),
+                          'autoScan'.tr(),
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
                         ).padding(horizontal: 16, top: 16),
                         SwitchListTile(
-                          title: Text(context.tr('autoScanMusicLibraries')),
+                          title: Text('autoScanMusicLibraries'.tr()),
                           subtitle: Text(
-                            context.tr('autoScanDescription'),
+                            'autoScanDescription'.tr(),
                           ),
                           shape: const RoundedRectangleBorder(
                             borderRadius: BorderRadius.all(Radius.circular(8)),
@@ -61,9 +61,9 @@ class SettingsScreen extends HookConsumerWidget {
                           },
                         ),
                         SwitchListTile(
-                          title: Text(context.tr('watchForChanges')),
+                          title: Text('watchForChanges'.tr()),
                           subtitle: Text(
-                            context.tr('watchForChangesDescription'),
+                            'watchForChangesDescription'.tr(),
                           ),
                           shape: const RoundedRectangleBorder(
                             borderRadius: BorderRadius.all(Radius.circular(8)),
@@ -93,7 +93,7 @@ class SettingsScreen extends HookConsumerWidget {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
-                                  context.tr('musicLibraries'),
+                                  'musicLibraries'.tr(),
                                   style: const TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -105,7 +105,7 @@ class SettingsScreen extends HookConsumerWidget {
                                       onPressed: () =>
                                           _scanLibraries(context, ref),
                                       icon: const Icon(Symbols.refresh),
-                                      tooltip: context.tr('scanLibraries'),
+                                      tooltip: 'scanLibraries'.tr(),
                                       visualDensity: const VisualDensity(
                                         horizontal: -4,
                                         vertical: -4,
@@ -115,7 +115,7 @@ class SettingsScreen extends HookConsumerWidget {
                                       onPressed: () =>
                                           _addMusicLibrary(context, ref),
                                       icon: const Icon(Symbols.add),
-                                      tooltip: context.tr('addMusicLibrary'),
+                                      tooltip: 'addMusicLibrary'.tr(),
                                       visualDensity: const VisualDensity(
                                         horizontal: -4,
                                         vertical: -4,
@@ -126,7 +126,7 @@ class SettingsScreen extends HookConsumerWidget {
                               ],
                             ),
                             Text(
-                              context.tr('addMusicLibraryDescription'),
+                              'addMusicLibraryDescription'.tr(),
                               style: const TextStyle(
                                 color: Colors.grey,
                                 fontSize: 14,
@@ -137,7 +137,7 @@ class SettingsScreen extends HookConsumerWidget {
                         watchFoldersAsync.when(
                           data: (folders) => folders.isEmpty
                               ? Text(
-                                  context.tr('noMusicLibrariesAdded'),
+                                  'noMusicLibrariesAdded'.tr(),
                                   style: const TextStyle(
                                     color: Colors.grey,
                                     fontSize: 14,
@@ -211,7 +211,7 @@ class SettingsScreen extends HookConsumerWidget {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
-                                  context.tr('remoteProviders'),
+                                  'remoteProviders'.tr(),
                                   style: const TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -223,7 +223,7 @@ class SettingsScreen extends HookConsumerWidget {
                                       onPressed: () =>
                                           _indexRemoteProviders(context, ref),
                                       icon: const Icon(Symbols.refresh),
-                                      tooltip: context.tr('indexRemoteProviders'),
+                                      tooltip: 'indexRemoteProviders'.tr(),
                                       visualDensity: const VisualDensity(
                                         horizontal: -4,
                                         vertical: -4,
@@ -233,7 +233,7 @@ class SettingsScreen extends HookConsumerWidget {
                                       onPressed: () =>
                                           _addRemoteProvider(context, ref),
                                       icon: const Icon(Symbols.add),
-                                      tooltip: context.tr('addRemoteProvider'),
+                                      tooltip: 'addRemoteProvider'.tr(),
                                       visualDensity: const VisualDensity(
                                         horizontal: -4,
                                         vertical: -4,
@@ -244,7 +244,7 @@ class SettingsScreen extends HookConsumerWidget {
                               ],
                             ),
                             Text(
-                              context.tr('remoteProvidersDescription'),
+                              'remoteProvidersDescription'.tr(),
                               style: const TextStyle(
                                 color: Colors.grey,
                                 fontSize: 14,
@@ -255,7 +255,7 @@ class SettingsScreen extends HookConsumerWidget {
                         remoteProvidersAsync.when(
                           data: (providers) => providers.isEmpty
                               ? Text(
-                                  context.tr('noRemoteProvidersAdded'),
+                                  'noRemoteProvidersAdded'.tr(),
                                   style: const TextStyle(
                                     color: Colors.grey,
                                     fontSize: 14,
@@ -323,20 +323,20 @@ class SettingsScreen extends HookConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          context.tr('playerSettings'),
+                          'playerSettings'.tr(),
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
                         ).padding(horizontal: 16, top: 16),
                         Text(
-                          context.tr('playerSettingsDescription'),
+                          'playerSettingsDescription'.tr(),
                           style: const TextStyle(color: Colors.grey, fontSize: 14),
                         ).padding(horizontal: 16, bottom: 8),
                         ListTile(
-                          title: Text(context.tr('defaultPlayerScreen')),
+                          title: Text('defaultPlayerScreen'.tr()),
                           subtitle: Text(
-                            context.tr('defaultPlayerScreenDescription'),
+                            'defaultPlayerScreenDescription'.tr(),
                           ),
                           trailing: DropdownButtonHideUnderline(
                             child: DropdownButton<DefaultPlayerScreen>(
@@ -360,9 +360,9 @@ class SettingsScreen extends HookConsumerWidget {
                           ),
                         ),
                         ListTile(
-                          title: Text(context.tr('lyricsMode')),
+                          title: Text('lyricsMode'.tr()),
                           subtitle: Text(
-                            context.tr('lyricsModeDescription'),
+                            'lyricsModeDescription'.tr(),
                           ),
                           trailing: DropdownButtonHideUnderline(
                             child: DropdownButton<LyricsMode>(
@@ -384,9 +384,9 @@ class SettingsScreen extends HookConsumerWidget {
                           ),
                         ),
                         SwitchListTile(
-                          title: Text(context.tr('continuePlaying')),
+                          title: Text('continuePlaying'.tr()),
                           subtitle: Text(
-                            context.tr('continuePlayingDescription'),
+                            'continuePlayingDescription'.tr(),
                           ),
                           shape: const RoundedRectangleBorder(
                             borderRadius: BorderRadius.all(Radius.circular(8)),
@@ -410,20 +410,20 @@ class SettingsScreen extends HookConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          context.tr('appSettings'),
+                          'appSettings'.tr(),
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
                         ).padding(horizontal: 16, top: 16),
                         Text(
-                          context.tr('appSettingsDescription'),
+                          'appSettingsDescription'.tr(),
                           style: const TextStyle(color: Colors.grey, fontSize: 14),
                         ).padding(horizontal: 16, bottom: 8),
                         ListTile(
-                          title: Text(context.tr('language')),
+                          title: Text('language'.tr()),
                           subtitle: Text(
-                            context.tr('languageDescription'),
+                            'languageDescription'.tr(),
                           ),
                           trailing: DropdownButtonHideUnderline(
                             child: DropdownButton<Locale>(
@@ -438,11 +438,11 @@ class SettingsScreen extends HookConsumerWidget {
                               items: [
                                 DropdownMenuItem(
                                   value: const Locale('en'),
-                                  child: Text(context.tr('english')),
+                                  child: Text('english'.tr()),
                                 ),
                                 DropdownMenuItem(
                                   value: const Locale('zh'),
-                                  child: Text(context.tr('chinese')),
+                                  child: Text('chinese'.tr()),
                                 ),
                               ],
                             ),
@@ -460,20 +460,20 @@ class SettingsScreen extends HookConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          context.tr('databaseManagement'),
+                          'databaseManagement'.tr(),
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
                         ).padding(horizontal: 16, top: 16),
                         Text(
-                          context.tr('databaseManagementDescription'),
+                          'databaseManagementDescription'.tr(),
                           style: const TextStyle(color: Colors.grey, fontSize: 14),
                         ).padding(horizontal: 16, bottom: 8),
                         ListTile(
-                          title: Text(context.tr('resetTrackDatabase')),
+                          title: Text('resetTrackDatabase'.tr()),
                           subtitle: Text(
-                            context.tr('resetTrackDatabaseDescription'),
+                            'resetTrackDatabaseDescription'.tr(),
                           ),
                           trailing: ElevatedButton(
                             onPressed: () => _resetTrackDatabase(context, ref),
@@ -481,7 +481,7 @@ class SettingsScreen extends HookConsumerWidget {
                               backgroundColor: Colors.red,
                               foregroundColor: Colors.white,
                             ),
-                            child: Text(context.tr('reset')),
+            child: Text('reset'.tr()),
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -510,12 +510,12 @@ class SettingsScreen extends HookConsumerWidget {
           await service.addWatchFolder(path, recursive: true);
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(context.tr('addedMusicLibrary', args: [path]))),
+              SnackBar(content: Text('addedMusicLibrary'.tr(args: [path]))),
             );
           }
         } catch (e) {
           if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('errorAddingLibrary', args: [e.toString()]))));
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('errorAddingLibrary'.tr(args: [e.toString()]))));
           }
         }
       }
@@ -528,14 +528,14 @@ class SettingsScreen extends HookConsumerWidget {
       await service.scanWatchFolders();
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.tr('librariesScannedSuccessfully'))),
+          SnackBar(content: Text('librariesScannedSuccessfully'.tr())),
         );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(context.tr('errorScanningLibraries', args: [e.toString()]))));
+        ).showSnackBar(SnackBar(content: Text('errorScanningLibraries'.tr(args: [e.toString()]))));
       }
     }
   }
@@ -553,7 +553,7 @@ class SettingsScreen extends HookConsumerWidget {
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text(context.tr('noActiveRemoteProviders')),
+                  content: Text('noActiveRemoteProviders'.tr()),
                 ),
               );
             }
@@ -572,7 +572,7 @@ class SettingsScreen extends HookConsumerWidget {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                  context.tr('indexedRemoteProviders', args: [activeProviders.length.toString()]),
+                  'indexedRemoteProviders'.tr(args: [activeProviders.length.toString()]),
                 ),
               ),
             );
@@ -606,27 +606,27 @@ class SettingsScreen extends HookConsumerWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(context.tr('addRemoteProviderDialog')),
+        title: Text('addRemoteProviderDialog'.tr()),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: serverUrlController,
               decoration: InputDecoration(
-                labelText: context.tr('serverUrl'),
-                hintText: context.tr('serverUrlHint'),
+                labelText: 'serverUrl'.tr(),
+                hintText: 'serverUrlHint'.tr(),
               ),
               keyboardType: TextInputType.url,
             ),
             const SizedBox(height: 16),
             TextField(
               controller: usernameController,
-              decoration: InputDecoration(labelText: context.tr('username')),
+              decoration: InputDecoration(labelText: 'username'.tr()),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: passwordController,
-              decoration: InputDecoration(labelText: context.tr('password')),
+              decoration: InputDecoration(labelText: 'password'.tr()),
               obscureText: true,
             ),
           ],
@@ -634,7 +634,7 @@ class SettingsScreen extends HookConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: Text(context.tr('cancel')),
+            child: Text('cancel'.tr()),
           ),
           TextButton(
             onPressed: () async {
@@ -644,7 +644,7 @@ class SettingsScreen extends HookConsumerWidget {
 
               if (serverUrl.isEmpty || username.isEmpty || password.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(context.tr('allFieldsRequired'))),
+                  SnackBar(content: Text('allFieldsRequired'.tr())),
                 );
                 return;
               }
@@ -656,19 +656,19 @@ class SettingsScreen extends HookConsumerWidget {
                   Navigator.of(context).pop();
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text(context.tr('addedRemoteProvider', args: [serverUrl])),
+                      content: Text('addedRemoteProvider'.tr(args: [serverUrl])),
                     ),
                   );
                 }
               } catch (e) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(context.tr('errorAddingProvider', args: [e.toString()]))),
+                    SnackBar(content: Text('errorAddingProvider'.tr(args: [e.toString()]))),
                   );
                 }
               }
             },
-            child: Text(context.tr('add')),
+            child: Text('add'.tr()),
           ),
         ],
       ),
@@ -679,14 +679,14 @@ class SettingsScreen extends HookConsumerWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(context.tr('resetTrackDatabase')),
+        title: Text('resetTrackDatabase'.tr()),
         content: Text(
-          context.tr('confirmResetTrackDatabase'),
+          'confirmResetTrackDatabase'.tr(),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: Text(context.tr('cancel')),
+            child: Text('cancel'.tr()),
           ),
           TextButton(
             onPressed: () async {
@@ -699,20 +699,20 @@ class SettingsScreen extends HookConsumerWidget {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text(context.tr('trackDatabaseReset')),
+                      content: Text('trackDatabaseReset'.tr()),
                     ),
                   );
                 }
               } catch (e) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(context.tr('errorResettingDatabase', args: [e.toString()]))),
+                    SnackBar(content: Text('errorResettingDatabase'.tr(args: [e.toString()]))),
                   );
                 }
               }
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: Text(context.tr('reset')),
+            child: Text('reset'.tr()),
           ),
         ],
       ),

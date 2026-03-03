@@ -21,30 +21,30 @@ class PlaylistsTab extends HookConsumerWidget {
           ListTile(
             leading: const Icon(Symbols.add),
             trailing: const Icon(Symbols.chevron_right).padding(right: 8),
-            title: Text(context.tr('createOne')),
-            subtitle: Text(context.tr('addNewPlaylist')),
+            title: Text('createOne'.tr()),
+            subtitle: Text('addNewPlaylist'.tr()),
             onTap: () async {
               final nameController = TextEditingController();
               final name = await showDialog<String>(
                 context: context,
                 builder: (context) => AlertDialog(
-                  title: Text(context.tr('newPlaylist')),
+                  title: Text('newPlaylist'.tr()),
                   content: TextField(
                     controller: nameController,
                     decoration: InputDecoration(
-                      labelText: context.tr('playlistName'),
+                      labelText: 'playlistName'.tr(),
                     ),
                     autofocus: true,
                   ),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(context),
-                      child: Text(context.tr('cancel')),
+                      child: Text('cancel'.tr()),
                     ),
                     TextButton(
                       onPressed: () =>
                           Navigator.pop(context, nameController.text),
-                      child: Text(context.tr('create')),
+                      child: Text('create'.tr()),
                     ),
                   ],
                 ),
@@ -65,7 +65,7 @@ class PlaylistsTab extends HookConsumerWidget {
                 final playlists = snapshot.data!;
 
                 if (playlists.isEmpty) {
-                  return Center(child: Text(context.tr('noPlaylistsYet')));
+                  return Center(child: Text('noPlaylistsYet'.tr()));
                 }
 
                 return ListView.builder(
@@ -76,7 +76,7 @@ class PlaylistsTab extends HookConsumerWidget {
                       leading: const Icon(Symbols.queue_music),
                       title: Text(playlist.name),
                       subtitle: Text(
-                        '${context.tr('createdAt')} ${playlist.createdAt.day}/${playlist.createdAt.month}/${playlist.createdAt.year}',
+                        '${'createdAt'.tr()} ${playlist.createdAt.day}/${playlist.createdAt.month}/${playlist.createdAt.year}',
                       ),
                       trailing: IconButton(
                         icon: const Icon(Symbols.delete),

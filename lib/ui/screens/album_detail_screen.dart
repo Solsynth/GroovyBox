@@ -77,7 +77,7 @@ class AlbumDetailScreen extends HookConsumerWidget {
                     if (tracks.isEmpty) {
                       return SizedBox(
                         height: 200,
-                        child: Center(child: Text(context.tr('noTracksInAlbum'))),
+                        child: Center(child: Text('noTracksInAlbum'.tr())),
                       );
                     }
 
@@ -98,7 +98,7 @@ class AlbumDetailScreen extends HookConsumerWidget {
                                       _playAlbum(ref, tracks);
                                     },
                                     icon: const Icon(Symbols.play_arrow),
-                                    label: Text(context.tr('playAll')),
+                                    label: Text('playAll'.tr()),
                                   ),
                                 ),
                                 SizedBox(
@@ -108,7 +108,7 @@ class AlbumDetailScreen extends HookConsumerWidget {
                                       _addToQueue(ref, tracks);
                                     },
                                     icon: const Icon(Symbols.queue_music),
-                                    label: Text(context.tr('addToQueue')),
+                                    label: Text('addToQueue'.tr()),
                                   ),
                                 ),
                               ],

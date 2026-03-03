@@ -53,7 +53,7 @@ class PlaylistDetailScreen extends HookConsumerWidget {
                       return SizedBox(
                         height: 200,
                         child: Center(
-                          child: Text(context.tr('noTracksInPlaylist')),
+                          child: Text('noTracksInPlaylist'.tr()),
                         ),
                       );
                     }
@@ -75,7 +75,7 @@ class PlaylistDetailScreen extends HookConsumerWidget {
                                       _playPlaylist(ref, tracks);
                                     },
                                     icon: const Icon(Symbols.play_arrow),
-                                    label: Text(context.tr('playAll')),
+                                    label: Text('playAll'.tr()),
                                   ),
                                 ),
                                 SizedBox(
@@ -85,7 +85,7 @@ class PlaylistDetailScreen extends HookConsumerWidget {
                                       _addToQueue(ref, tracks);
                                     },
                                     icon: const Icon(Symbols.queue_music),
-                                    label: Text(context.tr('addToQueue')),
+                                    label: Text('addToQueue'.tr()),
                                   ),
                                 ),
                               ],

@@ -175,7 +175,7 @@ class _MobileMiniPlayer extends HookConsumerWidget {
                               overflow: TextOverflow.ellipsis,
                             ),
                             Text(
-                              currentMetadata?.artist ?? context.tr('unknownArtist'),
+                              currentMetadata?.artist ?? 'unknownArtist'.tr(),
                               style: Theme.of(context).textTheme.bodySmall,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -409,7 +409,7 @@ class _DesktopMiniPlayer extends HookConsumerWidget {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   Text(
-                                    currentMetadata?.artist ?? context.tr('unknownArtist'),
+                                    currentMetadata?.artist ?? 'unknownArtist'.tr(),
                                     style: Theme.of(
                                       context,
                                     ).textTheme.bodySmall,
@@ -605,7 +605,7 @@ class _DesktopMiniPlayer extends HookConsumerWidget {
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
               child: Row(
                 children: [
-                  Text(context.tr('queue'), style: TextStyle(fontSize: 20)),
+                  Text('queue'.tr(), style: TextStyle(fontSize: 20)),
                   const Spacer(),
                   IconButton(
                     icon: const Icon(Symbols.close),
@@ -622,7 +622,7 @@ class _DesktopMiniPlayer extends HookConsumerWidget {
                 builder: (context, snapshot) {
                   final playlist = snapshot.data;
                   if (playlist == null || playlist.medias.isEmpty) {
-                    return Center(child: Text(context.tr('noTracksInQueue')));
+                    return Center(child: Text('noTracksInQueue'.tr()));
                   }
 
                   return ReorderableListView.builder(
@@ -678,8 +678,8 @@ class _DesktopMiniPlayer extends HookConsumerWidget {
                               path: trackPath,
                               title: Uri.parse(media.uri).pathSegments.last,
                               artist:
-                                  media.extras?['artist'] as String? ??
-                                  context.tr('unknownArtist'),
+                                          media.extras?['artist'] as String? ??
+                                          'unknownArtist'.tr(),
                               album: media.extras?['album'] as String?,
                               duration: null,
                               artUri: null,
@@ -728,7 +728,7 @@ class _DesktopMiniPlayer extends HookConsumerWidget {
                                       ).pathSegments.last,
                                       artist:
                                           media.extras?['artist'] as String? ??
-                                          context.tr('unknownArtist'),
+                                          'unknownArtist'.tr(),
                                       album: media.extras?['album'] as String?,
                                       duration: null,
                                       artUri: null,

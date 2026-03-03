@@ -24,7 +24,7 @@ class AlbumsTab extends HookConsumerWidget {
         final albums = snapshot.data!;
 
         if (albums.isEmpty) {
-          return Center(child: Text(context.tr('noAlbumsFound')));
+          return Center(child: Text('noAlbumsFound'.tr()));
         }
 
         return GridView.builder(
