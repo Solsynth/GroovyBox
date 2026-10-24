@@ -3,6 +3,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../widgets/common.dart';
 import 'aggregate.dart';
+import 'lyrics.dart';
 import 'models.dart';
 import 'source.dart';
 import 'store.dart';
@@ -134,4 +135,15 @@ Future<List<LibrarySong>> searchSongs(Ref ref, String query) async {
   if (trimmed.isEmpty) return const [];
   if (ref.watch(librarySourcesProvider).isEmpty) return const [];
   return ref.watch(libraryAggregatorProvider).search(trimmed);
+}
+
+/// Lyrics of one song, read straight from its own source.
+///
+/// Cached for the session: a track that is replayed or scrubbed through does
+/// not re-request its lyrics, and the dock only asks for the current track.
+@Riverpod(keepAlive: true)
+Future<Lyrics> songLyrics(Ref ref, LyricsRequest song) async {
+  final source = ref.watch(librarySourceByIdProvider)[song.sourceId];
+  if (source == null) return Lyrics.empty;
+  return source.lyrics(song.stub);
 }

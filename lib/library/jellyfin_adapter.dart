@@ -3,6 +3,7 @@ import 'dart:io' show HttpHeaders;
 import 'package:dio/dio.dart';
 
 import 'http.dart';
+import 'lyrics.dart';
 import 'models.dart';
 import 'source.dart';
 
@@ -320,6 +321,44 @@ class JellyfinSource extends LibrarySource {
     });
     return [for (final item in items) _song(item)];
   }
+
+  /// `/Audio/{id}/Lyrics`; 404 means the item has no lyrics at all.
+  ///
+  /// Jellyfin stores every line's start in ticks (100 ns), and reports 0 for
+  /// lines it could not time, which a view must not treat as "sung at 0:00".
+  @override
+  Future<Lyrics> lyrics(LibrarySong song) async {
+    final Map<String, dynamic> body;
+    try {
+      body = await _request('/Audio/${Uri.encodeComponent(song.id)}/Lyrics');
+    } on LibraryException catch (error) {
+      if (error.code == 404) return Lyrics.empty;
+      rethrow;
+    }
+
+    final raw = body['Lyrics'];
+    if (raw is! List) return Lyrics.empty;
+    final lines = <LyricLine>[];
+    for (final line in raw) {
+      if (line is! Map) continue;
+      final text = line['Text'] as String? ?? '';
+      final ticks = (line['Start'] as num?)?.toInt() ?? 0;
+      lines.add(LyricLine(_fromTicks(ticks), text));
+    }
+    if (lines.isEmpty) return Lyrics.empty;
+    lines.sort((a, b) => a.at.compareTo(b.at));
+
+    final metadata = body['Metadata'];
+    final language = metadata is Map ? metadata['ThreeLetterISOLanguageName'] : null;
+    return Lyrics(
+      lines: lines,
+      synced: lines.any((line) => line.at > Duration.zero),
+      language: language is String && language != 'und' ? language : null,
+    );
+  }
+
+  /// Jellyfin ticks are 100 ns each.
+  static Duration _fromTicks(int ticks) => Duration(microseconds: ticks ~/ 10);
 
   @override
   Uri streamUri(LibrarySong song) => Uri.parse(

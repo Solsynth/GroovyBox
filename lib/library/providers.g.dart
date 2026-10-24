@@ -634,3 +634,96 @@ final class SearchSongsFamily extends $Family
   @override
   String toString() => r'searchSongsProvider';
 }
+
+/// Lyrics of one song, read straight from its own source.
+///
+/// Cached for the session: a track that is replayed or scrubbed through does
+/// not re-request its lyrics, and the dock only asks for the current track.
+
+@ProviderFor(songLyrics)
+final songLyricsProvider = SongLyricsFamily._();
+
+/// Lyrics of one song, read straight from its own source.
+///
+/// Cached for the session: a track that is replayed or scrubbed through does
+/// not re-request its lyrics, and the dock only asks for the current track.
+
+final class SongLyricsProvider
+    extends $FunctionalProvider<AsyncValue<Lyrics>, Lyrics, FutureOr<Lyrics>>
+    with $FutureModifier<Lyrics>, $FutureProvider<Lyrics> {
+  /// Lyrics of one song, read straight from its own source.
+  ///
+  /// Cached for the session: a track that is replayed or scrubbed through does
+  /// not re-request its lyrics, and the dock only asks for the current track.
+  SongLyricsProvider._({
+    required SongLyricsFamily super.from,
+    required LyricsRequest super.argument,
+  }) : super(
+         retry: null,
+         name: r'songLyricsProvider',
+         isAutoDispose: false,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$songLyricsHash();
+
+  @override
+  String toString() {
+    return r'songLyricsProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<Lyrics> $createElement($ProviderPointer pointer) =>
+      $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<Lyrics> create(Ref ref) {
+    final argument = this.argument as LyricsRequest;
+    return songLyrics(ref, argument);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is SongLyricsProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$songLyricsHash() => r'1571e645650393b632af92a7433831815099dda8';
+
+/// Lyrics of one song, read straight from its own source.
+///
+/// Cached for the session: a track that is replayed or scrubbed through does
+/// not re-request its lyrics, and the dock only asks for the current track.
+
+final class SongLyricsFamily extends $Family
+    with $FunctionalFamilyOverride<FutureOr<Lyrics>, LyricsRequest> {
+  SongLyricsFamily._()
+    : super(
+        retry: null,
+        name: r'songLyricsProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: false,
+      );
+
+  /// Lyrics of one song, read straight from its own source.
+  ///
+  /// Cached for the session: a track that is replayed or scrubbed through does
+  /// not re-request its lyrics, and the dock only asks for the current track.
+
+  SongLyricsProvider call(LyricsRequest song) =>
+      SongLyricsProvider._(argument: song, from: this);
+
+  @override
+  String toString() => r'songLyricsProvider';
+}

@@ -1,4 +1,5 @@
 import 'jellyfin_adapter.dart';
+import 'lyrics.dart';
 import 'models.dart';
 import 'subsonic_adapter.dart';
 
@@ -97,6 +98,12 @@ abstract class LibrarySource {
   Future<List<LibrarySong>> search(String query, {int limit});
   Future<List<LibrarySong>> randomSongs({int size});
 
+  /// Lyrics for [song], synced when the server has a timed version.
+  ///
+  /// Never throws for "this song has none": an empty [Lyrics] is the answer.
+  /// A network failure does throw, so a caller can tell "no lyrics" from
+  /// "could not ask".
+  Future<Lyrics> lyrics(LibrarySong song);
   Uri streamUri(LibrarySong song);
   Uri? artworkUri(String? artId, {int size});
 }

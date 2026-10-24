@@ -9,6 +9,7 @@ import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/format.dart';
+import 'package:groovy_box/widgets/lyrics_view.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
@@ -23,11 +24,21 @@ import 'package:material_ui/material_ui.dart';
 /// paints. On a wide window the cover and the controls sit side by side
 /// instead of stacking in a narrow column.
 @RoutePage()
-class PlayerScreen extends ConsumerWidget {
+class PlayerScreen extends ConsumerStatefulWidget {
   const PlayerScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PlayerScreen> createState() => _PlayerScreenState();
+}
+
+class _PlayerScreenState extends ConsumerState<PlayerScreen> {
+  /// Whether the page shows lyrics instead of the cover. Apple Music's player
+  /// keeps both behind one control in the corner, because the cover and the
+  /// words compete for the same column.
+  bool _showLyrics = false;
+
+  @override
+  Widget build(BuildContext context) {
     final playback = ref.watch(playbackProvider);
     final controller = ref.read(playbackProvider.notifier);
     final song = playback.current;
@@ -118,6 +129,9 @@ class PlayerScreen extends ConsumerWidget {
                 _PlayerHeader(
                   onClose: () => context.router.maybePop(),
                   title: 'Now playing',
+                  showingLyrics: _showLyrics,
+                  onToggleLyrics: () =>
+                      setState(() => _showLyrics = !_showLyrics),
                 ),
                 Expanded(
                   child: wide
@@ -126,12 +140,14 @@ class PlayerScreen extends ConsumerWidget {
                           scrubber: scrubber,
                           transport: transport,
                           volume: volume,
+                          showLyrics: _showLyrics,
                         )
                       : _CompactPlayerBody(
                           song: song,
                           scrubber: scrubber,
                           transport: transport,
                           volume: volume,
+                          showLyrics: _showLyrics,
                         ),
                 ),
               ],
@@ -146,8 +162,15 @@ class PlayerScreen extends ConsumerWidget {
 class _PlayerHeader extends StatelessWidget {
   final VoidCallback onClose;
   final String title;
+  final bool showingLyrics;
+  final VoidCallback onToggleLyrics;
 
-  const _PlayerHeader({required this.onClose, required this.title});
+  const _PlayerHeader({
+    required this.onClose,
+    required this.title,
+    required this.showingLyrics,
+    required this.onToggleLyrics,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -170,7 +193,12 @@ class _PlayerHeader extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          const SizedBox(width: 48),
+          IconButton(
+            tooltip: showingLyrics ? 'Hide lyrics' : 'Show lyrics',
+            isSelected: showingLyrics,
+            onPressed: onToggleLyrics,
+            icon: const Icon(Symbols.lyrics_rounded),
+          ),
         ],
       ),
     );
@@ -189,19 +217,21 @@ class _CompactPlayerBody extends StatelessWidget {
   final Widget scrubber;
   final Widget transport;
   final Widget volume;
+  final bool showLyrics;
 
   const _CompactPlayerBody({
     required this.song,
     required this.scrubber,
     required this.transport,
     required this.volume,
+    required this.showLyrics,
   });
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final coverSize = (constraints.maxHeight * 0.46).clamp(180.0, 380.0);
+        final coverSize = (constraints.maxHeight * 0.54).clamp(200.0, 460.0);
         return Padding(
           padding: const EdgeInsets.fromLTRB(
             SolSpace.xl,
@@ -212,8 +242,25 @@ class _CompactPlayerBody extends StatelessWidget {
           child: Column(
             children: [
               Expanded(
-                child: Center(
-                  child: _Cover(song: song, size: coverSize),
+                // Lyrics take the cover's place rather than stacking above the
+                // controls: two scrolling bodies in one column leaves neither
+                // enough room to read a verse.
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 260),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  child: showLyrics
+                      ? const SongLyricsPane(
+                          key: ValueKey('lyrics'),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: SolSpace.xs,
+                          ),
+                          fade: false,
+                        )
+                      : Center(
+                          key: const ValueKey('cover'),
+                          child: _Cover(song: song, size: coverSize),
+                        ),
                 ),
               ),
               _TrackCopy(song: song, centered: true),
@@ -251,12 +298,14 @@ class _WidePlayerBody extends StatelessWidget {
   final Widget scrubber;
   final Widget transport;
   final Widget volume;
+  final bool showLyrics;
 
   const _WidePlayerBody({
     required this.song,
     required this.scrubber,
     required this.transport,
     required this.volume,
+    required this.showLyrics,
   });
 
   @override
@@ -265,41 +314,107 @@ class _WidePlayerBody extends StatelessWidget {
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(SolSpace.xxl),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 880),
-          child: IslandCard(
-            cornerRadius: SolRadius.xxl,
-            padding: const EdgeInsets.all(SolSpace.xxl),
-            emphasised: true,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+          constraints: BoxConstraints(
+            maxWidth: showLyrics ? 1120 : 1000,
+          ),
+          child: showLyrics
+              ? _lyricsCard(context)
+              : _coverCard(context),
+        ),
+      ),
+    );
+  }
+
+  Widget _coverCard(BuildContext context) {
+    return IslandCard(
+      cornerRadius: SolRadius.xxl,
+      padding: const EdgeInsets.all(SolSpace.xxl),
+      emphasised: true,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Flexible(
+            flex: 5,
+            child: AspectRatio(
+              aspectRatio: 1,
+              child: _Cover(song: song, size: null),
+            ),
+          ),
+          const SizedBox(width: SolSpace.xxxl),
+          Flexible(
+            flex: 5,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Flexible(
-                  flex: 4,
-                  child: AspectRatio(
-                    aspectRatio: 1,
-                    child: _Cover(song: song, size: null),
-                  ),
-                ),
-                const SizedBox(width: SolSpace.xxxl),
-                Flexible(
-                  flex: 5,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _TrackCopy(song: song, centered: false),
-                      const SizedBox(height: SolSpace.lg),
-                      scrubber,
-                      const SizedBox(height: SolSpace.sm),
-                      transport,
-                      const SizedBox(height: SolSpace.lg),
-                      volume,
-                    ],
-                  ),
-                ),
+                _TrackCopy(song: song, centered: false),
+                const SizedBox(height: SolSpace.lg),
+                scrubber,
+                const SizedBox(height: SolSpace.sm),
+                transport,
+                const SizedBox(height: SolSpace.lg),
+                volume,
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  /// The lyrics layout: cover and transport on the left, words on the right.
+  ///
+  /// The cover does not disappear when the lyrics open — both are the song, and
+  /// the reference player keeps the artwork beside the text — so the panel gets
+  /// a height that fits the viewport and both columns fill it.
+  Widget _lyricsCard(BuildContext context) {
+    final height = (MediaQuery.sizeOf(context).height * 0.76).clamp(
+      520.0,
+      780.0,
+    );
+    return SizedBox(
+      height: height,
+      child: IslandCard(
+        cornerRadius: SolRadius.xxl,
+        padding: const EdgeInsets.all(SolSpace.xl),
+        emphasised: true,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Flexible(
+              flex: 9,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: Center(
+                      child: AspectRatio(
+                        aspectRatio: 1,
+                        child: _Cover(song: song, size: null),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: SolSpace.lg),
+                  _TrackCopy(song: song, centered: false),
+                  const SizedBox(height: SolSpace.md),
+                  scrubber,
+                  const SizedBox(height: SolSpace.xs),
+                  transport,
+                  const SizedBox(height: SolSpace.sm),
+                  volume,
+                ],
+              ),
+            ),
+            const SizedBox(width: SolSpace.xxxl),
+            const Flexible(
+              flex: 11,
+              child: SongLyricsPane(
+                key: ValueKey('lyrics'),
+                padding: EdgeInsets.symmetric(horizontal: SolSpace.sm),
+                fade: false,
+              ),
+            ),
+          ],
         ),
       ),
     );

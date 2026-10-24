@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart' as crypto;
 import 'package:dio/dio.dart';
 
 import 'http.dart';
+import 'lyrics.dart';
 import 'models.dart';
 import 'source.dart';
 
@@ -292,6 +293,122 @@ class SubsonicSource extends LibrarySource {
       for (final song in random['song'] as List)
         if (song is Map) _songFromJson(_stringKeyed(song)),
     ];
+  }
+
+  /// OpenSubsonic's timed endpoint first, then the older plain-text one.
+  ///
+  /// A server that predates `songLyrics` answers the first call with an error
+  /// code, which is not a playback failure: the second call is the honest
+  /// fallback, and no lyrics at all is a normal answer for a lot of tracks.
+  @override
+  Future<Lyrics> lyrics(LibrarySong song) async {
+    try {
+      final body = await _request(
+        'getLyricsBySongId',
+        // `enhanced` only adds data on servers that know the songLyrics v2
+        // extension; older ones ignore the parameter, and a server that
+        // rejects it at all falls through to the classic endpoint below.
+        query: {'id': song.id, 'enhanced': 'true'},
+      );
+      final structured = _structuredLyrics(body['lyricsList']);
+      if (!structured.isEmpty) return structured;
+    } on LibraryException {
+      // Extension missing or the request failed; try the classic endpoint.
+    }
+
+    try {
+      final body = await _request(
+        'getLyrics',
+        query: {'artist': ?song.artist, 'title': song.title},
+      );
+      final lyrics = body['lyrics'];
+      final value = lyrics is Map ? lyrics['value'] : null;
+      if (value is String && value.trim().isNotEmpty) {
+        // Some servers store LRC in `value` even on the classic endpoint.
+        return parseLrc(value);
+      }
+    } on LibraryException {
+      // Unsupported endpoint or no lyrics; both read as "none" here.
+    }
+    return Lyrics.empty;
+  }
+
+  /// Splits the response into its layers and folds the readings onto the words.
+  ///
+  /// `kind` only appears on enhanced responses; when it is absent the entry is
+  /// the song's own words. A translation or romanization is never shown in the
+  /// main column — it annotates a line instead, aligned by its own stamps.
+  static Lyrics _structuredLyrics(Object? list) {
+    if (list is! Map) return Lyrics.empty;
+    final entries = list['structuredLyrics'];
+    if (entries is! List) return Lyrics.empty;
+
+    Lyrics? main;
+    Lyrics? unsyncedMain;
+    Lyrics? pronunciation;
+    Lyrics? translation;
+    for (final entry in entries) {
+      if (entry is! Map) continue;
+      final parsed = _layer(entry);
+      if (parsed == null) continue;
+      final kind = entry['kind'];
+      switch (kind) {
+        case 'pronunciation':
+          pronunciation ??= parsed;
+        case 'translation':
+          translation ??= parsed;
+        case _:
+          // An unmarked entry is the main track; a synced one beats a plain.
+          if (parsed.synced) {
+            main ??= parsed;
+          } else {
+            unsyncedMain ??= parsed;
+          }
+      }
+    }
+
+    final words = main ?? unsyncedMain;
+    if (words == null) return Lyrics.empty;
+    return mergeLyricLayers(
+      main: words,
+      pronunciation: pronunciation,
+      translation: translation,
+    );
+  }
+
+  /// One `structuredLyrics` entry, or null when it carries no text.
+  static Lyrics? _layer(Map entry) {
+    final raw = entry['line'];
+    if (raw is! List) return null;
+
+    // The spec's offset is positive-when-earlier, so it subtracts.
+    final offset = Duration(
+      milliseconds: (entry['offset'] as num?)?.round() ?? 0,
+    );
+    final lines = <LyricLine>[];
+    for (final line in raw) {
+      if (line is! Map) continue;
+      final start = Duration(
+        milliseconds: (line['start'] as num?)?.round() ?? 0,
+      );
+      final at = start - offset;
+      lines.add(
+        LyricLine(
+          at.isNegative ? Duration.zero : at,
+          line['value'] as String? ?? '',
+        ),
+      );
+    }
+    if (lines.isEmpty) return null;
+
+    final language = entry['lang'] as String?;
+    return Lyrics(
+      lines: lines,
+      synced:
+          entry['synced'] == true &&
+          lines.any((line) => line.at > Duration.zero),
+      language: language == 'xxx' ? null : language,
+    );
   }
 
   /// A directly playable URL. media_kit can stream this as-is; the signed

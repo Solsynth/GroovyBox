@@ -17,6 +17,11 @@ files. Nothing is downloaded: playback streams straight from the server.
 - **Playback** — one `media_kit` player for the app's lifetime
   (`lib/player/player.dart`), exposed through Riverpod. Shuffle reorders the
   visible queue instead of hiding randomization underneath.
+- **Lyrics** — `lib/library/lyrics.dart` normalizes OpenSubsonic structured
+  lyrics (timed lines, with romanization and translation layers folded onto the
+  words they annotate) and LRC text. `lib/widgets/lyrics_view.dart` draws the
+  Apple Music–style column: the sung line in full tone, the rest dimmed, the
+  playhead parked a third of the way down, a tap on a line seeking to it.
 - **Screens** — Browse (search + random shelf + recently added), Albums, album
   detail, Playlists, playlist detail, Queue, full Player, Setup, Settings.
 
@@ -36,6 +41,10 @@ Two surface languages, deliberately kept apart:
   in the scrolling plane: settings groups, the setup panel, the wide player
   body. Opaque, tonal, no border, no blur — body text has to stay legible and a
   long list must not pay for a backdrop sample per card.
+
+The dock's lyrics button lifts the capsule into a lyric sheet instead of a
+route, so glancing at the next line never loses the page; the player page keeps
+the cover beside the words on a wide window and swaps them on a phone.
 
 The now-playing dock is the collapsed player: tapping anywhere on the capsule
 that is not a control records its rect and opens `/now-playing` through a

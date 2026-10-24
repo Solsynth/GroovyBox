@@ -61,6 +61,19 @@ class _FakeJellyfin {
       response.write(
         jsonEncode({'Items': _itemsFor(query), 'TotalRecordCount': 2}),
       );
+    } else if (path == '/Audio/s1/Lyrics') {
+      response.write(
+        jsonEncode({
+          'Lyrics': [
+            {'Text': 'First line', 'Start': 10000000},
+            {'Text': 'Second line', 'Start': 450000000},
+          ],
+          'Metadata': {'ThreeLetterISOLanguageName': 'eng'},
+        }),
+      );
+    } else if (path == '/Audio/empty/Lyrics') {
+      response.statusCode = HttpStatus.notFound;
+      response.write(jsonEncode({'Message': 'not found'}));
     } else {
       response.statusCode = HttpStatus.notFound;
       response.write(jsonEncode({'Message': 'not found'}));
@@ -225,5 +238,41 @@ void main() {
     expect(albums.single.name, 'An Album');
     expect(albums.single.year, 2019);
     expect(albums.single.artId, 'al1');
+  });
+
+  test('maps timed lyrics in ticks and treats 404 as no lyrics', () async {
+    final config = await JellyfinAdapter().connect(
+      baseUrl: server.baseUrl,
+      username: 'me',
+      password: 'secret',
+    );
+    final source = JellyfinAdapter().sourceFor(config);
+
+    final lyrics = await source.lyrics(
+      const LibrarySong(
+        sourceId: 'a',
+        id: 's1',
+        title: 'A Song',
+        duration: Duration(minutes: 6),
+      ),
+    );
+    expect(lyrics.synced, isTrue);
+    expect(lyrics.language, 'eng');
+    expect(lyrics.lines.first.at, const Duration(seconds: 1));
+    expect(lyrics.lines.last.at, const Duration(seconds: 45));
+    expect(lyrics.lines.map((line) => line.text), [
+      'First line',
+      'Second line',
+    ]);
+
+    final none = await source.lyrics(
+      const LibrarySong(
+        sourceId: 'a',
+        id: 'empty',
+        title: 'Nothing',
+        duration: Duration(minutes: 3),
+      ),
+    );
+    expect(none.isEmpty, isTrue);
   });
 }
