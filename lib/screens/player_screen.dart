@@ -1,15 +1,14 @@
 import 'dart:ui';
 
 import 'package:auto_route/auto_route.dart';
+import 'package:groovy_box/core/app.dart';
+import 'package:groovy_box/core/theme.dart';
+import 'package:groovy_box/player/player.dart';
+import 'package:groovy_box/widgets/artwork.dart';
+import 'package:groovy_box/widgets/format.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
-
-import '../core/app.dart';
-import '../core/theme.dart';
-import '../player/player.dart';
-import '../widgets/artwork.dart';
-import '../widgets/format.dart';
 
 /// Full-window player: large cover, scrubber, transport and volume.
 ///
@@ -59,8 +58,9 @@ class PlayerScreen extends ConsumerWidget {
                 imageFilter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
                 child: Opacity(
                   opacity: 0.35,
-                  child: ServerArtwork(
-                    coverArtId: song.coverArt,
+                  child: LibraryArtwork(
+                    sourceId: song.sourceId,
+                    artId: song.artId,
                     radius: 0,
                     fallbackIcon: Symbols.music_note_rounded,
                   ),
@@ -120,8 +120,9 @@ class PlayerScreen extends ConsumerWidget {
                                       ),
                                     ],
                                   ),
-                                  child: ServerArtwork(
-                                    coverArtId: song.coverArt,
+                                  child: LibraryArtwork(
+                                    sourceId: song.sourceId,
+                                    artId: song.artId,
                                     radius: SolRadius.xl,
                                     size: 420,
                                     fallbackIcon: Symbols.album,

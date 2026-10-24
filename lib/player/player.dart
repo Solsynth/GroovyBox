@@ -1,12 +1,10 @@
 import 'dart:async';
 
+import 'package:groovy_box/library/models.dart';
+import 'package:groovy_box/library/providers.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-
-import '../core/app.dart';
-import '../server/models.dart';
-
 
 part 'player.g.dart';
 
@@ -27,7 +25,7 @@ PlaybackRepeatMode nextRepeatMode(PlaybackRepeatMode mode) => switch (mode) {
 /// widget ever subscribes to libmpv itself.
 class PlaybackState {
   /// The playable queue, in play order.
-  final List<SubsonicSong> queue;
+  final List<LibrarySong> queue;
   final int? currentIndex;
   final bool playing;
   final Duration position;
@@ -47,10 +45,15 @@ class PlaybackState {
     this.volume = 100,
   });
 
-  SubsonicSong? get current =>
+  LibrarySong? get current =>
       currentIndex == null || currentIndex! >= queue.length
           ? null
           : queue[currentIndex!];
+
+  /// Whether [song] is the one playing. Ids are only unique per source, so
+  /// both halves of the identity have to match.
+  bool isCurrentSong(LibrarySong song) =>
+      current?.sourceId == song.sourceId && current?.id == song.id;
 
   bool get hasNext =>
       queue.isNotEmpty && (currentIndex ?? -1) < queue.length - 1;
@@ -59,7 +62,7 @@ class PlaybackState {
       (currentIndex ?? 0) > 0 || repeatMode == PlaybackRepeatMode.all;
 
   PlaybackState copyWith({
-    List<SubsonicSong>? queue,
+    List<LibrarySong>? queue,
     int? currentIndex,
     bool? playing,
     Duration? position,
@@ -89,7 +92,7 @@ class PlaybackState {
 /// Kept out of the widget tree on purpose: the audio session outlives the dock,
 /// the player page, and any route pushed above them.
 ///
-/// Streams are remote URLs, so a track is opened with its signed Subsonic
+/// Streams are remote URLs, so a track is opened with its own library's signed
 /// stream URL rather than a local path. Nothing is downloaded first.
 /// The transport. Created lazily and kept alive for the whole session.
 @Riverpod(keepAlive: true)
@@ -100,10 +103,10 @@ class Playback extends Notifier<PlaybackState> {
   /// Play order is index order: shuffling reorders [PlaybackState.queue]
   /// rather than asking media-kit to shuffle, so the queue the user sees is
   /// always the queue that plays.
-  List<SubsonicSong> _order = [];
+  List<LibrarySong> _order = [];
 
   /// The queue as handed to [playQueue], used to undo a shuffle.
-  List<SubsonicSong> _sourceOrder = [];
+  List<LibrarySong> _sourceOrder = [];
 
   @override
   PlaybackState build() {
@@ -138,7 +141,7 @@ class Playback extends Notifier<PlaybackState> {
   }
 
   /// Replaces the queue with [songs] and starts at [startIndex].
-  Future<void> playQueue(List<SubsonicSong> songs, {int startIndex = 0}) async {
+  Future<void> playQueue(List<LibrarySong> songs, {int startIndex = 0}) async {
     if (songs.isEmpty || startIndex < 0 || startIndex >= songs.length) return;
 
     _order = List.of(songs);
@@ -224,13 +227,16 @@ class Playback extends Notifier<PlaybackState> {
 
   Future<void> setVolume(double volume) => _player.setVolume(volume);
 
-  /// Opens the song at the current index through the server's stream endpoint.
+  /// Opens the song at the current index through its library's stream
+  /// endpoint. A source that has since been removed leaves the transport
+  /// stopped rather than throwing.
   Future<void> _openCurrent() async {
     final song = state.current;
-    final client = ref.read(subsonicClientProvider);
-    if (song == null || client == null) return;
+    if (song == null) return;
+    final source = ref.read(librarySourceByIdProvider)[song.sourceId];
+    if (source == null) return;
 
-    await _player.open(Media(client.streamUrl(song.id)));
+    await _player.open(Media(source.streamUri(song).toString()));
   }
 
   Future<void> _jumpTo(int index) async {

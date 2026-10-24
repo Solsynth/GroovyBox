@@ -1,13 +1,12 @@
 import 'package:auto_route/auto_route.dart';
+import 'package:groovy_box/core/router.gr.dart';
+import 'package:groovy_box/core/theme.dart';
+import 'package:groovy_box/player/player.dart';
+import 'package:groovy_box/widgets/artwork.dart';
+import 'package:groovy_box/widgets/format.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
-
-import '../core/router.gr.dart';
-import '../core/theme.dart';
-import '../player/player.dart';
-import 'artwork.dart';
-import 'format.dart';
 
 /// The persistent transport strip under every tab.
 ///
@@ -63,8 +62,9 @@ class NowPlayingDock extends ConsumerWidget {
                 ),
                 child: Row(
                   children: [
-                    ServerArtwork(
-                      coverArtId: song.coverArt,
+                    LibraryArtwork(
+                      sourceId: song.sourceId,
+                      artId: song.artId,
                       size: 40,
                       radius: SolRadius.sm,
                     ),

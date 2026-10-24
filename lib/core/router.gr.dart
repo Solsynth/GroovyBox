@@ -26,6 +26,7 @@ import 'package:material_ui/material_ui.dart' as _i10;
 class AlbumDetailRoute extends _i9.PageRouteInfo<AlbumDetailRouteArgs> {
   AlbumDetailRoute({
     _i10.Key? key,
+    required String sourceId,
     required String albumId,
     String? albumName,
     List<_i9.PageRouteInfo>? children,
@@ -33,10 +34,11 @@ class AlbumDetailRoute extends _i9.PageRouteInfo<AlbumDetailRouteArgs> {
          AlbumDetailRoute.name,
          args: AlbumDetailRouteArgs(
            key: key,
+           sourceId: sourceId,
            albumId: albumId,
            albumName: albumName,
          ),
-         rawPathParams: {'albumId': albumId},
+         rawPathParams: {'sourceId': sourceId, 'albumId': albumId},
          initialChildren: children,
        );
 
@@ -47,11 +49,14 @@ class AlbumDetailRoute extends _i9.PageRouteInfo<AlbumDetailRouteArgs> {
     builder: (data) {
       final pathParams = data.inheritedPathParams;
       final args = data.argsAs<AlbumDetailRouteArgs>(
-        orElse: () =>
-            AlbumDetailRouteArgs(albumId: pathParams.getString('albumId')),
+        orElse: () => AlbumDetailRouteArgs(
+          sourceId: pathParams.getString('sourceId'),
+          albumId: pathParams.getString('albumId'),
+        ),
       );
       return _i1.AlbumDetailScreen(
         key: args.key,
+        sourceId: args.sourceId,
         albumId: args.albumId,
         albumName: args.albumName,
       );
@@ -60,9 +65,16 @@ class AlbumDetailRoute extends _i9.PageRouteInfo<AlbumDetailRouteArgs> {
 }
 
 class AlbumDetailRouteArgs {
-  const AlbumDetailRouteArgs({this.key, required this.albumId, this.albumName});
+  const AlbumDetailRouteArgs({
+    this.key,
+    required this.sourceId,
+    required this.albumId,
+    this.albumName,
+  });
 
   final _i10.Key? key;
+
+  final String sourceId;
 
   final String albumId;
 
@@ -70,7 +82,7 @@ class AlbumDetailRouteArgs {
 
   @override
   String toString() {
-    return 'AlbumDetailRouteArgs{key: $key, albumId: $albumId, albumName: $albumName}';
+    return 'AlbumDetailRouteArgs{key: $key, sourceId: $sourceId, albumId: $albumId, albumName: $albumName}';
   }
 
   @override
@@ -78,12 +90,14 @@ class AlbumDetailRouteArgs {
     if (identical(this, other)) return true;
     if (other is! AlbumDetailRouteArgs) return false;
     return key == other.key &&
+        sourceId == other.sourceId &&
         albumId == other.albumId &&
         albumName == other.albumName;
   }
 
   @override
-  int get hashCode => key.hashCode ^ albumId.hashCode ^ albumName.hashCode;
+  int get hashCode =>
+      key.hashCode ^ sourceId.hashCode ^ albumId.hashCode ^ albumName.hashCode;
 }
 
 /// generated route for
@@ -139,6 +153,7 @@ class PlayerRoute extends _i9.PageRouteInfo<void> {
 class PlaylistDetailRoute extends _i9.PageRouteInfo<PlaylistDetailRouteArgs> {
   PlaylistDetailRoute({
     _i10.Key? key,
+    required String sourceId,
     required String playlistId,
     String? playlistName,
     List<_i9.PageRouteInfo>? children,
@@ -146,10 +161,11 @@ class PlaylistDetailRoute extends _i9.PageRouteInfo<PlaylistDetailRouteArgs> {
          PlaylistDetailRoute.name,
          args: PlaylistDetailRouteArgs(
            key: key,
+           sourceId: sourceId,
            playlistId: playlistId,
            playlistName: playlistName,
          ),
-         rawPathParams: {'playlistId': playlistId},
+         rawPathParams: {'sourceId': sourceId, 'playlistId': playlistId},
          initialChildren: children,
        );
 
@@ -161,11 +177,13 @@ class PlaylistDetailRoute extends _i9.PageRouteInfo<PlaylistDetailRouteArgs> {
       final pathParams = data.inheritedPathParams;
       final args = data.argsAs<PlaylistDetailRouteArgs>(
         orElse: () => PlaylistDetailRouteArgs(
+          sourceId: pathParams.getString('sourceId'),
           playlistId: pathParams.getString('playlistId'),
         ),
       );
       return _i4.PlaylistDetailScreen(
         key: args.key,
+        sourceId: args.sourceId,
         playlistId: args.playlistId,
         playlistName: args.playlistName,
       );
@@ -176,11 +194,14 @@ class PlaylistDetailRoute extends _i9.PageRouteInfo<PlaylistDetailRouteArgs> {
 class PlaylistDetailRouteArgs {
   const PlaylistDetailRouteArgs({
     this.key,
+    required this.sourceId,
     required this.playlistId,
     this.playlistName,
   });
 
   final _i10.Key? key;
+
+  final String sourceId;
 
   final String playlistId;
 
@@ -188,7 +209,7 @@ class PlaylistDetailRouteArgs {
 
   @override
   String toString() {
-    return 'PlaylistDetailRouteArgs{key: $key, playlistId: $playlistId, playlistName: $playlistName}';
+    return 'PlaylistDetailRouteArgs{key: $key, sourceId: $sourceId, playlistId: $playlistId, playlistName: $playlistName}';
   }
 
   @override
@@ -196,13 +217,17 @@ class PlaylistDetailRouteArgs {
     if (identical(this, other)) return true;
     if (other is! PlaylistDetailRouteArgs) return false;
     return key == other.key &&
+        sourceId == other.sourceId &&
         playlistId == other.playlistId &&
         playlistName == other.playlistName;
   }
 
   @override
   int get hashCode =>
-      key.hashCode ^ playlistId.hashCode ^ playlistName.hashCode;
+      key.hashCode ^
+      sourceId.hashCode ^
+      playlistId.hashCode ^
+      playlistName.hashCode;
 }
 
 /// generated route for

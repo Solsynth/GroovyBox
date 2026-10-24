@@ -1,7 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../core/theme.dart';
-import '../server/models.dart';
+import '../library/models.dart';
 
 /// The one placeholder for every empty surface: dimmed icon, bold line, quiet
 /// explanation, optional way out.
@@ -241,7 +241,7 @@ class TrackRow extends StatelessWidget {
 /// claiming more than we know.
 String describeServerError(Object error) {
   return switch (error) {
-    SubsonicException(:final message) => message,
+    LibraryException(:final message) => message,
     _ => 'Something went wrong while talking to the server.',
   };
 }

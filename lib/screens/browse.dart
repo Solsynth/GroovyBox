@@ -1,16 +1,15 @@
 import 'package:auto_route/auto_route.dart';
+import 'package:groovy_box/core/router.gr.dart';
+import 'package:groovy_box/core/theme.dart';
+import 'package:groovy_box/library/models.dart';
+import 'package:groovy_box/library/providers.dart';
+import 'package:groovy_box/player/player.dart';
+import 'package:groovy_box/widgets/artwork.dart';
+import 'package:groovy_box/widgets/common.dart';
+import 'package:groovy_box/widgets/format.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
-
-import '../core/router.gr.dart';
-import '../core/server_data.dart';
-import '../core/theme.dart';
-import '../player/player.dart';
-import '../server/models.dart';
-import '../widgets/artwork.dart';
-import '../widgets/common.dart';
-import '../widgets/format.dart';
 
 /// The landing tab: search, a random shelf to start playing from, and the
 /// newest albums.
@@ -41,6 +40,7 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen> {
     final recentAlbums = ref.watch(recentAlbumsProvider);
     final randomSongs = ref.watch(randomSongsProvider);
     final search = ref.watch(searchSongsProvider(_query));
+    final sources = ref.watch(librarySourcesProvider);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -54,7 +54,9 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen> {
             SliverToBoxAdapter(
               child: PageHeader(
                 title: 'Browse',
-                subtitle: 'Streaming from your server',
+                subtitle: sources.isEmpty
+                    ? null
+                    : 'Streaming from ${sources.length == 1 ? sources.single.displayName : '${sources.length} libraries'}',
                 actions: [
                   IconButton(
                     tooltip: 'Settings',
@@ -186,8 +188,14 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen> {
     );
   }
 
-  void _openAlbum(BuildContext context, SubsonicAlbum album) {
-    context.router.push(AlbumDetailRoute(albumId: album.id));
+  void _openAlbum(BuildContext context, LibraryAlbum album) {
+    context.router.push(
+      AlbumDetailRoute(
+        sourceId: album.sourceId,
+        albumId: album.id,
+        albumName: album.name,
+      ),
+    );
   }
 
   /// Search results are songs: the server API returns them in one call and
@@ -197,7 +205,7 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen> {
   /// `search.when` returns widgets for a `slivers:` context in some branches,
   /// so the result has to be expanded rather than wrapped in a single sliver.
   List<Widget> _songSliver(
-    List<SubsonicSong> songs, {
+    List<LibrarySong> songs, {
     required String emptyMessage,
   }) {
     if (songs.isEmpty) {
@@ -263,7 +271,7 @@ class _SectionHeader extends StatelessWidget {
 
 /// Horizontal shelf of playable songs, each a cover card.
 class _SongShelf extends ConsumerWidget {
-  final List<SubsonicSong> songs;
+  final List<LibrarySong> songs;
 
   const _SongShelf({required this.songs});
 
@@ -291,7 +299,7 @@ class _SongShelf extends ConsumerWidget {
 }
 
 class _SongCard extends StatelessWidget {
-  final SubsonicSong song;
+  final LibrarySong song;
   final VoidCallback onTap;
 
   const _SongCard({required this.song, required this.onTap});
@@ -309,8 +317,9 @@ class _SongCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ServerArtwork(
-                coverArtId: song.coverArt,
+              LibraryArtwork(
+                sourceId: song.sourceId,
+                artId: song.artId,
                 size: 132,
                 radius: SolRadius.md,
               ),
@@ -340,7 +349,7 @@ class _SongCard extends StatelessWidget {
 }
 
 class _AlbumTile extends StatelessWidget {
-  final SubsonicAlbum album;
+  final LibraryAlbum album;
   final VoidCallback onTap;
 
   const _AlbumTile({required this.album, required this.onTap});
@@ -358,8 +367,9 @@ class _AlbumTile extends StatelessWidget {
           children: [
             AspectRatio(
               aspectRatio: 1,
-              child: ServerArtwork(
-                coverArtId: album.coverArt,
+              child: LibraryArtwork(
+                sourceId: album.sourceId,
+                artId: album.artId,
                 radius: SolRadius.md,
                 fallbackIcon: Symbols.album,
               ),
@@ -389,22 +399,25 @@ class _AlbumTile extends StatelessWidget {
 }
 
 class _SongRow extends ConsumerWidget {
-  final SubsonicSong song;
+  final LibrarySong song;
   final VoidCallback onTap;
 
   const _SongRow({required this.song, required this.onTap});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final current = ref.watch(playbackProvider).current;
+    final playback = ref.watch(playbackProvider);
     return TrackRow(
-      selected: current?.id == song.id,
+      selected: playback.isCurrentSong(song),
       onTap: onTap,
       title: song.title,
-      subtitle: song.subtitle,
+      // The suffix only appears with several libraries connected, so a
+      // single-server user never sees the extra noise.
+      subtitle: songRowSubtitle(ref, song),
       trailing: formatDuration(song.duration),
-      artwork: ServerArtwork(
-        coverArtId: song.coverArt,
+      artwork: LibraryArtwork(
+        sourceId: song.sourceId,
+        artId: song.artId,
         size: 44,
         radius: SolRadius.xs,
       ),

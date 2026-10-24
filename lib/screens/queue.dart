@@ -1,13 +1,12 @@
 import 'package:auto_route/auto_route.dart';
+import 'package:groovy_box/core/theme.dart';
+import 'package:groovy_box/player/player.dart';
+import 'package:groovy_box/widgets/artwork.dart';
+import 'package:groovy_box/widgets/common.dart';
+import 'package:groovy_box/widgets/format.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
-
-import '../core/theme.dart';
-import '../player/player.dart';
-import '../widgets/artwork.dart';
-import '../widgets/common.dart';
-import '../widgets/format.dart';
 
 /// The play queue, in the order it will actually play.
 ///
@@ -70,11 +69,12 @@ class QueueScreen extends ConsumerWidget {
                   final isCurrent = playback.currentIndex == index;
                   return TrackRow(
                     title: song.title,
-                    subtitle: song.subtitle,
+                    subtitle: songRowSubtitle(ref, song),
                     selected: isCurrent,
                     trailing: formatDuration(song.duration),
-                    artwork: ServerArtwork(
-                      coverArtId: song.coverArt,
+                    artwork: LibraryArtwork(
+                      sourceId: song.sourceId,
+                      artId: song.artId,
                       size: 44,
                       radius: SolRadius.xs,
                     ),

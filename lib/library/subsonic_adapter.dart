@@ -1,0 +1,367 @@
+import 'dart:convert';
+import 'dart:math';
+
+import 'package:crypto/crypto.dart' as crypto;
+import 'package:dio/dio.dart';
+
+import 'http.dart';
+import 'models.dart';
+import 'source.dart';
+
+/// Subsonic / OpenSubsonic / Navidrome / Gonic and friends.
+class SubsonicAdapter implements LibraryAdapter {
+  @override
+  LibraryKind get kind => LibraryKind.subsonic;
+
+  @override
+  Future<SourceConfig> connect({
+    required String baseUrl,
+    required String username,
+    required String password,
+  }) async {
+    final root = normalizeBaseUrl(baseUrl, suffix: '/rest');
+    final salt = _randomSalt();
+    final config = SourceConfig(
+      id: newSourceId(LibraryKind.subsonic),
+      kind: LibraryKind.subsonic,
+      baseUrl: root,
+      displayName: _displayNameFor(root),
+      auth: {
+        'username': username,
+        'token': crypto.md5.convert(utf8.encode('$password$salt')).toString(),
+        'salt': salt,
+      },
+    );
+    await SubsonicSource(config).ping();
+    return config;
+  }
+
+  @override
+  LibrarySource sourceFor(SourceConfig config) => SubsonicSource(config);
+
+  /// The server host, used when the caller passes no display name.
+  static String _displayNameFor(String normalizedUrl) =>
+      Uri.parse(normalizedUrl).host;
+
+  /// Subsonic's token auth: `t = md5(password + salt)`. The salt only has to
+  /// make the hash unusable for replay on its own, not to be secret.
+  static String _randomSalt() {
+    final random = Random.secure();
+    final values = List<int>.generate(8, (_) => random.nextInt(256));
+    return base64Url.encode(values);
+  }
+}
+
+/// Client identity sent as `c` / `v`; the server uses these for its own
+/// bookkeeping and some deployments reject requests without them.
+const _appName = 'GroovyBox';
+const _apiVersion = '1.16.1';
+
+/// One connected Subsonic server.
+///
+/// Every call goes through [_request], which unwraps the standard
+/// `subsonic-response` envelope, converts `status: failed` into a
+/// [LibraryException] and returns the inner map. That keeps the individual
+/// endpoints readable and means no caller ever sees the envelope.
+class SubsonicSource extends LibrarySource {
+  @override
+  final SourceConfig config;
+  final Dio _dio;
+
+  SubsonicSource(this.config)
+    : _dio = Dio(
+        BaseOptions(
+          baseUrl: normalizeBaseUrl(config.baseUrl, suffix: '/rest'),
+          connectTimeout: const Duration(seconds: 12),
+          receiveTimeout: const Duration(seconds: 25),
+          responseType: ResponseType.json,
+          // The API is queried with query parameters only; no JSON bodies.
+          contentType: Headers.jsonContentType,
+        ),
+      );
+
+  String get _username {
+    final username = config.auth['username'];
+    if (username == null) throw _signedOut;
+    return username;
+  }
+
+  String get _token {
+    final token = config.auth['token'];
+    if (token == null) throw _signedOut;
+    return token;
+  }
+
+  String get _salt {
+    final salt = config.auth['salt'];
+    if (salt == null) throw _signedOut;
+    return salt;
+  }
+
+  static const _signedOut = LibraryException(
+    'This library is not signed in. Connect it again from Settings.',
+  );
+
+  String get _serverRoot {
+    final url = normalizeBaseUrl(config.baseUrl, suffix: '/rest');
+    return url.substring(0, url.length - '/rest'.length);
+  }
+
+  Map<String, dynamic> _authParams() => {
+    'u': _username,
+    'c': _appName,
+    'v': _apiVersion,
+    'f': 'json',
+    't': _token,
+    's': _salt,
+  };
+
+  /// Unwraps the envelope and returns the body of a successful response.
+  Future<Map<String, dynamic>> _request(
+    String endpoint, {
+    Map<String, dynamic>? query,
+  }) async {
+    final Response<dynamic> response;
+    try {
+      response = await _dio.get<dynamic>(
+        '/$endpoint',
+        queryParameters: {..._authParams(), ...?query},
+      );
+    } on DioException catch (error) {
+      throw LibraryException(describeDioError(error));
+    }
+
+    final data = response.data;
+    if (data is! Map) {
+      throw const LibraryException(
+        'The server did not return a Subsonic response. '
+        'Check that the URL points at a Subsonic-compatible API.',
+      );
+    }
+
+    final envelope = data['subsonic-response'] ?? data['openSubsonic-response'];
+    if (envelope is! Map) {
+      throw const LibraryException('Malformed server response.');
+    }
+
+    if (envelope['status'] == 'failed') {
+      final error = envelope['error'];
+      throw LibraryException(
+        error is Map
+            ? (error['message'] as String? ?? 'Request failed')
+            : 'Request failed',
+        code: error is Map ? (error['code'] as num?)?.toInt() : null,
+      );
+    }
+
+    // OpenSubsonic servers nest everything under the same envelope; flatten
+    // the metadata fields so callers can read `artists` or `song` directly.
+    return Map<String, dynamic>.from(envelope)
+      ..remove('status')
+      ..remove('version')
+      ..remove('type')
+      ..remove('serverVersion')
+      ..remove('openSubsonic');
+  }
+
+  Future<bool> ping() async {
+    await _request('ping');
+    return true;
+  }
+
+  @override
+  Future<List<LibraryAlbum>> recentlyAdded({int limit = 50}) =>
+      _albums(limit: limit, offset: 0, type: 'newest');
+
+  @override
+  Future<List<LibraryAlbum>> albums({int limit = 60, int offset = 0}) =>
+      _albums(limit: limit, offset: offset, type: 'alphabeticalByName');
+
+  Future<List<LibraryAlbum>> _albums({
+    required int limit,
+    required int offset,
+    required String type,
+  }) async {
+    final body = await _request(
+      'getAlbumList2',
+      query: {'type': type, 'size': limit, 'offset': offset},
+    );
+    final albums = body['albumList2'];
+    if (albums is! Map || albums['album'] is! List) return const [];
+    return [
+      for (final album in albums['album'] as List)
+        if (album is Map) _albumFromJson(_stringKeyed(album)),
+    ];
+  }
+
+  @override
+  Future<LibraryAlbum?> album(String albumId) async {
+    final body = await _request('getAlbum', query: {'id': albumId});
+    final album = body['album'];
+    return album is Map ? _albumFromJson(_stringKeyed(album)) : null;
+  }
+
+  @override
+  Future<List<LibrarySong>> albumSongs(String albumId) async {
+    final body = await _request('getAlbum', query: {'id': albumId});
+    final album = body['album'];
+    if (album is! Map || album['song'] is! List) return const [];
+    return [
+      for (final song in album['song'] as List)
+        if (song is Map) _songFromJson(_stringKeyed(song)),
+    ];
+  }
+
+  /// OpenSubsonic `getArtists` gives indexed entries; the flattened list is the
+  /// union of every index bucket.
+  @override
+  Future<List<LibraryArtist>> artists() async {
+    final body = await _request('getArtists');
+    final index = body['artists'];
+    if (index is! Map) return const [];
+    final entries = index['index'];
+    if (entries is! List) return const [];
+    return [
+      for (final bucket in entries)
+        if (bucket is Map && bucket['artist'] is List)
+          for (final artist in bucket['artist'] as List)
+            if (artist is Map) _artistFromJson(_stringKeyed(artist)),
+    ];
+  }
+
+  @override
+  Future<List<LibraryAlbum>> artistAlbums(String artistId) async {
+    final body = await _request('getArtist', query: {'id': artistId});
+    final albums = body['artist'] is Map
+        ? (body['artist'] as Map)['album']
+        : null;
+    if (albums is! List) return const [];
+    return [
+      for (final album in albums)
+        if (album is Map) _albumFromJson(_stringKeyed(album)),
+    ];
+  }
+
+  @override
+  Future<List<LibraryPlaylist>> playlists() async {
+    final body = await _request('getPlaylists');
+    final playlists = body['playlists'];
+    if (playlists is! Map || playlists['playlist'] is! List) return const [];
+    return [
+      for (final playlist in playlists['playlist'] as List)
+        if (playlist is Map) _playlistFromJson(_stringKeyed(playlist)),
+    ];
+  }
+
+  @override
+  Future<List<LibrarySong>> playlistSongs(String playlistId) async {
+    final body = await _request('getPlaylist', query: {'id': playlistId});
+    final playlist = body['playlist'];
+    if (playlist is! Map || playlist['entry'] is! List) return const [];
+    return [
+      for (final song in playlist['entry'] as List)
+        if (song is Map) _songFromJson(_stringKeyed(song)),
+    ];
+  }
+
+  @override
+  Future<List<LibrarySong>> search(String query, {int limit = 40}) async {
+    final body = await _request(
+      'search3',
+      query: {
+        'query': query,
+        'songCount': limit,
+        'albumCount': 0,
+        'artistCount': 0,
+      },
+    );
+    final result = body['searchResult3'];
+    if (result is! Map || result['song'] is! List) return const [];
+    return [
+      for (final song in result['song'] as List)
+        if (song is Map) _songFromJson(_stringKeyed(song)),
+    ];
+  }
+
+  @override
+  Future<List<LibrarySong>> randomSongs({int size = 40}) async {
+    final body = await _request('getRandomSongs', query: {'size': size});
+    final random = body['randomSongs'];
+    if (random is! Map || random['song'] is! List) return const [];
+    return [
+      for (final song in random['song'] as List)
+        if (song is Map) _songFromJson(_stringKeyed(song)),
+    ];
+  }
+
+  /// A directly playable URL. media_kit can stream this as-is; the signed
+  /// token travels in the query string, exactly like the API calls.
+  @override
+  Uri streamUri(LibrarySong song) {
+    final params = {..._authParams(), 'id': song.id};
+    return Uri.parse('$_serverRoot/rest/stream').replace(
+      queryParameters: params.map((key, value) => MapEntry(key, '$value')),
+    );
+  }
+
+  @override
+  Uri? artworkUri(String? artId, {int size = 600}) {
+    if (artId == null || artId.isEmpty) return null;
+    final params = {..._authParams(), 'id': artId, 'size': '$size'};
+    return Uri.parse('$_serverRoot/rest/getCoverArt').replace(
+      queryParameters: params.map((key, value) => MapEntry(key, '$value')),
+    );
+  }
+
+  LibrarySong _songFromJson(Map<String, dynamic> json) => LibrarySong(
+    sourceId: config.id,
+    id: json['id'] as String,
+    title: json['title'] as String? ?? 'Untitled',
+    artist: json['artist'] as String?,
+    artistId: json['artistId'] as String?,
+    album: json['album'] as String?,
+    albumId: json['albumId'] as String?,
+    artId: json['coverArt'] as String?,
+    duration: Duration(seconds: (json['duration'] as num?)?.round() ?? 0),
+    track: (json['track'] as num?)?.toInt(),
+    discNumber: (json['discNumber'] as num?)?.toInt(),
+    year: (json['year'] as num?)?.toInt(),
+    genre: json['genre'] as String?,
+  );
+
+  LibraryAlbum _albumFromJson(Map<String, dynamic> json) => LibraryAlbum(
+    sourceId: config.id,
+    id: json['id'] as String,
+    name: json['name'] as String? ?? json['title'] as String? ?? 'Untitled',
+    artist: json['artist'] as String?,
+    artistId: json['artistId'] as String?,
+    artId: json['coverArt'] as String?,
+    songCount: (json['songCount'] as num?)?.toInt(),
+    duration: Duration(seconds: (json['duration'] as num?)?.round() ?? 0),
+    year: (json['year'] as num?)?.toInt(),
+    genre: json['genre'] as String?,
+  );
+
+  LibraryArtist _artistFromJson(Map<String, dynamic> json) => LibraryArtist(
+    sourceId: config.id,
+    id: json['id'] as String,
+    name: json['name'] as String? ?? 'Unknown artist',
+    artId: json['coverArt'] as String?,
+    albumCount: (json['albumCount'] as num?)?.toInt(),
+  );
+
+  LibraryPlaylist _playlistFromJson(Map<String, dynamic> json) =>
+      LibraryPlaylist(
+        sourceId: config.id,
+        id: json['id'] as String,
+        name: json['name'] as String? ?? 'Untitled playlist',
+        owner: json['owner'] as String?,
+        songCount: (json['songCount'] as num?)?.toInt(),
+        duration: Duration(seconds: (json['duration'] as num?)?.round() ?? 0),
+        artId: json['coverArt'] as String?,
+      );
+
+  static Map<String, dynamic> _stringKeyed(Map<dynamic, dynamic> raw) {
+    return raw.map((key, value) => MapEntry('$key', value));
+  }
+}

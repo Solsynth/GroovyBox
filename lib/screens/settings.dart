@@ -1,14 +1,15 @@
 import 'package:auto_route/auto_route.dart';
+import 'package:groovy_box/core/app.dart';
+import 'package:groovy_box/core/router.gr.dart';
+import 'package:groovy_box/core/theme.dart';
+import 'package:groovy_box/library/providers.dart';
+import 'package:groovy_box/library/store.dart';
+import 'package:groovy_box/widgets/common.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
-import '../core/app.dart';
-import '../core/server_data.dart';
-import '../core/theme.dart';
-import '../widgets/common.dart';
-
-/// Settings: theme, connection details, and the only way to disconnect.
+/// Settings: theme, connected libraries, and the only way to disconnect one.
 @RoutePage()
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -16,7 +17,8 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
-    final server = ref.watch(serverConnectionProvider);
+    final sources = ref.watch(librarySourcesProvider);
+    final failures = ref.watch(sourceFailuresProvider);
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -62,46 +64,46 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ),
           const GroupDivider(),
-          const SectionLabel('Server'),
-          if (server != null) ...[
+          const SectionLabel('Libraries'),
+          for (final source in sources)
             ListTile(
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: SolSpace.xxl,
               ),
-              leading: const Icon(Symbols.dns_rounded),
-              title: const Text('Address'),
-              subtitle: Text(server.baseUrl),
-            ),
-            ListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: SolSpace.xxl,
+              leading: const Icon(Symbols.cloud_rounded),
+              title: Text(source.displayName),
+              subtitle: Text(
+                '${source.kind.label} · ${source.config.baseUrl}'
+                '${failures[source.id] == null ? '' : '\n${failures[source.id]}'}',
               ),
-              leading: const Icon(Symbols.person_rounded),
-              title: const Text('Signed in as'),
-              subtitle: Text(server.username),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                SolSpace.xxl,
-                SolSpace.md,
-                SolSpace.xxl,
-                SolSpace.md,
-              ),
-              child: OutlinedButton.icon(
-                onPressed: () => _confirmDisconnect(context, ref),
-                icon: const Icon(Symbols.logout_rounded),
-                label: const Text('Disconnect'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: theme.colorScheme.error,
-                  side: BorderSide(color: theme.colorScheme.error),
-                ),
+              isThreeLine: failures[source.id] != null,
+              trailing: IconButton(
+                tooltip: 'Remove',
+                onPressed: () => _confirmRemove(context, ref, source.id),
+                icon: const Icon(Symbols.delete_outline_rounded),
               ),
             ),
-          ] else
+          if (sources.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: SolSpace.xxl),
-              child: Text('Not connected.'),
+              child: Text('Not connected to a library.'),
             ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              SolSpace.xxl,
+              SolSpace.md,
+              SolSpace.xxl,
+              SolSpace.md,
+            ),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => context.router.push(const SetupRoute()),
+                icon: const Icon(Symbols.add_rounded),
+                label: const Text('Add library'),
+              ),
+            ),
+          ),
           const GroupDivider(),
           const SectionLabel('Library'),
           ListTile(
@@ -111,7 +113,7 @@ class SettingsScreen extends ConsumerWidget {
             leading: const Icon(Symbols.refresh_rounded),
             title: const Text('Refresh everything'),
             subtitle: const Text(
-              'Reload albums, playlists and the random shelf from the server.',
+              'Reload albums, playlists and the random shelf from every library.',
             ),
             onTap: () {
               ref.invalidate(recentAlbumsProvider);
@@ -123,7 +125,7 @@ class SettingsScreen extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: SolSpace.xxl),
             child: Text(
-              'GroovyBox streams from any OpenSubsonic-compatible server. '
+              'GroovyBox streams from your own music servers. '
               'Nothing is copied to this device.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
@@ -136,11 +138,15 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _confirmDisconnect(BuildContext context, WidgetRef ref) async {
+  Future<void> _confirmRemove(
+    BuildContext context,
+    WidgetRef ref,
+    String sourceId,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Disconnect?'),
+        title: const Text('Remove this library?'),
         content: const Text(
           'The server address and signed-in account are removed from this '
           'device. Your music is untouched.',
@@ -152,13 +158,13 @@ class SettingsScreen extends ConsumerWidget {
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Disconnect'),
+            child: const Text('Remove'),
           ),
         ],
       ),
     );
 
     if (confirmed != true) return;
-    await ref.read(serverConnectionProvider.notifier).clear();
+    await ref.read(sourceStoreProvider.notifier).remove(sourceId);
   }
 }

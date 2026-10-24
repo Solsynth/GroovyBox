@@ -1,21 +1,20 @@
 import 'package:auto_route/auto_route.dart';
+import 'package:groovy_box/core/router.gr.dart';
+import 'package:groovy_box/core/theme.dart';
+import 'package:groovy_box/library/models.dart';
+import 'package:groovy_box/library/providers.dart';
+import 'package:groovy_box/player/player.dart';
+import 'package:groovy_box/widgets/artwork.dart';
+import 'package:groovy_box/widgets/common.dart';
+import 'package:groovy_box/widgets/format.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
-import '../core/router.gr.dart';
-import '../core/server_data.dart';
-import '../core/theme.dart';
-import '../player/player.dart';
-import '../server/models.dart';
-import '../widgets/artwork.dart';
-import '../widgets/common.dart';
-import '../widgets/format.dart';
-
-/// Every album on the server, newest first, as a grid of covers.
+/// Every album from every library, as a grid of covers.
 ///
-/// The server's own `getAlbumList2` sort is used rather than a client-side
-/// sort: paged lists must agree with the server about order or pages drift.
+/// The sources' own sort orders are used rather than a client-side sort: paged
+/// lists must agree with the server about order or pages drift.
 @RoutePage()
 class AlbumsScreen extends ConsumerWidget {
   const AlbumsScreen({super.key});
@@ -38,7 +37,8 @@ class AlbumsScreen extends ConsumerWidget {
             actions: [
               IconButton(
                 tooltip: 'Refresh',
-                onPressed: () => ref.read(recentAlbumsProvider.notifier).refresh(),
+                onPressed: () =>
+                    ref.read(recentAlbumsProvider.notifier).refresh(),
                 icon: const Icon(Symbols.refresh_rounded),
               ),
               const SizedBox(width: SolSpace.sm),
@@ -51,7 +51,8 @@ class AlbumsScreen extends ConsumerWidget {
                       icon: Symbols.album,
                       title: 'No albums yet',
                       message:
-                          'Anything with an album tag on your server shows up here.',
+                          'Anything with an album tag in your libraries shows '
+                          'up here.',
                     )
                   : GridView.builder(
                       padding: const EdgeInsets.fromLTRB(
@@ -78,6 +79,7 @@ class AlbumsScreen extends ConsumerWidget {
                           // anyone who wants to pick a track.
                           onTap: () => context.router.push(
                             AlbumDetailRoute(
+                              sourceId: album.sourceId,
                               albumId: album.id,
                               albumName: album.name,
                             ),
@@ -107,7 +109,7 @@ class AlbumsScreen extends ConsumerWidget {
 
 /// Shared album cover card, used by the grid and the browse shelves.
 class AlbumCard extends StatelessWidget {
-  final SubsonicAlbum album;
+  final LibraryAlbum album;
   final VoidCallback onTap;
 
   const AlbumCard({super.key, required this.album, required this.onTap});
@@ -126,8 +128,9 @@ class AlbumCard extends StatelessWidget {
             Expanded(
               child: AspectRatio(
                 aspectRatio: 1,
-                child: ServerArtwork(
-                  coverArtId: album.coverArt,
+                child: LibraryArtwork(
+                  sourceId: album.sourceId,
+                  artId: album.artId,
                   radius: SolRadius.md,
                   fallbackIcon: Symbols.album,
                 ),
@@ -160,18 +163,23 @@ class AlbumCard extends StatelessWidget {
 /// One album's track list, with a play-all header.
 @RoutePage()
 class AlbumDetailScreen extends ConsumerWidget {
+  /// Which library the album belongs to; albums are only unique per source.
+  final String sourceId;
   final String albumId;
   final String? albumName;
 
   const AlbumDetailScreen({
     super.key,
+    @PathParam('sourceId') required this.sourceId,
     @PathParam('albumId') required this.albumId,
     this.albumName,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final songs = ref.watch(albumSongsProvider(albumId));
+    final songs = ref.watch(
+      albumSongsProvider((sourceId: sourceId, id: albumId)),
+    );
     final playback = ref.watch(playbackProvider);
 
     return Scaffold(
@@ -220,8 +228,9 @@ class AlbumDetailScreen extends ConsumerWidget {
                             ),
                             child: Row(
                               children: [
-                                ServerArtwork(
-                                  coverArtId: list.first.coverArt,
+                                LibraryArtwork(
+                                  sourceId: list.first.sourceId,
+                                  artId: list.first.artId,
                                   size: 132,
                                   radius: SolRadius.lg,
                                   fallbackIcon: Symbols.album,
@@ -266,10 +275,11 @@ class AlbumDetailScreen extends ConsumerWidget {
                         return TrackRow(
                           title: song.title,
                           subtitle: song.artist ?? 'Unknown artist',
-                          selected: playback.current?.id == song.id,
+                          selected: playback.isCurrentSong(song),
                           trailing: formatDuration(song.duration),
-                          artwork: ServerArtwork(
-                            coverArtId: song.coverArt,
+                          artwork: LibraryArtwork(
+                            sourceId: song.sourceId,
+                            artId: song.artId,
                             size: 44,
                             radius: SolRadius.xs,
                           ),
@@ -286,7 +296,9 @@ class AlbumDetailScreen extends ConsumerWidget {
                 message: describeServerError(error),
                 iconColor: Theme.of(context).colorScheme.error,
                 action: FilledButton(
-                  onPressed: () => ref.invalidate(albumSongsProvider(albumId)),
+                  onPressed: () => ref.invalidate(
+                    albumSongsProvider((sourceId: sourceId, id: albumId)),
+                  ),
                   child: const Text('Try again'),
                 ),
               ),

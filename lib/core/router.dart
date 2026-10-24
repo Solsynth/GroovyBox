@@ -1,8 +1,7 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/foundation.dart';
+import 'package:groovy_box/core/router.gr.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-
-import 'router.gr.dart';
 
 final routerProvider = Provider<AppRouter>((ref) => AppRouter());
 
@@ -48,8 +47,14 @@ class AppRouter extends RootStackRouter {
         ),
       ],
     ),
-    AutoRoute(page: AlbumDetailRoute.page, path: '/albums/:albumId'),
-    AutoRoute(page: PlaylistDetailRoute.page, path: '/playlists/:playlistId'),
+    AutoRoute(
+      page: AlbumDetailRoute.page,
+      path: '/albums/:sourceId/:albumId',
+    ),
+    AutoRoute(
+      page: PlaylistDetailRoute.page,
+      path: '/playlists/:sourceId/:playlistId',
+    ),
     AutoRoute(page: PlayerRoute.page, path: '/now-playing'),
     AutoRoute(page: SetupRoute.page, path: '/setup'),
     AutoRoute(page: SettingsRoute.page, path: '/settings'),

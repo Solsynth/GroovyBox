@@ -1,19 +1,20 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/services.dart';
+import 'package:groovy_box/core/theme.dart';
+import 'package:groovy_box/library/models.dart';
+import 'package:groovy_box/library/providers.dart';
+import 'package:groovy_box/library/source.dart';
+import 'package:groovy_box/library/store.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
-import '../core/app.dart';
-import '../core/theme.dart';
-import '../server/models.dart';
-import '../server/subsonic.dart';
-
-/// First-run connection screen for a Subsonic-compatible server.
+/// Connection screen for a music library.
 ///
-/// Shown instead of the shell whenever no authenticated server is stored.
-/// "Test connection" and "Connect" run the same request; the test button exists
-/// so the user can validate an address without committing to it.
+/// Shown instead of the shell whenever no library is connected, and pushed from
+/// settings to add another one. "Test connection" and "Connect" run the same
+/// adapter call; the test button exists so the user can validate an address
+/// without committing to it.
 @RoutePage()
 class SetupScreen extends ConsumerStatefulWidget {
   const SetupScreen({super.key});
@@ -27,9 +28,20 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   final _serverController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  LibraryKind _kind = LibraryKind.subsonic;
   bool _busy = false;
   String? _error;
   String? _success;
+
+  /// Whether the app already had a library when this screen opened: adding a
+  /// second one returns to settings, the first one just enters the app.
+  late final bool _hadSources;
+
+  @override
+  void initState() {
+    super.initState();
+    _hadSources = ref.read(librarySourcesProvider).isNotEmpty;
+  }
 
   @override
   void dispose() {
@@ -62,7 +74,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                   ),
                   const SizedBox(height: SolSpace.lg),
                   Text(
-                    'Connect your server',
+                    'Connect a library',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.w700,
@@ -70,24 +82,37 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                   ),
                   const SizedBox(height: SolSpace.sm),
                   Text(
-                    'GroovyBox plays from any Subsonic-compatible server: '
-                    'Navidrome, Jellyfin, Gonic, Airsonic and friends.',
+                    'GroovyBox streams from your own music servers. '
+                    'Nothing is copied to this device.',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                       height: 1.5,
                     ),
                   ),
-                  const SizedBox(height: SolSpace.xxl),
+                  const SizedBox(height: SolSpace.xl),
+                  SegmentedButton<LibraryKind>(
+                    segments: [
+                      for (final kind in LibraryKind.values)
+                        ButtonSegment(value: kind, label: Text(kind.label)),
+                    ],
+                    selected: {_kind},
+                    onSelectionChanged: (selection) => setState(() {
+                      _kind = selection.first;
+                      _error = null;
+                      _success = null;
+                    }),
+                  ),
+                  const SizedBox(height: SolSpace.lg),
                   TextFormField(
                     controller: _serverController,
                     autofocus: true,
                     keyboardType: TextInputType.url,
                     textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Server address',
-                      hintText: 'https://music.example.com',
-                      prefixIcon: Icon(Symbols.dns_rounded),
+                      hintText: _kind.addressHint,
+                      prefixIcon: const Icon(Symbols.dns_rounded),
                     ),
                     validator: (value) {
                       final text = value?.trim() ?? '';
@@ -158,8 +183,8 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                   ),
                   const SizedBox(height: SolSpace.lg),
                   Text(
-                    'Your password is never stored: only a salted token, '
-                    'the way the Subsonic API expects clients to authenticate.',
+                    'Your password is never stored: only a token, the way each '
+                    'API expects clients to authenticate.',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: colorScheme.onSurfaceVariant,
@@ -175,31 +200,30 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     );
   }
 
-  SubsonicClient? _buildClient() {
+  /// Runs the adapter's connect flow, or returns null when the form is
+  /// invalid or the server rejected the credentials (in which case the error
+  /// banner is already set).
+  Future<SourceConfig?> _connectConfig() async {
     if (!(_formKey.currentState?.validate() ?? false)) return null;
-    final password = _passwordController.text;
-    return SubsonicClient(
-      ServerConfig(
-        baseUrl: _serverController.text.trim(),
-        username: _usernameController.text.trim(),
-      ).withPassword(password),
+    final adapter = libraryAdapters[_kind]!;
+    return adapter.connect(
+      baseUrl: _serverController.text.trim(),
+      username: _usernameController.text.trim(),
+      password: _passwordController.text,
     );
   }
 
   Future<void> _test() async {
-    final client = _buildClient();
-    if (client == null) return;
-
     setState(() {
       _busy = true;
       _error = null;
       _success = null;
     });
     try {
-      await client.ping();
-      if (!mounted) return;
+      final config = await _connectConfig();
+      if (config == null || !mounted) return;
       setState(() => _success = 'Server responded. You can connect now.');
-    } on SubsonicException catch (error) {
+    } on LibraryException catch (error) {
       if (!mounted) return;
       setState(() => _error = error.message);
     } finally {
@@ -208,21 +232,21 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   }
 
   Future<void> _connect() async {
-    final client = _buildClient();
-    if (client == null) return;
-
     setState(() {
       _busy = true;
       _error = null;
       _success = null;
     });
     try {
-      await client.ping();
-      await ref.read(serverConnectionProvider.notifier).save(client.config);
+      final config = await _connectConfig();
+      if (config == null) return;
+      await ref.read(sourceStoreProvider.notifier).add(config);
       TextInput.finishAutofillContext();
-      // The app rebuilds onto the shell as soon as the connection lands; no
-      // navigation is needed here.
-    } on SubsonicException catch (error) {
+      // With a library already connected this was pushed from settings, so
+      // the user needs to go back; on first run the app swaps the shell in
+      // underneath and popping would leave nothing.
+      if (mounted && _hadSources) context.router.maybePop();
+    } on LibraryException catch (error) {
       if (!mounted) return;
       setState(() => _error = error.message);
     } finally {

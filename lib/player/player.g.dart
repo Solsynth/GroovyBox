@@ -17,7 +17,7 @@ part of 'player.dart';
 /// Kept out of the widget tree on purpose: the audio session outlives the dock,
 /// the player page, and any route pushed above them.
 ///
-/// Streams are remote URLs, so a track is opened with its signed Subsonic
+/// Streams are remote URLs, so a track is opened with its own library's signed
 /// stream URL rather than a local path. Nothing is downloaded first.
 /// The transport. Created lazily and kept alive for the whole session.
 
@@ -33,7 +33,7 @@ final playbackProvider = PlaybackProvider._();
 /// Kept out of the widget tree on purpose: the audio session outlives the dock,
 /// the player page, and any route pushed above them.
 ///
-/// Streams are remote URLs, so a track is opened with its signed Subsonic
+/// Streams are remote URLs, so a track is opened with its own library's signed
 /// stream URL rather than a local path. Nothing is downloaded first.
 /// The transport. Created lazily and kept alive for the whole session.
 final class PlaybackProvider
@@ -47,7 +47,7 @@ final class PlaybackProvider
   /// Kept out of the widget tree on purpose: the audio session outlives the dock,
   /// the player page, and any route pushed above them.
   ///
-  /// Streams are remote URLs, so a track is opened with its signed Subsonic
+  /// Streams are remote URLs, so a track is opened with its own library's signed
   /// stream URL rather than a local path. Nothing is downloaded first.
   /// The transport. Created lazily and kept alive for the whole session.
   PlaybackProvider._()
@@ -77,7 +77,7 @@ final class PlaybackProvider
   }
 }
 
-String _$playbackHash() => r'54311b2755ddb3a7fdd3269a5da52e9239f870b3';
+String _$playbackHash() => r'4c04cb058ea2cfddc4d7455ae4c692c73b93dd40';
 
 /// Owns the one [Player] for the app's lifetime and translates its streams
 /// into [PlaybackState].
@@ -88,7 +88,7 @@ String _$playbackHash() => r'54311b2755ddb3a7fdd3269a5da52e9239f870b3';
 /// Kept out of the widget tree on purpose: the audio session outlives the dock,
 /// the player page, and any route pushed above them.
 ///
-/// Streams are remote URLs, so a track is opened with its signed Subsonic
+/// Streams are remote URLs, so a track is opened with its own library's signed
 /// stream URL rather than a local path. Nothing is downloaded first.
 /// The transport. Created lazily and kept alive for the whole session.
 

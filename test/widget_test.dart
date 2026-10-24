@@ -1,9 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/player/player.dart';
-import 'package:groovy_box/server/models.dart';
 
-SubsonicSong _song(String id, {String? title, int seconds = 100}) =>
-    SubsonicSong(id: id, title: title ?? id, duration: Duration(seconds: seconds));
+LibrarySong _song(String id, {String? title, int seconds = 100}) => LibrarySong(
+  sourceId: 'source',
+  id: id,
+  title: title ?? id,
+  duration: Duration(seconds: seconds),
+);
 
 void main() {
   group('PlaybackState', () {
@@ -49,6 +53,43 @@ void main() {
       expect(cleared.playing, isFalse);
     });
 
+    test('identifies the current song across sources', () {
+      final state = PlaybackState(
+        queue: [
+          LibrarySong(
+            sourceId: 'a',
+            id: '1',
+            title: 'Same id',
+            duration: Duration.zero,
+          ),
+        ],
+        currentIndex: 0,
+      );
+      expect(
+        state.isCurrentSong(
+          const LibrarySong(
+            sourceId: 'a',
+            id: '1',
+            title: 'Same id',
+            duration: Duration.zero,
+          ),
+        ),
+        isTrue,
+      );
+      // Native ids repeat between libraries, so the source has to match too.
+      expect(
+        state.isCurrentSong(
+          const LibrarySong(
+            sourceId: 'b',
+            id: '1',
+            title: 'Same id',
+            duration: Duration.zero,
+          ),
+        ),
+        isFalse,
+      );
+    });
+
     test('repeat cycles off -> queue -> one song -> off', () {
       expect(nextRepeatMode(PlaybackRepeatMode.off), PlaybackRepeatMode.all);
       expect(
@@ -64,46 +105,6 @@ void main() {
         PlaybackRepeatMode.off,
         reason: 'a fresh queue does not repeat',
       );
-    });
-  });
-
-  group('SubsonicSong', () {
-    test('falls back when tags are missing', () {
-      final song = SubsonicSong.fromJson({
-        'id': 's1',
-        'title': 'Song',
-        'duration': 60,
-        'album': 'An Album',
-      });
-      expect(song.subtitle, 'An Album', reason: 'album substitutes for artist');
-
-      final bare = SubsonicSong.fromJson({'id': 's2'});
-      expect(bare.title, 'Untitled');
-      expect(bare.duration, Duration.zero);
-      expect(bare.subtitle, 'Unknown artist');
-    });
-
-    test('reads OpenSubsonic wire names', () {
-      final song = SubsonicSong.fromJson({
-        'id': 's3',
-        'title': 'Song',
-        'artist': 'Artist',
-        'artistId': 'ar1',
-        'album': 'Album',
-        'albumId': 'al1',
-        'coverArt': 'cover-3',
-        'duration': 200,
-        'track': 4,
-        'discNumber': 2,
-        'year': 2019,
-        'genre': 'Jazz',
-      });
-      expect(song.coverArt, 'cover-3');
-      expect(song.track, 4);
-      expect(song.discNumber, 2);
-      expect(song.year, 2019);
-      expect(song.artistId, 'ar1');
-      expect(song.albumId, 'al1');
     });
   });
 }

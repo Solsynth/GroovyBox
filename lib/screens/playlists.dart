@@ -1,17 +1,16 @@
 import 'package:auto_route/auto_route.dart';
+import 'package:groovy_box/core/router.gr.dart';
+import 'package:groovy_box/core/theme.dart';
+import 'package:groovy_box/library/providers.dart';
+import 'package:groovy_box/player/player.dart';
+import 'package:groovy_box/widgets/artwork.dart';
+import 'package:groovy_box/widgets/common.dart';
+import 'package:groovy_box/widgets/format.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
-import '../core/router.gr.dart';
-import '../core/server_data.dart';
-import '../core/theme.dart';
-import '../player/player.dart';
-import '../widgets/artwork.dart';
-import '../widgets/common.dart';
-import '../widgets/format.dart';
-
-/// The user's server-side playlists.
+/// The user's server-side playlists, merged across every library.
 ///
 /// Playlists are the server's, not the app's: creating and editing them stays
 /// in Navidrome/Jellyfin's own UI so there is exactly one owner of that state.
@@ -31,7 +30,7 @@ class PlaylistsScreen extends ConsumerWidget {
             title: 'Playlists',
             subtitle: playlists.maybeWhen(
               data: (list) => list.isEmpty
-                  ? 'No playlists on this server'
+                  ? 'No playlists in your libraries'
                   : '${list.length} ${list.length == 1 ? 'playlist' : 'playlists'}',
               orElse: () => null,
             ),
@@ -64,8 +63,9 @@ class PlaylistsScreen extends ConsumerWidget {
                             horizontal: SolSpace.xxl,
                             vertical: SolSpace.xxs,
                           ),
-                          leading: ServerArtwork(
-                            coverArtId: playlist.coverArt,
+                          leading: LibraryArtwork(
+                            sourceId: playlist.sourceId,
+                            artId: playlist.artId,
                             size: 52,
                             radius: SolRadius.sm,
                             fallbackIcon: Symbols.playlist_play,
@@ -82,6 +82,7 @@ class PlaylistsScreen extends ConsumerWidget {
                           trailing: const Icon(Symbols.chevron_right_rounded),
                           onTap: () => context.router.push(
                             PlaylistDetailRoute(
+                              sourceId: playlist.sourceId,
                               playlistId: playlist.id,
                               playlistName: playlist.name,
                             ),
@@ -96,7 +97,8 @@ class PlaylistsScreen extends ConsumerWidget {
                 message: describeServerError(error),
                 iconColor: Theme.of(context).colorScheme.error,
                 action: FilledButton(
-                  onPressed: () => ref.read(playlistsProvider.notifier).refresh(),
+                  onPressed: () =>
+                      ref.read(playlistsProvider.notifier).refresh(),
                   child: const Text('Try again'),
                 ),
               ),
@@ -111,18 +113,23 @@ class PlaylistsScreen extends ConsumerWidget {
 /// One playlist's tracks, with a play-all button.
 @RoutePage()
 class PlaylistDetailScreen extends ConsumerWidget {
+  /// Which library the playlist belongs to.
+  final String sourceId;
   final String playlistId;
   final String? playlistName;
 
   const PlaylistDetailScreen({
     super.key,
+    @PathParam('sourceId') required this.sourceId,
     @PathParam('playlistId') required this.playlistId,
     this.playlistName,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final songs = ref.watch(playlistSongsProvider(playlistId));
+    final songs = ref.watch(
+      playlistSongsProvider((sourceId: sourceId, id: playlistId)),
+    );
     final playback = ref.watch(playbackProvider);
 
     return Scaffold(
@@ -172,11 +179,12 @@ class PlaylistDetailScreen extends ConsumerWidget {
                         final song = list[index];
                         return TrackRow(
                           title: song.title,
-                          subtitle: song.subtitle,
-                          selected: playback.current?.id == song.id,
+                          subtitle: songRowSubtitle(ref, song),
+                          selected: playback.isCurrentSong(song),
                           trailing: formatDuration(song.duration),
-                          artwork: ServerArtwork(
-                            coverArtId: song.coverArt,
+                          artwork: LibraryArtwork(
+                            sourceId: song.sourceId,
+                            artId: song.artId,
                             size: 44,
                             radius: SolRadius.xs,
                           ),
@@ -193,8 +201,12 @@ class PlaylistDetailScreen extends ConsumerWidget {
                 message: describeServerError(error),
                 iconColor: Theme.of(context).colorScheme.error,
                 action: FilledButton(
-                  onPressed: () =>
-                      ref.invalidate(playlistSongsProvider(playlistId)),
+                  onPressed: () => ref.invalidate(
+                    playlistSongsProvider((
+                      sourceId: sourceId,
+                      id: playlistId,
+                    )),
+                  ),
                   child: const Text('Try again'),
                 ),
               ),

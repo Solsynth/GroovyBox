@@ -2,22 +2,27 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
-import '../core/app.dart';
 import '../core/theme.dart';
+import '../library/providers.dart';
 
-/// Cover art served by the Subsonic server, with a tonal fallback while it
-/// loads and when a track or album has no art at all.
-class ServerArtwork extends ConsumerWidget {
-  final String? coverArtId;
+/// Cover art served by a library, with a tonal fallback while it loads and
+/// when a track or album has no art at all.
+class LibraryArtwork extends ConsumerWidget {
+  /// Which library owns the item; resolves the URL scheme.
+  final String? sourceId;
+
+  /// Opaque art handle, interpreted by the source.
+  final String? artId;
   final double? size;
   final double? width;
   final double? height;
   final double radius;
   final IconData fallbackIcon;
 
-  const ServerArtwork({
+  const LibraryArtwork({
     super.key,
-    required this.coverArtId,
+    required this.sourceId,
+    required this.artId,
     this.size,
     this.width,
     this.height,
@@ -28,9 +33,9 @@ class ServerArtwork extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
-    final client = ref.watch(subsonicClientProvider);
-    final url = client?.coverArtUrl(
-      coverArtId,
+    final source = ref.watch(librarySourceByIdProvider)[sourceId];
+    final uri = source?.artworkUri(
+      artId,
       size: ((size ?? width ?? 96) * 2).round(),
     );
 
@@ -50,10 +55,10 @@ class ServerArtwork extends ConsumerWidget {
       child: SizedBox(
         width: size ?? width,
         height: size ?? height,
-        child: url == null
+        child: uri == null
             ? placeholder
             : Image.network(
-                url,
+                uri.toString(),
                 fit: BoxFit.cover,
                 // The server is local or user-hosted and the URL carries the
                 // signed token; caching it on disk would keep credentials in

@@ -1,16 +1,16 @@
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:groovy_box/core/app.dart';
+import 'package:groovy_box/core/router.dart';
+import 'package:groovy_box/library/providers.dart';
+import 'package:groovy_box/screens/setup.dart';
+import 'package:groovy_box/shell/window_frame.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
-
-import 'core/app.dart';
-import 'core/router.dart';
-import 'screens/setup.dart';
-import 'shell/window_frame.dart';
 
 /// Window size on first launch. A player is a tall column — cover, title,
 /// scrubber, controls — so the default leans narrow rather than wide.
@@ -67,7 +67,7 @@ class GroovyBoxApp extends ConsumerWidget {
     final themes = ref.watch(appThemeProvider);
     final themeMode = ref.watch(themeModeProvider);
     final router = ref.watch(routerProvider);
-    final connected = ref.watch(serverConnectionProvider) != null;
+    final connected = ref.watch(librarySourcesProvider).isNotEmpty;
 
     return MaterialApp.router(
       title: 'GroovyBox',
