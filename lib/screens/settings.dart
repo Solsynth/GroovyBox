@@ -1,15 +1,22 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:groovy_box/core/app.dart';
+import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/router.gr.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/store.dart';
+import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// Settings: theme, connected libraries, and the only way to disconnect one.
+/// Settings: theme, glass, connected libraries, and the only way to
+/// disconnect one.
+///
+/// Groups are tonal cards separated by space. Dividers are deliberately not
+/// used: a card already says "these rows belong together", and a hairline
+/// between two of them would just be a third edge.
 @RoutePage()
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -17,123 +24,178 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
+    final glass = ref.watch(glassEffectsEnabledProvider);
     final sources = ref.watch(librarySourcesProvider);
     final failures = ref.watch(sourceFailuresProvider);
     final theme = Theme.of(context);
+    // Select the identity, not the state: watching the whole transport would
+    // rebuild this page on every position tick, once a second.
+    final hasSong = ref.watch(
+      playbackProvider.select((state) => state.current != null),
+    );
+    final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: ListView(
-        padding: const EdgeInsets.only(bottom: 96),
-        children: [
-          PageHeader(
-            title: 'Settings',
-            actions: [
-              IconButton(
-                tooltip: 'Back',
+      body: ContentFrame(
+        maxWidth: kReadingMaxWidth,
+        child: ListView(
+          padding: EdgeInsets.only(bottom: bottomInset),
+          children: [
+            PageHeader(
+              title: 'Settings',
+              leading: HeaderBackButton(
                 onPressed: () => context.router.maybePop(),
-                icon: const Icon(Symbols.arrow_back_rounded),
               ),
-              const SizedBox(width: SolSpace.sm),
-            ],
-          ),
-          const SectionLabel('Appearance'),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: SolSpace.xxl),
-            child: SegmentedButton<AppThemeMode>(
-              segments: const [
-                ButtonSegment(
-                  value: AppThemeMode.system,
-                  icon: Icon(Symbols.brightness_auto_rounded),
-                  label: Text('System'),
+            ),
+            const SectionLabel('Appearance'),
+            IslandCard(
+              margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
+              padding: const EdgeInsets.all(SolSpace.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Theme',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: SolSpace.md),
+                  SegmentedButton<AppThemeMode>(
+                    segments: const [
+                      ButtonSegment(
+                        value: AppThemeMode.system,
+                        icon: Icon(Symbols.brightness_auto_rounded),
+                        label: Text('System'),
+                      ),
+                      ButtonSegment(
+                        value: AppThemeMode.light,
+                        icon: Icon(Symbols.light_mode_rounded),
+                        label: Text('Light'),
+                      ),
+                      ButtonSegment(
+                        value: AppThemeMode.dark,
+                        icon: Icon(Symbols.dark_mode_rounded),
+                        label: Text('Dark'),
+                      ),
+                    ],
+                    selected: {themeMode},
+                    onSelectionChanged: (selection) => ref
+                        .read(themeModeProvider.notifier)
+                        .set(selection.first),
+                  ),
+                  const SizedBox(height: SolSpace.lg),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: glass,
+                    onChanged: (value) => ref
+                        .read(glassEffectsEnabledProvider.notifier)
+                        .set(value),
+                    secondary: const Icon(Symbols.blur_on_rounded),
+                    title: const Text('Liquid glass'),
+                    subtitle: const Text(
+                      'Floating chrome refracts the page behind it. Turn off '
+                      'to paint the same bars as flat surfaces, which costs '
+                      'less on every scroll frame.',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SectionLabel('Libraries'),
+            IslandCard(
+              margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
+              child: Column(
+                children: [
+                  for (final source in sources)
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: SolSpace.lg,
+                      ),
+                      leading: const Icon(Symbols.cloud_rounded),
+                      title: Text(source.displayName),
+                      subtitle: Text(
+                        '${source.kind.label} · ${source.config.baseUrl}'
+                        '${failures[source.id] == null ? '' : '\n${failures[source.id]}'}',
+                      ),
+                      isThreeLine: failures[source.id] != null,
+                      trailing: IconButton(
+                        tooltip: 'Remove',
+                        onPressed: () =>
+                            _confirmRemove(context, ref, source.id),
+                        icon: const Icon(Symbols.delete_outline_rounded),
+                      ),
+                    ),
+                  if (sources.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: SolSpace.lg,
+                        vertical: SolSpace.md,
+                      ),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text('Not connected to a library.'),
+                      ),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      SolSpace.md,
+                      0,
+                      SolSpace.md,
+                      SolSpace.sm,
+                    ),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: () =>
+                            context.router.push(const SetupRoute()),
+                        icon: const Icon(Symbols.add_rounded),
+                        label: const Text('Add library'),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SectionLabel('Library'),
+            IslandCard(
+              margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: SolSpace.lg,
                 ),
-                ButtonSegment(
-                  value: AppThemeMode.light,
-                  icon: Icon(Symbols.light_mode_rounded),
-                  label: Text('Light'),
+                leading: const Icon(Symbols.refresh_rounded),
+                title: const Text('Refresh everything'),
+                subtitle: const Text(
+                  'Reload albums, playlists and the random shelf from every '
+                  'library.',
                 ),
-                ButtonSegment(
-                  value: AppThemeMode.dark,
-                  icon: Icon(Symbols.dark_mode_rounded),
-                  label: Text('Dark'),
+                onTap: () {
+                  ref.invalidate(recentAlbumsProvider);
+                  ref.invalidate(randomSongsProvider);
+                  ref.invalidate(playlistsProvider);
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                SolSpace.xxl,
+                SolSpace.xl,
+                SolSpace.xxl,
+                SolSpace.xl,
+              ),
+              child: Text(
+                'GroovyBox streams from your own music servers. '
+                'Nothing is copied to this device.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  height: 1.5,
                 ),
-              ],
-              selected: {themeMode},
-              onSelectionChanged: (selection) =>
-                  ref.read(themeModeProvider.notifier).set(selection.first),
-            ),
-          ),
-          const GroupDivider(),
-          const SectionLabel('Libraries'),
-          for (final source in sources)
-            ListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: SolSpace.xxl,
-              ),
-              leading: const Icon(Symbols.cloud_rounded),
-              title: Text(source.displayName),
-              subtitle: Text(
-                '${source.kind.label} · ${source.config.baseUrl}'
-                '${failures[source.id] == null ? '' : '\n${failures[source.id]}'}',
-              ),
-              isThreeLine: failures[source.id] != null,
-              trailing: IconButton(
-                tooltip: 'Remove',
-                onPressed: () => _confirmRemove(context, ref, source.id),
-                icon: const Icon(Symbols.delete_outline_rounded),
               ),
             ),
-          if (sources.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: SolSpace.xxl),
-              child: Text('Not connected to a library.'),
-            ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              SolSpace.xxl,
-              SolSpace.md,
-              SolSpace.xxl,
-              SolSpace.md,
-            ),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: () => context.router.push(const SetupRoute()),
-                icon: const Icon(Symbols.add_rounded),
-                label: const Text('Add library'),
-              ),
-            ),
-          ),
-          const GroupDivider(),
-          const SectionLabel('Library'),
-          ListTile(
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: SolSpace.xxl,
-            ),
-            leading: const Icon(Symbols.refresh_rounded),
-            title: const Text('Refresh everything'),
-            subtitle: const Text(
-              'Reload albums, playlists and the random shelf from every library.',
-            ),
-            onTap: () {
-              ref.invalidate(recentAlbumsProvider);
-              ref.invalidate(randomSongsProvider);
-              ref.invalidate(playlistsProvider);
-            },
-          ),
-          const GroupDivider(),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: SolSpace.xxl),
-            child: Text(
-              'GroovyBox streams from your own music servers. '
-              'Nothing is copied to this device.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                height: 1.5,
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

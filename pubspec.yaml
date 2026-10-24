@@ -32,6 +32,7 @@ dependencies:
   dio: ^5.11.1
   crypto: ^3.0.7
   cupertino_ui: ^1.1.4
+  liquid_glass_renderer: ^1.0.0-dev.1
 
 dev_dependencies:
   flutter_test:

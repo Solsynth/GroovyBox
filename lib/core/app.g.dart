@@ -210,3 +210,70 @@ final class InitialVolumeProvider
 }
 
 String _$initialVolumeHash() => r'6f6f08d339403948fd5aa2eaa53a8a8b3e226e74';
+
+/// Whether chrome draws liquid glass. On by default: it is the app's look,
+/// and the flat fallback exists for machines where the shader pass is too
+/// expensive to pay on every scroll frame.
+
+@ProviderFor(GlassEffectsEnabled)
+final glassEffectsEnabledProvider = GlassEffectsEnabledProvider._();
+
+/// Whether chrome draws liquid glass. On by default: it is the app's look,
+/// and the flat fallback exists for machines where the shader pass is too
+/// expensive to pay on every scroll frame.
+final class GlassEffectsEnabledProvider
+    extends $NotifierProvider<GlassEffectsEnabled, bool> {
+  /// Whether chrome draws liquid glass. On by default: it is the app's look,
+  /// and the flat fallback exists for machines where the shader pass is too
+  /// expensive to pay on every scroll frame.
+  GlassEffectsEnabledProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'glassEffectsEnabledProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$glassEffectsEnabledHash();
+
+  @$internal
+  @override
+  GlassEffectsEnabled create() => GlassEffectsEnabled();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(bool value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<bool>(value),
+    );
+  }
+}
+
+String _$glassEffectsEnabledHash() =>
+    r'55f146f200366968a87c24a7d888330603034f2d';
+
+/// Whether chrome draws liquid glass. On by default: it is the app's look,
+/// and the flat fallback exists for machines where the shader pass is too
+/// expensive to pay on every scroll frame.
+
+abstract class _$GlassEffectsEnabled extends $Notifier<bool> {
+  bool build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<bool, bool>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<bool, bool>,
+              bool,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}

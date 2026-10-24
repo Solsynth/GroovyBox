@@ -5,6 +5,7 @@ import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/library/store.dart';
+import 'package:groovy_box/widgets/common.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
@@ -57,141 +58,151 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     final colorScheme = theme.colorScheme;
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(SolSpace.xxxl),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Icon(
-                    Symbols.graphic_eq_rounded,
-                    size: 44,
-                    color: colorScheme.primary,
-                  ),
-                  const SizedBox(height: SolSpace.lg),
-                  Text(
-                    'Connect a library',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: SolSpace.sm),
-                  Text(
-                    'GroovyBox streams from your own music servers. '
-                    'Nothing is copied to this device.',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      height: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: SolSpace.xl),
-                  SegmentedButton<LibraryKind>(
-                    segments: [
-                      for (final kind in LibraryKind.values)
-                        ButtonSegment(value: kind, label: Text(kind.label)),
-                    ],
-                    selected: {_kind},
-                    onSelectionChanged: (selection) => setState(() {
-                      _kind = selection.first;
-                      _error = null;
-                      _success = null;
-                    }),
-                  ),
-                  const SizedBox(height: SolSpace.lg),
-                  TextFormField(
-                    controller: _serverController,
-                    autofocus: true,
-                    keyboardType: TextInputType.url,
-                    textInputAction: TextInputAction.next,
-                    decoration: InputDecoration(
-                      labelText: 'Server address',
-                      hintText: _kind.addressHint,
-                      prefixIcon: const Icon(Symbols.dns_rounded),
-                    ),
-                    validator: (value) {
-                      final text = value?.trim() ?? '';
-                      if (text.isEmpty) return 'Enter your server address';
-                      final uri = Uri.tryParse(
-                        text.contains('://') ? text : 'https://$text',
-                      );
-                      if (uri == null || uri.host.isEmpty) {
-                        return 'That does not look like a server address';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: SolSpace.md),
-                  TextFormField(
-                    controller: _usernameController,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'Username',
-                      prefixIcon: Icon(Symbols.person_rounded),
-                    ),
-                    validator: (value) =>
-                        (value?.trim().isEmpty ?? true) ? 'Enter your username' : null,
-                  ),
-                  const SizedBox(height: SolSpace.md),
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: true,
-                    onFieldSubmitted: (_) => _connect(),
-                    decoration: const InputDecoration(
-                      labelText: 'Password',
-                      prefixIcon: Icon(Symbols.lock_rounded),
-                    ),
-                    validator: (value) =>
-                        (value?.isEmpty ?? true) ? 'Enter your password' : null,
-                  ),
-                  if (_error != null) ...[
-                    const SizedBox(height: SolSpace.lg),
-                    _Banner(
-                      icon: Symbols.error_rounded,
-                      message: _error!,
-                      color: colorScheme.error,
-                    ),
-                  ],
-                  if (_success != null) ...[
-                    const SizedBox(height: SolSpace.lg),
-                    _Banner(
-                      icon: Symbols.check_circle_rounded,
-                      message: _success!,
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: IslandCard(
+              cornerRadius: SolRadius.xxl,
+              padding: const EdgeInsets.all(SolSpace.xxl),
+              emphasised: true,
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Icon(
+                      Symbols.graphic_eq_rounded,
+                      size: 44,
                       color: colorScheme.primary,
                     ),
-                  ],
-                  const SizedBox(height: SolSpace.xl),
-                  FilledButton(
-                    onPressed: _busy ? null : _connect,
-                    child: _busy
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Connect'),
-                  ),
-                  const SizedBox(height: SolSpace.sm),
-                  TextButton(
-                    onPressed: _busy ? null : _test,
-                    child: const Text('Test connection'),
-                  ),
-                  const SizedBox(height: SolSpace.lg),
-                  Text(
-                    'Your password is never stored: only a token, the way each '
-                    'API expects clients to authenticate.',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      height: 1.5,
+                    const SizedBox(height: SolSpace.lg),
+                    Text(
+                      'Connect a library',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: SolSpace.sm),
+                    Text(
+                      'GroovyBox streams from your own music servers. '
+                      'Nothing is copied to this device.',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: SolSpace.xl),
+                    SegmentedButton<LibraryKind>(
+                      segments: [
+                        for (final kind in LibraryKind.values)
+                          ButtonSegment(value: kind, label: Text(kind.label)),
+                      ],
+                      selected: {_kind},
+                      onSelectionChanged: (selection) => setState(() {
+                        _kind = selection.first;
+                        _error = null;
+                        _success = null;
+                      }),
+                    ),
+                    const SizedBox(height: SolSpace.lg),
+                    TextFormField(
+                      controller: _serverController,
+                      autofocus: true,
+                      keyboardType: TextInputType.url,
+                      textInputAction: TextInputAction.next,
+                      decoration: InputDecoration(
+                        labelText: 'Server address',
+                        hintText: _kind.addressHint,
+                        prefixIcon: const Icon(Symbols.dns_rounded),
+                      ),
+                      validator: (value) {
+                        final text = value?.trim() ?? '';
+                        if (text.isEmpty) {
+                          return 'Enter your server address';
+                        }
+                        final uri = Uri.tryParse(
+                          text.contains('://') ? text : 'https://$text',
+                        );
+                        if (uri == null || uri.host.isEmpty) {
+                          return 'That does not look like a server address';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: SolSpace.md),
+                    TextFormField(
+                      controller: _usernameController,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: 'Username',
+                        prefixIcon: Icon(Symbols.person_rounded),
+                      ),
+                      validator: (value) => (value?.trim().isEmpty ?? true)
+                          ? 'Enter your username'
+                          : null,
+                    ),
+                    const SizedBox(height: SolSpace.md),
+                    TextFormField(
+                      controller: _passwordController,
+                      obscureText: true,
+                      onFieldSubmitted: (_) => _connect(),
+                      decoration: const InputDecoration(
+                        labelText: 'Password',
+                        prefixIcon: Icon(Symbols.lock_rounded),
+                      ),
+                      validator: (value) => (value?.isEmpty ?? true)
+                          ? 'Enter your password'
+                          : null,
+                    ),
+                    if (_error != null) ...[
+                      const SizedBox(height: SolSpace.lg),
+                      _Banner(
+                        icon: Symbols.error_rounded,
+                        message: _error!,
+                        color: colorScheme.error,
+                      ),
+                    ],
+                    if (_success != null) ...[
+                      const SizedBox(height: SolSpace.lg),
+                      _Banner(
+                        icon: Symbols.check_circle_rounded,
+                        message: _success!,
+                        color: colorScheme.primary,
+                      ),
+                    ],
+                    const SizedBox(height: SolSpace.xl),
+                    FilledButton(
+                      onPressed: _busy ? null : _connect,
+                      child: _busy
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Connect'),
+                    ),
+                    const SizedBox(height: SolSpace.sm),
+                    TextButton(
+                      onPressed: _busy ? null : _test,
+                      child: const Text('Test connection'),
+                    ),
+                    const SizedBox(height: SolSpace.lg),
+                    Text(
+                      'Your password is never stored: only a token, the way each '
+                      'API expects clients to authenticate.',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -281,9 +292,8 @@ class _Banner extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: color,
-              ),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: color),
             ),
           ),
         ],

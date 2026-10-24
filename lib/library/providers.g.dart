@@ -151,7 +151,7 @@ final class SourceFailuresProvider
   }
 }
 
-String _$sourceFailuresHash() => r'722ee7b9bd7b342d62e114c5e1c6f3943f598e85';
+String _$sourceFailuresHash() => r'6a04ff6d3a92be569558c3806095321d726b4a99';
 
 /// The last failure of each source, so settings can show why it went quiet.
 
@@ -218,7 +218,7 @@ final class LibraryAggregatorProvider
   }
 }
 
-String _$libraryAggregatorHash() => r'e0a9f6fd7d6b1aad4d658858b890c239300dbcd0';
+String _$libraryAggregatorHash() => r'fc01cbed4018da5461e35c8394af9a325545baaf';
 
 /// Recently added albums, merged across every library.
 
@@ -248,7 +248,7 @@ final class RecentAlbumsProvider
   RecentAlbums create() => RecentAlbums();
 }
 
-String _$recentAlbumsHash() => r'fdb623d5e93c716a03dd0ffdd87268cf017aa586';
+String _$recentAlbumsHash() => r'cd1310af5190fca7b82f48fc14953bdc963ed4fd';
 
 /// Recently added albums, merged across every library.
 
@@ -299,7 +299,7 @@ final class RandomSongsProvider
   RandomSongs create() => RandomSongs();
 }
 
-String _$randomSongsHash() => r'9845bc9ed1c643e10874b240a56ec5070edefa62';
+String _$randomSongsHash() => r'49390fe9f308060636f729bb8e722ad5bee5689d';
 
 /// Songs from a random draw, used as the browse page's instant-play shelf.
 
@@ -350,7 +350,7 @@ final class PlaylistsProvider
   Playlists create() => Playlists();
 }
 
-String _$playlistsHash() => r'c3cfd2608e943a59422d95cd69cadae50f5cb153';
+String _$playlistsHash() => r'2bae1759f681bd0274dab2313a3510fdf27e220d';
 
 /// The user's playlists, merged across every library.
 
@@ -611,7 +611,7 @@ final class SearchSongsProvider
   }
 }
 
-String _$searchSongsHash() => r'76e0819fc6808fc4fa9807823f096c58eefc4c59';
+String _$searchSongsHash() => r'747e45d07ca22b415dd7d992b68c0fe026de63f9';
 
 /// Search results for the browse page's field. Empty query = no request.
 

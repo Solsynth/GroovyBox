@@ -1,9 +1,11 @@
 import 'package:auto_route/auto_route.dart';
+import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/router.gr.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
+import 'package:groovy_box/screens/albums.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/format.dart';
@@ -17,6 +19,9 @@ import 'package:material_ui/material_ui.dart';
 /// Search is a field on this page rather than a tab of its own: the library
 /// lives on a server, so the search is instant and there is nothing to keep in
 /// sync — typing is the whole flow.
+///
+/// The whole page is one centered column ([ContentFrame]); on a wide window
+/// the shelves and grid keep their comfortable size instead of stretching.
 @RoutePage()
 class BrowseScreen extends ConsumerStatefulWidget {
   const BrowseScreen({super.key});
@@ -41,6 +46,12 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen> {
     final randomSongs = ref.watch(randomSongsProvider);
     final search = ref.watch(searchSongsProvider(_query));
     final sources = ref.watch(librarySourcesProvider);
+    // Select the identity, not the state: watching the whole transport would
+    // rebuild this page on every position tick, once a second.
+    final hasSong = ref.watch(
+      playbackProvider.select((state) => state.current != null),
+    );
+    final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -49,140 +60,143 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen> {
           await ref.read(recentAlbumsProvider.notifier).refresh();
           await ref.read(randomSongsProvider.notifier).refresh();
         },
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: PageHeader(
-                title: 'Browse',
-                subtitle: sources.isEmpty
-                    ? null
-                    : 'Streaming from ${sources.length == 1 ? sources.single.displayName : '${sources.length} libraries'}',
-                actions: [
-                  IconButton(
-                    tooltip: 'Settings',
-                    onPressed: () => context.router.push(const SettingsRoute()),
-                    icon: const Icon(Symbols.settings),
-                  ),
-                  const SizedBox(width: SolSpace.sm),
-                ],
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  SolSpace.xxl,
-                  0,
-                  SolSpace.xxl,
-                  SolSpace.md,
-                ),
-                child: SearchBar(
-                  controller: _searchController,
-                  hintText: 'Search songs',
-                  leading: const Icon(Symbols.search_rounded),
-                  trailing: [
-                    if (_query.isNotEmpty)
-                      IconButton(
-                        tooltip: 'Clear',
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() => _query = '');
-                        },
-                        icon: const Icon(Symbols.close_rounded),
-                      ),
+        child: ContentFrame(
+          child: CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: PageHeader(
+                  showRailToggle: true,
+                  title: 'Browse',
+                  subtitle: sources.isEmpty
+                      ? null
+                      : 'Streaming from ${sources.length == 1 ? sources.single.displayName : '${sources.length} libraries'}',
+                  actions: [
+                    HeaderSettingsButton(
+                      onPressed: () =>
+                          context.router.push(const SettingsRoute()),
+                    ),
+                    const SizedBox(width: SolSpace.sm),
                   ],
-                  onChanged: (value) => setState(() => _query = value),
-                ),
-              ),
-            ),
-            if (_query.trim().isNotEmpty)
-              // Every branch returns a list of slivers, so `when` is typed
-              // to that and the whole thing spreads into the outer list.
-              ...search.when<List<Widget>>(
-                data: (songs) => _songSliver(
-                  songs,
-                  emptyMessage: 'No songs match “$_query”.',
-                ),
-                loading: () => [const _LoadingSliver()],
-                error: (error, _) => [
-                  _ErrorSliver(
-                    error: error,
-                    onRetry: () => ref.invalidate(searchSongsProvider(_query)),
-                  ),
-                ],
-              )
-            else ...[
-              SliverToBoxAdapter(
-                child: _SectionHeader(
-                  title: 'Made for you',
-                  trailing: TextButton.icon(
-                    onPressed: () async {
-                      await ref.read(randomSongsProvider.notifier).refresh();
-                    },
-                    icon: const Icon(Symbols.refresh_rounded, size: 18),
-                    label: const Text('Shuffle'),
-                  ),
                 ),
               ),
               SliverToBoxAdapter(
-                child: randomSongs.when(
-                  data: (songs) => songs.isEmpty
-                      ? const SizedBox.shrink()
-                      : _SongShelf(songs: songs),
-                  loading: () => const SizedBox(
-                    height: 120,
-                    child: Center(child: CircularProgressIndicator()),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    SolSpace.xxl,
+                    0,
+                    SolSpace.xxl,
+                    SolSpace.md,
                   ),
-                  error: (error, _) => _InlineError(
-                    error: error,
-                    onRetry: () => ref.invalidate(randomSongsProvider),
-                  ),
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: _SectionHeader(
-                  title: 'Recently added',
-                  trailing: TextButton(
-                    onPressed: () => context.router.navigate(const AlbumsRoute()),
-                    child: const Text('See all'),
-                  ),
-                ),
-              ),
-              ...recentAlbums.when(
-                data: (albums) => albums.isEmpty
-                    ? const [SliverToBoxAdapter(child: SizedBox.shrink())]
-                    : [
-                        SliverPadding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: SolSpace.xl,
-                          ),
-                          sliver: SliverGrid.builder(
-                            gridDelegate:
-                                const SliverGridDelegateWithMaxCrossAxisExtent(
-                                  maxCrossAxisExtent: 200,
-                                  mainAxisSpacing: SolSpace.md,
-                                  crossAxisSpacing: SolSpace.md,
-                                  childAspectRatio: 0.72,
-                                ),
-                            itemCount: albums.length,
-                            itemBuilder: (context, index) =>
-                                _AlbumTile(
-                                  album: albums[index],
-                                  onTap: () => _openAlbum(context, albums[index]),
-                                ),
-                          ),
+                  child: SearchBar(
+                    controller: _searchController,
+                    hintText: 'Search songs',
+                    leading: const Icon(Symbols.search_rounded),
+                    trailing: [
+                      if (_query.isNotEmpty)
+                        IconButton(
+                          tooltip: 'Clear',
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _query = '');
+                          },
+                          icon: const Icon(Symbols.close_rounded),
                         ),
-                      ],
-                loading: () => const [_LoadingSliver()],
-                error: (error, _) => [
-                  _ErrorSliver(
-                    error: error,
-                    onRetry: () => ref.invalidate(recentAlbumsProvider),
+                    ],
+                    onChanged: (value) => setState(() => _query = value),
                   ),
-                ],
+                ),
               ),
+              if (_query.trim().isNotEmpty)
+                // Every branch returns a list of slivers, so `when` is typed
+                // to that and the whole thing spreads into the outer list.
+                ...search.when<List<Widget>>(
+                  data: (songs) => _songSliver(
+                    songs,
+                    emptyMessage: 'No songs match “$_query”.',
+                  ),
+                  loading: () => [const _LoadingSliver()],
+                  error: (error, _) => [
+                    _ErrorSliver(
+                      error: error,
+                      onRetry: () =>
+                          ref.invalidate(searchSongsProvider(_query)),
+                    ),
+                  ],
+                )
+              else ...[
+                SliverToBoxAdapter(
+                  child: _SectionHeader(
+                    title: 'Made for you',
+                    trailing: TextButton.icon(
+                      onPressed: () async {
+                        await ref.read(randomSongsProvider.notifier).refresh();
+                      },
+                      icon: const Icon(Symbols.refresh_rounded, size: 18),
+                      label: const Text('Shuffle'),
+                    ),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: randomSongs.when(
+                    data: (songs) => songs.isEmpty
+                        ? const SizedBox.shrink()
+                        : _SongShelf(songs: songs),
+                    loading: () => const SizedBox(
+                      height: 190,
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                    error: (error, _) => _InlineError(
+                      error: error,
+                      onRetry: () => ref.invalidate(randomSongsProvider),
+                    ),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: _SectionHeader(
+                    title: 'Recently added',
+                    trailing: TextButton(
+                      onPressed: () =>
+                          context.router.navigate(const AlbumsRoute()),
+                      child: const Text('See all'),
+                    ),
+                  ),
+                ),
+                ...recentAlbums.when(
+                  data: (albums) => albums.isEmpty
+                      ? const [SliverToBoxAdapter(child: SizedBox.shrink())]
+                      : [
+                          SliverPadding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: SolSpace.xl,
+                            ),
+                            sliver: SliverGrid.builder(
+                              gridDelegate:
+                                  const SliverGridDelegateWithMaxCrossAxisExtent(
+                                    maxCrossAxisExtent: 200,
+                                    mainAxisSpacing: SolSpace.md,
+                                    crossAxisSpacing: SolSpace.md,
+                                    childAspectRatio: 0.72,
+                                  ),
+                              itemCount: albums.length,
+                              itemBuilder: (context, index) => AlbumCard(
+                                album: albums[index],
+                                onTap: () => _openAlbum(context, albums[index]),
+                              ),
+                            ),
+                          ),
+                        ],
+                  loading: () => const [_LoadingSliver()],
+                  error: (error, _) => [
+                    _ErrorSliver(
+                      error: error,
+                      onRetry: () => ref.invalidate(recentAlbumsProvider),
+                    ),
+                  ],
+                ),
+              ],
+              SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
             ],
-            const SliverToBoxAdapter(child: SizedBox(height: 120)),
-          ],
+          ),
         ),
       ),
     );
@@ -200,10 +214,10 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen> {
 
   /// Search results are songs: the server API returns them in one call and
   /// there is nowhere else to go for a single track.
-  /// Flattens a list of slivers into the surrounding `slivers:` list.
   ///
   /// `search.when` returns widgets for a `slivers:` context in some branches,
-  /// so the result has to be expanded rather than wrapped in a single sliver.
+  /// so the result is flattened into the surrounding list rather than wrapped
+  /// in a single sliver.
   List<Widget> _songSliver(
     List<LibrarySong> songs, {
     required String emptyMessage,
@@ -257,9 +271,8 @@ class _SectionHeader extends StatelessWidget {
           Expanded(
             child: Text(
               title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(context).textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
           ?trailing,
@@ -348,56 +361,6 @@ class _SongCard extends StatelessWidget {
   }
 }
 
-class _AlbumTile extends StatelessWidget {
-  final LibraryAlbum album;
-  final VoidCallback onTap;
-
-  const _AlbumTile({required this.album, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: SolRadius.cardRadius,
-      child: Padding(
-        padding: const EdgeInsets.all(SolSpace.xs),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              aspectRatio: 1,
-              child: LibraryArtwork(
-                sourceId: album.sourceId,
-                artId: album.artId,
-                radius: SolRadius.md,
-                fallbackIcon: Symbols.album,
-              ),
-            ),
-            const SizedBox(height: SolSpace.sm),
-            Text(
-              album.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            Text(
-              album.artist ?? 'Unknown artist',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _SongRow extends ConsumerWidget {
   final LibrarySong song;
   final VoidCallback onTap;
@@ -451,7 +414,7 @@ class _ErrorSliver extends StatelessWidget {
       hasScrollBody: false,
       child: EmptyState(
         icon: Symbols.error_rounded,
-        title: 'Could not load your library',
+        title: 'Could not load this',
         message: describeServerError(error),
         iconColor: Theme.of(context).colorScheme.error,
         action: FilledButton(
@@ -472,15 +435,24 @@ class _InlineError extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: SolSpace.xxl),
+      padding: const EdgeInsets.symmetric(
+        horizontal: SolSpace.xxl,
+        vertical: SolSpace.sm,
+      ),
       child: Row(
         children: [
+          Icon(
+            Symbols.error_rounded,
+            size: 18,
+            color: Theme.of(context).colorScheme.error,
+          ),
+          const SizedBox(width: SolSpace.sm),
           Expanded(
             child: Text(
               describeServerError(error),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.error,
-              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
           TextButton(onPressed: onRetry, child: const Text('Retry')),

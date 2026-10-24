@@ -451,7 +451,7 @@ ThemeData createAppTheme(Brightness brightness, Color seedColor) {
       collapsedTextColor: onSurface,
     ),
     tabBarTheme: TabBarThemeData(
-      dividerColor: colorScheme.outlineVariant.withValues(alpha: 0.5),
+      dividerColor: Colors.transparent,
       splashBorderRadius: BorderRadius.circular(SolRadius.sm),
       labelStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
       unselectedLabelStyle: textTheme.labelLarge?.copyWith(
@@ -541,10 +541,13 @@ ThemeData createAppTheme(Brightness brightness, Color seedColor) {
       waitDuration: const Duration(milliseconds: 400),
       exitDuration: const Duration(milliseconds: 100),
     ),
-    dividerTheme: DividerThemeData(
-      color: colorScheme.outlineVariant.withValues(alpha: 0.7),
-      thickness: 1,
-      space: SolSpace.lg,
+    // The app draws no dividers at all: groups are separated by tone and
+    // space (see `IslandCard`), and a stray `Divider` in third-party chrome
+    // collapses to nothing rather than reintroducing a hairline.
+    dividerTheme: const DividerThemeData(
+      color: Colors.transparent,
+      thickness: 0,
+      space: 0,
     ),
     scrollbarTheme: ScrollbarThemeData(
       thickness: WidgetStateProperty.resolveWith(

@@ -1,7 +1,104 @@
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../core/responsive.dart';
+import '../shell/rail_scope.dart';
 import '../core/theme.dart';
 import '../library/models.dart';
+
+/// Centers a page's content in one column on wide windows.
+///
+/// Without this every row, cover and empty state stretches across a maximized
+/// window. The column stops at [maxWidth]; the extra pixels become gutter, and
+/// the page keeps its normal [SolSpace] insets inside the column.
+class ContentFrame extends StatelessWidget {
+  final Widget child;
+  final double maxWidth;
+  final Alignment alignment;
+
+  const ContentFrame({
+    super.key,
+    required this.child,
+    this.maxWidth = kContentMaxWidth,
+    this.alignment = Alignment.topCenter,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: alignment,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: child,
+      ),
+    );
+  }
+}
+
+/// The card primitive: a tonal island of the same warm paper, no border, no
+/// glass. Same tone family as Solian's `ExploreCard`, so the two apps' cards
+/// read as one system.
+///
+/// Cards sit *in* the scrolling plane, so they are deliberately opaque and
+/// unblurred — a sampled material behind body text costs legibility and a
+/// backdrop copy per frame, and a long list pays that per card. Separation
+/// comes from tone and space, which is why no divider is ever drawn between
+/// two of these.
+///
+/// The optional [onTap] adds a ripple clipped to the card's shape, so the
+/// whole island reads as one target.
+class IslandCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsets padding;
+  final EdgeInsets margin;
+  final double cornerRadius;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+
+  /// Slightly deeper tone, for a card that is selected or emphasised.
+  final bool emphasised;
+
+  const IslandCard({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.symmetric(vertical: SolSpace.sm),
+    this.margin = EdgeInsets.zero,
+    this.cornerRadius = SolRadius.card,
+    this.onTap,
+    this.onLongPress,
+    this.emphasised = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    // A real `Material` rather than a decorated box: rows inside (ListTile
+    // especially) paint their own ink on the nearest Material, so the card's
+    // fill has to be that Material or the ripples land underneath it.
+    return Padding(
+      padding: margin,
+      child: Material(
+        color: emphasised
+            ? colorScheme.surfaceContainer
+            : colorScheme.surfaceContainerLow,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(cornerRadius),
+        ),
+        child: onTap == null && onLongPress == null
+            ? Padding(padding: padding, child: child)
+            : InkWell(
+                onTap: onTap,
+                onLongPress: onLongPress,
+                child: Padding(padding: padding, child: child),
+              ),
+      ),
+    );
+  }
+}
 
 /// The one placeholder for every empty surface: dimmed icon, bold line, quiet
 /// explanation, optional way out.
@@ -30,34 +127,42 @@ class EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-
     return Center(
       child: Padding(
-        padding: EdgeInsets.all(compact ? 16 : 32),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 380),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
+        padding: EdgeInsets.all(compact ? SolSpace.xl : SolSpace.huge),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: compact ? 56 : 72,
+              height: compact ? 56 : 72,
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.7),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
                 icon,
-                size: compact ? 32 : 44,
-                color: iconColor ?? colorScheme.onSurfaceVariant.withValues(
-                  alpha: 0.55,
-                ),
+                size: compact ? 26 : 32,
+                color:
+                    iconColor ??
+                    colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
               ),
-              SizedBox(height: compact ? 8 : 16),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: (compact
-                        ? theme.textTheme.titleSmall
-                        : theme.textTheme.titleMedium)
-                    ?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              if (message != null) ...[
-                const SizedBox(height: 6),
-                Text(
+            ),
+            SizedBox(height: compact ? SolSpace.md : SolSpace.lg),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style:
+                  (compact
+                          ? theme.textTheme.titleSmall
+                          : theme.textTheme.titleMedium)
+                      ?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            if (message != null) ...[
+              const SizedBox(height: SolSpace.xs),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 380),
+                child: Text(
                   message!,
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodySmall?.copyWith(
@@ -65,13 +170,13 @@ class EmptyState extends StatelessWidget {
                     height: 1.5,
                   ),
                 ),
-              ],
-              if (action != null) ...[
-                SizedBox(height: compact ? 12 : 20),
-                action!,
-              ],
+              ),
             ],
-          ),
+            if (action != null) ...[
+              SizedBox(height: compact ? SolSpace.md : SolSpace.lg),
+              action!,
+            ],
+          ],
         ),
       ),
     );
@@ -80,16 +185,25 @@ class EmptyState extends StatelessWidget {
 
 /// Header used at the top of every tab: a title, an optional subtitle and a
 /// row of trailing actions, aligned like a document rather than centered.
+///
+/// [leading] is the back affordance for pushed pages. Tabs leave it empty and
+/// get [showRailToggle] instead: on a wide window the rail's collapse/expand
+/// control belongs at the head of the content, where a drawer button would
+/// be on a phone.
 class PageHeader extends StatelessWidget {
   final String title;
   final String? subtitle;
   final List<Widget> actions;
+  final Widget? leading;
+  final bool showRailToggle;
 
   const PageHeader({
     super.key,
     required this.title,
     this.subtitle,
     this.actions = const [],
+    this.leading,
+    this.showRailToggle = false,
   });
 
   @override
@@ -105,6 +219,13 @@ class PageHeader extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          if (leading != null) ...[
+            leading!,
+            const SizedBox(width: SolSpace.xs),
+          ] else if (showRailToggle) ...[
+            const RailToggleButton(),
+            const SizedBox(width: SolSpace.xs),
+          ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -112,6 +233,8 @@ class PageHeader extends StatelessWidget {
               children: [
                 Text(
                   title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -120,6 +243,8 @@ class PageHeader extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     subtitle!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -131,6 +256,63 @@ class PageHeader extends StatelessWidget {
           ...actions,
         ],
       ),
+    );
+  }
+}
+
+/// Back button for a pushed page's [PageHeader].
+class HeaderBackButton extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  const HeaderBackButton({super.key, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: 'Back',
+      onPressed: onPressed,
+      icon: const Icon(Symbols.arrow_back_rounded),
+    );
+  }
+}
+
+/// The wide layout's navigation toggle.
+///
+/// The rail is the only navigation surface there, so this button expands and
+/// collapses it in place — the same gesture a drawer button performs on a
+/// phone. Renders nothing on layouts without a rail.
+class RailToggleButton extends StatelessWidget {
+  const RailToggleButton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final rail = RailScope.maybeOf(context);
+    if (rail == null || !rail.available) return const SizedBox.shrink();
+    return IconButton(
+      tooltip: rail.expanded ? 'Collapse navigation' : 'Expand navigation',
+      onPressed: rail.toggle,
+      icon: const Icon(Symbols.menu_rounded),
+    );
+  }
+}
+
+/// Settings, as reached from a page header on layouts without a rail.
+///
+/// On wide windows the rail already carries the gear at the bottom of the
+/// column, so this renders nothing there: one destination, one button.
+class HeaderSettingsButton extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  const HeaderSettingsButton({super.key, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    final rail = RailScope.maybeOf(context);
+    if (rail != null && rail.available) return const SizedBox.shrink();
+    return IconButton(
+      tooltip: 'Settings',
+      onPressed: onPressed,
+      icon: const Icon(Symbols.settings),
     );
   }
 }
@@ -171,21 +353,11 @@ class SectionLabel extends StatelessWidget {
   }
 }
 
-/// Thin divider used between logical groups, inset to the page gutter.
-class GroupDivider extends StatelessWidget {
-  const GroupDivider({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Divider(
-      height: SolSpace.lg,
-      indent: SolSpace.xxl,
-      endIndent: SolSpace.xxl,
-    );
-  }
-}
-
-/// Album/track list rows share one shape: cover, two lines, trailing duration.
+/// Album/track list rows share one shape: cover, two lines, trailing text.
+///
+/// Rows are separated by space and hover tone, never by a divider: a list of
+/// hairlines reads as a table, and this is a playlist. The hover and selected
+/// fills are rounded so a row reads as one object.
 class TrackRow extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -211,37 +383,90 @@ class TrackRow extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return ListTile(
-      onTap: onTap,
-      onLongPress: onLongPress,
-      selected: selected,
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: SolSpace.xxl,
-        vertical: SolSpace.xxs,
-      ),
-      leading: artwork,
-      title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
-      trailing: trailing == null
-          ? null
-          : Text(
-              trailing!,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: SolSpace.md, vertical: 2),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          onLongPress: onLongPress,
+          borderRadius: BorderRadius.circular(SolRadius.md),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOutCubic,
+            padding: const EdgeInsets.symmetric(
+              horizontal: SolSpace.md,
+              vertical: SolSpace.sm,
             ),
+            decoration: BoxDecoration(
+              color: selected
+                  ? colorScheme.secondaryContainer.withValues(alpha: 0.6)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(SolRadius.md),
+            ),
+            child: Row(
+              children: [
+                if (artwork != null) ...[
+                  artwork!,
+                  const SizedBox(width: SolSpace.md),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: selected
+                              ? colorScheme.onSecondaryContainer
+                              : colorScheme.onSurface,
+                        ),
+                      ),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: selected
+                              ? colorScheme.onSecondaryContainer.withValues(
+                                  alpha: 0.8,
+                                )
+                              : colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (trailing != null)
+                  Padding(
+                    padding: const EdgeInsets.only(left: SolSpace.sm),
+                    child: Text(
+                      trailing!,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: selected
+                            ? colorScheme.onSecondaryContainer
+                            : colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
-
 
 /// Turns any thrown value into a line the UI can show.
 ///
 /// Server failures carry their own message; anything else is reported without
 /// claiming more than we know.
 String describeServerError(Object error) {
-  return switch (error) {
-    LibraryException(:final message) => message,
-    _ => 'Something went wrong while talking to the server.',
-  };
+  if (error is LibraryException) return error.message;
+  return 'The library did not answer. Check the connection and try again.';
 }

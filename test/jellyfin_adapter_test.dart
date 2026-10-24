@@ -14,6 +14,13 @@ class _FakeJellyfin {
   final HttpServer _server;
   bool rejectAuth = false;
 
+  /// Reject the auth call the way Jellyfin 10.11 does when the client
+  /// identity header is missing or malformed.
+  bool rejectClientIdentity = false;
+
+  /// Every request's headers, keyed by path.
+  final Map<String, HttpHeaders> lastHeaders = {};
+
   static Future<_FakeJellyfin> start() async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final fake = _FakeJellyfin(server);
@@ -27,11 +34,15 @@ class _FakeJellyfin {
 
   Future<void> _handle(HttpRequest request) async {
     final path = request.uri.path;
+    lastHeaders[path] = request.headers;
     final response = request.response;
     response.headers.contentType = ContentType.json;
 
     if (path == '/Users/AuthenticateByName') {
-      if (rejectAuth) {
+      if (rejectClientIdentity) {
+        response.statusCode = HttpStatus.badRequest;
+        response.write(jsonEncode({'Message': 'Bad request.'}));
+      } else if (rejectAuth) {
         response.statusCode = HttpStatus.unauthorized;
         response.write(jsonEncode({'Message': 'Invalid credentials.'}));
       } else {
@@ -47,7 +58,9 @@ class _FakeJellyfin {
       response.write(jsonEncode({'Id': 'u1', 'Name': 'me'}));
     } else if (path == '/Items') {
       final query = request.uri.queryParameters;
-      response.write(jsonEncode({'Items': _itemsFor(query), 'TotalRecordCount': 2}));
+      response.write(
+        jsonEncode({'Items': _itemsFor(query), 'TotalRecordCount': 2}),
+      );
     } else {
       response.statusCode = HttpStatus.notFound;
       response.write(jsonEncode({'Message': 'not found'}));
@@ -122,6 +135,54 @@ void main() {
       ),
     );
   });
+
+  test('authenticates with the Authorization header Jellyfin 10.11 reads', () async {
+    await JellyfinAdapter().connect(
+      baseUrl: server.baseUrl,
+      username: 'me',
+      password: 'secret',
+    );
+
+    // 10.11 parses `Authorization: MediaBrowser ...` only and rejects the
+    // legacy X-Emby pair, which used to make a correct password fail with 400.
+    final auth = server.lastHeaders['/Users/AuthenticateByName']!;
+    final header = auth.value(HttpHeaders.authorizationHeader).toString();
+    expect(header, startsWith('MediaBrowser '));
+    expect(header, contains('Client="GroovyBox"'));
+    expect(header, contains('DeviceId="'));
+    expect(auth.value('X-Emby-Authorization'), isNull);
+
+    // The signed-in calls carry the token in the same header.
+    final me = server.lastHeaders['/Users/Me'];
+    if (me != null) {
+      expect(
+        me.value(HttpHeaders.authorizationHeader).toString(),
+        contains('Token="tok"'),
+      );
+    }
+  });
+
+  test(
+    'explains a rejected client identity instead of blaming the password',
+    () async {
+      server.rejectClientIdentity = true;
+
+      await expectLater(
+        JellyfinAdapter().connect(
+          baseUrl: server.baseUrl,
+          username: 'me',
+          password: 'secret',
+        ),
+        throwsA(
+          isA<LibraryException>().having(
+            (e) => e.message,
+            'message',
+            contains('client identity'),
+          ),
+        ),
+      );
+    },
+  );
 
   test('maps songs, durations and stream URLs', () async {
     final config = await JellyfinAdapter().connect(

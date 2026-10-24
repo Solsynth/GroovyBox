@@ -58,6 +58,22 @@ List<TabDestination> get allTabDestinations => const [
 /// lives behind the header's overflow there instead of taking a slot.
 const kBottomBarIds = ['browse', 'albums', 'playlists', 'queue'];
 
+/// Settings is a pushed route, not a tab, so it is not part of
+/// [allTabDestinations]. Both shells still need one button for it, and they
+/// must not disagree about its label or icon — hence one constant
+/// destination. `routeIndex` is -1 on purpose: nothing may select it through
+/// the tabs router.
+const kSettingsLabel = 'Settings';
+const kSettingsIcon = Symbols.settings;
+
+const kSettingsDestination = TabDestination(
+  id: 'settings',
+  routeIndex: -1,
+  label: kSettingsLabel,
+  icon: kSettingsIcon,
+  selectedIcon: kSettingsIcon,
+);
+
 List<TabDestination> get bottomBarDestinations => allTabDestinations
     .where((destination) => kBottomBarIds.contains(destination.id))
     .toList();

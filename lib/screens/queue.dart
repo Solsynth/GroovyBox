@@ -1,4 +1,5 @@
 import 'package:auto_route/auto_route.dart';
+import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/artwork.dart';
@@ -20,73 +21,80 @@ class QueueScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final playback = ref.watch(playbackProvider);
     final controller = ref.read(playbackProvider.notifier);
+    final bottomInset = solBottomChromeInset(
+      context,
+      dockVisible: playback.current != null,
+    );
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: Column(
-        children: [
-          PageHeader(
-            title: 'Queue',
-            subtitle: playback.queue.isEmpty
-                ? 'Nothing queued'
-                : '${playback.queue.length} tracks'
-                      '${playback.shuffle ? '  ·  shuffled' : ''}',
-            actions: [
-              IconButton(
-                tooltip: 'Shuffle',
-                isSelected: playback.shuffle,
-                onPressed: () => controller.setShuffle(!playback.shuffle),
-                icon: const Icon(Symbols.shuffle_rounded),
-              ),
-              IconButton(
-                tooltip: _repeatLabel(playback.repeatMode),
-                isSelected: playback.repeatMode != PlaybackRepeatMode.off,
-                onPressed: controller.cycleRepeatMode,
-                icon: Icon(
-                  playback.repeatMode == PlaybackRepeatMode.single
-                      ? Symbols.repeat_one_rounded
-                      : Symbols.repeat_rounded,
+      body: ContentFrame(
+        child: Column(
+          children: [
+            PageHeader(
+              showRailToggle: true,
+              title: 'Queue',
+              subtitle: playback.queue.isEmpty
+                  ? 'Nothing queued'
+                  : '${playback.queue.length} tracks'
+                        '${playback.shuffle ? '  ·  shuffled' : ''}',
+              actions: [
+                IconButton(
+                  tooltip: 'Shuffle',
+                  isSelected: playback.shuffle,
+                  onPressed: () => controller.setShuffle(!playback.shuffle),
+                  icon: const Icon(Symbols.shuffle_rounded),
+                ),
+                IconButton(
+                  tooltip: _repeatLabel(playback.repeatMode),
+                  isSelected: playback.repeatMode != PlaybackRepeatMode.off,
+                  onPressed: controller.cycleRepeatMode,
+                  icon: Icon(
+                    playback.repeatMode == PlaybackRepeatMode.single
+                        ? Symbols.repeat_one_rounded
+                        : Symbols.repeat_rounded,
+                  ),
+                ),
+                const SizedBox(width: SolSpace.sm),
+              ],
+            ),
+            if (playback.queue.isEmpty)
+              const Expanded(
+                child: EmptyState(
+                  icon: Symbols.queue_music,
+                  title: 'The queue is empty',
+                  message: 'Play a song or an album and it lands here.',
+                ),
+              )
+            else
+              Expanded(
+                child: ListView.builder(
+                  padding: EdgeInsets.only(bottom: bottomInset),
+                  itemCount: playback.queue.length,
+                  itemBuilder: (context, index) {
+                    final song = playback.queue[index];
+                    final isCurrent = playback.currentIndex == index;
+                    return TrackRow(
+                      title: song.title,
+                      subtitle: songRowSubtitle(ref, song),
+                      selected: isCurrent,
+                      trailing: formatDuration(song.duration),
+                      artwork: LibraryArtwork(
+                        sourceId: song.sourceId,
+                        artId: song.artId,
+                        size: 44,
+                        radius: SolRadius.xs,
+                      ),
+                      onTap: () => controller.playQueue(
+                        playback.queue,
+                        startIndex: index,
+                      ),
+                    );
+                  },
                 ),
               ),
-              const SizedBox(width: SolSpace.sm),
-            ],
-          ),
-          if (playback.queue.isEmpty)
-            const Expanded(
-              child: EmptyState(
-                icon: Symbols.queue_music,
-                title: 'The queue is empty',
-                message: 'Play a song or an album and it lands here.',
-              ),
-            )
-          else
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.only(bottom: 96),
-                itemCount: playback.queue.length,
-                itemBuilder: (context, index) {
-                  final song = playback.queue[index];
-                  final isCurrent = playback.currentIndex == index;
-                  return TrackRow(
-                    title: song.title,
-                    subtitle: songRowSubtitle(ref, song),
-                    selected: isCurrent,
-                    trailing: formatDuration(song.duration),
-                    artwork: LibraryArtwork(
-                      sourceId: song.sourceId,
-                      artId: song.artId,
-                      size: 44,
-                      radius: SolRadius.xs,
-                    ),
-                    onTap: () => controller.playQueue(
-                      playback.queue,
-                      startIndex: index,
-                    ),
-                  );
-                },
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

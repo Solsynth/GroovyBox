@@ -1,4 +1,5 @@
 import 'package:auto_route/auto_route.dart';
+import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/router.gr.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/models.dart';
@@ -22,135 +23,87 @@ class AlbumsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final albums = ref.watch(recentAlbumsProvider);
+    // Select the identity, not the state: watching the whole transport would
+    // rebuild this page on every position tick, once a second.
+    final hasSong = ref.watch(
+      playbackProvider.select((state) => state.current != null),
+    );
+    final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: Column(
-        children: [
-          PageHeader(
-            title: 'Albums',
-            subtitle: albums.maybeWhen(
-              data: (list) =>
-                  '${list.length} ${list.length == 1 ? 'album' : 'albums'}',
-              orElse: () => null,
-            ),
-            actions: [
-              IconButton(
-                tooltip: 'Refresh',
-                onPressed: () =>
-                    ref.read(recentAlbumsProvider.notifier).refresh(),
-                icon: const Icon(Symbols.refresh_rounded),
+      body: ContentFrame(
+        child: Column(
+          children: [
+            PageHeader(
+              showRailToggle: true,
+              title: 'Albums',
+              subtitle: albums.maybeWhen(
+                data: (list) =>
+                    '${list.length} ${list.length == 1 ? 'album' : 'albums'}',
+                orElse: () => null,
               ),
-              const SizedBox(width: SolSpace.sm),
-            ],
-          ),
-          Expanded(
-            child: albums.when(
-              data: (list) => list.isEmpty
-                  ? const EmptyState(
-                      icon: Symbols.album,
-                      title: 'No albums yet',
-                      message:
-                          'Anything with an album tag in your libraries shows '
-                          'up here.',
-                    )
-                  : GridView.builder(
-                      padding: const EdgeInsets.fromLTRB(
-                        SolSpace.xl,
-                        0,
-                        SolSpace.xl,
-                        96,
-                      ),
-                      gridDelegate:
-                          const SliverGridDelegateWithMaxCrossAxisExtent(
-                            maxCrossAxisExtent: 200,
-                            mainAxisSpacing: SolSpace.md,
-                            crossAxisSpacing: SolSpace.md,
-                            childAspectRatio: 0.72,
-                          ),
-                      itemCount: list.length,
-                      itemBuilder: (context, index) {
-                        final album = list[index];
-                        return AlbumCard(
-                          album: album,
-                          // Tapping the cover opens the album and starts it:
-                          // one tap from the grid to music is the point of a
-                          // player, and the detail page is one push away for
-                          // anyone who wants to pick a track.
-                          onTap: () => context.router.push(
-                            AlbumDetailRoute(
-                              sourceId: album.sourceId,
-                              albumId: album.id,
-                              albumName: album.name,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => EmptyState(
-                icon: Symbols.error_rounded,
-                title: 'Could not load albums',
-                message: describeServerError(error),
-                iconColor: Theme.of(context).colorScheme.error,
-                action: FilledButton(
+              actions: [
+                IconButton(
+                  tooltip: 'Refresh',
                   onPressed: () =>
                       ref.read(recentAlbumsProvider.notifier).refresh(),
-                  child: const Text('Try again'),
+                  icon: const Icon(Symbols.refresh_rounded),
                 ),
-              ),
+                const SizedBox(width: SolSpace.sm),
+              ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Shared album cover card, used by the grid and the browse shelves.
-class AlbumCard extends StatelessWidget {
-  final LibraryAlbum album;
-  final VoidCallback onTap;
-
-  const AlbumCard({super.key, required this.album, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: SolRadius.cardRadius,
-      child: Padding(
-        padding: const EdgeInsets.all(SolSpace.xs),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
             Expanded(
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: LibraryArtwork(
-                  sourceId: album.sourceId,
-                  artId: album.artId,
-                  radius: SolRadius.md,
-                  fallbackIcon: Symbols.album,
+              child: albums.when(
+                data: (list) => list.isEmpty
+                    ? const EmptyState(
+                        icon: Symbols.album,
+                        title: 'No albums yet',
+                        message:
+                            'Anything with an album tag in your libraries '
+                            'shows up here.',
+                      )
+                    : GridView.builder(
+                        padding: EdgeInsets.fromLTRB(
+                          SolSpace.xl,
+                          0,
+                          SolSpace.xl,
+                          bottomInset,
+                        ),
+                        gridDelegate:
+                            const SliverGridDelegateWithMaxCrossAxisExtent(
+                              maxCrossAxisExtent: 200,
+                              mainAxisSpacing: SolSpace.md,
+                              crossAxisSpacing: SolSpace.md,
+                              childAspectRatio: 0.72,
+                            ),
+                        itemCount: list.length,
+                        itemBuilder: (context, index) {
+                          final album = list[index];
+                          return AlbumCard(
+                            album: album,
+                            onTap: () => context.router.push(
+                              AlbumDetailRoute(
+                                sourceId: album.sourceId,
+                                albumId: album.id,
+                                albumName: album.name,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, _) => EmptyState(
+                  icon: Symbols.error_rounded,
+                  title: 'Could not load albums',
+                  message: describeServerError(error),
+                  iconColor: Theme.of(context).colorScheme.error,
+                  action: FilledButton(
+                    onPressed: () =>
+                        ref.read(recentAlbumsProvider.notifier).refresh(),
+                    child: const Text('Try again'),
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(height: SolSpace.sm),
-            Text(
-              album.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            Text(
-              album.artist ?? 'Unknown artist',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ],
@@ -160,7 +113,99 @@ class AlbumCard extends StatelessWidget {
   }
 }
 
+/// Shared album cover card, used by the grid and the browse shelves.
+///
+/// The cover lifts on hover instead of drawing a border: on a grid of
+/// artwork, a hairline around every tile is noise, and motion is the cheapest
+/// way to say "this is a target".
+class AlbumCard extends StatefulWidget {
+  final LibraryAlbum album;
+  final VoidCallback onTap;
+
+  const AlbumCard({super.key, required this.album, required this.onTap});
+
+  @override
+  State<AlbumCard> createState() => _AlbumCardState();
+}
+
+class _AlbumCardState extends State<AlbumCard> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: InkWell(
+        onTap: widget.onTap,
+        borderRadius: SolRadius.cardRadius,
+        child: Padding(
+          padding: const EdgeInsets.all(SolSpace.xs),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: AnimatedScale(
+                    scale: _hovered ? 1.02 : 1,
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOutCubic,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(SolRadius.md),
+                        boxShadow: _hovered
+                            ? [
+                                BoxShadow(
+                                  color: theme.colorScheme.shadow.withValues(
+                                    alpha: 0.18,
+                                  ),
+                                  blurRadius: 18,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: LibraryArtwork(
+                        sourceId: widget.album.sourceId,
+                        artId: widget.album.artId,
+                        radius: SolRadius.md,
+                        fallbackIcon: Symbols.album,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: SolSpace.sm),
+              Text(
+                widget.album.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Text(
+                widget.album.artist ?? 'Unknown artist',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// One album's track list, with a play-all header.
+///
+/// On a wide window the cover and the actions sit side by side above the
+/// tracks instead of stacking in the middle of the page.
 @RoutePage()
 class AlbumDetailScreen extends ConsumerWidget {
   /// Which library the album belongs to; albums are only unique per source.
@@ -181,129 +226,165 @@ class AlbumDetailScreen extends ConsumerWidget {
       albumSongsProvider((sourceId: sourceId, id: albumId)),
     );
     final playback = ref.watch(playbackProvider);
+    final hasSong = playback.current != null;
+    final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: Column(
-        children: [
-          PageHeader(
-            title: albumName ?? 'Album',
-            subtitle: songs.maybeWhen(
-              data: (list) => list.isEmpty
-                  ? null
-                  : '${list.length} tracks  ·  '
-                        '${formatDuration(
-                          list.fold(Duration.zero, (sum, s) => sum + s.duration),
-                        )}',
-              orElse: () => null,
-            ),
-            actions: [
-              IconButton(
-                tooltip: 'Back',
+      body: ContentFrame(
+        child: Column(
+          children: [
+            PageHeader(
+              title: albumName ?? 'Album',
+              leading: HeaderBackButton(
                 onPressed: () => context.router.maybePop(),
-                icon: const Icon(Symbols.arrow_back_rounded),
               ),
-              const SizedBox(width: SolSpace.sm),
-            ],
-          ),
-          Expanded(
-            child: songs.when(
-              data: (list) => list.isEmpty
-                  ? const EmptyState(
-                      icon: Symbols.album,
-                      title: 'This album is empty',
-                      message: 'The server returned no tracks for it.',
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.only(bottom: 96),
-                      itemCount: list.length + 1,
-                      itemBuilder: (context, index) {
-                        if (index == 0) {
-                          return Padding(
-                            padding: const EdgeInsets.fromLTRB(
-                              SolSpace.xxl,
-                              SolSpace.sm,
-                              SolSpace.xxl,
-                              SolSpace.md,
-                            ),
-                            child: Row(
-                              children: [
-                                LibraryArtwork(
-                                  sourceId: list.first.sourceId,
-                                  artId: list.first.artId,
-                                  size: 132,
-                                  radius: SolRadius.lg,
-                                  fallbackIcon: Symbols.album,
-                                ),
-                                const SizedBox(width: SolSpace.lg),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      FilledButton.icon(
-                                        onPressed: () => ref
-                                            .read(playbackProvider.notifier)
-                                            .playQueue(list),
-                                        icon: const Icon(
-                                          Symbols.play_arrow_rounded,
-                                        ),
-                                        label: const Text('Play'),
-                                      ),
-                                      const SizedBox(height: SolSpace.sm),
-                                      Text(
-                                        '${list.first.artist ?? 'Unknown artist'}'
-                                        '${list.first.year == null ? '' : '  ·  ${list.first.year}'}',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall
-                                            ?.copyWith(
-                                              color: Theme.of(
-                                                context,
-                                              ).colorScheme.onSurfaceVariant,
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }
+              subtitle: songs.maybeWhen(
+                data: (list) => list.isEmpty
+                    ? null
+                    : '${list.length} tracks  ·  '
+                          '${formatDuration(list.fold(Duration.zero, (sum, s) => sum + s.duration))}',
+                orElse: () => null,
+              ),
+            ),
+            Expanded(
+              child: songs.when(
+                data: (list) => list.isEmpty
+                    ? const EmptyState(
+                        icon: Symbols.album,
+                        title: 'This album is empty',
+                        message: 'The server returned no tracks for it.',
+                      )
+                    : ListView.builder(
+                        padding: EdgeInsets.only(bottom: bottomInset),
+                        itemCount: list.length + 1,
+                        itemBuilder: (context, index) {
+                          if (index == 0) {
+                            return _AlbumHero(
+                              songs: list,
+                              onPlay: () => ref
+                                  .read(playbackProvider.notifier)
+                                  .playQueue(list),
+                            );
+                          }
 
-                        final song = list[index - 1];
-                        return TrackRow(
-                          title: song.title,
-                          subtitle: song.artist ?? 'Unknown artist',
-                          selected: playback.isCurrentSong(song),
-                          trailing: formatDuration(song.duration),
-                          artwork: LibraryArtwork(
-                            sourceId: song.sourceId,
-                            artId: song.artId,
-                            size: 44,
-                            radius: SolRadius.xs,
-                          ),
-                          onTap: () => ref
-                              .read(playbackProvider.notifier)
-                              .playQueue(list, startIndex: index - 1),
-                        );
-                      },
+                          final song = list[index - 1];
+                          return TrackRow(
+                            title: song.title,
+                            subtitle: song.artist ?? 'Unknown artist',
+                            selected: playback.isCurrentSong(song),
+                            trailing: formatDuration(song.duration),
+                            artwork: LibraryArtwork(
+                              sourceId: song.sourceId,
+                              artId: song.artId,
+                              size: 44,
+                              radius: SolRadius.xs,
+                            ),
+                            onTap: () => ref
+                                .read(playbackProvider.notifier)
+                                .playQueue(list, startIndex: index - 1),
+                          );
+                        },
+                      ),
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, _) => EmptyState(
+                  icon: Symbols.error_rounded,
+                  title: 'Could not load this album',
+                  message: describeServerError(error),
+                  iconColor: Theme.of(context).colorScheme.error,
+                  action: FilledButton(
+                    onPressed: () => ref.invalidate(
+                      albumSongsProvider((sourceId: sourceId, id: albumId)),
                     ),
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => EmptyState(
-                icon: Symbols.error_rounded,
-                title: 'Could not load this album',
-                message: describeServerError(error),
-                iconColor: Theme.of(context).colorScheme.error,
-                action: FilledButton(
-                  onPressed: () => ref.invalidate(
-                    albumSongsProvider((sourceId: sourceId, id: albumId)),
+                    child: const Text('Try again'),
                   ),
-                  child: const Text('Try again'),
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Cover, title block and play action at the top of an album.
+class _AlbumHero extends StatelessWidget {
+  final List<LibrarySong> songs;
+  final VoidCallback onPlay;
+
+  const _AlbumHero({required this.songs, required this.onPlay});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final first = songs.first;
+    final wide = isWideScreen(context);
+    final coverSize = wide ? 168.0 : 132.0;
+
+    final details = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          first.album ?? first.title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
           ),
+        ),
+        const SizedBox(height: SolSpace.xxs),
+        Text(
+          '${first.artist ?? 'Unknown artist'}'
+          '${first.year == null ? '' : '  ·  ${first.year}'}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: SolSpace.md),
+        FilledButton.icon(
+          onPressed: onPlay,
+          icon: const Icon(Symbols.play_arrow_rounded),
+          label: const Text('Play album'),
+        ),
+      ],
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        SolSpace.xxl,
+        SolSpace.sm,
+        SolSpace.xxl,
+        SolSpace.md,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(SolRadius.lg),
+              boxShadow: [
+                BoxShadow(
+                  color: colorScheme.shadow.withValues(alpha: 0.24),
+                  blurRadius: 28,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
+            child: LibraryArtwork(
+              sourceId: first.sourceId,
+              artId: first.artId,
+              size: coverSize,
+              radius: SolRadius.lg,
+              fallbackIcon: Symbols.album,
+            ),
+          ),
+          const SizedBox(width: SolSpace.lg),
+          Expanded(child: details),
         ],
       ),
     );

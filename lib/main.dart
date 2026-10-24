@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:groovy_box/core/app.dart';
+import 'package:groovy_box/core/glass.dart';
 import 'package:groovy_box/core/router.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/screens/setup.dart';
@@ -40,7 +41,8 @@ Future<void> main() async {
       await windowManager.focus();
     });
     // Wayland ignores the hidden-title-bar hint until the window is frameless.
-    if (Platform.isLinux && Platform.environment.containsKey('WAYLAND_DISPLAY')) {
+    if (Platform.isLinux &&
+        Platform.environment.containsKey('WAYLAND_DISPLAY')) {
       try {
         await windowManager.setAsFrameless();
       } on PlatformException catch (error) {
@@ -68,6 +70,7 @@ class GroovyBoxApp extends ConsumerWidget {
     final themeMode = ref.watch(themeModeProvider);
     final router = ref.watch(routerProvider);
     final connected = ref.watch(librarySourcesProvider).isNotEmpty;
+    final glass = ref.watch(glassEffectsEnabledProvider);
 
     return MaterialApp.router(
       title: 'GroovyBox',
@@ -84,19 +87,24 @@ class GroovyBoxApp extends ConsumerWidget {
       builder: (context, child) {
         // The frame is created once, around the routed content: pages never
         // draw window chrome themselves.
-        return DesktopWindowFrame(
-          isDesktopPlatform: DesktopWindowFrame.isPlatformDesktop,
-          title: const _WindowTitle(),
-          // Closing the window ends the app; a music player sitting in the
-          // tray with no UI would be a surprise, not a convenience.
-          onClose: () => windowManager.close(),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              connected
-                  ? (child ?? const SizedBox.shrink())
-                  : const SetupScreen(),
-            ],
+        // The glass scope wraps the frame, so every floating surface shares
+        // one setting and one paint switch.
+        return GlassEffects(
+          enabled: glass,
+          child: DesktopWindowFrame(
+            isDesktopPlatform: DesktopWindowFrame.isPlatformDesktop,
+            title: const _WindowTitle(),
+            // Closing the window ends the app; a music player sitting in the
+            // tray with no UI would be a surprise, not a convenience.
+            onClose: () => windowManager.close(),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                connected
+                    ? (child ?? const SizedBox.shrink())
+                    : const SetupScreen(),
+              ],
+            ),
           ),
         );
       },

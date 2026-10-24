@@ -20,12 +20,15 @@ enum AppThemeMode { system, light, dark }
 
 const _kThemeModeKey = 'app_theme_mode';
 const _kVolumeKey = 'app_volume';
+const _kGlassEffectsKey = 'app_glass_effects';
 
 @Riverpod(keepAlive: true)
 class ThemeModeNotifier extends Notifier<AppThemeMode> {
   @override
   AppThemeMode build() {
-    final saved = ref.watch(sharedPreferencesProvider).getString(_kThemeModeKey);
+    final saved = ref
+        .watch(sharedPreferencesProvider)
+        .getString(_kThemeModeKey);
     return AppThemeMode.values.firstWhere(
       (mode) => mode.name == saved,
       orElse: () => AppThemeMode.system,
@@ -50,3 +53,20 @@ double initialVolume(Ref ref) =>
 
 Future<void> saveVolume(WidgetRef ref, double volume) =>
     ref.read(sharedPreferencesProvider).setDouble(_kVolumeKey, volume);
+
+/// Whether chrome draws liquid glass. On by default: it is the app's look,
+/// and the flat fallback exists for machines where the shader pass is too
+/// expensive to pay on every scroll frame.
+@Riverpod(keepAlive: true)
+class GlassEffectsEnabled extends Notifier<bool> {
+  @override
+  bool build() =>
+      ref.watch(sharedPreferencesProvider).getBool(_kGlassEffectsKey) ?? true;
+
+  Future<void> set(bool enabled) async {
+    state = enabled;
+    await ref
+        .read(sharedPreferencesProvider)
+        .setBool(_kGlassEffectsKey, enabled);
+  }
+}

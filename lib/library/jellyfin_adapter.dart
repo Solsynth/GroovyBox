@@ -1,3 +1,5 @@
+import 'dart:io' show HttpHeaders;
+
 import 'package:dio/dio.dart';
 
 import 'http.dart';
@@ -24,7 +26,7 @@ class JellyfinAdapter implements LibraryAdapter {
         receiveTimeout: const Duration(seconds: 25),
         responseType: ResponseType.json,
         contentType: Headers.jsonContentType,
-        headers: {_authorizationHeader: _clientAuthorization(id)},
+        headers: {HttpHeaders.authorizationHeader: _authorization(id)},
       ),
     );
 
@@ -38,7 +40,7 @@ class JellyfinAdapter implements LibraryAdapter {
       if (error.response?.statusCode == 401) {
         throw const LibraryException('Wrong username or password.', code: 401);
       }
-      throw LibraryException(describeDioError(error));
+      throw LibraryException(_describeAuthError(error));
     }
 
     final body = auth.data;
@@ -66,14 +68,42 @@ class JellyfinAdapter implements LibraryAdapter {
   @override
   LibrarySource sourceFor(SourceConfig config) => JellyfinSource(config);
 
-  /// Jellyfin identifies clients per device; [deviceId] is the stable part.
-  static String _clientAuthorization(String deviceId) =>
-      'MediaBrowser Client="GroovyBox", Device="GroovyBox", '
-      'DeviceId="$deviceId", Version="0.1.0"';
-}
+  /// The one header Jellyfin authenticates every request with.
+  ///
+  /// Jellyfin 10.11 stopped accepting the legacy `X-Emby-Authorization` /
+  /// `X-Emby-Token` pair: it parses `Authorization: MediaBrowser ...` only, and
+  /// derives the client's `App` from this header. Without it the auth call
+  /// fails with a 400 *before* the credentials are looked at — which is why a
+  /// correct password still reported "HTTP 400". The access token rides in the
+  /// same header once signed in; [deviceId] is the part that identifies this
+  /// install.
+  static String authorization(String deviceId, {String? token}) =>
+      _authorization(deviceId, token: token);
 
-const _authorizationHeader = 'X-Emby-Authorization';
-const _tokenHeader = 'X-Emby-Token';
+  static String _authorization(String deviceId, {String? token}) {
+    final fields = [
+      'Client="GroovyBox"',
+      'Device="GroovyBox"',
+      'DeviceId="$deviceId"',
+      'Version="0.1.0"',
+      if (token != null && token.isNotEmpty) 'Token="$token"',
+    ];
+    return 'MediaBrowser ${fields.join(', ')}';
+  }
+
+  /// A 400 from the auth endpoint is never about the password: the server
+  /// rejected the client identity, which means it is not a Jellyfin server, or
+  /// a proxy in front of it strips the `Authorization` header.
+  static String _describeAuthError(DioException error) {
+    if (error.type == DioExceptionType.badResponse &&
+        error.response?.statusCode == 400) {
+      return 'The server rejected the client identity. Check that this is a '
+          'Jellyfin address, and that no proxy strips the Authorization '
+          'header.';
+    }
+    return describeDioError(error);
+  }
+}
 
 /// One connected Jellyfin server.
 ///
@@ -93,9 +123,9 @@ class JellyfinSource extends LibrarySource {
           responseType: ResponseType.json,
           contentType: Headers.jsonContentType,
           headers: {
-            _tokenHeader: config.auth['accessToken'] ?? '',
-            _authorizationHeader: JellyfinAdapter._clientAuthorization(
+            HttpHeaders.authorizationHeader: JellyfinAdapter.authorization(
               config.id,
+              token: config.auth['accessToken'],
             ),
           },
         ),
@@ -143,14 +173,14 @@ class JellyfinSource extends LibrarySource {
     }
 
     final data = response.data;
-    if (data is! Map) throw const LibraryException('Malformed server response.');
+    if (data is! Map) {
+      throw const LibraryException('Malformed server response.');
+    }
     return Map<String, dynamic>.from(data);
   }
 
   /// Every list endpoint returns `{Items: [...], TotalRecordCount: n}`.
-  Future<List<Map<String, dynamic>>> _items(
-    Map<String, dynamic> query,
-  ) async {
+  Future<List<Map<String, dynamic>>> _items(Map<String, dynamic> query) async {
     final body = await _request('/Items', query: {...query, 'userId': _userId});
     final items = body['Items'];
     if (items is! List) return const [];
