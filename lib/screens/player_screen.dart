@@ -12,6 +12,8 @@ import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:groovy_box/widgets/lyrics_view.dart';
+import 'package:groovy_box/widgets/queue_panel.dart';
+import 'package:groovy_box/widgets/transport.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
@@ -30,11 +32,14 @@ import 'package:material_ui/material_ui.dart';
 /// On a wide window the cover and the controls sit side by side instead of
 /// stacking in a narrow column.
 ///
-/// Lyrics are not a second page: they are the same page in another shape. One
-/// controller drives the change, and every box that differs between the two
-/// arrangements — the slot's height, the frame's width, the cover's size, the
-/// side the controls hang from — is interpolated from it, so there is no frame
-/// where the player is neither one layout nor the other.
+/// Lyrics and the queue are not second pages: they are the same page in
+/// another shape. One controller drives the change, and every box that differs
+/// between the arrangements — the slot's height, the frame's width, the cover's
+/// size, the side the controls hang from — is interpolated from it, so there is
+/// no frame where the player is neither one layout nor the other.
+///
+/// The cover, the words and the queue compete for the same column, so the two
+/// alternates sit behind one pair of corner controls and only one can be open.
 @RoutePage()
 class PlayerScreen extends ConsumerStatefulWidget {
   const PlayerScreen({super.key});
@@ -43,16 +48,25 @@ class PlayerScreen extends ConsumerStatefulWidget {
   ConsumerState<PlayerScreen> createState() => _PlayerScreenState();
 }
 
+/// What the page's slot shows instead of the cover.
+enum _PlayerView { cover, lyrics, queue }
+
 class _PlayerScreenState extends ConsumerState<PlayerScreen>
     with SingleTickerProviderStateMixin {
-  /// Whether the page shows lyrics instead of the cover. Apple Music's player
-  /// keeps both behind one control in the corner, because the cover and the
-  /// words compete for the same column.
-  bool _showLyrics = false;
+  /// The slot's current shape. Apple Music's player keeps the alternatives
+  /// behind controls in the corner, because they compete for the cover's
+  /// column rather than stacking above it.
+  _PlayerView _view = _PlayerView.cover;
 
-  /// Drives the morph between the two arrangements: 0 is the cover, 1 is the
-  /// lyrics. It runs in both directions, so closing the words is the opening
-  /// played backwards rather than a second, different animation.
+  /// The alternate the slot last showed. The slot keeps it mounted while the
+  /// cover comes back, so closing fades the panel out instead of deleting it
+  /// on the frame the button was tapped.
+  _PlayerView _pane = _PlayerView.cover;
+
+  /// Drives the morph between the arrangements: 0 is the cover, 1 is whichever
+  /// alternate is asked for. It runs in both directions, so closing the words
+  /// is the opening played backwards rather than a second, different
+  /// animation.
   late final AnimationController _morph = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 480),
@@ -100,12 +114,19 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     super.dispose();
   }
 
-  void _toggleLyrics() {
-    setState(() => _showLyrics = !_showLyrics);
-    if (_showLyrics) {
-      _morph.forward();
-    } else {
+  /// Swaps the slot's alternate. Asking for the one already open closes it,
+  /// so each corner button toggles itself and picking the other one hands the
+  /// slot over rather than opening both.
+  void _showView(_PlayerView view) {
+    final next = _view == view ? _PlayerView.cover : view;
+    setState(() {
+      _view = next;
+      if (next != _PlayerView.cover) _pane = next;
+    });
+    if (next == _PlayerView.cover) {
       _morph.reverse();
+    } else {
+      _morph.forward();
     }
   }
 
@@ -129,12 +150,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
         );
   }
 
-  /// Escape backs out one layer at a time: the words first, the page second.
-  /// Leaving the player from under an open lyric pane would take the pane with
-  /// it, and closing the pane is what the same key means everywhere else.
+  /// Escape backs out one layer at a time: the open alternate first, the page
+  /// second. Leaving the player from under a panel would take the panel with
+  /// it, and closing it is what the same key means everywhere else.
   void _backOut() {
-    if (_showLyrics) {
-      _toggleLyrics();
+    if (_view != _PlayerView.cover) {
+      _showView(_view);
     } else {
       context.router.maybePop();
     }
@@ -194,7 +215,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       case LogicalKeyboardKey.arrowDown:
         _nudgeVolume(playback.volume, -5);
       case LogicalKeyboardKey.keyL:
-        if (!repeat) _toggleLyrics();
+        if (!repeat) _showView(_PlayerView.lyrics);
+      case LogicalKeyboardKey.keyQ:
+        if (!repeat) _showView(_PlayerView.queue);
       default:
         return KeyEventResult.ignored;
     }
@@ -240,18 +263,29 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     );
 
     final transport = _Transport(playback: playback, controller: controller);
+    // Built once per page build, not per animation frame: whichever pane is
+    // on show keeps its scroll position while the morph runs.
+    final alternate = switch (_pane) {
+      _PlayerView.queue => const QueuePanel(),
+      _ => const SongLyricsPane(
+        padding: EdgeInsets.symmetric(horizontal: SolSpace.xs),
+        fade: false,
+      ),
+    };
     final body = wide
         ? _WidePlayerBody(
             song: song,
             scrubber: scrubber,
             transport: transport,
+            alternate: alternate,
             morph: _morphT,
           )
         : _CompactPlayerBody(
             song: song,
             scrubber: scrubber,
             transport: transport,
-            showLyrics: _showLyrics,
+            alternate: alternate,
+            alternateAlive: _view != _PlayerView.cover,
             morph: _morphT,
           );
 
@@ -326,7 +360,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                   includeSemantics: false,
                   onKeyEvent: (_, event) =>
                       _onTransportKey(event, playback, duration),
-                  // The body owns the whole page: the close and lyrics
+                  // The body owns the whole page: the close and view
                   // controls float over it rather than sitting in a bar above
                   // it, so the artwork is not charged a row it does not need
                   // and the player reads as one full-bleed surface.
@@ -344,11 +378,26 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                       ),
                       Align(
                         alignment: Alignment.topRight,
-                        child: IconButton(
-                          tooltip: _showLyrics ? 'Hide lyrics' : 'Show lyrics',
-                          isSelected: _showLyrics,
-                          onPressed: _toggleLyrics,
-                          icon: const Icon(Symbols.lyrics_rounded),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: _view == _PlayerView.queue
+                                  ? 'Hide queue'
+                                  : 'Show queue',
+                              isSelected: _view == _PlayerView.queue,
+                              onPressed: () => _showView(_PlayerView.queue),
+                              icon: const Icon(Symbols.queue_music_rounded),
+                            ),
+                            IconButton(
+                              tooltip: _view == _PlayerView.lyrics
+                                  ? 'Hide lyrics'
+                                  : 'Show lyrics',
+                              isSelected: _view == _PlayerView.lyrics,
+                              onPressed: () => _showView(_PlayerView.lyrics),
+                              icon: const Icon(Symbols.lyrics_rounded),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -369,20 +418,22 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 /// scrim — is the surface, so the controls sit straight on it; a tonal panel
 /// on top of that only reads as a second background.
 ///
-/// The cover and the words are one slot rather than two layouts, so the lyrics
-/// button morphs that slot instead of swapping its child.
+/// The cover and one alternate are one slot rather than two layouts, so the
+/// corner controls morph that slot instead of swapping its child.
 class _CompactPlayerBody extends StatelessWidget {
   final LibrarySong song;
   final Widget scrubber;
   final Widget transport;
-  final bool showLyrics;
+  final Widget alternate;
+  final bool alternateAlive;
   final Animation<double> morph;
 
   const _CompactPlayerBody({
     required this.song,
     required this.scrubber,
     required this.transport,
-    required this.showLyrics,
+    required this.alternate,
+    required this.alternateAlive,
     required this.morph,
   });
 
@@ -390,43 +441,55 @@ class _CompactPlayerBody extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final coverSize = (constraints.maxHeight * 0.54).clamp(200.0, 460.0);
+        // Sized from the window, not from the column left over: the copy,
+        // scrubber and transport below have fixed heights, and letting the
+        // art claim half the screen is what pushed the transport onto the
+        // bottom edge. The second clamp keeps those controls their room on a
+        // window short enough for both to compete.
+        final coverSize = math.min(
+          (constraints.maxHeight * 0.44).clamp(160.0, 360.0),
+          math.max(constraints.maxHeight - 250, 120.0),
+        );
+        // The transport is five buttons wide and does not shrink; where the
+        // window is too small for both, the art gives way so the controls
+        // keep the width they need instead of spilling out of the column.
+        final controlsWidth = math.max(
+          coverSize,
+          math.min(320.0, constraints.maxWidth),
+        );
         return Padding(
           padding: const EdgeInsets.fromLTRB(
             SolSpace.xl,
             0,
             SolSpace.xl,
-            SolSpace.lg,
+            // Clear of the phone's own bottom inset, which [SafeArea] has
+            // already applied, and of the window edge: the transport is the
+            // last thing on the page, and a button on the glass edge reads as
+            // clipped rather than placed.
+            SolSpace.xxl,
           ),
           child: Column(
             children: [
               Expanded(
-                // Lyrics take the cover's place rather than stacking above the
-                // controls: two scrolling bodies in one column leaves neither
-                // enough room to read a verse.
+                // The alternate takes the cover's place rather than stacking
+                // above the controls: two scrolling bodies in one column
+                // leaves neither enough room to read.
                 child: _MorphSlot(
                   t: morph,
                   cover: Center(
                     child: _Cover(song: song, size: coverSize),
                   ),
-                  // Built only once the words are on their way in or still
-                  // fading out, so the cover state costs no lyric request.
-                  lyrics: () => const SongLyricsPane(
-                    padding: EdgeInsets.symmetric(horizontal: SolSpace.xs),
-                    fade: false,
-                  ),
-                  lyricsAlive: showLyrics,
+                  alternate: () => alternate,
+                  alternateAlive: alternateAlive,
                 ),
               ),
               _TrackCopy(song: song, centered: true),
               const SizedBox(height: SolSpace.lg),
-              // Exactly the artwork's width, so the column reads as one
-              // object: the square the cover paints is the square the
-              // controls span. Both clamp to the same padded width on a
-              // narrow window, so they stay matched at every size.
+              // As wide as the artwork, so the column reads as one object:
+              // the square the cover paints is the square the controls span.
               Center(
                 child: SizedBox(
-                  width: coverSize,
+                  width: controlsWidth,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [scrubber, transport],
@@ -441,27 +504,27 @@ class _CompactPlayerBody extends StatelessWidget {
   }
 }
 
-/// Cover and lyrics as one slot, morphed rather than swapped.
+/// Cover and alternate as one slot, morphed rather than swapped.
 ///
-/// The cover sits on top and lifts away while the words rise from behind it,
-/// so the two never dissolve into each other. The cover stays mounted at both
-/// ends — it is the expensive subtree, and rebuilding it on every toggle would
-/// blink the artwork — while the words exist only while they are wanted or
-/// still leaving.
+/// The cover sits on top and lifts away while the alternate rises from behind
+/// it, so the two never dissolve into each other. The cover stays mounted at
+/// both ends — it is the expensive subtree, and rebuilding it on every toggle
+/// would blink the artwork — while the alternate exists only while it is
+/// wanted or still leaving.
 class _MorphSlot extends StatelessWidget {
   final Animation<double> t;
   final Widget cover;
-  final Widget Function() lyrics;
+  final Widget Function() alternate;
 
-  /// Whether the words are wanted at all. Kept separate from [t] because the
-  /// controller reaches 0 one frame before the pane can be dropped.
-  final bool lyricsAlive;
+  /// Whether the alternate is wanted at all. Kept separate from [t] because
+  /// the controller reaches 0 one frame before the pane can be dropped.
+  final bool alternateAlive;
 
   const _MorphSlot({
     required this.t,
     required this.cover,
-    required this.lyrics,
-    required this.lyricsAlive,
+    required this.alternate,
+    required this.alternateAlive,
   });
 
   @override
@@ -470,11 +533,11 @@ class _MorphSlot extends StatelessWidget {
       animation: t,
       builder: (context, _) {
         final v = t.value;
-        // Staggered, with the cover on top: the words rise from behind the
-        // artwork and are only uncovered as it lifts away, so no frame shows
-        // lettering bleeding through a half-transparent cover. Both subtrees
-        // stay mounted at every value — unmounting one would drop its decoded
-        // image and its scroll position.
+        // Staggered, with the cover on top: the alternate rises from behind
+        // the artwork and is only uncovered as it lifts away, so no frame
+        // shows lettering bleeding through a half-transparent cover. Both
+        // subtrees stay mounted at every value — unmounting one would drop its
+        // decoded image and its scroll position.
         final out =
             1 - Curves.easeInCubic.transform((v / 0.58).clamp(0.0, 1.0));
         final into = Curves.easeOutCubic.transform(
@@ -483,12 +546,12 @@ class _MorphSlot extends StatelessWidget {
         return Stack(
           fit: StackFit.expand,
           children: [
-            // Words sit *under* the artwork, so during the morph they are
-            // uncovered rather than painted over it. Both subtrees stay
+            // The alternate sits *under* the artwork, so during the morph it
+            // is uncovered rather than painted over it. Both subtrees stay
             // mounted at every value, including the ends: unmounting one would
             // drop its decoded image and its scroll position, and the next
             // toggle would re-enter from a blank tile.
-            if (lyricsAlive || into > 0)
+            if (alternateAlive || into > 0)
               IgnorePointer(
                 ignoring: into < 1,
                 child: Opacity(
@@ -497,7 +560,7 @@ class _MorphSlot extends StatelessWidget {
                     offset: Offset(0, 24 * (1 - into)),
                     child: Transform.scale(
                       scale: 0.97 + 0.03 * into,
-                      child: lyrics(),
+                      child: alternate(),
                     ),
                   ),
                 ),
@@ -536,12 +599,14 @@ class _WidePlayerBody extends StatelessWidget {
   final LibrarySong song;
   final Widget scrubber;
   final Widget transport;
+  final Widget alternate;
   final Animation<double> morph;
 
   const _WidePlayerBody({
     required this.song,
     required this.scrubber,
     required this.transport,
+    required this.alternate,
     required this.morph,
   });
 
@@ -570,10 +635,6 @@ class _WidePlayerBody extends StatelessWidget {
         transport,
       ],
     );
-    const lyrics = SongLyricsPane(
-      padding: EdgeInsets.symmetric(horizontal: SolSpace.sm),
-      fade: false,
-    );
 
     return AnimatedBuilder(
       animation: morph,
@@ -583,7 +644,7 @@ class _WidePlayerBody extends StatelessWidget {
 
         // Both ends of every measurement, so no frame has to choose between
         // them: the cover end is a square that sizes itself from its column,
-        // the lyrics end is a text frame that fits the viewport.
+        // the alternate end is a pane that fits the viewport.
         //
         // The column is exactly one cover wide at both ends. Sizing it as a
         // fraction of the frame instead let the scrubber outgrow the square
@@ -593,9 +654,20 @@ class _WidePlayerBody extends StatelessWidget {
         final viewport = math.max(screen.width - SolSpace.xxl * 2, 320.0);
         final width = math.min(lerpDouble(1000, 1120, t)!, viewport);
         final inner = math.max(width - SolSpace.xxxl, 0.0);
-        final coverSize = inner * lerpDouble(0.5, 0.45, t)!;
-        final lyricsHeight = (screen.height * 0.76).clamp(520.0, 780.0);
-        final wordsHeight = lerpDouble(coverSize, lyricsHeight, t)!;
+        // Under half the column, and never taller than the window can show:
+        // the cover is a companion to the controls, not the page itself.
+        final coverSize = math.min(
+          inner * lerpDouble(0.44, 0.40, t)!,
+          screen.height * 0.58,
+        );
+        // The pane grows with the morph instead of starting at the words'
+        // full height: at the cover end it is exactly the cover's square, so
+        // the row is as tall as the artwork and the column stays centred.
+        final wordsHeight = lerpDouble(
+          coverSize,
+          (screen.height * 0.76).clamp(520.0, 780.0),
+          t,
+        )!;
 
         // The controls hand off rather than cross-fade in place: they are on
         // the right for the cover and under the artwork for the words, and the
@@ -680,7 +752,7 @@ class _WidePlayerBody extends StatelessWidget {
                                 opacity: words,
                                 child: Transform.translate(
                                   offset: Offset(28 * (1 - words), 0),
-                                  child: lyrics,
+                                  child: alternate,
                                 ),
                               ),
                             ),
@@ -848,22 +920,7 @@ class _Transport extends StatelessWidget {
           onPressed: controller.togglePlayPause,
           iconSize: 36,
           padding: const EdgeInsets.all(SolSpace.lg),
-          icon: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 100),
-            child: playback.playing
-                ? Icon(
-                    Symbols.pause_rounded,
-                    color: Colors.white,
-                    fill: 1,
-                    key: const ValueKey("playing"),
-                  )
-                : Icon(
-                    Symbols.play_arrow_rounded,
-                    color: Colors.white,
-                    fill: 1,
-                    key: const ValueKey("paused"),
-                  ),
-          ),
+          icon: PlayPauseIcon(playing: playback.playing, size: 36),
         ),
         const SizedBox(width: SolSpace.xs),
         IconButton(

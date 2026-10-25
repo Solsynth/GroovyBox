@@ -7,7 +7,8 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// The queue, as a sheet inside the now-playing capsule.
+/// The queue, as a panel: a sheet in the now-playing capsule, a page-wide
+/// list in the player.
 ///
 /// The dock's queue button opens this instead of navigating to the Queue tab:
 /// a glance at what is next should not cost the page underneath, and the
@@ -20,8 +21,8 @@ import 'package:material_ui/material_ui.dart';
 /// It fills the height the dock gives it. A list that measured itself would
 /// make the capsule's `AnimatedSize` chase its own output, so the header is
 /// fixed and the rows take the rest.
-class QueueSheet extends ConsumerWidget {
-  const QueueSheet({super.key});
+class QueuePanel extends ConsumerWidget {
+  const QueuePanel({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

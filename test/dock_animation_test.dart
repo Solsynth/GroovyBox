@@ -8,7 +8,7 @@ import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/now_playing_dock.dart';
-import 'package:groovy_box/widgets/queue_sheet.dart';
+import 'package:groovy_box/widgets/queue_panel.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -66,7 +66,7 @@ class _Playback extends Playback {
 const _capsuleHeight = kNowPlayingDockHeight + SolSpace.sm * 2;
 
 Future<_Playback> _pumpDock(WidgetTester tester) async {
-  tester.view.physicalSize = const Size(500, 900);
+  tester.view.physicalSize = const Size(1200, 900);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   SharedPreferences.setMockInitialValues({});
@@ -116,13 +116,13 @@ void main() {
     // later the panel is still on screen, part-way down.
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 150));
-    expect(find.byType(QueueSheet), findsOneWidget);
+    expect(find.byType(QueuePanel), findsOneWidget);
     final folding = tester.getSize(_capsule()).height;
     expect(folding, lessThan(open));
     expect(folding, greaterThan(_capsuleHeight));
 
     await tester.pumpAndSettle();
-    expect(find.byType(QueueSheet), findsNothing);
+    expect(find.byType(QueuePanel), findsNothing);
     expect(tester.getSize(_capsule()).height, closeTo(_capsuleHeight, 1));
   });
 
@@ -181,5 +181,23 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.getSize(dock).height, closeTo(_capsuleHeight, 1));
     expect(find.text('After the Rain'), findsOneWidget);
+  });
+
+  testWidgets('a window that shrinks under an open sheet folds it away', (
+    tester,
+  ) async {
+    await _pumpDock(tester);
+    await tester.tap(find.byTooltip('Show queue'));
+    await tester.pumpAndSettle();
+    expect(find.byType(QueuePanel), findsOneWidget);
+
+    // Narrow enough that the sheet buttons are gone: leaving the panel open
+    // would strand it with no way back.
+    tester.view.physicalSize = const Size(380, 700);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(QueuePanel), findsNothing);
+    expect(find.byTooltip('Show queue'), findsNothing);
+    expect(tester.getSize(_capsule()).height, closeTo(_capsuleHeight, 1));
   });
 }

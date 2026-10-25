@@ -69,7 +69,7 @@ class _Playback extends Playback {
 
 void main() {
   testWidgets('the dock lyrics sheet follows the position', (tester) async {
-    tester.view.physicalSize = const Size(500, 900);
+    tester.view.physicalSize = const Size(1200, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     SharedPreferences.setMockInitialValues({});
@@ -80,9 +80,9 @@ void main() {
       ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(prefs),
-        // The library's answer is timed, so no network or disk is involved;
-        // an absent cache keeps the test off the device's real database.
-        lyricsCacheProvider.overrideWithValue(null),
+          // The library's answer is timed, so no network or disk is involved;
+          // an absent cache keeps the test off the device's real database.
+          lyricsCacheProvider.overrideWithValue(null),
           librarySourcesProvider.overrideWithValue([_Source()]),
           playbackProvider.overrideWith(() => playback),
         ],

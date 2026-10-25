@@ -9,6 +9,7 @@ import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/screens/player_screen.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/lyrics_view.dart';
+import 'package:groovy_box/widgets/queue_panel.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -112,4 +113,21 @@ void main() {
       expect(find.byType(SongLyricsPane), findsNothing);
     });
   }
+
+  testWidgets('the queue takes the same slot as the words', (tester) async {
+    await _pump(tester, const Size(420, 860));
+
+    expect(find.byType(QueuePanel), findsNothing);
+    await tester.tap(find.byTooltip('Show queue'));
+    await tester.pumpAndSettle();
+    expect(find.byType(QueuePanel), findsOneWidget);
+    expect(find.byType(SongLyricsPane), findsNothing);
+
+    // The slot holds one alternate: asking for the words hands it over.
+    await tester.tap(find.byTooltip('Show lyrics'));
+    await tester.pumpAndSettle();
+    expect(find.byType(QueuePanel), findsNothing);
+    expect(find.byType(SongLyricsPane), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

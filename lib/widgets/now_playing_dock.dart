@@ -9,7 +9,8 @@ import 'package:groovy_box/shell/dock_morph.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:groovy_box/widgets/lyrics_view.dart';
-import 'package:groovy_box/widgets/queue_sheet.dart';
+import 'package:groovy_box/widgets/queue_panel.dart';
+import 'package:groovy_box/widgets/transport.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
@@ -100,10 +101,34 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
     curve: Curves.easeOutCubic,
   );
 
+  /// Set while a narrow window has asked the open panel to leave, so the
+  /// request is scheduled once rather than by every rebuild of the fall.
+  bool _closingForWidth = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The sheet controls live only where there is room for the panel. A
+    // window that shrinks under an open sheet would otherwise leave it lifted
+    // with nothing to fold it back, so the shrink closes it. Closing is a
+    // setState, which cannot run mid-build; it waits for the frame.
+    if (isWideScreen(context) || _openSheet == _DockSheet.none) {
+      _closingForWidth = false;
+      return;
+    }
+    if (_closingForWidth) return;
+    _closingForWidth = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _closingForWidth = false;
+      final sheet = _openSheet;
+      if (sheet != _DockSheet.none) _toggleSheet(sheet);
+    });
+  }
+
   @override
   void initState() {
     super.initState();
-    // A restored queue rises like any other song rather than snapping in.
     _shownSong = ref.read(playbackProvider).current;
     if (_shownSong != null) _dock.forward();
   }
@@ -144,17 +169,15 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
   }
 
   /// Height the lyric sheet asks for, capped to a share of the window so the
-  /// transport row and the tab capsule still fit on a short phone.
-  double _sheetHeight({required bool wide}) {
-    final preferred = wide ? 300.0 : 220.0;
-    return preferred.clamp(0.0, MediaQuery.sizeOf(context).height * 0.34);
+  /// transport row and the tab capsule still fit on a short window.
+  double _sheetHeight() {
+    return 300.0.clamp(0.0, MediaQuery.sizeOf(context).height * 0.34);
   }
 
   /// The queue needs more room than the words: it is a list, and three rows
   /// are the fewest that show a song, the one playing, and what follows.
-  double _queueSheetHeight({required bool wide}) {
-    final preferred = wide ? 380.0 : 280.0;
-    return preferred.clamp(0.0, MediaQuery.sizeOf(context).height * 0.46);
+  double _queueSheetHeight() {
+    return 380.0.clamp(0.0, MediaQuery.sizeOf(context).height * 0.46);
   }
 
   /// The slot a sheet grows out of and retracts into: nothing when no sheet
@@ -165,10 +188,10 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
   /// rather than a size shrinking around content already gone. The gap is
   /// part of the slot, so tone and space (never a rule) still separate the
   /// panel from the transport at every point of the motion.
-  Widget _sheetSlot({required bool wide}) {
+  Widget _sheetSlot() {
     final height = switch (_shownSheet) {
-      _DockSheet.lyrics => _sheetHeight(wide: wide),
-      _DockSheet.queue => _queueSheetHeight(wide: wide),
+      _DockSheet.lyrics => _sheetHeight(),
+      _DockSheet.queue => _queueSheetHeight(),
       _DockSheet.none => 0.0,
     };
     final gap = switch (_shownSheet) {
@@ -193,7 +216,7 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
                 behavior: HitTestBehavior.opaque,
                 onTap: () {},
                 child: SongLyricsPane(
-                  height: _sheetHeight(wide: wide),
+                  height: _sheetHeight(),
                   padding: const EdgeInsets.symmetric(horizontal: SolSpace.md),
                 ),
               ),
@@ -201,8 +224,8 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
                 behavior: HitTestBehavior.opaque,
                 onTap: () {},
                 child: SizedBox(
-                  height: _queueSheetHeight(wide: wide),
-                  child: const QueueSheet(),
+                  height: _queueSheetHeight(),
+                  child: const QueuePanel(),
                 ),
               ),
               _DockSheet.none => const SizedBox.shrink(),
@@ -297,16 +320,16 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
                         // the morph would read as movement.
                         padding: const EdgeInsets.fromLTRB(
                           SolSpace.sm,
-                          SolSpace.sm,
+                          0,
                           SolSpace.md,
-                          SolSpace.sm,
+                          0,
                         ),
                         child: capsule!,
                       ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          _sheetSlot(wide: wide),
+                          _sheetSlot(),
                           SizedBox(
                             height: kNowPlayingDockHeight,
                             child: Row(
@@ -403,30 +426,37 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      IconButton(
-                                        tooltip: _queueOpen
-                                            ? 'Hide queue'
-                                            : 'Show queue',
-                                        visualDensity: VisualDensity.compact,
-                                        isSelected: _queueOpen,
-                                        onPressed: () =>
-                                            _toggleSheet(_DockSheet.queue),
-                                        icon: const Icon(
-                                          Symbols.queue_music_rounded,
+                                      // The panels take more room than a phone
+                                      // has: with the transport, the tab pill
+                                      // and the safe area there is no height
+                                      // left for a sheet, so the two ways into
+                                      // them exist only on a wide window.
+                                      if (wide) ...[
+                                        IconButton(
+                                          tooltip: _queueOpen
+                                              ? 'Hide queue'
+                                              : 'Show queue',
+                                          visualDensity: VisualDensity.compact,
+                                          isSelected: _queueOpen,
+                                          onPressed: () =>
+                                              _toggleSheet(_DockSheet.queue),
+                                          icon: const Icon(
+                                            Symbols.queue_music_rounded,
+                                          ),
                                         ),
-                                      ),
-                                      IconButton(
-                                        tooltip: _lyricsOpen
-                                            ? 'Hide lyrics'
-                                            : 'Show lyrics',
-                                        visualDensity: VisualDensity.compact,
-                                        isSelected: _lyricsOpen,
-                                        onPressed: () =>
-                                            _toggleSheet(_DockSheet.lyrics),
-                                        icon: const Icon(
-                                          Symbols.lyrics_rounded,
+                                        IconButton(
+                                          tooltip: _lyricsOpen
+                                              ? 'Hide lyrics'
+                                              : 'Show lyrics',
+                                          visualDensity: VisualDensity.compact,
+                                          isSelected: _lyricsOpen,
+                                          onPressed: () =>
+                                              _toggleSheet(_DockSheet.lyrics),
+                                          icon: const Icon(
+                                            Symbols.lyrics_rounded,
+                                          ),
                                         ),
-                                      ),
+                                      ],
                                       IconButton(
                                         tooltip: 'Previous',
                                         visualDensity: VisualDensity.compact,
@@ -440,10 +470,8 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
                                             ? 'Pause'
                                             : 'Play',
                                         onPressed: controller.togglePlayPause,
-                                        icon: Icon(
-                                          playback.playing
-                                              ? Symbols.pause_rounded
-                                              : Symbols.play_arrow_rounded,
+                                        icon: PlayPauseIcon(
+                                          playing: playback.playing,
                                         ),
                                       ),
                                       IconButton(

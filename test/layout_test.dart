@@ -184,4 +184,26 @@ void main() {
     );
     expect(find.byType(Slider), findsOneWidget);
   });
+
+  testWidgets('dock offers lyrics and queue only where a panel fits', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      const SizedBox.shrink(),
+      size: const Size(420, 780),
+      dock: true,
+    );
+    expect(find.byTooltip('Show lyrics'), findsNothing);
+    expect(find.byTooltip('Show queue'), findsNothing);
+
+    await _pump(
+      tester,
+      const SizedBox.shrink(),
+      size: const Size(1440, 900),
+      dock: true,
+    );
+    expect(find.byTooltip('Show lyrics'), findsOneWidget);
+    expect(find.byTooltip('Show queue'), findsOneWidget);
+  });
 }
