@@ -16,7 +16,10 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// Full-window player: large cover, scrubber, transport and volume.
+/// Full-window player: large cover, scrubber and transport.
+///
+/// The window's volume lives in Settings, not here: it is set once and rarely
+/// touched, and the column under the cover belongs to the track.
 ///
 /// This is the only place seeking happens from the page stack; the dock shows
 /// position but leaves dragging to a control with room for it.
@@ -153,10 +156,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
   /// Transport keys, while the page itself is what has the focus.
   ///
-  /// A focused control keeps its own keys: Space activates the button the user
-  /// tabbed to and the volume slider takes the arrows, which is what a
-  /// keyboard user expects from each. These apply to the page's own focus,
-  /// which is where the page starts and where a click on empty space returns.
+  /// A focused control keeps its own keys: Space activates the button the
+  /// user tabbed to, which is what a keyboard user expects. These apply to
+  /// the page's own focus, which is where the page starts and where a click
+  /// on empty space returns. The arrows still set the volume even though the
+  /// slider moved to Settings.
   KeyEventResult _onTransportKey(
     KeyEvent event,
     PlaybackState playback,
@@ -236,12 +240,20 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     );
 
     final transport = _Transport(playback: playback, controller: controller);
-
-    final volume = _VolumeControl(
-      volume: playback.volume,
-      onChanged: controller.setVolume,
-      onSaved: (value) => saveVolume(ref, value),
-    );
+    final body = wide
+        ? _WidePlayerBody(
+            song: song,
+            scrubber: scrubber,
+            transport: transport,
+            morph: _morphT,
+          )
+        : _CompactPlayerBody(
+            song: song,
+            scrubber: scrubber,
+            transport: transport,
+            showLyrics: _showLyrics,
+            morph: _morphT,
+          );
 
     return Focus(
       // Cannot take focus itself, so it only ever sees the keys a control has
@@ -255,31 +267,25 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
         backgroundColor: colorScheme.surface,
         body: Stack(
           children: [
-            // The empty field around the content is a way back to the page's
-            // own keys: after tabbing onto a control, Space and the arrows
-            // belong to that control, and a tap on the backdrop hands them
-            // back instead of leaving the user to tab around in a circle.
+            // The blurred cover gives the page a colour field without
+            // introducing a gradient of our own. It is not the tap target:
+            // the surface above it is, so content that covers the field still
+            // hands the keys back.
             Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: _shortcutFocus.requestFocus,
-                // The cover, blown up and blurred, gives the page a colour
-                // field without introducing a gradient of our own.
-                child: ClipRect(
-                  child: ImageFiltered(
-                    imageFilter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
-                    child: Opacity(
-                      opacity: 0.4,
-                      child: LibraryArtwork(
-                        sourceId: song.sourceId,
-                        artId: song.artId,
-                        radius: 0,
-                        // Blurred past recognition: detail here would be
-                        // decoded and thrown away, so ask for a thumbnail,
-                        // not the cover.
-                        pixelSize: 256,
-                        fallbackIcon: Symbols.music_note_rounded,
-                      ),
+              child: ClipRect(
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
+                  child: Opacity(
+                    opacity: 0.4,
+                    child: LibraryArtwork(
+                      sourceId: song.sourceId,
+                      artId: song.artId,
+                      radius: 0,
+                      // Blurred past recognition: detail here would be
+                      // decoded and thrown away, so ask for a thumbnail,
+                      // not the cover.
+                      pixelSize: 256,
+                      fallbackIcon: Symbols.music_note_rounded,
                     ),
                   ),
                 ),
@@ -303,84 +309,55 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                 ),
               ),
             ),
+            // The whole surface is the way back to the page's own keys: after
+            // tabbing onto a control, Space and the arrows belong to that
+            // control, and a tap anywhere that is not one hands them back
+            // instead of leaving the user to tab around in a circle. It wraps
+            // the content rather than sitting under it, so the artwork and the
+            // lyrics are covered by it too; a control still wins the tap
+            // because it is the deeper target.
             SafeArea(
-              child: Focus(
-                focusNode: _shortcutFocus,
-                autofocus: true,
-                includeSemantics: false,
-                onKeyEvent: (_, event) =>
-                    _onTransportKey(event, playback, duration),
-                child: Column(
-                  children: [
-                    _PlayerHeader(
-                      onClose: () => context.router.maybePop(),
-                      showingLyrics: _showLyrics,
-                      onToggleLyrics: _toggleLyrics,
-                    ),
-                    Expanded(
-                      child: wide
-                          ? _WidePlayerBody(
-                              song: song,
-                              scrubber: scrubber,
-                              transport: transport,
-                              volume: volume,
-                              morph: _morphT,
-                            )
-                          : _CompactPlayerBody(
-                              song: song,
-                              scrubber: scrubber,
-                              transport: transport,
-                              volume: volume,
-                              showLyrics: _showLyrics,
-                              morph: _morphT,
-                            ),
-                    ),
-                  ],
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: _shortcutFocus.requestFocus,
+                child: Focus(
+                  focusNode: _shortcutFocus,
+                  autofocus: true,
+                  includeSemantics: false,
+                  onKeyEvent: (_, event) =>
+                      _onTransportKey(event, playback, duration),
+                  // The body owns the whole page: the close and lyrics
+                  // controls float over it rather than sitting in a bar above
+                  // it, so the artwork is not charged a row it does not need
+                  // and the player reads as one full-bleed surface.
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Positioned.fill(child: body),
+                      Align(
+                        alignment: Alignment.topLeft,
+                        child: IconButton(
+                          tooltip: 'Close',
+                          onPressed: () => context.router.maybePop(),
+                          icon: const Icon(Symbols.keyboard_arrow_down_rounded),
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.topRight,
+                        child: IconButton(
+                          tooltip: _showLyrics ? 'Hide lyrics' : 'Show lyrics',
+                          isSelected: _showLyrics,
+                          onPressed: _toggleLyrics,
+                          icon: const Icon(Symbols.lyrics_rounded),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// The player's own bar: close on the left, the lyrics toggle on the right.
-///
-/// No title between them — the track's copy is the page's headline, and a
-/// "Now playing" label above it only said what the artwork and the scrubber
-/// already say.
-class _PlayerHeader extends StatelessWidget {
-  final VoidCallback onClose;
-  final bool showingLyrics;
-  final VoidCallback onToggleLyrics;
-
-  const _PlayerHeader({
-    required this.onClose,
-    required this.showingLyrics,
-    required this.onToggleLyrics,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: SolSpace.sm),
-      child: Row(
-        children: [
-          IconButton(
-            tooltip: 'Close',
-            onPressed: onClose,
-            icon: const Icon(Symbols.keyboard_arrow_down_rounded),
-          ),
-          const Spacer(),
-          IconButton(
-            tooltip: showingLyrics ? 'Hide lyrics' : 'Show lyrics',
-            isSelected: showingLyrics,
-            onPressed: onToggleLyrics,
-            icon: const Icon(Symbols.lyrics_rounded),
-          ),
-        ],
       ),
     );
   }
@@ -398,7 +375,6 @@ class _CompactPlayerBody extends StatelessWidget {
   final LibrarySong song;
   final Widget scrubber;
   final Widget transport;
-  final Widget volume;
   final bool showLyrics;
   final Animation<double> morph;
 
@@ -406,7 +382,6 @@ class _CompactPlayerBody extends StatelessWidget {
     required this.song,
     required this.scrubber,
     required this.transport,
-    required this.volume,
     required this.showLyrics,
     required this.morph,
   });
@@ -431,7 +406,9 @@ class _CompactPlayerBody extends StatelessWidget {
                 // enough room to read a verse.
                 child: _MorphSlot(
                   t: morph,
-                  cover: Center(child: _Cover(song: song, size: coverSize)),
+                  cover: Center(
+                    child: _Cover(song: song, size: coverSize),
+                  ),
                   // Built only once the words are on their way in or still
                   // fading out, so the cover state costs no lyric request.
                   lyrics: () => const SongLyricsPane(
@@ -452,12 +429,7 @@ class _CompactPlayerBody extends StatelessWidget {
                   width: coverSize,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
-                    children: [
-                      scrubber,
-                      transport,
-                      const SizedBox(height: SolSpace.xs),
-                      volume,
-                    ],
+                    children: [scrubber, transport],
                   ),
                 ),
               ),
@@ -503,7 +475,8 @@ class _MorphSlot extends StatelessWidget {
         // lettering bleeding through a half-transparent cover. Both subtrees
         // stay mounted at every value — unmounting one would drop its decoded
         // image and its scroll position.
-        final out = 1 - Curves.easeInCubic.transform((v / 0.58).clamp(0.0, 1.0));
+        final out =
+            1 - Curves.easeInCubic.transform((v / 0.58).clamp(0.0, 1.0));
         final into = Curves.easeOutCubic.transform(
           ((v - 0.34) / 0.66).clamp(0.0, 1.0),
         );
@@ -563,14 +536,12 @@ class _WidePlayerBody extends StatelessWidget {
   final LibrarySong song;
   final Widget scrubber;
   final Widget transport;
-  final Widget volume;
   final Animation<double> morph;
 
   const _WidePlayerBody({
     required this.song,
     required this.scrubber,
     required this.transport,
-    required this.volume,
     required this.morph,
   });
 
@@ -583,8 +554,8 @@ class _WidePlayerBody extends StatelessWidget {
     // One column shape, reused at both ends of the morph so the handoff is
     // between identical blocks. Its width always follows the artwork: at the
     // cover end the right column is exactly the cover's width, and under the
-    // words it sits in the cover's own column, so the scrubber and the volume
-    // row span the same width as the art rather than a width of their own.
+    // words it sits in the cover's own column, so the scrubber spans the
+    // same width as the art rather than a width of its own.
     final controls = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -597,8 +568,6 @@ class _WidePlayerBody extends StatelessWidget {
         scrubber,
         const SizedBox(height: SolSpace.sm),
         transport,
-        const SizedBox(height: SolSpace.lg),
-        volume,
       ],
     );
     const lyrics = SongLyricsPane(
@@ -614,14 +583,19 @@ class _WidePlayerBody extends StatelessWidget {
 
         // Both ends of every measurement, so no frame has to choose between
         // them: the cover end is a square that sizes itself from its column,
-        // the lyrics end is a frame that fits the viewport.
+        // the lyrics end is a text frame that fits the viewport.
+        //
+        // The column is exactly one cover wide at both ends. Sizing it as a
+        // fraction of the frame instead let the scrubber outgrow the square
+        // above it once the frame grew for the words, and a progress bar
+        // wider than the artwork reads as a separate control rather than as
+        // the artwork's own ruler.
         final viewport = math.max(screen.width - SolSpace.xxl * 2, 320.0);
         final width = math.min(lerpDouble(1000, 1120, t)!, viewport);
         final inner = math.max(width - SolSpace.xxxl, 0.0);
-        final squareEnd = inner * 0.5;
+        final coverSize = inner * lerpDouble(0.5, 0.45, t)!;
         final lyricsHeight = (screen.height * 0.76).clamp(520.0, 780.0);
-        final height = lerpDouble(squareEnd, lyricsHeight, t)!;
-        final leftWidth = inner * lerpDouble(0.5, 0.45, t)!;
+        final wordsHeight = lerpDouble(coverSize, lyricsHeight, t)!;
 
         // The controls hand off rather than cross-fade in place: they are on
         // the right for the cover and under the artwork for the words, and the
@@ -637,21 +611,24 @@ class _WidePlayerBody extends StatelessWidget {
             padding: const EdgeInsets.all(SolSpace.xxl),
             child: SizedBox(
               width: width,
-              height: height,
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   SizedBox(
-                    width: leftWidth,
+                    width: coverSize,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Expanded(
+                        // The square is the measurement, not a leftover: its
+                        // side is exactly the column's width, so the scrubber
+                        // under it can never be wider than the art it rules.
+                        // Sizing it from the row height instead left a gap
+                        // whenever the words made the row taller than the
+                        // square.
+                        SizedBox.square(
+                          dimension: coverSize,
                           child: Center(
-                            child: AspectRatio(
-                              aspectRatio: 1,
-                              child: cover,
-                            ),
+                            child: AspectRatio(aspectRatio: 1, child: cover),
                           ),
                         ),
                         if (leftControls > 0)
@@ -675,29 +652,40 @@ class _WidePlayerBody extends StatelessWidget {
                   ),
                   const SizedBox(width: SolSpace.xxxl),
                   Expanded(
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        if (rightControls > 0)
-                          IgnorePointer(
-                            ignoring: rightControls < 1,
-                            child: Opacity(
-                              opacity: rightControls,
-                              child: Center(child: controls),
-                            ),
-                          ),
-                        if (words > 0)
-                          IgnorePointer(
-                            ignoring: words < 1,
-                            child: Opacity(
-                              opacity: words,
-                              child: Transform.translate(
-                                offset: Offset(28 * (1 - words), 0),
-                                child: lyrics,
+                    child: SizedBox(
+                      height: wordsHeight,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          if (rightControls > 0)
+                            IgnorePointer(
+                              ignoring: rightControls < 1,
+                              child: Opacity(
+                                opacity: rightControls,
+                                child: Center(
+                                  // The same width as the art at the cover
+                                  // end, where the right pane is already
+                                  // exactly one cover wide.
+                                  child: SizedBox(
+                                    width: coverSize,
+                                    child: controls,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                      ],
+                          if (words > 0)
+                            IgnorePointer(
+                              ignoring: words < 1,
+                              child: Opacity(
+                                opacity: words,
+                                child: Transform.translate(
+                                  offset: Offset(28 * (1 - words), 0),
+                                  child: lyrics,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -860,10 +848,21 @@ class _Transport extends StatelessWidget {
           onPressed: controller.togglePlayPause,
           iconSize: 36,
           padding: const EdgeInsets.all(SolSpace.lg),
-          icon: Icon(
-            playback.playing
-                ? Symbols.pause_rounded
-                : Symbols.play_arrow_rounded,
+          icon: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 100),
+            child: playback.playing
+                ? Icon(
+                    Symbols.pause_rounded,
+                    color: Colors.white,
+                    fill: 1,
+                    key: const ValueKey("playing"),
+                  )
+                : Icon(
+                    Symbols.play_arrow_rounded,
+                    color: Colors.white,
+                    fill: 1,
+                    key: const ValueKey("paused"),
+                  ),
           ),
         ),
         const SizedBox(width: SolSpace.xs),
@@ -884,41 +883,6 @@ class _Transport extends StatelessWidget {
             playback.repeatMode == PlaybackRepeatMode.single
                 ? Symbols.repeat_one_rounded
                 : Symbols.repeat_rounded,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Volume row. Writes through to prefs when the drag ends, not on every tick.
-class _VolumeControl extends StatelessWidget {
-  final double volume;
-  final ValueChanged<double> onChanged;
-  final ValueChanged<double> onSaved;
-
-  const _VolumeControl({
-    required this.volume,
-    required this.onChanged,
-    required this.onSaved,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Row(
-      children: [
-        Icon(
-          volume <= 0 ? Symbols.volume_off_rounded : Symbols.volume_up_rounded,
-          size: 20,
-          color: colorScheme.onSurfaceVariant,
-        ),
-        Expanded(
-          child: Slider(
-            value: volume.clamp(0, 100),
-            max: 100,
-            onChanged: onChanged,
-            onChangeEnd: onSaved,
           ),
         ),
       ],

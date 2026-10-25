@@ -219,8 +219,10 @@ void main() {
     await tester.pump();
 
     // A click on empty space returns the page to being the key owner, so the
-    // transport shortcuts work again without tabbing back around.
-    await tester.tapAt(const Offset(6, 6));
+    // transport shortcuts work again without tabbing back around. The point
+    // is the shell's left gutter, level with the middle of the page: the
+    // corner belongs to the floating close control.
+    await tester.tapAt(const Offset(6, 400));
     await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.space);
     await tester.pump();

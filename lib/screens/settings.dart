@@ -33,6 +33,9 @@ class SettingsScreen extends ConsumerWidget {
     final hasSong = ref.watch(
       playbackProvider.select((state) => state.current != null),
     );
+    // Read once, live: the slider must reflect a nudge from the player's
+    // arrow keys, and the player page no longer shows a level of its own.
+    final volume = ref.watch(playbackProvider.select((state) => state.volume));
     final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
 
     return Scaffold(
@@ -98,6 +101,53 @@ class SettingsScreen extends ConsumerWidget {
                       'Floating chrome refracts the page behind it. Turn off '
                       'to paint the same bars as flat surfaces, which costs '
                       'less on every scroll frame.',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SectionLabel('Playback'),
+            IslandCard(
+              margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
+              padding: const EdgeInsets.all(SolSpace.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Volume',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: SolSpace.md),
+                  Row(
+                    children: [
+                      Icon(
+                        volume <= 0
+                            ? Symbols.volume_off_rounded
+                            : Symbols.volume_up_rounded,
+                        size: 20,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      Expanded(
+                        child: Slider(
+                          value: volume.clamp(0, 100),
+                          max: 100,
+                          onChanged: (value) => ref
+                              .read(playbackProvider.notifier)
+                              .setVolume(value),
+                          onChangeEnd: (value) => saveVolume(ref, value),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    'The player page does not show this: level is set once and '
+                    'rarely touched. Arrow keys still change it while the '
+                    'player has focus.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      height: 1.5,
                     ),
                   ),
                 ],
@@ -187,16 +237,15 @@ class SettingsScreen extends ConsumerWidget {
                 ),
                 leading: const Icon(Symbols.lyrics_rounded),
                 title: const Text('Stored lyrics'),
-                subtitle: Text(
-                  switch (ref.watch(storedLyricsProvider).value) {
-                    final count? =>
-                      '$count song${count == 1 ? '' : 's'} cached on this '
-                          'device. They show without asking the server again, '
-                          'and stay available offline.',
-                    null => 'Lyrics downloaded from the library and LRCLIB '
+                subtitle: Text(switch (ref.watch(storedLyricsProvider).value) {
+                  final count? =>
+                    '$count song${count == 1 ? '' : 's'} cached on this '
+                        'device. They show without asking the server again, '
+                        'and stay available offline.',
+                  null =>
+                    'Lyrics downloaded from the library and LRCLIB '
                         'stay available offline.',
-                  },
-                ),
+                }),
                 trailing: TextButton(
                   onPressed: () => _confirmClearLyrics(context, ref),
                   child: const Text('Clear'),
@@ -259,10 +308,7 @@ class SettingsScreen extends ConsumerWidget {
     await ref.read(lyricsMaintenanceProvider.notifier).forgetSource(sourceId);
   }
 
-  Future<void> _confirmClearLyrics(
-    BuildContext context,
-    WidgetRef ref,
-  ) async {
+  Future<void> _confirmClearLyrics(BuildContext context, WidgetRef ref) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(

@@ -3,6 +3,7 @@ import 'package:groovy_box/core/glass.dart';
 import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/router.gr.dart';
 import 'package:groovy_box/core/theme.dart';
+import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/shell/dock_morph.dart';
 import 'package:groovy_box/widgets/artwork.dart';
@@ -34,6 +35,13 @@ import 'package:material_ui/material_ui.dart';
 /// queue and a row seeks to it, all without leaving the page. Only one of the
 /// two sheets is open at a time — they occupy the same space above the
 /// transport, and stacking them would push the tab capsule off a short window.
+///
+/// Nothing of it appears or vanishes between frames. The capsule rises from
+/// behind the tab pill when a song starts and folds back when the last one
+/// ends, and each sheet unrolls out of the transport row and retracts into it
+/// on the same curve — both driven by their own controller, so a closing
+/// panel has time to fade rather than disappearing a beat before the glass
+/// around it collapses.
 class NowPlayingDock extends ConsumerStatefulWidget {
   const NowPlayingDock({super.key});
 
@@ -41,21 +49,98 @@ class NowPlayingDock extends ConsumerStatefulWidget {
   ConsumerState<NowPlayingDock> createState() => _NowPlayingDockState();
 }
 
-class _NowPlayingDockState extends ConsumerState<NowPlayingDock> {
+class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
+    with TickerProviderStateMixin {
   /// The capsule's own box, measured at tap time so the player can start the
   /// morph from exactly where the capsule was.
   final _capsuleKey = GlobalKey();
 
-  /// Which sheet, if any, is lifted above the transport row. One at a time:
-  /// both take the same space, and two of them would push the tab capsule off
-  /// the bottom of a short window.
+  /// Which sheet, if any, is asked to be lifted above the transport row. One
+  /// at a time: both take the same space, and two of them would push the tab
+  /// capsule off the bottom of a short phone.
   _DockSheet _openSheet = _DockSheet.none;
+
+  /// The sheet whose panel is still on screen.
+  ///
+  /// [_openSheet] flips the moment its button is tapped; this one only
+  /// follows once the fall has finished, so a closing panel stays mounted to
+  /// fade out of instead of vanishing a beat before the glass collapses.
+  _DockSheet _shownSheet = _DockSheet.none;
+
+  /// The song the capsule is dressed in, held while the dock folds away.
+  ///
+  /// Playback reports no current song the instant the last one ends; the
+  /// artwork should fade with the capsule rather than be deleted from it.
+  LibrarySong? _shownSong;
+
+  /// The capsule's own rise and fall, kept off the sheets' timeline: a song
+  /// can end while a sheet is open, and the two motions must not fight.
+  late final AnimationController _dock = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 320),
+    reverseDuration: const Duration(milliseconds: 260),
+  );
+
+  /// Every sheet's rise and fall. The slot's height and the panel's opacity
+  /// both read its curve, so a panel unrolls out of the transport row on the
+  /// way in and retracts into it on the way out.
+  late final AnimationController _sheet = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 320),
+    reverseDuration: const Duration(milliseconds: 260),
+  );
+
+  late final Animation<double> _dockCurve = CurvedAnimation(
+    parent: _dock,
+    curve: Curves.easeOutCubic,
+  );
+
+  late final Animation<double> _sheetCurve = CurvedAnimation(
+    parent: _sheet,
+    curve: Curves.easeOutCubic,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    // A restored queue rises like any other song rather than snapping in.
+    _shownSong = ref.read(playbackProvider).current;
+    if (_shownSong != null) _dock.forward();
+  }
+
+  @override
+  void dispose() {
+    _dock.dispose();
+    _sheet.dispose();
+    super.dispose();
+  }
 
   bool get _lyricsOpen => _openSheet == _DockSheet.lyrics;
   bool get _queueOpen => _openSheet == _DockSheet.queue;
 
-  void _toggleSheet(_DockSheet sheet) {
-    setState(() => _openSheet = _openSheet == sheet ? _DockSheet.none : sheet);
+  /// Folds the capsule away, unless a song arriving during the fold turns it
+  /// back into a rise.
+  Future<void> _foldDock() async {
+    await _dock.reverse();
+    if (!mounted || _dock.value > 0) return;
+    setState(() => _shownSong = null);
+  }
+
+  Future<void> _toggleSheet(_DockSheet sheet) async {
+    if (_openSheet != sheet) {
+      setState(() {
+        _openSheet = sheet;
+        _shownSheet = sheet;
+      });
+      await _sheet.forward();
+      return;
+    }
+    setState(() => _openSheet = _DockSheet.none);
+    await _sheet.reverse();
+    // A tap during the fall reopened a panel; only the sheet that actually
+    // finished leaving stops being shown.
+    if (!mounted || _sheet.value > 0) return;
+    setState(() => _shownSheet = _DockSheet.none);
   }
 
   /// Height the lyric sheet asks for, capped to a share of the window so the
@@ -72,6 +157,62 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock> {
     return preferred.clamp(0.0, MediaQuery.sizeOf(context).height * 0.46);
   }
 
+  /// The slot a sheet grows out of and retracts into: nothing when no sheet
+  /// is shown, the open panel's height plus its trailing gap otherwise.
+  ///
+  /// Height and opacity ride the same curve, so closing is the opening
+  /// reversed — the panel folds back into the transport row as it fades —
+  /// rather than a size shrinking around content already gone. The gap is
+  /// part of the slot, so tone and space (never a rule) still separate the
+  /// panel from the transport at every point of the motion.
+  Widget _sheetSlot({required bool wide}) {
+    final height = switch (_shownSheet) {
+      _DockSheet.lyrics => _sheetHeight(wide: wide),
+      _DockSheet.queue => _queueSheetHeight(wide: wide),
+      _DockSheet.none => 0.0,
+    };
+    final gap = switch (_shownSheet) {
+      _DockSheet.lyrics => SolSpace.md,
+      _DockSheet.queue => SolSpace.xs,
+      _DockSheet.none => 0.0,
+    };
+    return SizeTransition(
+      sizeFactor: _sheetCurve,
+      alignment: AlignmentDirectional.topStart,
+      child: SizedBox(
+        height: height + gap,
+        child: Padding(
+          padding: EdgeInsets.only(bottom: gap),
+          child: FadeTransition(
+            opacity: _sheetCurve,
+            child: switch (_shownSheet) {
+              // Each sheet owns its taps: a lyric line seeks, a queue row
+              // plays, and a tap on the space beside them must not morph
+              // the dock.
+              _DockSheet.lyrics => GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {},
+                child: SongLyricsPane(
+                  height: _sheetHeight(wide: wide),
+                  padding: const EdgeInsets.symmetric(horizontal: SolSpace.md),
+                ),
+              ),
+              _DockSheet.queue => GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {},
+                child: SizedBox(
+                  height: _queueSheetHeight(wide: wide),
+                  child: const QueueSheet(),
+                ),
+              ),
+              _DockSheet.none => const SizedBox.shrink(),
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   void _openPlayer() {
     final box = _capsuleKey.currentContext?.findRenderObject();
     if (box is RenderBox && box.hasSize) {
@@ -85,16 +226,26 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock> {
     // The dock is the one widget that *should* repaint every tick, so it
     // watches the whole transport. Nothing above it does.
     final playback = ref.watch(playbackProvider);
-    final song = playback.current;
-    if (song == null) return const SizedBox.shrink();
+    // The capsule holds the last song while it folds away, the way a sheet
+    // holds its panel — so which song is on show is settled here and the
+    // fold itself by the controller.
+    final song = playback.current ?? _shownSong;
+    ref.listen(playbackProvider.select((state) => state.current), (_, next) {
+      if (next == null) {
+        _foldDock();
+      } else {
+        setState(() => _shownSong = next);
+        _dock.forward();
+      }
+    });
 
     final controller = ref.read(playbackProvider.notifier);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final wide = isWideScreen(context);
-    final duration = playback.duration == Duration.zero
-        ? song.duration
-        : playback.duration;
+    final duration = playback.duration != Duration.zero
+        ? playback.duration
+        : song?.duration ?? Duration.zero;
     final maxMs = duration.inMilliseconds.toDouble();
     final positionMs = playback.position.inMilliseconds
         .clamp(0, duration.inMilliseconds)
@@ -103,197 +254,218 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: kChromeGutter),
       child: MouseRegion(
-        cursor: SystemMouseCursors.click,
+        cursor: song == null ? MouseCursor.defer : SystemMouseCursors.click,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: _openPlayer,
-          child: AnimatedSize(
-            duration: const Duration(milliseconds: 320),
-            curve: Curves.easeOutCubic,
-            alignment: Alignment.bottomCenter,
-            child: GlassSurface(
-              key: _capsuleKey,
-              // A capsule when collapsed; a card once a sheet gives it
-              // height, where a pill's ends would eat the first and last row.
-              cornerRadius: _openSheet == _DockSheet.none
-                  ? SolRadius.pill
-                  : SolRadius.xxl,
-              // Leading inset matches the artwork's own corner, so the cover
-              // sits square in the capsule's left end. A sheet keeps the same
-              // padding: its own list has the inner inset instead, and
-              // changing this box is what the morph would read as movement.
-              padding: const EdgeInsets.fromLTRB(
-                SolSpace.sm,
-                SolSpace.sm,
-                SolSpace.md,
-                SolSpace.sm,
+          onTap: song == null ? null : _openPlayer,
+          // The capsule rises from behind the tab pill when a song starts
+          // and folds back into it when the last one ends.
+          child: AnimatedBuilder(
+            animation: _dockCurve,
+            builder: (context, capsule) => ClipRect(
+              // Unclipped, so the glass keeps its shadow at rest; whatever
+              // hangs below while it moves paints behind the tab pill,
+              // which is where it came from.
+              clipBehavior: Clip.none,
+              child: Align(
+                alignment: AlignmentDirectional.topStart,
+                heightFactor: _dockCurve.value,
+                child: capsule,
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Each sheet owns its taps: a lyric line seeks, a queue row
-                  // plays, and a tap on the space beside them must not morph
-                  // the dock.
-                  if (_lyricsOpen) ...[
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () {},
-                      child: SongLyricsPane(
-                        height: _sheetHeight(wide: wide),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: SolSpace.md,
+            ),
+            child: song == null
+                ? const SizedBox.shrink()
+                : FadeTransition(
+                    opacity: _dockCurve,
+                    child: AnimatedBuilder(
+                      animation: _sheetCurve,
+                      builder: (context, capsule) => GlassSurface(
+                        key: _capsuleKey,
+                        // A capsule while no sheet has given it height, a
+                        // card once one has, where a pill's ends would eat
+                        // the first and last row. Lerp on the sheet's own
+                        // curve so the ends change shape with the panel
+                        // rather than popping under it.
+                        cornerRadius:
+                            SolRadius.pill +
+                            (SolRadius.xxl - SolRadius.pill) *
+                                _sheetCurve.value,
+                        // Leading inset matches the artwork's own corner, so
+                        // the cover sits square in the capsule's left end. A
+                        // sheet keeps the same padding: its own list has the
+                        // inner inset instead, and changing this box is what
+                        // the morph would read as movement.
+                        padding: const EdgeInsets.fromLTRB(
+                          SolSpace.sm,
+                          SolSpace.sm,
+                          SolSpace.md,
+                          SolSpace.sm,
                         ),
+                        child: capsule!,
                       ),
-                    ),
-                    // No rule between the words and the transport: tone and
-                    // space separate groups everywhere else in the app.
-                    const SizedBox(height: SolSpace.md),
-                  ] else if (_queueOpen) ...[
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () {},
-                      child: SizedBox(
-                        height: _queueSheetHeight(wide: wide),
-                        child: const QueueSheet(),
-                      ),
-                    ),
-                    const SizedBox(height: SolSpace.xs),
-                  ],
-                  SizedBox(
-                    height: kNowPlayingDockHeight,
-                    child: Row(
-                      children: [
-                        LibraryArtwork(
-                          sourceId: song.sourceId,
-                          artId: song.artId,
-                          size: 44,
-                          radius: SolRadius.pill,
-                        ),
-                        const SizedBox(width: SolSpace.md),
-                        Expanded(
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(
-                              maxWidth: wide ? 260 : double.infinity,
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              mainAxisSize: MainAxisSize.min,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _sheetSlot(wide: wide),
+                          SizedBox(
+                            height: kNowPlayingDockHeight,
+                            child: Row(
                               children: [
-                                Text(
-                                  song.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    fontWeight: FontWeight.w700,
+                                LibraryArtwork(
+                                  sourceId: song.sourceId,
+                                  artId: song.artId,
+                                  size: 44,
+                                  radius: SolRadius.pill,
+                                ),
+                                const SizedBox(width: SolSpace.md),
+                                Expanded(
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      maxWidth: wide ? 260 : double.infinity,
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          song.title,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: theme.textTheme.bodyMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                        ),
+                                        Text(
+                                          switch (_shownSheet) {
+                                            _DockSheet.lyrics => 'Lyrics',
+                                            _DockSheet.queue =>
+                                              '${playback.queue.length} tracks'
+                                                  '${playback.shuffle ? '  ·  shuffled' : ''}',
+                                            _DockSheet.none =>
+                                              wide
+                                                  ? song.subtitle
+                                                  : '${formatDuration(playback.position)}'
+                                                        ' / ${formatDuration(duration)}',
+                                          },
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
+                                                color: colorScheme
+                                                    .onSurfaceVariant,
+                                              ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                                Text(
-                                  switch (_openSheet) {
-                                    _DockSheet.lyrics => 'Lyrics',
-                                    _DockSheet.queue =>
-                                      '${playback.queue.length} tracks'
-                                          '${playback.shuffle ? '  ·  shuffled' : ''}',
-                                    _DockSheet.none => wide
-                                        ? song.subtitle
-                                        : '${formatDuration(playback.position)}'
-                                              ' / ${formatDuration(duration)}',
-                                  },
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
+                                if (wide) ...[
+                                  const SizedBox(width: SolSpace.md),
+                                  Text(
+                                    formatDuration(playback.position),
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Slider(
+                                      value: positionMs,
+                                      max: maxMs <= 0 ? 1 : maxMs,
+                                      onChanged: maxMs <= 0
+                                          ? null
+                                          : (value) => controller.seek(
+                                              Duration(
+                                                milliseconds: value.round(),
+                                              ),
+                                            ),
+                                    ),
+                                  ),
+                                  Text(
+                                    formatDuration(duration),
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                  const SizedBox(width: SolSpace.sm),
+                                ],
+                                // The controls own their taps, including a
+                                // disabled button (a disabled control is still
+                                // a control, not a way into the player).
+                                // Without this, a disabled Next would fall
+                                // through to the capsule's morph.
+                                GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: () {},
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        tooltip: _queueOpen
+                                            ? 'Hide queue'
+                                            : 'Show queue',
+                                        visualDensity: VisualDensity.compact,
+                                        isSelected: _queueOpen,
+                                        onPressed: () =>
+                                            _toggleSheet(_DockSheet.queue),
+                                        icon: const Icon(
+                                          Symbols.queue_music_rounded,
+                                        ),
+                                      ),
+                                      IconButton(
+                                        tooltip: _lyricsOpen
+                                            ? 'Hide lyrics'
+                                            : 'Show lyrics',
+                                        visualDensity: VisualDensity.compact,
+                                        isSelected: _lyricsOpen,
+                                        onPressed: () =>
+                                            _toggleSheet(_DockSheet.lyrics),
+                                        icon: const Icon(
+                                          Symbols.lyrics_rounded,
+                                        ),
+                                      ),
+                                      IconButton(
+                                        tooltip: 'Previous',
+                                        visualDensity: VisualDensity.compact,
+                                        onPressed: controller.previous,
+                                        icon: const Icon(
+                                          Symbols.skip_previous_rounded,
+                                        ),
+                                      ),
+                                      IconButton.filled(
+                                        tooltip: playback.playing
+                                            ? 'Pause'
+                                            : 'Play',
+                                        onPressed: controller.togglePlayPause,
+                                        icon: Icon(
+                                          playback.playing
+                                              ? Symbols.pause_rounded
+                                              : Symbols.play_arrow_rounded,
+                                        ),
+                                      ),
+                                      IconButton(
+                                        tooltip: 'Next',
+                                        visualDensity: VisualDensity.compact,
+                                        onPressed: playback.hasNext
+                                            ? controller.next
+                                            : null,
+                                        icon: const Icon(
+                                          Symbols.skip_next_rounded,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                        ),
-                        if (wide) ...[
-                          const SizedBox(width: SolSpace.md),
-                          Text(
-                            formatDuration(playback.position),
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          Expanded(
-                            child: Slider(
-                              value: positionMs,
-                              max: maxMs <= 0 ? 1 : maxMs,
-                              onChanged: maxMs <= 0
-                                  ? null
-                                  : (value) => controller.seek(
-                                      Duration(milliseconds: value.round()),
-                                    ),
-                            ),
-                          ),
-                          Text(
-                            formatDuration(duration),
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(width: SolSpace.sm),
                         ],
-                        // The controls own their taps, including a disabled
-                        // button (a disabled control is still a control, not a
-                        // way into the player). Without this, a disabled Next
-                        // would fall through to the capsule's morph.
-                        GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () {},
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                tooltip: _queueOpen ? 'Hide queue' : 'Show queue',
-                                visualDensity: VisualDensity.compact,
-                                isSelected: _queueOpen,
-                                onPressed: () => _toggleSheet(_DockSheet.queue),
-                                icon: const Icon(Symbols.queue_music_rounded),
-                              ),
-                              IconButton(
-                                tooltip: _lyricsOpen
-                                    ? 'Hide lyrics'
-                                    : 'Show lyrics',
-                                visualDensity: VisualDensity.compact,
-                                isSelected: _lyricsOpen,
-                                onPressed: () => _toggleSheet(_DockSheet.lyrics),
-                                icon: const Icon(Symbols.lyrics_rounded),
-                              ),
-                              IconButton(
-                                tooltip: 'Previous',
-                                visualDensity: VisualDensity.compact,
-                                onPressed: controller.previous,
-                                icon: const Icon(Symbols.skip_previous_rounded),
-                              ),
-                              IconButton.filled(
-                                tooltip: playback.playing ? 'Pause' : 'Play',
-                                onPressed: controller.togglePlayPause,
-                                icon: Icon(
-                                  playback.playing
-                                      ? Symbols.pause_rounded
-                                      : Symbols.play_arrow_rounded,
-                                ),
-                              ),
-                              IconButton(
-                                tooltip: 'Next',
-                                visualDensity: VisualDensity.compact,
-                                onPressed: playback.hasNext
-                                    ? controller.next
-                                    : null,
-                                icon: const Icon(Symbols.skip_next_rounded),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-                ],
-              ),
-            ),
           ),
         ),
       ),

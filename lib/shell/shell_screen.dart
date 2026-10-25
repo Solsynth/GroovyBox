@@ -45,12 +45,7 @@ class ShellScreen extends StatelessWidget {
           // Each tab is an `AutoRouter` with its own stack, so pushing an
           // album or playlist inside a tab keeps the shell — and the
           // now-playing capsule that floats in it — on screen.
-          routes: const [
-            BrowseTab(),
-            AlbumsTab(),
-            PlaylistsTab(),
-            QueueTab(),
-          ],
+          routes: const [BrowseTab(), AlbumsTab(), PlaylistsTab(), QueueTab()],
           duration: const Duration(milliseconds: 320),
           builder: (context, child) => _ShellFrame(child: child),
         );
@@ -89,27 +84,19 @@ class _ShellFrameState extends ConsumerState<_ShellFrame> {
     final tabs = AutoTabsRouter.of(context);
     final wide = isWideScreen(context);
     final isDesktop = DesktopWindowFrame.isPlatformDesktop;
-    // Select the identity, not the state: the whole transport changes once a
-    // second while playing, and only the dock needs to repaint that often.
-    final hasSong = ref.watch(
-      playbackProvider.select((state) => state.current != null),
-    );
-
-    final dock = hasSong
-        ? const NowPlayingDock()
-        : const SizedBox.shrink(key: ValueKey('dock-idle'));
-
     if (wide) {
       final page = Stack(
         children: [
           widget.child,
-          if (hasSong)
-            Positioned(
-              bottom: SolSpace.sm,
-              left: SolSpace.sm,
-              right: SolSpace.sm,
-              child: dock,
-            ),
+          // Mounted for keeps: the dock folds itself away when nothing
+          // is playing, so the frame never swaps it out from under that
+          // animation.
+          const Positioned(
+            bottom: SolSpace.sm,
+            left: SolSpace.sm,
+            right: SolSpace.sm,
+            child: NowPlayingDock(),
+          ),
         ],
       );
 
@@ -169,7 +156,7 @@ class _ShellFrameState extends ConsumerState<_ShellFrame> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (hasSong) dock,
+                    const NowPlayingDock(),
                     _PillBottomNav(
                       selectedIndex: _bottomIndexFor(tabs.activeIndex),
                       onSelected: (index) {
