@@ -1,5 +1,11 @@
 package dev.solsynth.rhythmBox
 
-import io.flutter.embedding.android.FlutterActivity
+import com.ryanheise.audioservice.AudioServiceActivity
 
-class MainActivity : FlutterActivity()
+/**
+ * The app's activity, on audio_service's engine.
+ *
+ * AudioServiceActivity shares the Flutter engine with the media service, so a
+ * media button that arrives while the UI is gone still reaches the handler.
+ */
+class MainActivity : AudioServiceActivity()

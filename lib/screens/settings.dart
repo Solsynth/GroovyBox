@@ -178,6 +178,32 @@ class SettingsScreen extends ConsumerWidget {
                 },
               ),
             ),
+            const SectionLabel('Lyrics'),
+            IslandCard(
+              margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: SolSpace.lg,
+                ),
+                leading: const Icon(Symbols.lyrics_rounded),
+                title: const Text('Stored lyrics'),
+                subtitle: Text(
+                  switch (ref.watch(storedLyricsProvider).value) {
+                    final count? =>
+                      '$count song${count == 1 ? '' : 's'} cached on this '
+                          'device. They show without asking the server again, '
+                          'and stay available offline.',
+                    null => 'Lyrics downloaded from the library and LRCLIB '
+                        'stay available offline.',
+                  },
+                ),
+                trailing: TextButton(
+                  onPressed: () => _confirmClearLyrics(context, ref),
+                  child: const Text('Clear'),
+                ),
+              ),
+            ),
+
             Padding(
               padding: const EdgeInsets.fromLTRB(
                 SolSpace.xxl,
@@ -228,5 +254,38 @@ class SettingsScreen extends ConsumerWidget {
 
     if (confirmed != true) return;
     await ref.read(sourceStoreProvider.notifier).remove(sourceId);
+    // Its downloaded lyrics point at a library that is gone; nothing will
+    // ever ask for them again.
+    await ref.read(lyricsMaintenanceProvider.notifier).forgetSource(sourceId);
+  }
+
+  Future<void> _confirmClearLyrics(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Clear stored lyrics?'),
+        content: const Text(
+          'Every downloaded lyric is removed from this device. They are '
+          'fetched again the next time each song plays, so nothing is lost — '
+          'only the offline copies.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    await ref.read(lyricsMaintenanceProvider.notifier).clear();
   }
 }

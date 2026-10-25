@@ -1,10 +1,13 @@
 import 'dart:io';
 
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/services.dart';
 import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/core/glass.dart';
 import 'package:groovy_box/core/router.dart';
+import 'package:groovy_box/library/lyrics_store.dart';
 import 'package:groovy_box/library/providers.dart';
+import 'package:groovy_box/player/session.dart';
 import 'package:groovy_box/screens/setup.dart';
 import 'package:groovy_box/shell/window_frame.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -24,6 +27,22 @@ Future<void> main() async {
   // libmpv has to be loaded before the first Player is constructed, which the
   // shell does as soon as it mounts.
   MediaKit.ensureInitialized();
+
+  // The media session comes up before the UI: the platform can hand a media
+  // button to an app whose first frame has not been drawn, and the handler has
+  // to exist to take it. Playback attaches itself once the shell mounts.
+  final audioHandler = await AudioService.init(
+    builder: GroovyBoxAudioHandler.new,
+    config: const AudioServiceConfig(
+      androidNotificationChannelId: 'dev.solsynth.rhythmBox.channel.audio',
+      androidNotificationChannelName: 'Playback',
+      androidNotificationOngoing: true,
+      // Covers are served by the library at whatever size is asked for; the
+      // notification never needs more than a thumbnail.
+      artDownscaleWidth: 512,
+      artDownscaleHeight: 512,
+    ),
+  );
 
   if (DesktopWindowFrame.isPlatformDesktop) {
     await windowManager.ensureInitialized();
@@ -51,11 +70,26 @@ Future<void> main() async {
     }
   }
 
+  // The lyrics cache is opened before the first frame for the same reason
+  // prefs are: the player asks for words as soon as a track starts, and a
+  // database still opening would surface as a spinner. A machine that refuses
+  // the file still plays — the pane just asks the network every time.
+  LyricsCache? lyricsCache;
+  try {
+    lyricsCache = await LyricsCache.open();
+  } catch (error) {
+    debugPrint('[Lyrics] Cache unavailable: $error');
+  }
+
   final prefs = await SharedPreferences.getInstance();
 
   runApp(
     ProviderScope(
-      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
+        audioHandlerProvider.overrideWithValue(audioHandler),
+        lyricsCacheProvider.overrideWithValue(lyricsCache),
+      ],
       child: const GroovyBoxApp(),
     ),
   );

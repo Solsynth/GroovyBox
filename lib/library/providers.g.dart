@@ -635,26 +635,179 @@ final class SearchSongsFamily extends $Family
   String toString() => r'searchSongsProvider';
 }
 
-/// Lyrics of one song, read straight from its own source.
+/// The lyrics cache, opened in `main` and injected into the container.
 ///
-/// Cached for the session: a track that is replayed or scrubbed through does
-/// not re-request its lyrics, and the dock only asks for the current track.
+/// Overriding it keeps the store synchronous to read, and keeps the database
+/// out of widget tests, which have no platform channel to open one through. A
+/// machine where it could not be opened gets null: playback and lyrics still
+/// work, they just ask the network every time.
+
+@ProviderFor(lyricsCache)
+final lyricsCacheProvider = LyricsCacheProvider._();
+
+/// The lyrics cache, opened in `main` and injected into the container.
+///
+/// Overriding it keeps the store synchronous to read, and keeps the database
+/// out of widget tests, which have no platform channel to open one through. A
+/// machine where it could not be opened gets null: playback and lyrics still
+/// work, they just ask the network every time.
+
+final class LyricsCacheProvider
+    extends $FunctionalProvider<LyricsCache?, LyricsCache?, LyricsCache?>
+    with $Provider<LyricsCache?> {
+  /// The lyrics cache, opened in `main` and injected into the container.
+  ///
+  /// Overriding it keeps the store synchronous to read, and keeps the database
+  /// out of widget tests, which have no platform channel to open one through. A
+  /// machine where it could not be opened gets null: playback and lyrics still
+  /// work, they just ask the network every time.
+  LyricsCacheProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'lyricsCacheProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$lyricsCacheHash();
+
+  @$internal
+  @override
+  $ProviderElement<LyricsCache?> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  LyricsCache? create(Ref ref) {
+    return lyricsCache(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(LyricsCache? value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<LyricsCache?>(value),
+    );
+  }
+}
+
+String _$lyricsCacheHash() => r'0654317aad874222d6a8a5a942de86ee5a49f2b5';
+
+/// The LRCLIB client, shared so its rate-limit state is too.
+
+@ProviderFor(lrclib)
+final lrclibProvider = LrclibProvider._();
+
+/// The LRCLIB client, shared so its rate-limit state is too.
+
+final class LrclibProvider extends $FunctionalProvider<Lrclib, Lrclib, Lrclib>
+    with $Provider<Lrclib> {
+  /// The LRCLIB client, shared so its rate-limit state is too.
+  LrclibProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'lrclibProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$lrclibHash();
+
+  @$internal
+  @override
+  $ProviderElement<Lrclib> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  Lrclib create(Ref ref) {
+    return lrclib(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(Lrclib value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<Lrclib>(value),
+    );
+  }
+}
+
+String _$lrclibHash() => r'2be44ac976f498e84546d0f61047ca77fda7de3e';
+
+/// Resolves lyrics: stored answer first, then the library, then LRCLIB.
+
+@ProviderFor(lyricsResolver)
+final lyricsResolverProvider = LyricsResolverProvider._();
+
+/// Resolves lyrics: stored answer first, then the library, then LRCLIB.
+
+final class LyricsResolverProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<LyricsResolver>,
+          LyricsResolver,
+          FutureOr<LyricsResolver>
+        >
+    with $FutureModifier<LyricsResolver>, $FutureProvider<LyricsResolver> {
+  /// Resolves lyrics: stored answer first, then the library, then LRCLIB.
+  LyricsResolverProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'lyricsResolverProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$lyricsResolverHash();
+
+  @$internal
+  @override
+  $FutureProviderElement<LyricsResolver> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<LyricsResolver> create(Ref ref) {
+    return lyricsResolver(ref);
+  }
+}
+
+String _$lyricsResolverHash() => r'9b8911e57196b37ca50835c6bd7cec7fbff75021';
+
+/// Lyrics of one song, from the cache or the network.
+///
+/// Kept for the session as well as on disk: the pane is rebuilt on every
+/// position tick's parent rebuild, and a family entry means it never asks
+/// twice for the track it is already showing.
 
 @ProviderFor(songLyrics)
 final songLyricsProvider = SongLyricsFamily._();
 
-/// Lyrics of one song, read straight from its own source.
+/// Lyrics of one song, from the cache or the network.
 ///
-/// Cached for the session: a track that is replayed or scrubbed through does
-/// not re-request its lyrics, and the dock only asks for the current track.
+/// Kept for the session as well as on disk: the pane is rebuilt on every
+/// position tick's parent rebuild, and a family entry means it never asks
+/// twice for the track it is already showing.
 
 final class SongLyricsProvider
     extends $FunctionalProvider<AsyncValue<Lyrics>, Lyrics, FutureOr<Lyrics>>
     with $FutureModifier<Lyrics>, $FutureProvider<Lyrics> {
-  /// Lyrics of one song, read straight from its own source.
+  /// Lyrics of one song, from the cache or the network.
   ///
-  /// Cached for the session: a track that is replayed or scrubbed through does
-  /// not re-request its lyrics, and the dock only asks for the current track.
+  /// Kept for the session as well as on disk: the pane is rebuilt on every
+  /// position tick's parent rebuild, and a family entry means it never asks
+  /// twice for the track it is already showing.
   SongLyricsProvider._({
     required SongLyricsFamily super.from,
     required LyricsRequest super.argument,
@@ -698,12 +851,13 @@ final class SongLyricsProvider
   }
 }
 
-String _$songLyricsHash() => r'1571e645650393b632af92a7433831815099dda8';
+String _$songLyricsHash() => r'36ca3c44f6de75e42431107451ad13b0d337507e';
 
-/// Lyrics of one song, read straight from its own source.
+/// Lyrics of one song, from the cache or the network.
 ///
-/// Cached for the session: a track that is replayed or scrubbed through does
-/// not re-request its lyrics, and the dock only asks for the current track.
+/// Kept for the session as well as on disk: the pane is rebuilt on every
+/// position tick's parent rebuild, and a family entry means it never asks
+/// twice for the track it is already showing.
 
 final class SongLyricsFamily extends $Family
     with $FunctionalFamilyOverride<FutureOr<Lyrics>, LyricsRequest> {
@@ -716,14 +870,115 @@ final class SongLyricsFamily extends $Family
         isAutoDispose: false,
       );
 
-  /// Lyrics of one song, read straight from its own source.
+  /// Lyrics of one song, from the cache or the network.
   ///
-  /// Cached for the session: a track that is replayed or scrubbed through does
-  /// not re-request its lyrics, and the dock only asks for the current track.
+  /// Kept for the session as well as on disk: the pane is rebuilt on every
+  /// position tick's parent rebuild, and a family entry means it never asks
+  /// twice for the track it is already showing.
 
   SongLyricsProvider call(LyricsRequest song) =>
       SongLyricsProvider._(argument: song, from: this);
 
   @override
   String toString() => r'songLyricsProvider';
+}
+
+/// How many songs have a stored lyric, for the settings row.
+
+@ProviderFor(storedLyrics)
+final storedLyricsProvider = StoredLyricsProvider._();
+
+/// How many songs have a stored lyric, for the settings row.
+
+final class StoredLyricsProvider
+    extends $FunctionalProvider<AsyncValue<int>, int, FutureOr<int>>
+    with $FutureModifier<int>, $FutureProvider<int> {
+  /// How many songs have a stored lyric, for the settings row.
+  StoredLyricsProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'storedLyricsProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$storedLyricsHash();
+
+  @$internal
+  @override
+  $FutureProviderElement<int> $createElement($ProviderPointer pointer) =>
+      $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<int> create(Ref ref) {
+    return storedLyrics(ref);
+  }
+}
+
+String _$storedLyricsHash() => r'00472b10617066fec1efe853cefc242dcac92b4a';
+
+/// Actions the lyrics UI needs beyond reading: re-ask the network, forget a
+/// library's downloads, empty the cache.
+
+@ProviderFor(LyricsMaintenance)
+final lyricsMaintenanceProvider = LyricsMaintenanceProvider._();
+
+/// Actions the lyrics UI needs beyond reading: re-ask the network, forget a
+/// library's downloads, empty the cache.
+final class LyricsMaintenanceProvider
+    extends $NotifierProvider<LyricsMaintenance, void> {
+  /// Actions the lyrics UI needs beyond reading: re-ask the network, forget a
+  /// library's downloads, empty the cache.
+  LyricsMaintenanceProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'lyricsMaintenanceProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$lyricsMaintenanceHash();
+
+  @$internal
+  @override
+  LyricsMaintenance create() => LyricsMaintenance();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(void value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<void>(value),
+    );
+  }
+}
+
+String _$lyricsMaintenanceHash() => r'6a48eaa10919e8e4c3ccf10dbfb8692e601eccb4';
+
+/// Actions the lyrics UI needs beyond reading: re-ask the network, forget a
+/// library's downloads, empty the cache.
+
+abstract class _$LyricsMaintenance extends $Notifier<void> {
+  void build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<void, void>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<void, void>,
+              void,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
 }

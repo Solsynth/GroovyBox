@@ -37,9 +37,10 @@ const double _kGlassShadowOpacity = 0.16;
 /// so toggling the material never moves a control. Only the paint changes.
 ///
 /// **This is for chrome that floats over content**, never for cards: the
-/// navigation capsules, the now-playing dock, the rail and the player's
-/// transport panel. Anything in the scrolling plane is an `IslandCard`, which
-/// is tonal and opaque so text stays legible and long lists stay cheap.
+/// navigation capsules, the now-playing dock and the rail. Anything in the
+/// scrolling plane is an `IslandCard`, which is tonal and opaque so text stays
+/// legible and long lists stay cheap; the player page paints no card at all,
+/// because its blurred field already is the surface.
 ///
 /// The glass samples the page painted *behind* it, so the surface has to sit
 /// in a stack over the content it floats above (a `Scaffold` slot with

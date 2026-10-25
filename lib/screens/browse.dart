@@ -1,6 +1,7 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/router.gr.dart';
+import 'package:groovy_box/core/tab_navigation.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
@@ -155,8 +156,9 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen> {
                   child: _SectionHeader(
                     title: 'Recently added',
                     trailing: TextButton(
-                      onPressed: () =>
-                          context.router.navigate(const AlbumsRoute()),
+                      // Albums is another tab, not a page above this one:
+                      // selecting it is the same move the bottom bar makes.
+                      onPressed: () => activateTab(context, 'albums'),
                       child: const Text('See all'),
                     ),
                   ),

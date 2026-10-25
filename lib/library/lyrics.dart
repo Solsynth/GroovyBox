@@ -110,11 +110,18 @@ class LyricsRequest {
   final String? artist;
   final String title;
 
+  /// The library's reported length and album, used to disambiguate a match
+  /// when a cache or a lyrics service is asked by title and artist.
+  final Duration duration;
+  final String? album;
+
   const LyricsRequest({
     required this.sourceId,
     required this.id,
     required this.title,
     this.artist,
+    this.duration = Duration.zero,
+    this.album,
   });
 
   factory LyricsRequest.of(LibrarySong song) => LyricsRequest(
@@ -122,6 +129,8 @@ class LyricsRequest {
     id: song.id,
     title: song.title,
     artist: song.artist,
+    duration: song.duration,
+    album: song.album,
   );
 
   /// The fields a server search needs; duration and album are irrelevant.
@@ -135,10 +144,13 @@ class LyricsRequest {
       other.sourceId == sourceId &&
       other.id == id &&
       other.artist == artist &&
-      other.title == title;
+      other.title == title &&
+      other.duration == duration &&
+      other.album == album;
 
   @override
-  int get hashCode => Object.hash(sourceId, id, artist, title);
+  int get hashCode =>
+      Object.hash(sourceId, id, artist, title, duration, album);
 }
 
 /// Index of the line playing at [position], or -1 before the first one.

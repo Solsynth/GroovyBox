@@ -69,9 +69,13 @@ class DesktopWindowFrame extends HookWidget {
               fit: StackFit.expand,
               children: [
                 Column(
+                  crossAxisAlignment: .stretch,
                   children: [
                     DragToMoveArea(
-                      child: _buildTitleBar(context, isMaximized),
+                      child: Material(
+                        color: Theme.of(context).colorScheme.surfaceContainer,
+                        child: _buildTitleBar(context, isMaximized),
+                      ),
                     ),
                     Expanded(child: child),
                   ],

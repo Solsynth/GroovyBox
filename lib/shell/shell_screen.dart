@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import '../core/glass.dart';
 import '../core/router.gr.dart';
 import '../core/responsive.dart';
+import '../core/tab_navigation.dart';
 import '../core/theme.dart';
 import '../player/player.dart';
 import '../widgets/now_playing_dock.dart';
@@ -41,11 +42,14 @@ class ShellScreen extends StatelessWidget {
         ref.read(playbackProvider);
 
         return AutoTabsRouter(
+          // Each tab is an `AutoRouter` with its own stack, so pushing an
+          // album or playlist inside a tab keeps the shell — and the
+          // now-playing capsule that floats in it — on screen.
           routes: const [
-            BrowseRoute(),
-            AlbumsRoute(),
-            PlaylistsRoute(),
-            QueueRoute(),
+            BrowseTab(),
+            AlbumsTab(),
+            PlaylistsTab(),
+            QueueTab(),
           ],
           duration: const Duration(milliseconds: 320),
           builder: (context, child) => _ShellFrame(child: child),
@@ -96,17 +100,14 @@ class _ShellFrameState extends ConsumerState<_ShellFrame> {
         : const SizedBox.shrink(key: ValueKey('dock-idle'));
 
     if (wide) {
-      final page = Column(
+      final page = Stack(
         children: [
-          Expanded(child: widget.child),
+          widget.child,
           if (hasSong)
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                solContentGutter(context),
-                SolSpace.sm,
-                solContentGutter(context),
-                kChromeGutter,
-              ),
+            Positioned(
+              bottom: SolSpace.sm,
+              left: SolSpace.sm,
+              right: SolSpace.sm,
               child: dock,
             ),
         ],
@@ -130,7 +131,18 @@ class _ShellFrameState extends ConsumerState<_ShellFrame> {
                   expanded: _railExpanded,
                   onSelected: tabs.setActiveIndex,
                 ),
-                Expanded(child: page),
+                Expanded(
+                  child: ColoredBox(
+                    color: Theme.of(context).colorScheme.surfaceContainer,
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.all(Radius.circular(12)),
+                      child: ColoredBox(
+                        color: Theme.of(context).colorScheme.surface,
+                        child: page,
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -224,7 +236,7 @@ class _WideRail extends StatelessWidget {
       curve: Curves.easeOutCubic,
       width: expanded ? expandedWidth : collapsedWidth,
       // Flush to the page: the same paper, one step deeper, and no divider.
-      decoration: BoxDecoration(color: colorScheme.surfaceContainerLow),
+      decoration: BoxDecoration(color: colorScheme.surfaceContainer),
       child: Column(
         children: [
           // The wordmark only. Expanding is the page header's menu button —
@@ -285,7 +297,11 @@ class _WideRail extends StatelessWidget {
               destination: kSettingsDestination,
               selected: false,
               expanded: expanded,
-              onTap: () => context.router.push(const SettingsRoute()),
+              // The rail is above the tabs, so its own router is the root
+              // one: pushing here would put Settings *over* the shell and
+              // hide the now-playing capsule. Open it in the active tab
+              // instead, where the tabs' own pushes go.
+              onTap: () => pushInActiveTab(context, const SettingsRoute()),
             ),
           ),
         ],
@@ -404,10 +420,7 @@ class _PillBottomNav extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelected;
 
-  const _PillBottomNav({
-    required this.selectedIndex,
-    required this.onSelected,
-  });
+  const _PillBottomNav({required this.selectedIndex, required this.onSelected});
 
   @override
   Widget build(BuildContext context) {

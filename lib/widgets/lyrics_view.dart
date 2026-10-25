@@ -325,7 +325,12 @@ class SongLyricsPane extends ConsumerWidget {
     );
     final theme = Theme.of(context);
 
-    Widget status(IconData? icon, String title, {String? detail}) {
+    Widget status(
+      IconData? icon,
+      String title, {
+      String? detail,
+      bool retry = false,
+    }) {
       return SizedBox(
         height: height,
         child: Center(
@@ -368,6 +373,16 @@ class SongLyricsPane extends ConsumerWidget {
                     ),
                   ),
                 ],
+                if (retry) ...[
+                  const SizedBox(height: SolSpace.md),
+                  TextButton.icon(
+                    onPressed: () => ref
+                        .read(lyricsMaintenanceProvider.notifier)
+                        .refresh(LyricsRequest.of(song!)),
+                    icon: const Icon(Symbols.refresh_rounded, size: 18),
+                    label: const Text('Ask again'),
+                  ),
+                ],
               ],
             ),
           ),
@@ -388,14 +403,16 @@ class SongLyricsPane extends ConsumerWidget {
       error: (_, _) => status(
         Symbols.cloud_off_rounded,
         'Lyrics unavailable',
-        detail: 'The library could not answer this time.',
+        detail: 'Neither the library nor LRCLIB answered.',
+        retry: true,
       ),
       data: (lyrics) {
         if (lyrics.isEmpty) {
           return status(
             Symbols.lyrics_rounded,
             'No lyrics for this track',
-            detail: 'The library has none stored for it.',
+            detail: 'Neither the library nor LRCLIB has words for it.',
+            retry: true,
           );
         }
         return SizedBox(

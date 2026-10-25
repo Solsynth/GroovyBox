@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:audio_service/audio_service.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
+import 'package:groovy_box/player/session.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -96,9 +98,14 @@ class PlaybackState {
 /// stream URL rather than a local path. Nothing is downloaded first.
 /// The transport. Created lazily and kept alive for the whole session.
 @Riverpod(keepAlive: true)
-class Playback extends Notifier<PlaybackState> {
+class Playback extends Notifier<PlaybackState> implements AudioTransport {
   late final Player _player;
   final List<StreamSubscription<dynamic>> _subscriptions = [];
+
+  /// The media session this transport reports to. The handler is built in
+  /// `main`, before this container, so it is looked up here instead of being
+  /// constructed with the notifier.
+  GroovyBoxAudioHandler? _session;
 
   /// Play order is index order: shuffling reorders [PlaybackState.queue]
   /// rather than asking media-kit to shuffle, so the queue the user sees is
@@ -112,15 +119,22 @@ class Playback extends Notifier<PlaybackState> {
   PlaybackState build() {
     _player = Player();
 
+    // Hand the transport over before any subscription fires: a media button
+    // that arrived while the app was starting has been waiting for one.
+    _session = ref.read(audioHandlerProvider);
+    _session?.transport = this;
+
     _subscriptions.addAll([
       _player.stream.playing.listen((playing) {
         state = state.copyWith(playing: playing);
+        _publish();
       }),
       _player.stream.position.listen((position) {
         state = state.copyWith(position: position);
       }),
       _player.stream.duration.listen((duration) {
         state = state.copyWith(duration: duration);
+        _publish();
       }),
       _player.stream.completed.listen((completed) {
         if (completed) _onTrackCompleted();
@@ -134,6 +148,7 @@ class Playback extends Notifier<PlaybackState> {
       for (final subscription in _subscriptions) {
         subscription.cancel();
       }
+      if (identical(_session?.transport, this)) _session!.transport = null;
       _player.dispose();
     });
 
@@ -153,43 +168,65 @@ class Playback extends Notifier<PlaybackState> {
       position: Duration.zero,
     );
 
+
     await _openCurrent();
+    _publish();
   }
 
-  Future<void> play() => _player.play();
-  Future<void> pause() => _player.pause();
+  @override
+  Future<void> play() async {
+    await _player.play();
+    _publish();
+  }
 
-  Future<void> togglePlayPause() =>
-      state.playing ? _player.pause() : _player.play();
+  @override
+  Future<void> pause() async {
+    await _player.pause();
+    _publish();
+  }
 
-  Future<void> seek(Duration position) => _player.seek(position);
+  Future<void> togglePlayPause() => state.playing ? pause() : play();
 
+  @override
+  Future<void> seek(Duration position) async {
+    await _player.seek(position);
+    _publish();
+  }
+
+  @override
   Future<void> next() async {
     if (!state.hasNext) {
       if (state.repeatMode == PlaybackRepeatMode.all && state.queue.isNotEmpty) {
         await _jumpTo(0);
+        _publish();
       }
       return;
     }
     await _jumpTo((state.currentIndex ?? 0) + 1);
+    _publish();
   }
 
+  @override
   Future<void> previous() async {
     // Ten seconds in, "previous" means restart the track — the behaviour every
     // player shares — rather than jump back a row.
     if (state.position > const Duration(seconds: 10) ||
         !state.hasPrevious) {
       await _player.seek(Duration.zero);
+      _publish();
       return;
     }
     final target = (state.currentIndex ?? 0) - 1;
     await _jumpTo(target < 0 ? state.queue.length - 1 : target);
+    _publish();
   }
 
+  @override
   Future<void> setShuffle(bool shuffle) async {
     final current = state.current;
     if (current == null || shuffle == state.shuffle) {
       state = state.copyWith(shuffle: shuffle);
+      _publish();
       return;
     }
 
@@ -213,6 +250,7 @@ class Playback extends Notifier<PlaybackState> {
       currentIndex: 0,
       duration: current.duration,
     );
+    _publish();
   }
 
   Future<void> cycleRepeatMode() async {
@@ -223,6 +261,38 @@ class Playback extends Notifier<PlaybackState> {
       PlaybackRepeatMode.all => PlaylistMode.loop,
       PlaybackRepeatMode.single => PlaylistMode.single,
     });
+    _publish();
+  }
+
+  /// The system's repeat switch is the same three-state cycle the button
+  /// drives, entered from a different side.
+  @override
+  Future<void> setRepeatMode(AudioServiceRepeatMode mode) async {
+    final target = switch (mode) {
+      AudioServiceRepeatMode.one => PlaybackRepeatMode.single,
+      AudioServiceRepeatMode.all => PlaybackRepeatMode.all,
+      _ => PlaybackRepeatMode.off,
+    };
+    if (target != state.repeatMode) {
+      state = state.copyWith(repeatMode: target);
+      await _player.setPlaylistMode(switch (target) {
+        PlaybackRepeatMode.off => PlaylistMode.none,
+        PlaybackRepeatMode.all => PlaylistMode.loop,
+        PlaybackRepeatMode.single => PlaylistMode.single,
+      });
+    }
+    _publish();
+  }
+
+  @override
+  Future<void> skipToQueueIndex(int index) async {
+    if (index < 0 || index >= state.queue.length) return;
+    if (index == state.currentIndex) {
+      await seek(Duration.zero);
+      return;
+    }
+    await _jumpTo(index);
+    _publish();
   }
 
   Future<void> setVolume(double volume) => _player.setVolume(volume);
@@ -248,6 +318,37 @@ class Playback extends Notifier<PlaybackState> {
     await _openCurrent();
   }
 
+  /// Tells the media session what is playing and where.
+  ///
+  /// Called on discrete events — track change, play/pause, seek, queue edits —
+  /// not on the position tick: between events the system advances the clock
+  /// itself, and a notification rebuild per tick would be pure cost.
+  void _publish() {
+    final session = _session;
+    if (session == null) return;
+    final sources = ref.read(librarySourceByIdProvider);
+    session.publish(
+      AudioSnapshot(
+        items: [
+          for (final song in state.queue)
+            AudioSnapshot.itemOf(
+              song,
+              artUri: sources[song.sourceId]?.artworkUri(song.artId),
+            ),
+        ],
+        index: state.currentIndex,
+        playing: state.playing,
+        position: state.position,
+        repeatMode: switch (state.repeatMode) {
+          PlaybackRepeatMode.off => AudioServiceRepeatMode.none,
+          PlaybackRepeatMode.all => AudioServiceRepeatMode.all,
+          PlaybackRepeatMode.single => AudioServiceRepeatMode.one,
+        },
+        shuffle: state.shuffle,
+      ),
+    );
+  }
+
   Future<void> _onTrackCompleted() async {
     switch (state.repeatMode) {
       case PlaybackRepeatMode.single:
@@ -262,6 +363,7 @@ class Playback extends Notifier<PlaybackState> {
           await next();
         } else {
           state = state.copyWith(playing: false, position: Duration.zero);
+          _publish();
         }
     }
   }

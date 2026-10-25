@@ -6,10 +6,29 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 final routerProvider = Provider<AppRouter>((ref) => AppRouter());
 
+/// Every tab can open the same detail pages, and each opens them on its own
+/// stack: switching tabs mid-album keeps the other tab where it was.
+List<AutoRoute> _tabChildren(AutoRoute root) => [
+  root,
+  AutoRoute(page: AlbumDetailRoute.page, path: 'albums/:sourceId/:albumId'),
+  AutoRoute(
+    page: PlaylistDetailRoute.page,
+    path: 'playlists/:sourceId/:playlistId',
+  ),
+  AutoRoute(page: SettingsRoute.page, path: 'settings'),
+];
+
 /// The app's route table.
 ///
-/// Tabs live under the shell route so each keeps its own navigation stack. The
-/// player, album and playlist details are standalone pushes above the shell.
+/// The shell hosts four tabs, and each tab owns a navigation stack of its own
+/// (see `tab_stack.dart`). Album, playlist and settings pages are declared
+/// *inside* those stacks rather than at the root: pushing them there keeps the
+/// shell — and with it the now-playing capsule — on screen, which a root-level
+/// page would cover.
+///
+/// The player is the exception. It is the expanded dock, so it is pushed above
+/// the shell and grows out of the capsule it was opened from.
+
 @AutoRouterConfig()
 class AppRouter extends RootStackRouter {
   @override
@@ -26,24 +45,25 @@ class AppRouter extends RootStackRouter {
       initial: true,
       children: [
         AutoRoute(
-          page: BrowseRoute.page,
-          path: 'browse',
+          page: BrowseTab.page,
           initial: true,
-          maintainState: false,
+          children: _tabChildren(AutoRoute(page: BrowseRoute.page, initial: true)),
         ),
-        AutoRoute(page: AlbumsRoute.page, path: 'albums', maintainState: false),
         AutoRoute(
-          page: PlaylistsRoute.page,
-          path: 'playlists',
-          maintainState: false,
+          page: AlbumsTab.page,
+          children: _tabChildren(AutoRoute(page: AlbumsRoute.page, initial: true)),
         ),
-        AutoRoute(page: QueueRoute.page, path: 'queue', maintainState: false),
+        AutoRoute(
+          page: PlaylistsTab.page,
+          children: _tabChildren(
+            AutoRoute(page: PlaylistsRoute.page, initial: true),
+          ),
+        ),
+        AutoRoute(
+          page: QueueTab.page,
+          children: _tabChildren(AutoRoute(page: QueueRoute.page, initial: true)),
+        ),
       ],
-    ),
-    AutoRoute(page: AlbumDetailRoute.page, path: '/albums/:sourceId/:albumId'),
-    AutoRoute(
-      page: PlaylistDetailRoute.page,
-      path: '/playlists/:sourceId/:playlistId',
     ),
     // The player grows out of the dock capsule it was opened from: see
     // `dockMorphTransition`. Non-opaque so the page the capsule floated over
@@ -56,6 +76,5 @@ class AppRouter extends RootStackRouter {
       reverseDuration: const Duration(milliseconds: 320),
     ),
     AutoRoute(page: SetupRoute.page, path: '/setup'),
-    AutoRoute(page: SettingsRoute.page, path: '/settings'),
   ];
 }

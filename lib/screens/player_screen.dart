@@ -1,13 +1,15 @@
+import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:auto_route/auto_route.dart';
+import 'package:flutter/services.dart';
 import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/artwork.dart';
-import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:groovy_box/widgets/lyrics_view.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -19,10 +21,17 @@ import 'package:material_ui/material_ui.dart';
 /// This is the only place seeking happens from the page stack; the dock shows
 /// position but leaves dragging to a control with room for it.
 ///
-/// The page is built around a color field taken from the cover, with the
-/// controls on a glass capsule so they stay legible over whatever the artwork
-/// paints. On a wide window the cover and the controls sit side by side
-/// instead of stacking in a narrow column.
+/// The page is built around a color field taken from the cover, and nothing is
+/// laid over that field: the cover, the copy and the controls sit directly on
+/// it, so the artwork stays the page rather than the wallpaper behind a panel.
+/// On a wide window the cover and the controls sit side by side instead of
+/// stacking in a narrow column.
+///
+/// Lyrics are not a second page: they are the same page in another shape. One
+/// controller drives the change, and every box that differs between the two
+/// arrangements — the slot's height, the frame's width, the cover's size, the
+/// side the controls hang from — is interpolated from it, so there is no frame
+/// where the player is neither one layout nor the other.
 @RoutePage()
 class PlayerScreen extends ConsumerStatefulWidget {
   const PlayerScreen({super.key});
@@ -31,11 +40,162 @@ class PlayerScreen extends ConsumerStatefulWidget {
   ConsumerState<PlayerScreen> createState() => _PlayerScreenState();
 }
 
-class _PlayerScreenState extends ConsumerState<PlayerScreen> {
+class _PlayerScreenState extends ConsumerState<PlayerScreen>
+    with SingleTickerProviderStateMixin {
   /// Whether the page shows lyrics instead of the cover. Apple Music's player
   /// keeps both behind one control in the corner, because the cover and the
   /// words compete for the same column.
   bool _showLyrics = false;
+
+  /// Drives the morph between the two arrangements: 0 is the cover, 1 is the
+  /// lyrics. It runs in both directions, so closing the words is the opening
+  /// played backwards rather than a second, different animation.
+  late final AnimationController _morph = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 480),
+  );
+
+  late final Animation<double> _morphT = CurvedAnimation(
+    parent: _morph,
+    curve: Curves.easeInOutCubic,
+    reverseCurve: Curves.easeInOutCubic,
+  );
+
+  /// The page's own focus: the transport keys belong to it while nothing
+  /// inside the page has been tabbed to, and it is the primary focus on
+  /// arrival so the keys work the moment the page opens.
+  final _shortcutFocus = FocusNode(debugLabel: 'player-shortcuts');
+
+  /// Writes the volume once the last key repeat has passed rather than on
+  /// every step: a held arrow key changes the transport dozens of times, and
+  /// each change would otherwise be its own prefs write.
+  Timer? _volumeSaveTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    // The lyrics pane is only built while the morph is off its cover end, so
+    // the last frame has to rebuild once the controller settles back at 0.
+    _morph.addStatusListener(_onMorphStatus);
+    // The page is what has the keys when it opens, not whichever control the
+    // route happened to hand focus to.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _shortcutFocus.requestFocus();
+    });
+  }
+
+  void _onMorphStatus(AnimationStatus status) {
+    if (status.isDismissed && mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _volumeSaveTimer?.cancel();
+    _shortcutFocus.dispose();
+    _morph.removeStatusListener(_onMorphStatus);
+    _morph.dispose();
+    super.dispose();
+  }
+
+  void _toggleLyrics() {
+    setState(() => _showLyrics = !_showLyrics);
+    if (_showLyrics) {
+      _morph.forward();
+    } else {
+      _morph.reverse();
+    }
+  }
+
+  void _nudgeVolume(double volume, double delta) {
+    final next = (volume + delta).clamp(0.0, 100.0);
+    ref.read(playbackProvider.notifier).setVolume(next);
+    _volumeSaveTimer?.cancel();
+    _volumeSaveTimer = Timer(const Duration(milliseconds: 400), () {
+      if (mounted) saveVolume(ref, next);
+    });
+  }
+
+  void _seekBy(Duration position, Duration by, Duration duration) {
+    final target = position + by;
+    ref
+        .read(playbackProvider.notifier)
+        .seek(
+          target < Duration.zero
+              ? Duration.zero
+              : (target > duration ? duration : target),
+        );
+  }
+
+  /// Escape backs out one layer at a time: the words first, the page second.
+  /// Leaving the player from under an open lyric pane would take the pane with
+  /// it, and closing the pane is what the same key means everywhere else.
+  void _backOut() {
+    if (_showLyrics) {
+      _toggleLyrics();
+    } else {
+      context.router.maybePop();
+    }
+  }
+
+  /// Escape, from anywhere on the page.
+  ///
+  /// Sits on a node that cannot take focus, so it never competes with a
+  /// control: it only sees the key after the focused widget has declined it,
+  /// and no widget in the app binds Escape for itself.
+  KeyEventResult _onEscape(KeyEvent event) {
+    if (event is! KeyDownEvent ||
+        event.logicalKey != LogicalKeyboardKey.escape) {
+      return KeyEventResult.ignored;
+    }
+    _backOut();
+    return KeyEventResult.handled;
+  }
+
+  /// Transport keys, while the page itself is what has the focus.
+  ///
+  /// A focused control keeps its own keys: Space activates the button the user
+  /// tabbed to and the volume slider takes the arrows, which is what a
+  /// keyboard user expects from each. These apply to the page's own focus,
+  /// which is where the page starts and where a click on empty space returns.
+  KeyEventResult _onTransportKey(
+    KeyEvent event,
+    PlaybackState playback,
+    Duration duration,
+  ) {
+    if (!_shortcutFocus.hasPrimaryFocus) return KeyEventResult.ignored;
+    // Repeats are wanted for seeking and volume — those are the keys people
+    // hold down — and not for the toggles, which would otherwise flap.
+    final repeat = event is KeyRepeatEvent;
+    if (event is! KeyDownEvent && !repeat) return KeyEventResult.ignored;
+
+    final controller = ref.read(playbackProvider.notifier);
+    final shift = HardwareKeyboard.instance.isShiftPressed;
+    switch (event.logicalKey) {
+      case LogicalKeyboardKey.space:
+        if (!repeat) controller.togglePlayPause();
+      case LogicalKeyboardKey.arrowLeft:
+        if (shift) {
+          if (!repeat) controller.previous();
+        } else {
+          _seekBy(playback.position, const Duration(seconds: -5), duration);
+        }
+      case LogicalKeyboardKey.arrowRight:
+        if (shift) {
+          if (!repeat) controller.next();
+        } else {
+          _seekBy(playback.position, const Duration(seconds: 5), duration);
+        }
+      case LogicalKeyboardKey.arrowUp:
+        _nudgeVolume(playback.volume, 5);
+      case LogicalKeyboardKey.arrowDown:
+        _nudgeVolume(playback.volume, -5);
+      case LogicalKeyboardKey.keyL:
+        if (!repeat) _toggleLyrics();
+      default:
+        return KeyEventResult.ignored;
+    }
+    return KeyEventResult.handled;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -83,98 +243,127 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       onSaved: (value) => saveVolume(ref, value),
     );
 
-    return Scaffold(
-      // Opaque: this page owns the whole window, and the page it grew out of
-      // must not show through the artwork blur.
-      backgroundColor: colorScheme.surface,
-      body: Stack(
-        children: [
-          // The cover, blown up and blurred, gives the page a colour field
-          // without introducing a gradient of our own.
-          Positioned.fill(
-            child: ClipRect(
-              child: ImageFiltered(
-                imageFilter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
-                child: Opacity(
-                  opacity: 0.4,
-                  child: LibraryArtwork(
-                    sourceId: song.sourceId,
-                    artId: song.artId,
-                    radius: 0,
-                    fallbackIcon: Symbols.music_note_rounded,
+    return Focus(
+      // Cannot take focus itself, so it only ever sees the keys a control has
+      // already declined; Escape is the one the page owns outright.
+      canRequestFocus: false,
+      skipTraversal: true,
+      onKeyEvent: (_, event) => _onEscape(event),
+      child: Scaffold(
+        // Opaque: this page owns the whole window, and the page it grew out of
+        // must not show through the artwork blur.
+        backgroundColor: colorScheme.surface,
+        body: Stack(
+          children: [
+            // The empty field around the content is a way back to the page's
+            // own keys: after tabbing onto a control, Space and the arrows
+            // belong to that control, and a tap on the backdrop hands them
+            // back instead of leaving the user to tab around in a circle.
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _shortcutFocus.requestFocus,
+                // The cover, blown up and blurred, gives the page a colour
+                // field without introducing a gradient of our own.
+                child: ClipRect(
+                  child: ImageFiltered(
+                    imageFilter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
+                    child: Opacity(
+                      opacity: 0.4,
+                      child: LibraryArtwork(
+                        sourceId: song.sourceId,
+                        artId: song.artId,
+                        radius: 0,
+                        // Blurred past recognition: detail here would be
+                        // decoded and thrown away, so ask for a thumbnail,
+                        // not the cover.
+                        pixelSize: 256,
+                        fallbackIcon: Symbols.music_note_rounded,
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          // A scrim so text and glass always have something even behind a
-          // bright cover; without it the blurred art washes the labels out.
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    colorScheme.surface.withValues(alpha: 0.55),
-                    colorScheme.surface.withValues(alpha: 0.82),
+            // A scrim so text and glass always have something even behind a
+            // bright cover; without it the blurred art washes the labels out.
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        colorScheme.surface.withValues(alpha: 0.55),
+                        colorScheme.surface.withValues(alpha: 0.82),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            SafeArea(
+              child: Focus(
+                focusNode: _shortcutFocus,
+                autofocus: true,
+                includeSemantics: false,
+                onKeyEvent: (_, event) =>
+                    _onTransportKey(event, playback, duration),
+                child: Column(
+                  children: [
+                    _PlayerHeader(
+                      onClose: () => context.router.maybePop(),
+                      showingLyrics: _showLyrics,
+                      onToggleLyrics: _toggleLyrics,
+                    ),
+                    Expanded(
+                      child: wide
+                          ? _WidePlayerBody(
+                              song: song,
+                              scrubber: scrubber,
+                              transport: transport,
+                              volume: volume,
+                              morph: _morphT,
+                            )
+                          : _CompactPlayerBody(
+                              song: song,
+                              scrubber: scrubber,
+                              transport: transport,
+                              volume: volume,
+                              showLyrics: _showLyrics,
+                              morph: _morphT,
+                            ),
+                    ),
                   ],
                 ),
               ),
             ),
-          ),
-          SafeArea(
-            child: Column(
-              children: [
-                _PlayerHeader(
-                  onClose: () => context.router.maybePop(),
-                  title: 'Now playing',
-                  showingLyrics: _showLyrics,
-                  onToggleLyrics: () =>
-                      setState(() => _showLyrics = !_showLyrics),
-                ),
-                Expanded(
-                  child: wide
-                      ? _WidePlayerBody(
-                          song: song,
-                          scrubber: scrubber,
-                          transport: transport,
-                          volume: volume,
-                          showLyrics: _showLyrics,
-                        )
-                      : _CompactPlayerBody(
-                          song: song,
-                          scrubber: scrubber,
-                          transport: transport,
-                          volume: volume,
-                          showLyrics: _showLyrics,
-                        ),
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
+/// The player's own bar: close on the left, the lyrics toggle on the right.
+///
+/// No title between them — the track's copy is the page's headline, and a
+/// "Now playing" label above it only said what the artwork and the scrubber
+/// already say.
 class _PlayerHeader extends StatelessWidget {
   final VoidCallback onClose;
-  final String title;
   final bool showingLyrics;
   final VoidCallback onToggleLyrics;
 
   const _PlayerHeader({
     required this.onClose,
-    required this.title,
     required this.showingLyrics,
     required this.onToggleLyrics,
   });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: SolSpace.sm),
       child: Row(
@@ -183,14 +372,6 @@ class _PlayerHeader extends StatelessWidget {
             tooltip: 'Close',
             onPressed: onClose,
             icon: const Icon(Symbols.keyboard_arrow_down_rounded),
-          ),
-          const Spacer(),
-          Text(
-            title,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              letterSpacing: 1.2,
-            ),
           ),
           const Spacer(),
           IconButton(
@@ -205,19 +386,21 @@ class _PlayerHeader extends StatelessWidget {
   }
 }
 
-/// Compact: cover, copy, and the controls on a tonal panel pinned to the
-/// bottom of the page.
+/// Compact: cover, copy, and the controls pinned to the bottom of the page.
 ///
-/// The panel is *not* glass: it holds the scrubber, the transport and the
-/// volume, and a sampled material behind moving controls plus live artwork is
-/// both noisy and expensive. The glass in this app is reserved for the dock
-/// and the tab bar — chrome that only ever floats over a scrolling page.
+/// Nothing here is a card. The page's own field — the blown-up cover under a
+/// scrim — is the surface, so the controls sit straight on it; a tonal panel
+/// on top of that only reads as a second background.
+///
+/// The cover and the words are one slot rather than two layouts, so the lyrics
+/// button morphs that slot instead of swapping its child.
 class _CompactPlayerBody extends StatelessWidget {
   final LibrarySong song;
   final Widget scrubber;
   final Widget transport;
   final Widget volume;
   final bool showLyrics;
+  final Animation<double> morph;
 
   const _CompactPlayerBody({
     required this.song,
@@ -225,6 +408,7 @@ class _CompactPlayerBody extends StatelessWidget {
     required this.transport,
     required this.volume,
     required this.showLyrics,
+    required this.morph,
   });
 
   @override
@@ -245,42 +429,36 @@ class _CompactPlayerBody extends StatelessWidget {
                 // Lyrics take the cover's place rather than stacking above the
                 // controls: two scrolling bodies in one column leaves neither
                 // enough room to read a verse.
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 260),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  child: showLyrics
-                      ? const SongLyricsPane(
-                          key: ValueKey('lyrics'),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: SolSpace.xs,
-                          ),
-                          fade: false,
-                        )
-                      : Center(
-                          key: const ValueKey('cover'),
-                          child: _Cover(song: song, size: coverSize),
-                        ),
+                child: _MorphSlot(
+                  t: morph,
+                  cover: Center(child: _Cover(song: song, size: coverSize)),
+                  // Built only once the words are on their way in or still
+                  // fading out, so the cover state costs no lyric request.
+                  lyrics: () => const SongLyricsPane(
+                    padding: EdgeInsets.symmetric(horizontal: SolSpace.xs),
+                    fade: false,
+                  ),
+                  lyricsAlive: showLyrics,
                 ),
               ),
               _TrackCopy(song: song, centered: true),
               const SizedBox(height: SolSpace.lg),
-              IslandCard(
-                cornerRadius: SolRadius.xxl,
-                padding: const EdgeInsets.fromLTRB(
-                  SolSpace.lg,
-                  SolSpace.md,
-                  SolSpace.lg,
-                  SolSpace.md,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    scrubber,
-                    transport,
-                    const SizedBox(height: SolSpace.xs),
-                    volume,
-                  ],
+              // Exactly the artwork's width, so the column reads as one
+              // object: the square the cover paints is the square the
+              // controls span. Both clamp to the same padded width on a
+              // narrow window, so they stay matched at every size.
+              Center(
+                child: SizedBox(
+                  width: coverSize,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      scrubber,
+                      transport,
+                      const SizedBox(height: SolSpace.xs),
+                      volume,
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -291,132 +469,243 @@ class _CompactPlayerBody extends StatelessWidget {
   }
 }
 
-/// Wide: cover on the left, everything you can do to the track on the right,
-/// both inside one tonal panel so the pair reads as a single object.
+/// Cover and lyrics as one slot, morphed rather than swapped.
+///
+/// The cover sits on top and lifts away while the words rise from behind it,
+/// so the two never dissolve into each other. The cover stays mounted at both
+/// ends — it is the expensive subtree, and rebuilding it on every toggle would
+/// blink the artwork — while the words exist only while they are wanted or
+/// still leaving.
+class _MorphSlot extends StatelessWidget {
+  final Animation<double> t;
+  final Widget cover;
+  final Widget Function() lyrics;
+
+  /// Whether the words are wanted at all. Kept separate from [t] because the
+  /// controller reaches 0 one frame before the pane can be dropped.
+  final bool lyricsAlive;
+
+  const _MorphSlot({
+    required this.t,
+    required this.cover,
+    required this.lyrics,
+    required this.lyricsAlive,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: t,
+      builder: (context, _) {
+        final v = t.value;
+        // Staggered, with the cover on top: the words rise from behind the
+        // artwork and are only uncovered as it lifts away, so no frame shows
+        // lettering bleeding through a half-transparent cover. Both subtrees
+        // stay mounted at every value — unmounting one would drop its decoded
+        // image and its scroll position.
+        final out = 1 - Curves.easeInCubic.transform((v / 0.58).clamp(0.0, 1.0));
+        final into = Curves.easeOutCubic.transform(
+          ((v - 0.34) / 0.66).clamp(0.0, 1.0),
+        );
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            // Words sit *under* the artwork, so during the morph they are
+            // uncovered rather than painted over it. Both subtrees stay
+            // mounted at every value, including the ends: unmounting one would
+            // drop its decoded image and its scroll position, and the next
+            // toggle would re-enter from a blank tile.
+            if (lyricsAlive || into > 0)
+              IgnorePointer(
+                ignoring: into < 1,
+                child: Opacity(
+                  opacity: into,
+                  child: Transform.translate(
+                    offset: Offset(0, 24 * (1 - into)),
+                    child: Transform.scale(
+                      scale: 0.97 + 0.03 * into,
+                      child: lyrics(),
+                    ),
+                  ),
+                ),
+              ),
+            IgnorePointer(
+              ignoring: out < 1,
+              child: Opacity(
+                opacity: out,
+                child: Transform.scale(
+                  scale: 1 - 0.05 * (1 - out),
+                  child: Transform.translate(
+                    offset: Offset(0, -28 * (1 - out)),
+                    child: cover,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// Wide: cover on the left, everything you can do to the track on the right.
+///
+/// No panel groups the pair: the page's blurred field already reads as one
+/// object, and a card over it would only add a tonal rectangle on top of the
+/// artwork it is meant to show.
+///
+/// The two arrangements are one shape with two ends. The frame's width, its
+/// height, the split between the columns and the cover's side all come from
+/// [morph], and the controls travel from the right column to under the cover
+/// as it moves, so nothing is laid out twice at a moment in time.
 class _WidePlayerBody extends StatelessWidget {
   final LibrarySong song;
   final Widget scrubber;
   final Widget transport;
   final Widget volume;
-  final bool showLyrics;
+  final Animation<double> morph;
 
   const _WidePlayerBody({
     required this.song,
     required this.scrubber,
     required this.transport,
     required this.volume,
-    required this.showLyrics,
+    required this.morph,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(SolSpace.xxl),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: showLyrics ? 1120 : 1000,
-          ),
-          child: showLyrics
-              ? _lyricsCard(context)
-              : _coverCard(context),
-        ),
-      ),
+    // Built once per page build, not per animation frame: the animated
+    // wrappers change every tick, these subtrees do not, so they can be reused
+    // by identity and skipped by the element tree.
+    final cover = _Cover(song: song, size: null);
+    // One column shape, reused at both ends of the morph so the handoff is
+    // between identical blocks. Its width always follows the artwork: at the
+    // cover end the right column is exactly the cover's width, and under the
+    // words it sits in the cover's own column, so the scrubber and the volume
+    // row span the same width as the art rather than a width of their own.
+    final controls = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Centered in both layouts: the column is the cover's width, so a
+        // left-aligned title sat under the artwork's left edge and read as a
+        // caption for it rather than as the page's headline.
+        _TrackCopy(song: song, centered: true),
+        const SizedBox(height: SolSpace.lg),
+        scrubber,
+        const SizedBox(height: SolSpace.sm),
+        transport,
+        const SizedBox(height: SolSpace.lg),
+        volume,
+      ],
     );
-  }
+    const lyrics = SongLyricsPane(
+      padding: EdgeInsets.symmetric(horizontal: SolSpace.sm),
+      fade: false,
+    );
 
-  Widget _coverCard(BuildContext context) {
-    return IslandCard(
-      cornerRadius: SolRadius.xxl,
-      padding: const EdgeInsets.all(SolSpace.xxl),
-      emphasised: true,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Flexible(
-            flex: 5,
-            child: AspectRatio(
-              aspectRatio: 1,
-              child: _Cover(song: song, size: null),
-            ),
-          ),
-          const SizedBox(width: SolSpace.xxxl),
-          Flexible(
-            flex: 5,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _TrackCopy(song: song, centered: false),
-                const SizedBox(height: SolSpace.lg),
-                scrubber,
-                const SizedBox(height: SolSpace.sm),
-                transport,
-                const SizedBox(height: SolSpace.lg),
-                volume,
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+    return AnimatedBuilder(
+      animation: morph,
+      builder: (context, _) {
+        final t = morph.value;
+        final screen = MediaQuery.sizeOf(context);
 
-  /// The lyrics layout: cover and transport on the left, words on the right.
-  ///
-  /// The cover does not disappear when the lyrics open — both are the song, and
-  /// the reference player keeps the artwork beside the text — so the panel gets
-  /// a height that fits the viewport and both columns fill it.
-  Widget _lyricsCard(BuildContext context) {
-    final height = (MediaQuery.sizeOf(context).height * 0.76).clamp(
-      520.0,
-      780.0,
-    );
-    return SizedBox(
-      height: height,
-      child: IslandCard(
-        cornerRadius: SolRadius.xxl,
-        padding: const EdgeInsets.all(SolSpace.xl),
-        emphasised: true,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Flexible(
-              flex: 9,
-              child: Column(
+        // Both ends of every measurement, so no frame has to choose between
+        // them: the cover end is a square that sizes itself from its column,
+        // the lyrics end is a frame that fits the viewport.
+        final viewport = math.max(screen.width - SolSpace.xxl * 2, 320.0);
+        final width = math.min(lerpDouble(1000, 1120, t)!, viewport);
+        final inner = math.max(width - SolSpace.xxxl, 0.0);
+        final squareEnd = inner * 0.5;
+        final lyricsHeight = (screen.height * 0.76).clamp(520.0, 780.0);
+        final height = lerpDouble(squareEnd, lyricsHeight, t)!;
+        final leftWidth = inner * lerpDouble(0.5, 0.45, t)!;
+
+        // The controls hand off rather than cross-fade in place: they are on
+        // the right for the cover and under the artwork for the words, and the
+        // second copy unfolds from beneath the cover as the first lets go. The
+        // two ranges overlap, so there is no value of t at which the page has
+        // no transport at all.
+        final rightControls = (1 - t / 0.52).clamp(0.0, 1.0);
+        final leftControls = ((t - 0.26) / 0.74).clamp(0.0, 1.0);
+        final words = ((t - 0.40) / 0.60).clamp(0.0, 1.0);
+
+        return Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(SolSpace.xxl),
+            child: SizedBox(
+              width: width,
+              height: height,
+              child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: Center(
-                      child: AspectRatio(
-                        aspectRatio: 1,
-                        child: _Cover(song: song, size: null),
-                      ),
+                  SizedBox(
+                    width: leftWidth,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          child: Center(
+                            child: AspectRatio(
+                              aspectRatio: 1,
+                              child: cover,
+                            ),
+                          ),
+                        ),
+                        if (leftControls > 0)
+                          ClipRect(
+                            child: Align(
+                              alignment: Alignment.topCenter,
+                              heightFactor: leftControls,
+                              child: Opacity(
+                                opacity: leftControls,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(
+                                    top: SolSpace.lg,
+                                  ),
+                                  child: controls,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: SolSpace.lg),
-                  _TrackCopy(song: song, centered: false),
-                  const SizedBox(height: SolSpace.md),
-                  scrubber,
-                  const SizedBox(height: SolSpace.xs),
-                  transport,
-                  const SizedBox(height: SolSpace.sm),
-                  volume,
+                  const SizedBox(width: SolSpace.xxxl),
+                  Expanded(
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (rightControls > 0)
+                          IgnorePointer(
+                            ignoring: rightControls < 1,
+                            child: Opacity(
+                              opacity: rightControls,
+                              child: Center(child: controls),
+                            ),
+                          ),
+                        if (words > 0)
+                          IgnorePointer(
+                            ignoring: words < 1,
+                            child: Opacity(
+                              opacity: words,
+                              child: Transform.translate(
+                                offset: Offset(28 * (1 - words), 0),
+                                child: lyrics,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-            const SizedBox(width: SolSpace.xxxl),
-            const Flexible(
-              flex: 11,
-              child: SongLyricsPane(
-                key: ValueKey('lyrics'),
-                padding: EdgeInsets.symmetric(horizontal: SolSpace.sm),
-                fade: false,
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

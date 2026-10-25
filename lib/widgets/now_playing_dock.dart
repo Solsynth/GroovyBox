@@ -8,6 +8,7 @@ import 'package:groovy_box/shell/dock_morph.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:groovy_box/widgets/lyrics_view.dart';
+import 'package:groovy_box/widgets/queue_sheet.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
@@ -28,6 +29,11 @@ import 'package:material_ui/material_ui.dart';
 /// stays put and the timed lines rise above it, following the song the way the
 /// player page's lyrics do. It is a second tap to go back, not a route, so a
 /// glance at the next line never costs the page underneath.
+///
+/// The queue button does the same for what is coming up: the sheet lists the
+/// queue and a row seeks to it, all without leaving the page. Only one of the
+/// two sheets is open at a time — they occupy the same space above the
+/// transport, and stacking them would push the tab capsule off a short window.
 class NowPlayingDock extends ConsumerStatefulWidget {
   const NowPlayingDock({super.key});
 
@@ -40,13 +46,30 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock> {
   /// morph from exactly where the capsule was.
   final _capsuleKey = GlobalKey();
 
-  bool _lyricsOpen = false;
+  /// Which sheet, if any, is lifted above the transport row. One at a time:
+  /// both take the same space, and two of them would push the tab capsule off
+  /// the bottom of a short window.
+  _DockSheet _openSheet = _DockSheet.none;
+
+  bool get _lyricsOpen => _openSheet == _DockSheet.lyrics;
+  bool get _queueOpen => _openSheet == _DockSheet.queue;
+
+  void _toggleSheet(_DockSheet sheet) {
+    setState(() => _openSheet = _openSheet == sheet ? _DockSheet.none : sheet);
+  }
 
   /// Height the lyric sheet asks for, capped to a share of the window so the
   /// transport row and the tab capsule still fit on a short phone.
   double _sheetHeight({required bool wide}) {
     final preferred = wide ? 300.0 : 220.0;
     return preferred.clamp(0.0, MediaQuery.sizeOf(context).height * 0.34);
+  }
+
+  /// The queue needs more room than the words: it is a list, and three rows
+  /// are the fewest that show a song, the one playing, and what follows.
+  double _queueSheetHeight({required bool wide}) {
+    final preferred = wide ? 380.0 : 280.0;
+    return preferred.clamp(0.0, MediaQuery.sizeOf(context).height * 0.46);
   }
 
   void _openPlayer() {
@@ -90,9 +113,15 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock> {
             alignment: Alignment.bottomCenter,
             child: GlassSurface(
               key: _capsuleKey,
-              // A capsule when collapsed; a card once the lyrics give it
-              // height, where a pill's ends would eat the first and last line.
-              cornerRadius: _lyricsOpen ? SolRadius.xxl : SolRadius.pill,
+              // A capsule when collapsed; a card once a sheet gives it
+              // height, where a pill's ends would eat the first and last row.
+              cornerRadius: _openSheet == _DockSheet.none
+                  ? SolRadius.pill
+                  : SolRadius.xxl,
+              // Leading inset matches the artwork's own corner, so the cover
+              // sits square in the capsule's left end. A sheet keeps the same
+              // padding: its own list has the inner inset instead, and
+              // changing this box is what the morph would read as movement.
               padding: const EdgeInsets.fromLTRB(
                 SolSpace.sm,
                 SolSpace.sm,
@@ -102,9 +131,10 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Each sheet owns its taps: a lyric line seeks, a queue row
+                  // plays, and a tap on the space beside them must not morph
+                  // the dock.
                   if (_lyricsOpen) ...[
-                    // The sheet owns its taps: a lyric line seeks, and a tap
-                    // on the empty space beside it must not morph the dock.
                     GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: () {},
@@ -118,6 +148,16 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock> {
                     // No rule between the words and the transport: tone and
                     // space separate groups everywhere else in the app.
                     const SizedBox(height: SolSpace.md),
+                  ] else if (_queueOpen) ...[
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {},
+                      child: SizedBox(
+                        height: _queueSheetHeight(wide: wide),
+                        child: const QueueSheet(),
+                      ),
+                    ),
+                    const SizedBox(height: SolSpace.xs),
                   ],
                   SizedBox(
                     height: kNowPlayingDockHeight,
@@ -149,12 +189,16 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock> {
                                   ),
                                 ),
                                 Text(
-                                  _lyricsOpen
-                                      ? 'Lyrics'
-                                      : wide
-                                      ? song.subtitle
-                                      : '${formatDuration(playback.position)}'
-                                            ' / ${formatDuration(duration)}',
+                                  switch (_openSheet) {
+                                    _DockSheet.lyrics => 'Lyrics',
+                                    _DockSheet.queue =>
+                                      '${playback.queue.length} tracks'
+                                          '${playback.shuffle ? '  ·  shuffled' : ''}',
+                                    _DockSheet.none => wide
+                                        ? song.subtitle
+                                        : '${formatDuration(playback.position)}'
+                                              ' / ${formatDuration(duration)}',
+                                  },
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: theme.textTheme.bodySmall?.copyWith(
@@ -203,13 +247,19 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               IconButton(
+                                tooltip: _queueOpen ? 'Hide queue' : 'Show queue',
+                                visualDensity: VisualDensity.compact,
+                                isSelected: _queueOpen,
+                                onPressed: () => _toggleSheet(_DockSheet.queue),
+                                icon: const Icon(Symbols.queue_music_rounded),
+                              ),
+                              IconButton(
                                 tooltip: _lyricsOpen
                                     ? 'Hide lyrics'
                                     : 'Show lyrics',
                                 visualDensity: VisualDensity.compact,
                                 isSelected: _lyricsOpen,
-                                onPressed: () =>
-                                    setState(() => _lyricsOpen = !_lyricsOpen),
+                                onPressed: () => _toggleSheet(_DockSheet.lyrics),
                                 icon: const Icon(Symbols.lyrics_rounded),
                               ),
                               IconButton(
@@ -250,3 +300,6 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock> {
     );
   }
 }
+
+/// Which sheet the dock is lifted into, if any.
+enum _DockSheet { none, lyrics, queue }

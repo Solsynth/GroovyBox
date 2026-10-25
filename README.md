@@ -16,12 +16,25 @@ files. Nothing is downloaded: playback streams straight from the server.
   requires and keeps the issued access token in that same header.
 - **Playback** — one `media_kit` player for the app's lifetime
   (`lib/player/player.dart`), exposed through Riverpod. Shuffle reorders the
-  visible queue instead of hiding randomization underneath.
+  visible queue instead of hiding randomization underneath. The media session
+  is `audio_service` (`lib/player/session.dart`): it publishes the current
+  track, the queue and the transport state to the notification, the lock
+  screen and headset buttons, and routes what they send back into the same
+  transport the UI drives. The full player is also a keyboard surface — Space,
+  Escape, arrows, Shift+arrows and `L` — bound on the page's own focus, so a
+  focused control keeps its keys.
 - **Lyrics** — `lib/library/lyrics.dart` normalizes OpenSubsonic structured
   lyrics (timed lines, with romanization and translation layers folded onto the
   words they annotate) and LRC text. `lib/widgets/lyrics_view.dart` draws the
   Apple Music–style column: the sung line in full tone, the rest dimmed, the
   playhead parked a third of the way down, a tap on a line seeking to it.
+  `lib/library/lyrics_resolver.dart` decides where the words come from: the
+  library first when it has *timed* lines, otherwise [LRCLIB](https://lrclib.net)
+  (`lib/library/lrclib.dart`, identified client, one request at a time,
+  `Retry-After` honoured), otherwise the library's plain block. Every answer is
+  written to a local SQLite cache (`lib/library/lyrics_store.dart`) keyed by
+  song identity, so the second play — and any play offline — never asks the
+  network. A confirmed miss is cached for a day; a timeout never is.
 - **Screens** — Browse (search + random shelf + recently added), Albums, album
   detail, Playlists, playlist detail, Queue, full Player, Setup, Settings.
 
