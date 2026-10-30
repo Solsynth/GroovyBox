@@ -9,6 +9,7 @@ import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/screens/player_screen.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/lyrics_view.dart';
+import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/queue_panel.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
@@ -129,5 +130,82 @@ void main() {
     expect(find.byType(QueuePanel), findsNothing);
     expect(find.byType(SongLyricsPane), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the panes cross rather than cut when the slot hands over', (
+    tester,
+  ) async {
+    await _pump(tester, const Size(420, 860));
+
+    await tester.tap(find.byTooltip('Show lyrics'));
+    await tester.pumpAndSettle();
+
+    // Queue and words are the same page in two shapes, so one gives way to the
+    // other inside the slot instead of the slot closing and reopening. Both
+    // are on screen for the length of the hand-off.
+    await tester.tap(find.byTooltip('Show queue'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+    expect(find.byType(QueuePanel), findsOneWidget);
+    expect(find.byType(SongLyricsPane), findsOneWidget);
+
+    await tester.pumpAndSettle();
+    expect(find.byType(QueuePanel), findsOneWidget);
+    expect(find.byType(SongLyricsPane), findsNothing);
+
+    // Asking for the pane that is still leaving sends it back rather than
+    // starting a second hand-off from the far end.
+    await tester.tap(find.byTooltip('Show lyrics'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byType(SongLyricsPane), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.byType(SongLyricsPane), findsOneWidget);
+    expect(find.byType(QueuePanel), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a settled pane takes taps and drags, not the page behind it', (
+    tester,
+  ) async {
+    await _pump(tester, const Size(420, 860));
+
+    await tester.tap(find.byTooltip('Show queue'));
+    await tester.pumpAndSettle();
+
+    // The pane sits inside an IgnorePointer that is released when the morph
+    // reaches its end. That progress comes from an eased curve, and an eased
+    // curve stops at 0.9999997 rather than 1, so a strict comparison left the
+    // whole pane transparent to the pointer: taps and drags fell through to
+    // the page scroll behind it.
+    expect(
+      find.byType(QueuePanel).hitTestable(),
+      findsOneWidget,
+      reason: 'the queue must answer the pointer once the morph has settled',
+    );
+    final list = find.descendant(
+      of: find.byType(QueuePanel),
+      matching: find.byType(ListView),
+    );
+    expect(
+      find.descendant(of: list, matching: find.byType(TrackRow)).first.hitTestable(),
+      findsOneWidget,
+    );
+
+    // A drag over the queue scrolls the queue, not the page under it.
+    final page = tester
+        .state<ScrollableState>(
+          find
+              .descendant(
+                of: find.byType(SingleChildScrollView),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        )
+        .position;
+    final before = page.pixels;
+    await tester.drag(list, const Offset(0, -160));
+    await tester.pumpAndSettle();
+    expect(page.pixels, before, reason: 'the page must not move');
   });
 }

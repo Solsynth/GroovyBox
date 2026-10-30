@@ -124,14 +124,15 @@ void main() {
   ) async {
     await _pump(tester);
 
-    // The chrome sits against the window edge rather than in a row above the
-    // body, and the body itself starts at that same edge — nothing was
-    // reserved for a header.
+    // The chrome floats over the body rather than sitting in a row above it,
+    // and it keeps a small inset from the window edges so a button is not
+    // cropped by the glass. Both corners use the same inset, so the two ends
+    // of the bar read as one row.
     final close = tester.getRect(find.byTooltip('Close'));
     final lyrics = tester.getRect(find.byTooltip('Show lyrics'));
-    expect(close.top, lessThan(12));
-    expect(lyrics.top, lessThan(12));
-    expect(lyrics.right, greaterThan(1240));
+    expect(close.top, lessThan(32));
+    expect(lyrics.top, moreOrLessEquals(close.top, epsilon: 0.5));
+    expect(close.left, moreOrLessEquals(1280 - lyrics.right, epsilon: 0.5));
 
     // The body is laid out against the whole window, so the artwork is
     // centred in it. A header row would have pushed the centre down by half

@@ -18,6 +18,81 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
+/// Room the page keeps at the top and bottom of the window.
+///
+/// Both arrangements are one full-bleed surface, so without it the cover sits
+/// on the window edge and the transport on the glass edge; the corner
+/// controls also need somewhere to sit that is not on top of the artwork.
+/// Wider than the [SolSpace.xl] side gutters on purpose: the page is read
+/// top-to-bottom, so the breathing room belongs above and below.
+const double _kPageMargin = SolSpace.xxxl;
+
+/// Clearance between the floating corner controls and the window edges.
+///
+/// They are not in a bar: they sit on the page's field above the artwork. On
+/// the glass edge they read as cropped, so they keep their own inset — smaller
+/// than [_kPageMargin] because a button already carries its own tap padding.
+const double _kCornerInset = SolSpace.lg;
+
+/// Height the column under the slot takes at the default type size: the copy,
+/// the scrubber and the transport, plus the gap between them.
+///
+/// Measured rather than assumed from [SolSpace], because the transport is a
+/// row of icon buttons and the copy is two lines of text; the compact body
+/// subtracts it (scaled by the reader's text size) from the window to size the
+/// slot, so the tail and the slot cannot both claim the same pixels.
+const double _kBodyTail = 232;
+
+/// Narrowest the copy, scrubber and transport column gets before it spills.
+///
+/// The transport is five icon buttons plus their gaps and does not shrink
+/// with the window; a column narrower than this clips the first and last one,
+/// so the square above it is what gives way instead.
+const double _kControlsMinWidth = 288;
+
+/// A curve whose ends are exactly 0 and exactly 1.
+///
+/// [Curve.transform] solves its cubic numerically and stops at a tolerance, so
+/// `Curves.easeOutCubic.transform(1)` is 0.9999997 rather than 1. Any code
+/// that compares progress against 1 to decide whether a subtree is
+/// interactive (`IgnorePointer(ignoring: value < 1)`) would then leave the
+/// pane permanently untappable once the animation settled. Answering the ends
+/// directly is the only place this can be fixed once: every ramp downstream
+/// divides or offsets the value, and each of those would have to repeat it.
+class _EndExact extends Curve {
+  final Curve curve;
+
+  const _EndExact(this.curve);
+
+  @override
+  double transformInternal(double t) =>
+      t <= 0 ? 0 : (t >= 1 ? 1 : curve.transform(t));
+}
+
+/// Eases [t], landing on exactly 0 and exactly 1 at the ends.
+///
+/// For the ramps that carve a sub-range out of an already-curved value.
+///
+/// Tolerant at the ends because the ramp arithmetic is not exact: at `v = 1`,
+/// `((1 - 0.34) / 0.66)` is 0.9999999999999999, not 1. A strict comparison
+/// there is the same bug as the curve's own, one multiplication further on.
+double _eased(Curve curve, double t) {
+  if (t >= 1 - 1e-9) return 1;
+  if (t <= 1e-9) return 0;
+  return curve.transform(t);
+}
+
+/// Room the lyrics and queue keep inside the slot.
+///
+/// The slot is the cover's footprint, and the cover is an object sitting in
+/// space; a pane that filled it edge to edge would put its first line under
+/// the corner controls and its last on the track title. Horizontal is wider
+/// than vertical because lines of text need the break at the ends.
+const EdgeInsets _kPanePadding = EdgeInsets.symmetric(
+  horizontal: SolSpace.sm,
+  vertical: SolSpace.sm,
+);
+
 /// Full-window player: large cover, scrubber and transport.
 ///
 /// The window's volume lives in Settings, not here: it is set once and rarely
@@ -52,7 +127,7 @@ class PlayerScreen extends ConsumerStatefulWidget {
 enum _PlayerView { cover, lyrics, queue }
 
 class _PlayerScreenState extends ConsumerState<PlayerScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   /// The slot's current shape. Apple Music's player keeps the alternatives
   /// behind controls in the corner, because they compete for the cover's
   /// column rather than stacking above it.
@@ -62,6 +137,17 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   /// cover comes back, so closing fades the panel out instead of deleting it
   /// on the frame the button was tapped.
   _PlayerView _pane = _PlayerView.cover;
+
+  /// Whether the hand-off in [swap] is running backwards, which means the
+  /// pane it was leaving is the one that ends up in the slot.
+  bool _swapUndoing = false;
+
+  /// The alternate the slot is handing over to [_pane], while it leaves.
+  ///
+  /// Only set while one pane replaces the other: picking the queue with the
+  /// words open is not a close and a reopen, so [_morph] is already at its far
+  /// end and cannot animate it. This is that second move, on its own clock.
+  _PlayerView? _swapFrom;
 
   /// Drives the morph between the arrangements: 0 is the cover, 1 is whichever
   /// alternate is asked for. It runs in both directions, so closing the words
@@ -74,8 +160,22 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
   late final Animation<double> _morphT = CurvedAnimation(
     parent: _morph,
-    curve: Curves.easeInOutCubic,
-    reverseCurve: Curves.easeInOutCubic,
+    curve: const _EndExact(Curves.easeInOutCubic),
+    reverseCurve: const _EndExact(Curves.easeInOutCubic),
+  );
+
+  /// One alternate giving the slot to the other. Shorter than [_morph]
+  /// because it moves far less: the slot keeps its size, only its contents
+  /// change.
+  late final AnimationController _swap = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 360),
+  );
+
+  late final Animation<double> _swapT = CurvedAnimation(
+    parent: _swap,
+    curve: const _EndExact(Curves.easeInOutCubic),
+    reverseCurve: const _EndExact(Curves.easeInOutCubic),
   );
 
   /// The page's own focus: the transport keys belong to it while nothing
@@ -94,6 +194,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     // The lyrics pane is only built while the morph is off its cover end, so
     // the last frame has to rebuild once the controller settles back at 0.
     _morph.addStatusListener(_onMorphStatus);
+    _swap.addStatusListener(_onSwapStatus);
     // The page is what has the keys when it opens, not whichever control the
     // route happened to hand focus to.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -105,12 +206,34 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     if (status.isDismissed && mounted) setState(() {});
   }
 
+  void _onSwapStatus(AnimationStatus status) {
+    if (_swapFrom == null || !mounted) return;
+    if (status == AnimationStatus.completed) {
+      // Reached the far end: the arriving pane is the slot's pane and the one
+      // that left can be dropped.
+      setState(() => _swapFrom = null);
+    } else if (status == AnimationStatus.dismissed && _swapUndoing) {
+      // Ran back to zero because the hand-off was undone, so the pane being
+      // dropped is the one that had arrived and the slot belongs to the pane
+      // that never finished leaving. A dismissed status also arrives when the
+      // clock is rewound to start a fresh hand-off; [_swapUndoing] tells the
+      // two apart.
+      setState(() {
+        _pane = _swapFrom!;
+        _swapFrom = null;
+        _swapUndoing = false;
+      });
+    }
+  }
+
   @override
   void dispose() {
     _volumeSaveTimer?.cancel();
     _shortcutFocus.dispose();
     _morph.removeStatusListener(_onMorphStatus);
     _morph.dispose();
+    _swap.removeStatusListener(_onSwapStatus);
+    _swap.dispose();
     super.dispose();
   }
 
@@ -119,15 +242,66 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   /// slot over rather than opening both.
   void _showView(_PlayerView view) {
     final next = _view == view ? _PlayerView.cover : view;
+    if (next == _view) return;
+    final wasAlternate = _view != _PlayerView.cover;
+    // Asking again for the pane that is still on its way out is not a new
+    // hand-off: it is this one undone. The slot's fields stay as they are and
+    // the clock runs backwards, so that pane returns from where it stands
+    // instead of blinking to the far end and sliding a second time.
+    final back = wasAlternate && _swap.isAnimating && _swapFrom == next;
     setState(() {
+      if (back) {
+        // Nothing to change in the slot: [_swapFrom] is the pane being asked
+        // back and [_pane] is the one it took the slot from. Running the clock
+        // down returns both.
+        _swapUndoing = true;
+      } else if (next == _PlayerView.cover) {
+        // Closing: the pane on show is the one that leaves, so nothing is
+        // handing over to anything.
+        _swapFrom = null;
+        _swapUndoing = false;
+      } else if (!wasAlternate) {
+        // Opening from the cover: the morph carries the pane in, so there is
+        // nothing to hand over from.
+        _swapFrom = null;
+        _swapUndoing = false;
+        _pane = next;
+      } else {
+        // Queue and words share the slot, so this is not a close and a reopen:
+        // the slot keeps its size and one pane gives way to the other.
+        _swapFrom = _pane;
+        _swapUndoing = false;
+        _pane = next;
+      }
       _view = next;
-      if (next != _PlayerView.cover) _pane = next;
     });
     if (next == _PlayerView.cover) {
+      _swap.stop();
       _morph.reverse();
-    } else {
+    } else if (_swapFrom == null) {
       _morph.forward();
+    } else if (back) {
+      _swap.reverse();
+    } else if (!_swap.isAnimating) {
+      _swap.forward(from: 0);
     }
+  }
+
+  /// The slot's alternate, by name. One builder for both the pane on show and
+  /// the one leaving, so a hand-off never changes how a panel is built.
+  Widget _paneWidget(_PlayerView view) {
+    final pane = switch (view) {
+      _PlayerView.queue => const QueuePanel(),
+      _ => const SongLyricsPane(
+        padding: EdgeInsets.symmetric(horizontal: SolSpace.xs),
+        fade: false,
+      ),
+    };
+    // Inset inside the slot, not just inside the pane: the words and the queue
+    // take the cover's footprint, and the cover is an object with air around
+    // it. Flush, the first lyric line sat under the corner controls and the
+    // last on the track title, and the queue's hover tone ran to the edge.
+    return Padding(padding: _kPanePadding, child: pane);
   }
 
   void _nudgeVolume(double volume, double delta) {
@@ -265,19 +439,19 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     final transport = _Transport(playback: playback, controller: controller);
     // Built once per page build, not per animation frame: whichever pane is
     // on show keeps its scroll position while the morph runs.
-    final alternate = switch (_pane) {
-      _PlayerView.queue => const QueuePanel(),
-      _ => const SongLyricsPane(
-        padding: EdgeInsets.symmetric(horizontal: SolSpace.xs),
-        fade: false,
-      ),
-    };
+    final alternate = _paneWidget(_pane);
+    // The pane it is replacing, while that fade is still running. Built from
+    // the same builder so the hand-off is between identical subtrees, and
+    // only while it is needed, so a closed player holds one panel not two.
+    final leaving = _swapFrom == null ? null : _paneWidget(_swapFrom!);
     final body = wide
         ? _WidePlayerBody(
             song: song,
             scrubber: scrubber,
             transport: transport,
             alternate: alternate,
+            leaving: leaving,
+            swap: _swapT,
             morph: _morphT,
           )
         : _CompactPlayerBody(
@@ -285,6 +459,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
             scrubber: scrubber,
             transport: transport,
             alternate: alternate,
+            leaving: leaving,
+            swap: _swapT,
             alternateAlive: _view != _PlayerView.cover,
             morph: _morphT,
           );
@@ -368,16 +544,21 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                     fit: StackFit.expand,
                     children: [
                       Positioned.fill(child: body),
-                      Align(
-                        alignment: Alignment.topLeft,
+                      // Floated off the edges rather than flush with them: the
+                      // page is full-bleed, so a control on the glass edge
+                      // reads as cropped instead of placed.
+                      Positioned(
+                        top: _kCornerInset,
+                        left: _kCornerInset,
                         child: IconButton(
                           tooltip: 'Close',
                           onPressed: () => context.router.maybePop(),
                           icon: const Icon(Symbols.keyboard_arrow_down_rounded),
                         ),
                       ),
-                      Align(
-                        alignment: Alignment.topRight,
+                      Positioned(
+                        top: _kCornerInset,
+                        right: _kCornerInset,
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -425,6 +606,8 @@ class _CompactPlayerBody extends StatelessWidget {
   final Widget scrubber;
   final Widget transport;
   final Widget alternate;
+  final Widget? leaving;
+  final Animation<double> swap;
   final bool alternateAlive;
   final Animation<double> morph;
 
@@ -433,6 +616,8 @@ class _CompactPlayerBody extends StatelessWidget {
     required this.scrubber,
     required this.transport,
     required this.alternate,
+    required this.leaving,
+    required this.swap,
     required this.alternateAlive,
     required this.morph,
   });
@@ -441,36 +626,53 @@ class _CompactPlayerBody extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Sized from the window, not from the column left over: the copy,
-        // scrubber and transport below have fixed heights, and letting the
+        // The copy, scrubber and transport are fixed content: they cannot
+        // give way, so the slot is sized from what is left over instead of
+        // the tail competing with the artwork for the column. The reserve is
+        // taken at the current type size, so a large one makes the tail
+        // taller rather than letting it run past the window edge.
+        final scaler = MediaQuery.textScalerOf(context);
+        final reserve = scaler.scale(_kBodyTail);
+        final available = math.max(
+          constraints.maxHeight - _kPageMargin * 2,
+          0.0,
+        );
+        // The slot keeps enough room for the words and the queue even on a
+        // window too short for both ends of it; the page scrolls below rather
+        // than squeezing the alternate into a stripe.
+        final slotHeight = math.max(available - reserve, scaler.scale(180.0));
+        // Sized from the window, not from the column left over: letting the
         // art claim half the screen is what pushed the transport onto the
-        // bottom edge. The second clamp keeps those controls their room on a
-        // window short enough for both to compete.
+        // bottom edge. The second clamp keeps the square inside its slot.
         final coverSize = math.min(
-          (constraints.maxHeight * 0.44).clamp(160.0, 360.0),
-          math.max(constraints.maxHeight - 250, 120.0),
+          (available * 0.44).clamp(160.0, 360.0),
+          math.max(slotHeight, 120.0),
         );
         // The transport is five buttons wide and does not shrink; where the
         // window is too small for both, the art gives way so the controls
         // keep the width they need instead of spilling out of the column.
         final controlsWidth = math.max(
           coverSize,
-          math.min(320.0, constraints.maxWidth),
+          math.min(
+            320.0,
+            math.max(constraints.maxWidth - SolSpace.xl * 2, 0.0),
+          ),
         );
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(
-            SolSpace.xl,
-            0,
-            SolSpace.xl,
+        return SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(
+            horizontal: SolSpace.xl,
             // Clear of the phone's own bottom inset, which [SafeArea] has
             // already applied, and of the window edge: the transport is the
             // last thing on the page, and a button on the glass edge reads as
-            // clipped rather than placed.
-            SolSpace.xxl,
+            // clipped rather than placed. The same room at the top keeps the
+            // cover off the window edge and out from under the corner
+            // controls.
+            vertical: _kPageMargin,
           ),
           child: Column(
             children: [
-              Expanded(
+              SizedBox(
+                height: slotHeight,
                 // The alternate takes the cover's place rather than stacking
                 // above the controls: two scrolling bodies in one column
                 // leaves neither enough room to read.
@@ -479,7 +681,9 @@ class _CompactPlayerBody extends StatelessWidget {
                   cover: Center(
                     child: _Cover(song: song, size: coverSize),
                   ),
-                  alternate: () => alternate,
+                  alternate: alternate,
+                  leaving: leaving,
+                  swap: swap,
                   alternateAlive: alternateAlive,
                 ),
               ),
@@ -514,7 +718,15 @@ class _CompactPlayerBody extends StatelessWidget {
 class _MorphSlot extends StatelessWidget {
   final Animation<double> t;
   final Widget cover;
-  final Widget Function() alternate;
+  final Widget alternate;
+
+  /// The pane [alternate] is replacing, while that hand-off runs. Null at
+  /// every other moment, so the slot never holds two panels it is not
+  /// cross-fading between.
+  final Widget? leaving;
+
+  /// 0 while [leaving] still fills the slot, 1 once [alternate] does.
+  final Animation<double> swap;
 
   /// Whether the alternate is wanted at all. Kept separate from [t] because
   /// the controller reaches 0 one frame before the pane can be dropped.
@@ -524,6 +736,8 @@ class _MorphSlot extends StatelessWidget {
     required this.t,
     required this.cover,
     required this.alternate,
+    required this.leaving,
+    required this.swap,
     required this.alternateAlive,
   });
 
@@ -538,11 +752,20 @@ class _MorphSlot extends StatelessWidget {
         // shows lettering bleeding through a half-transparent cover. Both
         // subtrees stay mounted at every value — unmounting one would drop its
         // decoded image and its scroll position.
-        final out =
-            1 - Curves.easeInCubic.transform((v / 0.58).clamp(0.0, 1.0));
-        final into = Curves.easeOutCubic.transform(
+        // End-exact: the two values that decide whether the pane is
+        // interactive are exactly 0 and exactly 1, and the curve's own
+        // numeric solve never quite reaches either.
+        final out = 1 - _eased(Curves.easeInCubic, (v / 0.58).clamp(0.0, 1.0));
+        final into = _eased(
+          Curves.easeOutCubic,
           ((v - 0.34) / 0.66).clamp(0.0, 1.0),
         );
+        // The pane, cross-faded with the one it is replacing when the slot is
+        // handing over between the queue and the words. Aligned to the same
+        // bottom edge so a panel entering from below does not jump the row.
+        final pane = leaving == null
+            ? alternate
+            : _PaneSwap(swap: swap, leaving: leaving!, child: alternate);
         return Stack(
           fit: StackFit.expand,
           children: [
@@ -560,7 +783,7 @@ class _MorphSlot extends StatelessWidget {
                     offset: Offset(0, 24 * (1 - into)),
                     child: Transform.scale(
                       scale: 0.97 + 0.03 * into,
-                      child: alternate(),
+                      child: pane,
                     ),
                   ),
                 ),
@@ -575,6 +798,69 @@ class _MorphSlot extends StatelessWidget {
                     offset: Offset(0, -28 * (1 - out)),
                     child: cover,
                   ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// One alternate giving the slot to the other.
+///
+/// The queue and the words are the same page in different shapes, so moving
+/// between them is not a close and a reopen: the slot keeps its size and only
+/// its contents change. They slide past each other rather than dissolving in
+/// place — the leaving pane drops away while the arriving one rises into the
+/// space — because a cross-fade of two panels with different text would read
+/// for a moment as one garbled panel.
+class _PaneSwap extends StatelessWidget {
+  final Animation<double> swap;
+  final Widget leaving;
+  final Widget child;
+
+  const _PaneSwap({
+    required this.swap,
+    required this.leaving,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: swap,
+      builder: (context, _) {
+        final v = swap.value;
+        // End-exact, like the slot's: whether the arriving pane is tappable
+        // is decided by comparing this against 1.
+        final out = _eased(Curves.easeInCubic, v);
+        final into = _eased(Curves.easeOutCubic, v);
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            // The pane on its way out stays under the incoming one, so the
+            // arrival is never seen through a half-faded predecessor.
+            IgnorePointer(
+              child: Opacity(
+                opacity: 1 - out,
+                child: Transform.translate(
+                  offset: Offset(0, -20 * out),
+                  child: leaving,
+                ),
+              ),
+            ),
+            IgnorePointer(
+              // Only the pane that stays is tappable, and only once it is
+              // fully in place: a half-slid list would scroll under a finger
+              // that did not mean to touch it.
+              ignoring: into < 1,
+              child: Opacity(
+                opacity: into,
+                child: Transform.translate(
+                  offset: Offset(0, 20 * (1 - into)),
+                  child: child,
                 ),
               ),
             ),
@@ -600,6 +886,8 @@ class _WidePlayerBody extends StatelessWidget {
   final Widget scrubber;
   final Widget transport;
   final Widget alternate;
+  final Widget? leaving;
+  final Animation<double> swap;
   final Animation<double> morph;
 
   const _WidePlayerBody({
@@ -607,6 +895,8 @@ class _WidePlayerBody extends StatelessWidget {
     required this.scrubber,
     required this.transport,
     required this.alternate,
+    required this.leaving,
+    required this.swap,
     required this.morph,
   });
 
@@ -654,20 +944,38 @@ class _WidePlayerBody extends StatelessWidget {
         final viewport = math.max(screen.width - SolSpace.xxl * 2, 320.0);
         final width = math.min(lerpDouble(1000, 1120, t)!, viewport);
         final inner = math.max(width - SolSpace.xxxl, 0.0);
+        // The window's own margin, and the height the right column's copy
+        // and controls need at the reader's type size. The cover end used to
+        // size the row to the square alone, so on a short window the column
+        // beside it was taller than the square and spilled out of the row.
+        final scaler = MediaQuery.textScalerOf(context);
+        final bodyHeight = math.max(screen.height - _kPageMargin * 2, 240.0);
+        final controlsHeight = scaler.scale(_kBodyTail);
         // Under half the column, and never taller than the window can show:
-        // the cover is a companion to the controls, not the page itself.
-        final coverSize = math.min(
-          inner * lerpDouble(0.44, 0.40, t)!,
-          screen.height * 0.58,
+        // the cover is a companion to the controls, not the page itself. The
+        // floor is the controls' own width, because the column beside the
+        // square is exactly the square's width and a shorter square would
+        // clip the transport's outer buttons.
+        final coverSize = math.max(
+          math.min(
+            inner * lerpDouble(0.44, 0.40, t)!,
+            math.min(screen.height * 0.58, bodyHeight),
+          ),
+          math.min(_kControlsMinWidth, inner),
         );
         // The pane grows with the morph instead of starting at the words'
-        // full height: at the cover end it is exactly the cover's square, so
-        // the row is as tall as the artwork and the column stays centred.
-        final wordsHeight = lerpDouble(
-          coverSize,
-          (screen.height * 0.76).clamp(520.0, 780.0),
-          t,
-        )!;
+        // full height: at the cover end it is the cover's square, so the row
+        // is as tall as the artwork and the column stays centred — unless the
+        // square is shorter than the controls beside it, and then the row is
+        // theirs instead, because they cannot shrink.
+        final wordsHeight = math.max(
+          lerpDouble(
+            math.max(coverSize, controlsHeight),
+            (bodyHeight * 0.9).clamp(400.0, 780.0),
+            t,
+          )!,
+          controlsHeight,
+        );
 
         // The controls hand off rather than cross-fade in place: they are on
         // the right for the cover and under the artwork for the words, and the
@@ -680,7 +988,10 @@ class _WidePlayerBody extends StatelessWidget {
 
         return Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(SolSpace.xxl),
+            padding: const EdgeInsets.symmetric(
+              horizontal: SolSpace.xxl,
+              vertical: _kPageMargin,
+            ),
             child: SizedBox(
               width: width,
               child: Row(
@@ -752,7 +1063,13 @@ class _WidePlayerBody extends StatelessWidget {
                                 opacity: words,
                                 child: Transform.translate(
                                   offset: Offset(28 * (1 - words), 0),
-                                  child: alternate,
+                                  child: leaving == null
+                                      ? alternate
+                                      : _PaneSwap(
+                                          swap: swap,
+                                          leaving: leaving!,
+                                          child: alternate,
+                                        ),
                                 ),
                               ),
                             ),

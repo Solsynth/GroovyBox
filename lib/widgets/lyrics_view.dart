@@ -331,11 +331,15 @@ class SongLyricsPane extends ConsumerWidget {
       String? detail,
       bool retry = false,
     }) {
+      // Scrollable, not just centred: the player gives this pane the slot the
+      // cover had, and on a short window that slot is shorter than the icon,
+      // the line and the retry button together. Centring alone would clip the
+      // way out of the state.
       return SizedBox(
         height: height,
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(SolSpace.xl),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(SolSpace.xl),
+          child: Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
