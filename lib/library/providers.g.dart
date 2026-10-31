@@ -173,8 +173,22 @@ abstract class _$SourceFailures extends $Notifier<Map<String, String>> {
   }
 }
 
+/// Folds every read into the local library, so songs are adopted as the user
+/// browses rather than waiting for a full sync that does not exist yet.
+///
+/// Adoption is fire-and-forget: a read must never be slower, or fail, because
+/// the local database did, and a song that was not adopted is picked up by the
+/// next read that mentions it.
+
 @ProviderFor(libraryAggregator)
 final libraryAggregatorProvider = LibraryAggregatorProvider._();
+
+/// Folds every read into the local library, so songs are adopted as the user
+/// browses rather than waiting for a full sync that does not exist yet.
+///
+/// Adoption is fire-and-forget: a read must never be slower, or fail, because
+/// the local database did, and a song that was not adopted is picked up by the
+/// next read that mentions it.
 
 final class LibraryAggregatorProvider
     extends
@@ -184,6 +198,12 @@ final class LibraryAggregatorProvider
           LibraryAggregator
         >
     with $Provider<LibraryAggregator> {
+  /// Folds every read into the local library, so songs are adopted as the user
+  /// browses rather than waiting for a full sync that does not exist yet.
+  ///
+  /// Adoption is fire-and-forget: a read must never be slower, or fail, because
+  /// the local database did, and a song that was not adopted is picked up by the
+  /// next read that mentions it.
   LibraryAggregatorProvider._()
     : super(
         from: null,
@@ -218,7 +238,7 @@ final class LibraryAggregatorProvider
   }
 }
 
-String _$libraryAggregatorHash() => r'fc01cbed4018da5461e35c8394af9a325545baaf';
+String _$libraryAggregatorHash() => r'46a75259b5e5ec956a8fae942c862d96b23d611a';
 
 /// Recently added albums, merged across every library.
 
@@ -635,66 +655,167 @@ final class SearchSongsFamily extends $Family
   String toString() => r'searchSongsProvider';
 }
 
-/// The lyrics cache, opened in `main` and injected into the container.
+/// The local library, opened in `main` and injected into the container.
 ///
-/// Overriding it keeps the store synchronous to read, and keeps the database
-/// out of widget tests, which have no platform channel to open one through. A
-/// machine where it could not be opened gets null: playback and lyrics still
-/// work, they just ask the network every time.
+/// Overriding it keeps the catalog and the lyrics store synchronous to read,
+/// and keeps the database out of widget tests, which have no platform channel
+/// to open one through. A machine where it could not be opened gets null:
+/// playback and lyrics still work, they just ask the network every time and
+/// keep no history.
 
-@ProviderFor(lyricsCache)
-final lyricsCacheProvider = LyricsCacheProvider._();
+@ProviderFor(libraryDatabase)
+final libraryDatabaseProvider = LibraryDatabaseProvider._();
 
-/// The lyrics cache, opened in `main` and injected into the container.
+/// The local library, opened in `main` and injected into the container.
 ///
-/// Overriding it keeps the store synchronous to read, and keeps the database
-/// out of widget tests, which have no platform channel to open one through. A
-/// machine where it could not be opened gets null: playback and lyrics still
-/// work, they just ask the network every time.
+/// Overriding it keeps the catalog and the lyrics store synchronous to read,
+/// and keeps the database out of widget tests, which have no platform channel
+/// to open one through. A machine where it could not be opened gets null:
+/// playback and lyrics still work, they just ask the network every time and
+/// keep no history.
 
-final class LyricsCacheProvider
-    extends $FunctionalProvider<LyricsCache?, LyricsCache?, LyricsCache?>
-    with $Provider<LyricsCache?> {
-  /// The lyrics cache, opened in `main` and injected into the container.
+final class LibraryDatabaseProvider
+    extends
+        $FunctionalProvider<
+          LibraryDatabase?,
+          LibraryDatabase?,
+          LibraryDatabase?
+        >
+    with $Provider<LibraryDatabase?> {
+  /// The local library, opened in `main` and injected into the container.
   ///
-  /// Overriding it keeps the store synchronous to read, and keeps the database
-  /// out of widget tests, which have no platform channel to open one through. A
-  /// machine where it could not be opened gets null: playback and lyrics still
-  /// work, they just ask the network every time.
-  LyricsCacheProvider._()
+  /// Overriding it keeps the catalog and the lyrics store synchronous to read,
+  /// and keeps the database out of widget tests, which have no platform channel
+  /// to open one through. A machine where it could not be opened gets null:
+  /// playback and lyrics still work, they just ask the network every time and
+  /// keep no history.
+  LibraryDatabaseProvider._()
     : super(
         from: null,
         argument: null,
         retry: null,
-        name: r'lyricsCacheProvider',
+        name: r'libraryDatabaseProvider',
         isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
 
   @override
-  String debugGetCreateSourceHash() => _$lyricsCacheHash();
+  String debugGetCreateSourceHash() => _$libraryDatabaseHash();
 
   @$internal
   @override
-  $ProviderElement<LyricsCache?> $createElement($ProviderPointer pointer) =>
+  $ProviderElement<LibraryDatabase?> $createElement($ProviderPointer pointer) =>
       $ProviderElement(pointer);
 
   @override
-  LyricsCache? create(Ref ref) {
-    return lyricsCache(ref);
+  LibraryDatabase? create(Ref ref) {
+    return libraryDatabase(ref);
   }
 
   /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(LyricsCache? value) {
+  Override overrideWithValue(LibraryDatabase? value) {
     return $ProviderOverride(
       origin: this,
-      providerOverride: $SyncValueProvider<LyricsCache?>(value),
+      providerOverride: $SyncValueProvider<LibraryDatabase?>(value),
     );
   }
 }
 
-String _$lyricsCacheHash() => r'0654317aad874222d6a8a5a942de86ee5a49f2b5';
+String _$libraryDatabaseHash() => r'020c2e3b1d1b70b6a14f53feb20a96e2a32fc02d';
+
+/// The app's view of the local library.
+
+@ProviderFor(libraryCatalog)
+final libraryCatalogProvider = LibraryCatalogProvider._();
+
+/// The app's view of the local library.
+
+final class LibraryCatalogProvider
+    extends
+        $FunctionalProvider<LibraryCatalog?, LibraryCatalog?, LibraryCatalog?>
+    with $Provider<LibraryCatalog?> {
+  /// The app's view of the local library.
+  LibraryCatalogProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'libraryCatalogProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$libraryCatalogHash();
+
+  @$internal
+  @override
+  $ProviderElement<LibraryCatalog?> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  LibraryCatalog? create(Ref ref) {
+    return libraryCatalog(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(LibraryCatalog? value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<LibraryCatalog?>(value),
+    );
+  }
+}
+
+String _$libraryCatalogHash() => r'9ea566c633a47122b91f77e01c1ff890a6281fbc';
+
+/// The stored lyrics of each track.
+
+@ProviderFor(lyricsStore)
+final lyricsStoreProvider = LyricsStoreProvider._();
+
+/// The stored lyrics of each track.
+
+final class LyricsStoreProvider
+    extends $FunctionalProvider<LyricsStore?, LyricsStore?, LyricsStore?>
+    with $Provider<LyricsStore?> {
+  /// The stored lyrics of each track.
+  LyricsStoreProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'lyricsStoreProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$lyricsStoreHash();
+
+  @$internal
+  @override
+  $ProviderElement<LyricsStore?> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  LyricsStore? create(Ref ref) {
+    return lyricsStore(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(LyricsStore? value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<LyricsStore?>(value),
+    );
+  }
+}
+
+String _$lyricsStoreHash() => r'0cc441b33f05c83ddebf28c9688374e25773db25';
 
 /// The LRCLIB client, shared so its rate-limit state is too.
 
@@ -783,9 +904,9 @@ final class LyricsResolverProvider
   }
 }
 
-String _$lyricsResolverHash() => r'9b8911e57196b37ca50835c6bd7cec7fbff75021';
+String _$lyricsResolverHash() => r'515bb0a65e677a7a600483106f87ef8e229f219e';
 
-/// Lyrics of one song, from the cache or the network.
+/// Lyrics of one song, from the local library or the network.
 ///
 /// Kept for the session as well as on disk: the pane is rebuilt on every
 /// position tick's parent rebuild, and a family entry means it never asks
@@ -794,7 +915,7 @@ String _$lyricsResolverHash() => r'9b8911e57196b37ca50835c6bd7cec7fbff75021';
 @ProviderFor(songLyrics)
 final songLyricsProvider = SongLyricsFamily._();
 
-/// Lyrics of one song, from the cache or the network.
+/// Lyrics of one song, from the local library or the network.
 ///
 /// Kept for the session as well as on disk: the pane is rebuilt on every
 /// position tick's parent rebuild, and a family entry means it never asks
@@ -803,7 +924,7 @@ final songLyricsProvider = SongLyricsFamily._();
 final class SongLyricsProvider
     extends $FunctionalProvider<AsyncValue<Lyrics>, Lyrics, FutureOr<Lyrics>>
     with $FutureModifier<Lyrics>, $FutureProvider<Lyrics> {
-  /// Lyrics of one song, from the cache or the network.
+  /// Lyrics of one song, from the local library or the network.
   ///
   /// Kept for the session as well as on disk: the pane is rebuilt on every
   /// position tick's parent rebuild, and a family entry means it never asks
@@ -853,7 +974,7 @@ final class SongLyricsProvider
 
 String _$songLyricsHash() => r'36ca3c44f6de75e42431107451ad13b0d337507e';
 
-/// Lyrics of one song, from the cache or the network.
+/// Lyrics of one song, from the local library or the network.
 ///
 /// Kept for the session as well as on disk: the pane is rebuilt on every
 /// position tick's parent rebuild, and a family entry means it never asks
@@ -870,7 +991,7 @@ final class SongLyricsFamily extends $Family
         isAutoDispose: false,
       );
 
-  /// Lyrics of one song, from the cache or the network.
+  /// Lyrics of one song, from the local library or the network.
   ///
   /// Kept for the session as well as on disk: the pane is rebuilt on every
   /// position tick's parent rebuild, and a family entry means it never asks
@@ -883,24 +1004,33 @@ final class SongLyricsFamily extends $Family
   String toString() => r'songLyricsProvider';
 }
 
-/// How many songs have a stored lyric, for the settings row.
+/// How many tracks have a stored lyric, for the settings row.
+///
+/// Auto-disposed rather than kept: a count read when the page opened would be
+/// wrong once a track has played, and re-reading is one `COUNT(*)`.
 
 @ProviderFor(storedLyrics)
 final storedLyricsProvider = StoredLyricsProvider._();
 
-/// How many songs have a stored lyric, for the settings row.
+/// How many tracks have a stored lyric, for the settings row.
+///
+/// Auto-disposed rather than kept: a count read when the page opened would be
+/// wrong once a track has played, and re-reading is one `COUNT(*)`.
 
 final class StoredLyricsProvider
     extends $FunctionalProvider<AsyncValue<int>, int, FutureOr<int>>
     with $FutureModifier<int>, $FutureProvider<int> {
-  /// How many songs have a stored lyric, for the settings row.
+  /// How many tracks have a stored lyric, for the settings row.
+  ///
+  /// Auto-disposed rather than kept: a count read when the page opened would be
+  /// wrong once a track has played, and re-reading is one `COUNT(*)`.
   StoredLyricsProvider._()
     : super(
         from: null,
         argument: null,
         retry: null,
         name: r'storedLyricsProvider',
-        isAutoDispose: false,
+        isAutoDispose: true,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -919,20 +1049,69 @@ final class StoredLyricsProvider
   }
 }
 
-String _$storedLyricsHash() => r'00472b10617066fec1efe853cefc242dcac92b4a';
+String _$storedLyricsHash() => r'b6779c52adea3ab45e43e37d1dc12b3e297586ce';
 
-/// Actions the lyrics UI needs beyond reading: re-ask the network, forget a
-/// library's downloads, empty the cache.
+/// How many songs the local library knows, and how many of them no connected
+/// source can play any more, for the settings row.
+
+@ProviderFor(libraryStats)
+final libraryStatsProvider = LibraryStatsProvider._();
+
+/// How many songs the local library knows, and how many of them no connected
+/// source can play any more, for the settings row.
+
+final class LibraryStatsProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<({int orphaned, int tracks})>,
+          ({int orphaned, int tracks}),
+          FutureOr<({int orphaned, int tracks})>
+        >
+    with
+        $FutureModifier<({int orphaned, int tracks})>,
+        $FutureProvider<({int orphaned, int tracks})> {
+  /// How many songs the local library knows, and how many of them no connected
+  /// source can play any more, for the settings row.
+  LibraryStatsProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'libraryStatsProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$libraryStatsHash();
+
+  @$internal
+  @override
+  $FutureProviderElement<({int orphaned, int tracks})> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<({int orphaned, int tracks})> create(Ref ref) {
+    return libraryStats(ref);
+  }
+}
+
+String _$libraryStatsHash() => r'cf720945567c241f2ef7f205714aea0e5f589b5b';
+
+/// Actions the library UI needs beyond reading: re-ask the network, forget a
+/// removed source, empty the stored lyrics.
 
 @ProviderFor(LyricsMaintenance)
 final lyricsMaintenanceProvider = LyricsMaintenanceProvider._();
 
-/// Actions the lyrics UI needs beyond reading: re-ask the network, forget a
-/// library's downloads, empty the cache.
+/// Actions the library UI needs beyond reading: re-ask the network, forget a
+/// removed source, empty the stored lyrics.
 final class LyricsMaintenanceProvider
     extends $NotifierProvider<LyricsMaintenance, void> {
-  /// Actions the lyrics UI needs beyond reading: re-ask the network, forget a
-  /// library's downloads, empty the cache.
+  /// Actions the library UI needs beyond reading: re-ask the network, forget a
+  /// removed source, empty the stored lyrics.
   LyricsMaintenanceProvider._()
     : super(
         from: null,
@@ -960,10 +1139,10 @@ final class LyricsMaintenanceProvider
   }
 }
 
-String _$lyricsMaintenanceHash() => r'6a48eaa10919e8e4c3ccf10dbfb8692e601eccb4';
+String _$lyricsMaintenanceHash() => r'dce5eb68712c53e0373884d954a8dd17d0e79025';
 
-/// Actions the lyrics UI needs beyond reading: re-ask the network, forget a
-/// library's downloads, empty the cache.
+/// Actions the library UI needs beyond reading: re-ask the network, forget a
+/// removed source, empty the stored lyrics.
 
 abstract class _$LyricsMaintenance extends $Notifier<void> {
   void build();

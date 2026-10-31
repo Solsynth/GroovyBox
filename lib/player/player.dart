@@ -4,6 +4,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/session.dart';
+import 'package:groovy_box/player/play_tracker.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -115,9 +116,13 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
   /// The queue as handed to [playQueue], used to undo a shuffle.
   List<LibrarySong> _sourceOrder = [];
 
+  /// Writes what the transport plays into the local library's history.
+  late final PlayTracker _tracker;
+
   @override
   PlaybackState build() {
     _player = Player();
+    _tracker = PlayTracker(ref.read(libraryCatalogProvider));
 
     // Hand the transport over before any subscription fires: a media button
     // that arrived while the app was starting has been waiting for one.
@@ -131,6 +136,9 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       }),
       _player.stream.position.listen((position) {
         state = state.copyWith(position: position);
+        // Fire and forget: history is written at its own pace, and playback
+        // must never wait on a transaction.
+        _tracker.observe(position, duration: state.duration);
       }),
       _player.stream.duration.listen((duration) {
         state = state.copyWith(duration: duration);
@@ -148,6 +156,9 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       for (final subscription in _subscriptions) {
         subscription.cancel();
       }
+      // Whatever the play reached is written before the database goes away,
+      // so closing the window mid-track still leaves an honest row.
+      _tracker.flush();
       if (identical(_session?.transport, this)) _session!.transport = null;
       _player.dispose();
     });
@@ -303,6 +314,9 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
   Future<void> _openCurrent() async {
     final song = state.current;
     if (song == null) return;
+    // The play is recorded before the stream opens, so a source that has been
+    // removed still leaves the row that says the user tried to play it.
+    await _tracker.start(song);
     final source = ref.read(librarySourceByIdProvider)[song.sourceId];
     if (source == null) return;
 
@@ -350,6 +364,9 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
   }
 
   Future<void> _onTrackCompleted() async {
+    // Written before the repeat branch, which may start the track over and
+    // reset the play this row describes.
+    await _tracker.finish();
     switch (state.repeatMode) {
       case PlaybackRepeatMode.single:
         // media-kit already honours single mode on its own; this keeps the

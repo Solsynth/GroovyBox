@@ -1,8 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../data/local/library_database.dart';
 import '../widgets/common.dart';
 import 'aggregate.dart';
+import 'catalog.dart';
 import 'lrclib.dart';
 import 'lyrics.dart';
 import 'lyrics_resolver.dart';
@@ -49,17 +52,34 @@ class SourceFailures extends Notifier<Map<String, String>> {
   void clear() => state = const {};
 }
 
+/// Folds every read into the local library, so songs are adopted as the user
+/// browses rather than waiting for a full sync that does not exist yet.
+///
+/// Adoption is fire-and-forget: a read must never be slower, or fail, because
+/// the local database did, and a song that was not adopted is picked up by the
+/// next read that mentions it.
 @Riverpod(keepAlive: true)
-LibraryAggregator libraryAggregator(Ref ref) => LibraryAggregator(
-  ref.watch(librarySourcesProvider),
-  onFailure: (sourceId, error) =>
-      ref.read(sourceFailuresProvider.notifier).report(sourceId, error),
-  // Clearing here, rather than before the fan-out, keeps this out of the
-  // window where a provider is still building: riverpod forbids one provider
-  // mutating another during `build`.
-  onSuccess: (sourceId) =>
-      ref.read(sourceFailuresProvider.notifier).clearSource(sourceId),
-);
+LibraryAggregator libraryAggregator(Ref ref) {
+  final catalog = ref.watch(libraryCatalogProvider);
+  void adopt(Iterable<LibrarySong> songs) {
+    if (catalog == null) return;
+    catalog.adoptAll(songs).catchError((Object error) {
+      debugPrint('[Library] Could not store songs: $error');
+    });
+  }
+
+  return LibraryAggregator(
+    ref.watch(librarySourcesProvider),
+    onSongs: adopt,
+    onFailure: (sourceId, error) =>
+        ref.read(sourceFailuresProvider.notifier).report(sourceId, error),
+    // Clearing here, rather than before the fan-out, keeps this out of the
+    // window where a provider is still building: riverpod forbids one provider
+    // mutating another during `build`.
+    onSuccess: (sourceId) =>
+        ref.read(sourceFailuresProvider.notifier).clearSource(sourceId),
+  );
+}
 
 /// Recently added albums, merged across every library.
 @Riverpod(keepAlive: true)
@@ -140,15 +160,30 @@ Future<List<LibrarySong>> searchSongs(Ref ref, String query) async {
   return ref.watch(libraryAggregatorProvider).search(trimmed);
 }
 
-/// The lyrics cache, opened in `main` and injected into the container.
+/// The local library, opened in `main` and injected into the container.
 ///
-/// Overriding it keeps the store synchronous to read, and keeps the database
-/// out of widget tests, which have no platform channel to open one through. A
-/// machine where it could not be opened gets null: playback and lyrics still
-/// work, they just ask the network every time.
+/// Overriding it keeps the catalog and the lyrics store synchronous to read,
+/// and keeps the database out of widget tests, which have no platform channel
+/// to open one through. A machine where it could not be opened gets null:
+/// playback and lyrics still work, they just ask the network every time and
+/// keep no history.
 @Riverpod(keepAlive: true)
-LyricsCache? lyricsCache(Ref ref) =>
-    throw StateError('lyricsCache must be overridden in main()');
+LibraryDatabase? libraryDatabase(Ref ref) =>
+    throw StateError('libraryDatabase must be overridden in main()');
+
+/// The app's view of the local library.
+@Riverpod(keepAlive: true)
+LibraryCatalog? libraryCatalog(Ref ref) {
+  final database = ref.watch(libraryDatabaseProvider);
+  return database == null ? null : LibraryCatalog(database);
+}
+
+/// The stored lyrics of each track.
+@Riverpod(keepAlive: true)
+LyricsStore? lyricsStore(Ref ref) {
+  final database = ref.watch(libraryDatabaseProvider);
+  return database == null ? null : LyricsStore(database);
+}
 
 /// The LRCLIB client, shared so its rate-limit state is too.
 @Riverpod(keepAlive: true)
@@ -157,14 +192,15 @@ Lrclib lrclib(Ref ref) => Lrclib();
 /// Resolves lyrics: stored answer first, then the library, then LRCLIB.
 @Riverpod(keepAlive: true)
 Future<LyricsResolver> lyricsResolver(Ref ref) async => LyricsResolver(
-  cache: ref.watch(lyricsCacheProvider),
+  catalog: ref.watch(libraryCatalogProvider),
+  store: ref.watch(lyricsStoreProvider),
   lrclib: ref.watch(lrclibProvider),
   // Read, not watch: the resolver is long-lived and must see the library list
   // as it is at the moment of a lookup, including one added mid-session.
   sourceFor: (sourceId) => ref.read(librarySourceByIdProvider)[sourceId],
 );
 
-/// Lyrics of one song, from the cache or the network.
+/// Lyrics of one song, from the local library or the network.
 ///
 /// Kept for the session as well as on disk: the pane is rebuilt on every
 /// position tick's parent rebuild, and a family entry means it never asks
@@ -175,15 +211,28 @@ Future<Lyrics> songLyrics(Ref ref, LyricsRequest song) async {
   return resolver.resolve(song);
 }
 
-/// How many songs have a stored lyric, for the settings row.
-@Riverpod(keepAlive: true)
-Future<int> storedLyrics(Ref ref) async {
-  final cache = ref.watch(lyricsCacheProvider);
-  return await cache?.count() ?? 0;
+/// How many tracks have a stored lyric, for the settings row.
+///
+/// Auto-disposed rather than kept: a count read when the page opened would be
+/// wrong once a track has played, and re-reading is one `COUNT(*)`.
+@riverpod
+Future<int> storedLyrics(Ref ref) async =>
+    await ref.watch(lyricsStoreProvider)?.count() ?? 0;
+
+/// How many songs the local library knows, and how many of them no connected
+/// source can play any more, for the settings row.
+@riverpod
+Future<({int tracks, int orphaned})> libraryStats(Ref ref) async {
+  final catalog = ref.watch(libraryCatalogProvider);
+  if (catalog == null) return (tracks: 0, orphaned: 0);
+  return (
+    tracks: await catalog.trackCount(),
+    orphaned: await catalog.orphanCount(),
+  );
 }
 
-/// Actions the lyrics UI needs beyond reading: re-ask the network, forget a
-/// library's downloads, empty the cache.
+/// Actions the library UI needs beyond reading: re-ask the network, forget a
+/// removed source, empty the stored lyrics.
 @Riverpod(keepAlive: true)
 class LyricsMaintenance extends Notifier<void> {
   @override
@@ -198,18 +247,20 @@ class LyricsMaintenance extends Notifier<void> {
     ref.invalidate(storedLyricsProvider);
   }
 
-  /// Drops the downloads of a library that is no longer connected.
+  /// Drops the links and downloads of a library that is no longer connected.
+  /// The tracks themselves stay: re-adding the same server, or adding another
+  /// one with the same songs, adopts them again by fingerprint.
   Future<void> forgetSource(String sourceId) async {
-    final resolver = await ref.read(lyricsResolverProvider.future);
-    await resolver.forgetSource(sourceId);
+    await ref.read(libraryCatalogProvider)?.forgetSource(sourceId);
     ref.invalidate(storedLyricsProvider);
+    ref.invalidate(libraryStatsProvider);
   }
 
   /// Empties every stored lyric; the next play downloads again.
   Future<void> clear() async {
-    final cache = ref.read(lyricsCacheProvider);
-    if (cache == null) return;
-    await cache.clear();
+    final store = ref.read(lyricsStoreProvider);
+    if (store == null) return;
+    await store.clear();
     ref.invalidate(songLyricsProvider);
     ref.invalidate(storedLyricsProvider);
   }

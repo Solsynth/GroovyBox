@@ -1,11 +1,13 @@
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:groovy_box/data/local/library_database.dart';
+import 'package:groovy_box/library/catalog.dart';
 import 'package:groovy_box/library/lrclib.dart';
 import 'package:groovy_box/library/lyrics.dart';
 import 'package:groovy_box/library/lyrics_resolver.dart';
 import 'package:groovy_box/library/lyrics_store.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/source.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 /// A library whose answer the test controls, and which counts its calls.
 class _Library extends LibrarySource {
@@ -90,30 +92,37 @@ LrclibLookup _found(Lyrics lyrics) => LrclibLookup(
   settled: true,
 );
 
-/// An in-memory database; the resolver's real cache is on disk.
-Future<LyricsCache> _cache() async {
-  sqfliteFfiInit();
-  return LyricsCache.open(
-    path: inMemoryDatabasePath,
-    factory: databaseFactoryFfi,
-  );
+/// An in-memory library; the resolver's real one is on disk.
+({LibraryDatabase db, LibraryCatalog catalog, LyricsStore store}) _open() {
+  final db = LibraryDatabase(NativeDatabase.memory());
+  return (db: db, catalog: LibraryCatalog(db), store: LyricsStore(db));
 }
+
+/// The track the shared [_song] resolves to, adopted the way a real lookup
+/// adopts it.
+Future<int> _trackOf(LibraryCatalog catalog) => catalog.requestTrackId(_song);
 
 void main() {
   late _Library library;
-  late LyricsCache cache;
+  late LibraryDatabase db;
+  late LibraryCatalog catalog;
+  late LyricsStore cache;
 
-  setUp(() async {
+  setUp(() {
     library = _Library(null);
-    cache = await _cache();
+    final opened = _open();
+    db = opened.db;
+    catalog = opened.catalog;
+    cache = opened.store;
   });
-  tearDown(() async => cache.close());
+  tearDown(() async => db.close());
 
   Future<Lyrics> resolve(
     _FakeLrclib lrclib, {
     bool refresh = false,
   }) => LyricsResolver(
-    cache: cache,
+    catalog: catalog,
+    store: cache,
     lrclib: lrclib,
     sourceFor: (_) => library,
   ).resolve(_song, refresh: refresh);
@@ -126,7 +135,7 @@ void main() {
 
     expect(lyrics.lines.single.text, 'library line');
     expect(lrclib.calls, 0, reason: 'a timed lyric needs no second opinion');
-    expect((await cache.read('a', 's1'))!.origin, LyricsOrigin.library);
+    expect((await cache.read(await _trackOf(catalog)))!.origin, LyricsOrigin.library);
   });
 
   test('an unsynced library lyric is replaced by a timed LRCLIB one', () async {
@@ -137,7 +146,7 @@ void main() {
 
     expect(lyrics.synced, isTrue);
     expect(lyrics.lines.single.text, 'remote line');
-    expect((await cache.read('a', 's1'))!.origin, LyricsOrigin.lrclib);
+    expect((await cache.read(await _trackOf(catalog)))!.origin, LyricsOrigin.lrclib);
   });
 
   test('a plain LRCLIB answer does not displace the library block', () async {
@@ -147,7 +156,7 @@ void main() {
     final lyrics = await resolve(lrclib);
 
     expect(lyrics.lines.single.text, 'library plain');
-    expect((await cache.read('a', 's1'))!.origin, LyricsOrigin.library);
+    expect((await cache.read(await _trackOf(catalog)))!.origin, LyricsOrigin.library);
   });
 
   test('a dead library still gets LRCLIB lyrics', () async {
@@ -175,7 +184,7 @@ void main() {
   test('a refresh ignores the stored answer and asks again', () async {
     library.answer = _libraryTimed;
     await resolve(_FakeLrclib(LrclibLookup.missing));
-    await cache.remove('a', 's1');
+    await cache.remove(await _trackOf(catalog));
 
     library.answer = null;
     final lrclib = _FakeLrclib(_found(_remoteTimed));
@@ -187,33 +196,30 @@ void main() {
 
   test('a confirmed miss is stored; an unanswered one is not', () async {
     await resolve(_FakeLrclib(LrclibLookup.missing));
-    expect((await cache.read('a', 's1'))!.origin, LyricsOrigin.none);
+    expect((await cache.read(await _trackOf(catalog)))!.origin, LyricsOrigin.none);
 
     await cache.clear();
     await resolve(_FakeLrclib(LrclibLookup.unknown));
     expect(
-      await cache.read('a', 's1'),
+      await cache.read(await _trackOf(catalog)),
       isNull,
       reason: 'an offline machine must ask again on the next play',
     );
   });
 
-  test('forgetting a library drops only its rows', () async {
+  test('removing a source unlinks its songs but keeps their words', () async {
     library.answer = _libraryTimed;
     await resolve(_FakeLrclib(LrclibLookup.missing));
-    await cache.write(
-      'other',
-      's1',
-      _libraryTimed,
-      origin: LyricsOrigin.library,
+    final trackId = await _trackOf(catalog);
+
+    await catalog.forgetSource('a');
+
+    expect(await db.trackIdForLink('a', 's1'), isNull, reason: 'unlinked');
+    expect(
+      await cache.read(trackId),
+      isNotNull,
+      reason: 'the song and its words outlive the server that served them',
     );
-
-    await LyricsResolver(
-      cache: cache,
-      lrclib: _FakeLrclib(LrclibLookup.missing),
-    ).forgetSource('a');
-
-    expect(await cache.read('a', 's1'), isNull);
-    expect(await cache.read('other', 's1'), isNotNull);
+    expect(await catalog.orphanCount(), 1);
   });
 }

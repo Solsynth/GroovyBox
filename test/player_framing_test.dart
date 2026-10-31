@@ -66,7 +66,7 @@ Future<void> _pump(WidgetTester tester) async {
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
-        lyricsCacheProvider.overrideWithValue(null),
+        libraryDatabaseProvider.overrideWithValue(null),
         librarySourcesProvider.overrideWithValue([_Source()]),
         playbackProvider.overrideWith(_Playback.new),
       ],

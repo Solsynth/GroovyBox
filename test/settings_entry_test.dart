@@ -1,7 +1,11 @@
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:groovy_box/core/app.dart';
+import 'package:groovy_box/data/local/library_database.dart';
 import 'package:groovy_box/core/router.dart';
 import 'package:groovy_box/core/theme.dart';
+import 'package:groovy_box/library/catalog.dart';
+import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -24,7 +28,11 @@ class _Idle extends Playback {
   }
 }
 
-Future<void> _pumpShell(WidgetTester tester, Size size) async {
+Future<void> _pumpShell(
+  WidgetTester tester,
+  Size size, {
+  LibraryDatabase? library,
+}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -36,6 +44,7 @@ Future<void> _pumpShell(WidgetTester tester, Size size) async {
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
         librarySourcesProvider.overrideWithValue(const []),
+        libraryDatabaseProvider.overrideWithValue(library),
         playbackProvider.overrideWith(() {
           _playback = _Idle();
           return _playback;
@@ -63,6 +72,42 @@ void main() {
   testWidgets('wide shell offers settings exactly once', (tester) async {
     await _pumpShell(tester, const Size(1400, 900));
     expect(find.byIcon(Symbols.settings), findsOneWidget);
+  });
+
+  testWidgets('settings reports what the local library knows', (tester) async {
+    final db = LibraryDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final catalog = LibraryCatalog(db);
+    await catalog.adopt(
+      const LibrarySong(
+        sourceId: 'a',
+        id: 's1',
+        title: 'Yellow',
+        artist: 'Coldplay',
+        duration: Duration(seconds: 266),
+      ),
+    );
+
+    await _pumpShell(tester, const Size(430, 860), library: db);
+    await tester.tap(find.byIcon(Symbols.settings));
+    await tester.pumpAndSettle();
+
+    // The row is below the fold on a compact window, and the count arrives
+    // from the database asynchronously.
+    await tester.scrollUntilVisible(
+      find.text('On this device'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+
+    // The row reads the real database rather than a placeholder: one song,
+    // still reachable through the source it came from.
+    expect(
+      find.textContaining('1 song known on this device'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('settings drives the transport volume', (tester) async {

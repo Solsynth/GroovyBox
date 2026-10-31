@@ -35,12 +35,10 @@ dependencies:
   liquid_glass_renderer: ^1.0.0-dev.1
   audio_service: ^0.18.19
   audio_session: ^0.2.4
-  sqflite: ^2.4.5
-  sqflite_common_ffi: ^2.3.7+1
   path_provider: ^2.1.6
   path: ^1.9.1
-  sqlite3: ^2.9.4
-
+  drift: ^2.35.3
+  drift_flutter: ^0.3.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -49,6 +47,7 @@ dev_dependencies:
   auto_route_generator: ^10.6.0
   riverpod_generator: ^4.0.9
   flutter_launcher_icons: ^0.14.4
+  drift_dev: ^2.35.2
 
 flutter:
   uses-material-design: true

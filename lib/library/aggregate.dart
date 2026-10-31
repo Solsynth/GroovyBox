@@ -7,9 +7,19 @@ import 'source.dart';
 /// reported through [onFailure] and simply contributes nothing, as long as at
 /// least one other source answered.
 class LibraryAggregator {
-  LibraryAggregator(this.sources, {this.onFailure, this.onSuccess});
+  LibraryAggregator(
+    this.sources, {
+    this.onSongs,
+    this.onFailure,
+    this.onSuccess,
+  });
 
   final List<LibrarySource> sources;
+
+  /// Called with the songs of every successful read, including a single
+  /// album's or playlist's, so the local library learns a track the first time
+  /// the user sees it instead of at some later sync.
+  final void Function(Iterable<LibrarySong> songs)? onSongs;
 
   /// Called once per source that answered with an error, after the merge.
   final void Function(String sourceId, Object error)? onFailure;
@@ -38,6 +48,7 @@ class LibraryAggregator {
         // Sources keep their own ordering; concatenation is in source order
         // because not every backend exposes a comparable timestamp.
         merged.addAll(result);
+        if (result case final List<LibrarySong> songs) onSongs?.call(songs);
       } else if (result != null) {
         failures.add((sources[index].id, result));
       }

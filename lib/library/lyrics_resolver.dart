@@ -10,26 +10,35 @@
 ///   3. LRCLIB, whose records are vetted and usually timed;
 ///   4. the library's plain block, when LRCLIB had nothing.
 ///
-/// Every answer is written to [LyricsCache], including "nobody has it", so a
-/// replay never walks the network again. Nothing here throws: a lyrics pane
+/// Every answer is written to the local library, including "nobody has it", so
+/// a replay never walks the network again. Nothing here throws: a lyrics pane
 /// with no words is a normal state, and a dead server must not turn it into an
 /// error card.
 library;
 
+import 'catalog.dart';
 import 'lrclib.dart';
 import 'lyrics.dart';
 import 'lyrics_store.dart';
 import 'source.dart';
 
-/// Resolves one song's lyrics through the cache and then the network.
+/// Resolves one song's lyrics through the local library and then the network.
+///
+/// Storage is keyed by the canonical track, not by the `(source, id)` pair a
+/// request carries: a second server with the same song, or the same server
+/// after a re-tag, finds the words that were already fetched.
 class LyricsResolver {
   LyricsResolver({
-    required this.cache,
+    required this.catalog,
+    required this.store,
     required this.lrclib,
     this.sourceFor,
   });
 
-  final LyricsCache? cache;
+  /// Null when the local database could not be opened. Lyrics still resolve;
+  /// they are simply fetched again on every play.
+  final LibraryCatalog? catalog;
+  final LyricsStore? store;
   final Lrclib lrclib;
   final LibrarySource? Function(String sourceId)? sourceFor;
 
@@ -45,24 +54,43 @@ class LyricsResolver {
     }
   }
 
+  /// The track the request is about, or null when nothing can be stored.
+  Future<int?> _trackId(LyricsRequest song) async {
+    final database = catalog;
+    if (database == null) return null;
+    try {
+      return await database.requestTrackId(song);
+    } catch (_) {
+      // A database that refuses a write must not cost the user their lyrics.
+      return null;
+    }
+  }
+
   /// The song's lyrics, never failing and never returning null.
   ///
-  /// [refresh] skips the cache for this call: the user asked for the lyrics
-  /// again because the ones on screen are wrong.
+  /// [refresh] skips the stored answer for this call: the user asked for the
+  /// lyrics again because the ones on screen are wrong.
   Future<Lyrics> resolve(LyricsRequest song, {bool refresh = false}) async {
-    if (!refresh) {
-      final stored = await cache?.read(song.sourceId, song.id);
+    final trackId = await _trackId(song);
+
+    if (!refresh && trackId != null) {
+      final stored = await store?.read(trackId);
       if (stored != null) return stored.lyrics;
+    }
+
+    Future<void> remember(Lyrics lyrics, LyricsOrigin origin, {int? remoteId}) async {
+      if (trackId == null) return;
+      await store?.write(
+        trackId,
+        lyrics,
+        origin: origin,
+        remoteId: remoteId,
+      );
     }
 
     final library = await _fromLibrary(song);
     if (library != null && library.synced) {
-      await cache?.write(
-        song.sourceId,
-        song.id,
-        library,
-        origin: LyricsOrigin.library,
-      );
+      await remember(library, LyricsOrigin.library);
       return library;
     }
 
@@ -73,43 +101,28 @@ class LyricsResolver {
       // only wins because its version is timed.
       final useRemote = remote.synced || library == null;
       final lyrics = useRemote ? remote : library;
-      await cache?.write(
-        song.sourceId,
-        song.id,
+      await remember(
         lyrics,
-        origin: useRemote ? LyricsOrigin.lrclib : LyricsOrigin.library,
+        useRemote ? LyricsOrigin.lrclib : LyricsOrigin.library,
+        remoteId: useRemote ? found.result?.id : null,
       );
       return lyrics;
     }
 
     if (library != null) {
-      await cache?.write(
-        song.sourceId,
-        song.id,
-        library,
-        origin: LyricsOrigin.library,
-      );
+      await remember(library, LyricsOrigin.library);
       return library;
     }
 
     // Only a miss the service confirmed is worth remembering; an offline
     // answer must be asked again on the next play.
-    if (found.settled) {
-      await cache?.write(
-        song.sourceId,
-        song.id,
-        Lyrics.empty,
-        origin: LyricsOrigin.none,
-      );
-    }
+    if (found.settled) await remember(Lyrics.empty, LyricsOrigin.none);
     return Lyrics.empty;
   }
 
   /// Forgets one song so the next play asks the network again.
-  Future<void> forget(LyricsRequest song) async =>
-      cache?.remove(song.sourceId, song.id);
-
-  /// Forgets everything downloaded for the given source.
-  Future<void> forgetSource(String sourceId) async =>
-      cache?.removeSource(sourceId);
+  Future<void> forget(LyricsRequest song) async {
+    final trackId = await _trackId(song);
+    if (trackId != null) await store?.remove(trackId);
+  }
 }

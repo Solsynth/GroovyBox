@@ -75,7 +75,7 @@ Future<void> _pump(WidgetTester tester, Size size) async {
         sharedPreferencesProvider.overrideWithValue(prefs),
         // The library's answer is timed, so no network or disk is involved;
         // an absent cache keeps the test off the device's real database.
-        lyricsCacheProvider.overrideWithValue(null),
+        libraryDatabaseProvider.overrideWithValue(null),
         librarySourcesProvider.overrideWithValue([_Source()]),
         playbackProvider.overrideWith(_Playback.new),
       ],

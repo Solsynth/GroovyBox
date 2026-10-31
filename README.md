@@ -2,7 +2,9 @@
 
 A Flutter music player that streams from any **OpenSubsonic**-compatible
 server — Navidrome, Jellyfin, Gonic, Airsonic — rather than managing local
-files. Nothing is downloaded: playback streams straight from the server.
+files. Nothing is downloaded: playback streams straight from the server. What
+the app keeps locally is its own library — songs, lyrics and play history in one
+SQLite database, independent of whichever server happens to serve them.
 
 ## What is here
 
@@ -23,18 +25,36 @@ files. Nothing is downloaded: playback streams straight from the server.
   transport the UI drives. The full player is also a keyboard surface — Space,
   Escape, arrows, Shift+arrows and `L` — bound on the page's own focus, so a
   focused control keeps its keys.
+- **Local library** — `lib/data/local/library_database.dart` (Drift, SQLite)
+  is where the app remembers songs, whatever server serves them. A track is
+  canonical — title, artist, album, duration and a fingerprint of them — and
+  each source's own id for it is a *link* row. Adoption happens as you browse:
+  every read the aggregator performs (`lib/library/aggregate.dart`) is folded
+  into the catalog, so no full sync is needed yet. Two servers carrying the
+  same song end up as one track with two links (fingerprint in
+  `lib/library/track_identity.dart` ignores bracketed credits, case,
+  punctuation and a couple of seconds of length), which is what makes the
+  library independent of a *playback source*: removing a source drops its
+  links and keeps the track, its lyrics and its play history, so re-adding it —
+  or adding a different one with the same songs — picks them up again. Local
+  files can join the same rows later. `play_events` is one row per play,
+  written when a track opens and updated as it advances
+  (`lib/player/play_tracker.dart`); play counts and "recently played" are
+  queries over it, so no counter can drift.
 - **Lyrics** — `lib/library/lyrics.dart` normalizes OpenSubsonic structured
   lyrics (timed lines, with romanization and translation layers folded onto the
   words they annotate) and LRC text. `lib/widgets/lyrics_view.dart` draws the
   Apple Music–style column: the sung line in full tone, the rest dimmed, the
   playhead parked a third of the way down, a tap on a line seeking to it.
   `lib/library/lyrics_resolver.dart` decides where the words come from: the
-  library first when it has *timed* lines, otherwise [LRCLIB](https://lrclib.net)
-  (`lib/library/lrclib.dart`, identified client, one request at a time,
-  `Retry-After` honoured), otherwise the library's plain block. Every answer is
-  written to a local SQLite cache (`lib/library/lyrics_store.dart`) keyed by
-  song identity, so the second play — and any play offline — never asks the
-  network. A confirmed miss is cached for a day; a timeout never is.
+  library first when it has *timed* lines, otherwise
+  [LRCLIB](https://lrclib.net) (`lib/library/lrclib.dart`, identified client,
+  one request at a time, `Retry-After` honoured), otherwise the library's plain
+  block. Every answer is stored in `lyrics_entries`
+  (`lib/library/lyrics_store.dart`) against the canonical track, so the second
+  play — and any play offline — never asks the network, and a re-tagged or
+  re-linked song keeps its words. A confirmed miss is cached for a day; a
+  timeout never is.
 - **Screens** — Browse (search + random shelf + recently added), Albums, album
   detail, Playlists, playlist detail, Queue, full Player, Setup, Settings.
 

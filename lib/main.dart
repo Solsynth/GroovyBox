@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/core/glass.dart';
 import 'package:groovy_box/core/router.dart';
-import 'package:groovy_box/library/lyrics_store.dart';
+import 'package:groovy_box/data/local/library_database.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/session.dart';
 import 'package:groovy_box/screens/setup.dart';
@@ -70,17 +70,21 @@ Future<void> main() async {
     }
   }
 
-  // The lyrics cache is opened before the first frame for the same reason
-  // prefs are: the player asks for words as soon as a track starts, and a
-  // database still opening would surface as a spinner. A machine that refuses
-  // the file still plays — the pane just asks the network every time.
-  LyricsCache? lyricsCache;
+  // The local library is opened before the first frame for the same reason
+  // prefs are: the player records a play as soon as a track starts, and a
+  // database still opening would surface as a stutter on the first song. The
+  // first query runs here on purpose — drift opens lazily, so a file the
+  // platform refuses would otherwise only surface as a failed write mid-song.
+  // A machine that refuses the file still plays: it just keeps no history and
+  // asks the network for lyrics every time.
+  LibraryDatabase? library;
   try {
-    lyricsCache = await LyricsCache.open();
+    library = LibraryDatabase();
+    await library.customSelect('SELECT 1').getSingle();
   } catch (error) {
-    debugPrint('[Lyrics] Cache unavailable: $error');
+    debugPrint('[Library] Database unavailable: $error');
+    library = null;
   }
-
   final prefs = await SharedPreferences.getInstance();
 
   runApp(
@@ -88,7 +92,7 @@ Future<void> main() async {
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
         audioHandlerProvider.overrideWithValue(audioHandler),
-        lyricsCacheProvider.overrideWithValue(lyricsCache),
+        libraryDatabaseProvider.overrideWithValue(library),
       ],
       child: const GroovyBoxApp(),
     ),

@@ -211,21 +211,38 @@ class SettingsScreen extends ConsumerWidget {
             const SectionLabel('Library'),
             IslandCard(
               margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: SolSpace.lg,
-                ),
-                leading: const Icon(Symbols.refresh_rounded),
-                title: const Text('Refresh everything'),
-                subtitle: const Text(
-                  'Reload albums, playlists and the random shelf from every '
-                  'library.',
-                ),
-                onTap: () {
-                  ref.invalidate(recentAlbumsProvider);
-                  ref.invalidate(randomSongsProvider);
-                  ref.invalidate(playlistsProvider);
-                },
+              child: Column(
+                children: [
+                  ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: SolSpace.lg,
+                    ),
+                    leading: const Icon(Symbols.storage_rounded),
+                    title: const Text('On this device'),
+                    subtitle: Text(
+                      switch (ref.watch(libraryStatsProvider).value) {
+                        final stats? => _describeLibrary(stats),
+                        null => 'Songs, lyrics and plays are kept locally.',
+                      },
+                    ),
+                  ),
+                  ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: SolSpace.lg,
+                    ),
+                    leading: const Icon(Symbols.refresh_rounded),
+                    title: const Text('Refresh everything'),
+                    subtitle: const Text(
+                      'Reload albums, playlists and the random shelf from '
+                      'every library.',
+                    ),
+                    onTap: () {
+                      ref.invalidate(recentAlbumsProvider);
+                      ref.invalidate(randomSongsProvider);
+                      ref.invalidate(playlistsProvider);
+                    },
+                  ),
+                ],
               ),
             ),
             const SectionLabel('Lyrics'),
@@ -286,7 +303,9 @@ class SettingsScreen extends ConsumerWidget {
         title: const Text('Remove this library?'),
         content: const Text(
           'The server address and signed-in account are removed from this '
-          'device. Your music is untouched.',
+          'device. Its songs stay in the local library with their lyrics and '
+          'play history, so adding the same server back keeps them. Your '
+          'music is untouched.',
         ),
         actions: [
           TextButton(
@@ -303,8 +322,8 @@ class SettingsScreen extends ConsumerWidget {
 
     if (confirmed != true) return;
     await ref.read(sourceStoreProvider.notifier).remove(sourceId);
-    // Its downloaded lyrics point at a library that is gone; nothing will
-    // ever ask for them again.
+    // its links go; its songs, lyrics and plays stay, so re-adding the server
+    // or adding another with the same tracks finds them again
     await ref.read(lyricsMaintenanceProvider.notifier).forgetSource(sourceId);
   }
 
@@ -334,4 +353,20 @@ class SettingsScreen extends ConsumerWidget {
     if (confirmed != true) return;
     await ref.read(lyricsMaintenanceProvider.notifier).clear();
   }
+}
+
+/// One sentence about the local library: how many songs it knows, and how many
+/// of them only a removed server could play.
+String _describeLibrary(({int tracks, int orphaned}) stats) {
+  if (stats.tracks == 0) {
+    return 'Songs are stored here as you browse, so their lyrics and play '
+        'history survive a server change.';
+  }
+  final songs = '${stats.tracks} song${stats.tracks == 1 ? '' : 's'}';
+  if (stats.orphaned == 0) {
+    return '$songs known on this device, every one still playable.';
+  }
+  return '$songs known on this device, ${stats.orphaned} no longer served by '
+      'a connected library. Their lyrics and history are kept in case one is '
+      'added back.';
 }

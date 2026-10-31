@@ -81,8 +81,8 @@ void main() {
         overrides: [
           sharedPreferencesProvider.overrideWithValue(prefs),
           // The library's answer is timed, so no network or disk is involved;
-          // an absent cache keeps the test off the device's real database.
-          lyricsCacheProvider.overrideWithValue(null),
+          // an absent database keeps the test off the device's real one.
+          libraryDatabaseProvider.overrideWithValue(null),
           librarySourcesProvider.overrideWithValue([_Source()]),
           playbackProvider.overrideWith(() => playback),
         ],

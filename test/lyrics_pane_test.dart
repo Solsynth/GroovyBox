@@ -71,7 +71,7 @@ Future<void> _pump(WidgetTester tester, _Source source) async {
         playbackProvider.overrideWith(_Playback.new),
         // No cache: this test is about what the pane does when the network
         // is the only source of an answer.
-        lyricsCacheProvider.overrideWithValue(null),
+        libraryDatabaseProvider.overrideWithValue(null),
       ],
       child: MaterialApp(
         theme: createAppThemeSet().light,
