@@ -963,20 +963,6 @@ class _WidePlayerBody extends StatelessWidget {
           ),
           math.min(_kControlsMinWidth, inner),
         );
-        // The pane grows with the morph instead of starting at the words'
-        // full height: at the cover end it is the cover's square, so the row
-        // is as tall as the artwork and the column stays centred — unless the
-        // square is shorter than the controls beside it, and then the row is
-        // theirs instead, because they cannot shrink.
-        final wordsHeight = math.max(
-          lerpDouble(
-            math.max(coverSize, controlsHeight),
-            (bodyHeight * 0.9).clamp(400.0, 780.0),
-            t,
-          )!,
-          controlsHeight,
-        );
-
         // The controls hand off rather than cross-fade in place: they are on
         // the right for the cover and under the artwork for the words, and the
         // second copy unfolds from beneath the cover as the first lets go. The
@@ -985,6 +971,22 @@ class _WidePlayerBody extends StatelessWidget {
         final rightControls = (1 - t / 0.52).clamp(0.0, 1.0);
         final leftControls = ((t - 0.26) / 0.74).clamp(0.0, 1.0);
         final words = ((t - 0.40) / 0.60).clamp(0.0, 1.0);
+
+        // The pane grows with the morph instead of starting at the words'
+        // full height: at the cover end it is the cover's square, so the row
+        // is as tall as the artwork and the column stays centred — unless the
+        // square is shorter than the controls beside it, and then the row is
+        // theirs instead, because they cannot shrink.
+        final leftColumnNeeded =
+            coverSize + (SolSpace.lg + controlsHeight) * leftControls;
+        final wordsHeight = math.max(
+          lerpDouble(
+            math.max(coverSize, controlsHeight),
+            (bodyHeight * 0.9).clamp(400.0, 780.0),
+            t,
+          )!,
+          math.max(controlsHeight, leftColumnNeeded),
+        );
 
         return Center(
           child: SingleChildScrollView(
@@ -995,13 +997,17 @@ class _WidePlayerBody extends StatelessWidget {
             child: SizedBox(
               width: width,
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   SizedBox(
                     width: coverSize,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
+                    child: SizedBox(
+                      height: wordsHeight,
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
                         // The square is the measurement, not a leftover: its
                         // side is exactly the column's width, so the scrubber
                         // under it can never be wider than the art it rules.
@@ -1033,7 +1039,9 @@ class _WidePlayerBody extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(width: SolSpace.xxxl),
+                ),
+              ),
+              const SizedBox(width: SolSpace.xxxl),
                   Expanded(
                     child: SizedBox(
                       height: wordsHeight,

@@ -168,8 +168,7 @@ Future<List<LibrarySong>> searchSongs(Ref ref, String query) async {
 /// playback and lyrics still work, they just ask the network every time and
 /// keep no history.
 @Riverpod(keepAlive: true)
-LibraryDatabase? libraryDatabase(Ref ref) =>
-    throw StateError('libraryDatabase must be overridden in main()');
+LibraryDatabase? libraryDatabase(Ref ref) => null;
 
 /// The app's view of the local library.
 @Riverpod(keepAlive: true)

@@ -19,6 +19,7 @@ library;
 import 'catalog.dart';
 import 'lrclib.dart';
 import 'lyrics.dart';
+import 'lyrics_enricher.dart';
 import 'lyrics_store.dart';
 import 'source.dart';
 
@@ -33,7 +34,8 @@ class LyricsResolver {
     required this.store,
     required this.lrclib,
     this.sourceFor,
-  });
+    LyricsEnricher? enricher,
+  }) : enricher = enricher ?? LyricsEnricher();
 
   /// Null when the local database could not be opened. Lyrics still resolve;
   /// they are simply fetched again on every play.
@@ -41,6 +43,7 @@ class LyricsResolver {
   final LyricsStore? store;
   final Lrclib lrclib;
   final LibrarySource? Function(String sourceId)? sourceFor;
+  final LyricsEnricher enricher;
 
   /// The library's answer, or null when it has none or cannot be reached.
   Future<Lyrics?> _fromLibrary(LyricsRequest song) async {
@@ -75,7 +78,19 @@ class LyricsResolver {
 
     if (!refresh && trackId != null) {
       final stored = await store?.read(trackId);
-      if (stored != null) return stored.lyrics;
+      if (stored != null) {
+        if (enricher.needsEnrichment(stored.lyrics)) {
+          final enriched = await enricher.enrich(stored.lyrics);
+          await store?.write(
+            trackId,
+            enriched,
+            origin: stored.origin,
+            remoteId: stored.remoteId,
+          );
+          return enriched;
+        }
+        return stored.lyrics;
+      }
     }
 
     Future<void> remember(Lyrics lyrics, LyricsOrigin origin, {int? remoteId}) async {
@@ -90,8 +105,9 @@ class LyricsResolver {
 
     final library = await _fromLibrary(song);
     if (library != null && library.synced) {
-      await remember(library, LyricsOrigin.library);
-      return library;
+      final enriched = await enricher.enrich(library);
+      await remember(enriched, LyricsOrigin.library);
+      return enriched;
     }
 
     final found = await lrclib.find(song);
@@ -101,17 +117,19 @@ class LyricsResolver {
       // only wins because its version is timed.
       final useRemote = remote.synced || library == null;
       final lyrics = useRemote ? remote : library;
+      final enriched = await enricher.enrich(lyrics);
       await remember(
-        lyrics,
+        enriched,
         useRemote ? LyricsOrigin.lrclib : LyricsOrigin.library,
         remoteId: useRemote ? found.result?.id : null,
       );
-      return lyrics;
+      return enriched;
     }
 
     if (library != null) {
-      await remember(library, LyricsOrigin.library);
-      return library;
+      final enriched = await enricher.enrich(library);
+      await remember(enriched, LyricsOrigin.library);
+      return enriched;
     }
 
     // Only a miss the service confirmed is worth remembering; an offline

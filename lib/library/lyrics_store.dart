@@ -26,11 +26,13 @@ class CachedLyrics {
   final Lyrics lyrics;
   final LyricsOrigin origin;
   final DateTime fetchedAt;
+  final int? remoteId;
 
   const CachedLyrics({
     required this.lyrics,
     required this.origin,
     required this.fetchedAt,
+    this.remoteId,
   });
 }
 
@@ -82,6 +84,7 @@ class LyricsStore {
       ),
       origin: origin,
       fetchedAt: row.fetchedAt,
+      remoteId: row.remoteId,
     );
   }
 

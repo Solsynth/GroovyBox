@@ -185,6 +185,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.0.4"
+  checks:
+    dependency: transitive
+    description:
+      name: checks
+      sha256: "9c360a078576950976c9045fe28392dfb5f3b0b648ae897e8c1fe307a6ffbed2"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.2"
   cli_util:
     dependency: transitive
     description:
@@ -570,6 +578,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.12.0"
+  kana_kit:
+    dependency: "direct main"
+    description:
+      name: kana_kit
+      sha256: "4e99cfddae947971c327ef3d8d82d35cf036c046c7f460583785d48c0f777fa3"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.1.1"
+  kuromoji:
+    dependency: "direct main"
+    description:
+      name: kuromoji
+      sha256: ad4ff9de8c41fbd51f71f7127ba671f3efbd14bead6a2e241b10a56338f9da7c
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.5"
   leak_tracker:
     dependency: transitive
     description:
@@ -834,6 +858,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.3.0"
+  pinyin:
+    dependency: transitive
+    description:
+      name: pinyin
+      sha256: "240f271a3c71af20c8d2757756b5ee8e9d79a955d37abad4b3568fd406b22411"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.3.0"
   platform:
     dependency: transitive
     description:
@@ -938,6 +970,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.0.9"
+  romanize:
+    dependency: "direct main"
+    description:
+      name: romanize
+      sha256: "4fad4cc9923531fbef6741231af63d32666fd1e05ffd21115f9ed0c2f41fe07b"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.0.3"
   rxdart:
     dependency: transitive
     description:

@@ -39,6 +39,9 @@ dependencies:
   path: ^1.9.1
   drift: ^2.35.3
   drift_flutter: ^0.3.1
+  romanize: ^0.0.3
+  kana_kit: ^2.1.1
+  kuromoji: ^1.0.5
 dev_dependencies:
   flutter_test:
     sdk: flutter

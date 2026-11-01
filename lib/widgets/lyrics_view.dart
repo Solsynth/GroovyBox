@@ -93,8 +93,8 @@ class _LyricsViewState extends State<LyricsView> {
       if (context == null) return;
       Scrollable.ensureVisible(
         context,
-        alignment: 0.36,
-        duration: const Duration(milliseconds: 420),
+        alignment: 0.35,
+        duration: const Duration(milliseconds: 560),
         curve: Curves.easeOutCubic,
       );
     });
@@ -227,27 +227,27 @@ class _LyricLine extends StatelessWidget {
 
     final tone = current
         ? colorScheme.onSurface
-        : colorScheme.onSurface.withValues(alpha: 0.34);
+        : colorScheme.onSurface.withValues(alpha: 0.32);
 
     final words = theme.textTheme.titleLarge?.copyWith(
-      fontSize: 22,
-      height: 1.28,
+      fontSize: current ? 32.0 : 22.0,
+      height: 1.25,
       fontWeight: current ? FontWeight.w800 : FontWeight.w700,
-      letterSpacing: 0.1,
+      letterSpacing: current ? -0.2 : 0.1,
       color: tone,
     );
     final reading = theme.textTheme.bodySmall?.copyWith(
-      fontSize: 13.5,
+      fontSize: current ? 15.5 : 13.0,
       height: 1.35,
-      fontWeight: FontWeight.w700,
+      fontWeight: current ? FontWeight.w700 : FontWeight.w600,
       letterSpacing: 0.2,
-      color: colorScheme.onSurface.withValues(alpha: current ? 0.62 : 0.24),
+      color: colorScheme.onSurface.withValues(alpha: current ? 0.72 : 0.24),
     );
     final translation = theme.textTheme.bodySmall?.copyWith(
-      fontSize: 14,
+      fontSize: current ? 16.5 : 14.0,
       height: 1.35,
-      fontWeight: FontWeight.w600,
-      color: colorScheme.onSurface.withValues(alpha: current ? 0.72 : 0.26),
+      fontWeight: current ? FontWeight.w600 : FontWeight.w500,
+      color: colorScheme.onSurface.withValues(alpha: current ? 0.82 : 0.26),
     );
 
     return Semantics(
@@ -255,37 +255,47 @@ class _LyricLine extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(SolRadius.sm),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: SolSpace.sm),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 260),
-                curve: Curves.easeOut,
-                style: words!,
-                child: Text(line.text),
-              ),
-              if (line.pronunciation != null) ...[
-                const SizedBox(height: SolSpace.xxs),
+        child: AnimatedPadding(
+          duration: const Duration(milliseconds: 360),
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.symmetric(
+            vertical: current ? SolSpace.md : SolSpace.sm,
+          ),
+          child: AnimatedScale(
+            scale: current ? 1.02 : 1.0,
+            alignment: Alignment.centerLeft,
+            duration: const Duration(milliseconds: 360),
+            curve: Curves.easeOutCubic,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
                 AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 260),
-                  curve: Curves.easeOut,
-                  style: reading!,
-                  child: Text(line.pronunciation!),
+                  duration: const Duration(milliseconds: 360),
+                  curve: Curves.easeOutCubic,
+                  style: words!,
+                  child: Text(line.text),
                 ),
+                if (line.pronunciation != null) ...[
+                  const SizedBox(height: SolSpace.xxs),
+                  AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 360),
+                    curve: Curves.easeOutCubic,
+                    style: reading!,
+                    child: Text(line.pronunciation!),
+                  ),
+                ],
+                if (line.translation != null) ...[
+                  const SizedBox(height: SolSpace.xxs),
+                  AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 360),
+                    curve: Curves.easeOutCubic,
+                    style: translation!,
+                    child: Text(line.translation!),
+                  ),
+                ],
               ],
-              if (line.translation != null) ...[
-                const SizedBox(height: SolSpace.xxs),
-                AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 260),
-                  curve: Curves.easeOut,
-                  style: translation!,
-                  child: Text(line.translation!),
-                ),
-              ],
-            ],
+            ),
           ),
         ),
       ),
