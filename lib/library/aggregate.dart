@@ -1,5 +1,6 @@
 import 'models.dart';
 import 'source.dart';
+import 'track_identity.dart';
 
 /// Fans a read out over every connected library and merges the results.
 ///
@@ -86,9 +87,25 @@ class LibraryAggregator {
   Future<List<LibrarySong>> playlistSongs(String playlistId) =>
       _fanOut((source) => source.playlistSongs(playlistId));
 
-  Future<List<LibrarySong>> search(String query, {int limit = 40}) =>
-      _fanOut((source) => source.search(query, limit: limit));
+  Future<List<LibrarySong>> search(String query, {int limit = 40}) async {
+    final songs = await _fanOut((source) => source.search(query, limit: limit));
+    return _deduplicateSongs(songs);
+  }
 
-  Future<List<LibrarySong>> randomSongs({int size = 40}) =>
-      _fanOut((source) => source.randomSongs(size: size));
+  Future<List<LibrarySong>> randomSongs({int size = 40}) async {
+    final songs = await _fanOut((source) => source.randomSongs(size: size));
+    return _deduplicateSongs(songs);
+  }
+
+  List<LibrarySong> _deduplicateSongs(List<LibrarySong> songs) {
+    final seen = <String>{};
+    final result = <LibrarySong>[];
+    for (final song in songs) {
+      final key = song.mbid ?? TrackIdentity.of(song).fingerprint;
+      if (seen.add(key)) {
+        result.add(song);
+      }
+    }
+    return result;
+  }
 }

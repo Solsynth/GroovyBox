@@ -83,5 +83,54 @@ void main() {
       expect(enriched.lines[0].pronunciation, isNotNull);
       expect(enriched.lines[0].pronunciation, contains('saranghaeyo'));
     });
+
+    test('does not duplicate lines for English lyrics', () async {
+      final lyrics = const Lyrics(
+        lines: [
+          LyricLine(Duration(seconds: 1), "I'm in love with the shape of you"),
+          LyricLine(Duration(seconds: 4), 'We push and pull like a magnet do'),
+        ],
+        synced: true,
+      );
+
+      final enriched = await enricher.enrich(lyrics, targetLanguage: 'en');
+      for (final line in enriched.lines) {
+        // Must never have pronunciation on English lines
+        expect(line.pronunciation, isNull);
+        // Must never duplicate text as translation
+        expect(line.translation, isNot(equals(line.text)));
+      }
+    });
+
+    test('detects English song with single CJK credit line as en', () {
+      final lang = LyricsEnricher.detectLanguage([
+        const LyricLine(Duration.zero, "I'm in love with the shape of you"),
+        const LyricLine(Duration(seconds: 2), 'We push and pull like a magnet do'),
+        const LyricLine(Duration(seconds: 4), 'Although my heart is falling too'),
+        const LyricLine(Duration(seconds: 6), 'I am in love with your body'),
+        const LyricLine(Duration(seconds: 8), 'Every day discovering something brand new'),
+        const LyricLine(Duration(seconds: 10), 'I am in love with the shape of you'),
+        const LyricLine(Duration(seconds: 12), 'Written by Ed (作詞: 某某)'),
+      ]);
+      expect(lang, 'en');
+    });
+
+    test('cleans up duplicate layers from earlier stores', () async {
+      final dirty = const Lyrics(
+        lines: [
+          LyricLine(
+            Duration(seconds: 1),
+            'Yellow',
+            pronunciation: 'Yellow',
+            translation: 'Yellow',
+          ),
+        ],
+        synced: true,
+      );
+
+      final cleaned = await enricher.enrich(dirty, targetLanguage: 'en');
+      expect(cleaned.lines[0].pronunciation, isNull);
+      expect(cleaned.lines[0].translation, isNull);
+    });
   });
 }

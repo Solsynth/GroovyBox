@@ -277,3 +277,189 @@ abstract class _$GlassEffectsEnabled extends $Notifier<bool> {
     return element.handleCreate(ref, build);
   }
 }
+
+/// Whether lyrics show pronunciation (Romanization / Romaji / Pinyin / Hangul).
+/// On by default.
+
+@ProviderFor(LyricsPronunciationEnabled)
+final lyricsPronunciationEnabledProvider =
+    LyricsPronunciationEnabledProvider._();
+
+/// Whether lyrics show pronunciation (Romanization / Romaji / Pinyin / Hangul).
+/// On by default.
+final class LyricsPronunciationEnabledProvider
+    extends $NotifierProvider<LyricsPronunciationEnabled, bool> {
+  /// Whether lyrics show pronunciation (Romanization / Romaji / Pinyin / Hangul).
+  /// On by default.
+  LyricsPronunciationEnabledProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'lyricsPronunciationEnabledProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$lyricsPronunciationEnabledHash();
+
+  @$internal
+  @override
+  LyricsPronunciationEnabled create() => LyricsPronunciationEnabled();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(bool value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<bool>(value),
+    );
+  }
+}
+
+String _$lyricsPronunciationEnabledHash() =>
+    r'db7170e7e6917746904dc61c3aefbdd25a15b01b';
+
+/// Whether lyrics show pronunciation (Romanization / Romaji / Pinyin / Hangul).
+/// On by default.
+
+abstract class _$LyricsPronunciationEnabled extends $Notifier<bool> {
+  bool build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<bool, bool>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<bool, bool>,
+              bool,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
+/// Whether lyrics show translations. On by default.
+
+@ProviderFor(LyricsTranslationEnabled)
+final lyricsTranslationEnabledProvider = LyricsTranslationEnabledProvider._();
+
+/// Whether lyrics show translations. On by default.
+final class LyricsTranslationEnabledProvider
+    extends $NotifierProvider<LyricsTranslationEnabled, bool> {
+  /// Whether lyrics show translations. On by default.
+  LyricsTranslationEnabledProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'lyricsTranslationEnabledProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$lyricsTranslationEnabledHash();
+
+  @$internal
+  @override
+  LyricsTranslationEnabled create() => LyricsTranslationEnabled();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(bool value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<bool>(value),
+    );
+  }
+}
+
+String _$lyricsTranslationEnabledHash() =>
+    r'0eda632836180ced24a893372bc2cb85b63bbb45';
+
+/// Whether lyrics show translations. On by default.
+
+abstract class _$LyricsTranslationEnabled extends $Notifier<bool> {
+  bool build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<bool, bool>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<bool, bool>,
+              bool,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
+/// Whether playback continues indefinitely with random library tracks when
+/// the queue reaches the end. On by default.
+
+@ProviderFor(InfinitePlaybackEnabled)
+final infinitePlaybackEnabledProvider = InfinitePlaybackEnabledProvider._();
+
+/// Whether playback continues indefinitely with random library tracks when
+/// the queue reaches the end. On by default.
+final class InfinitePlaybackEnabledProvider
+    extends $NotifierProvider<InfinitePlaybackEnabled, bool> {
+  /// Whether playback continues indefinitely with random library tracks when
+  /// the queue reaches the end. On by default.
+  InfinitePlaybackEnabledProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'infinitePlaybackEnabledProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$infinitePlaybackEnabledHash();
+
+  @$internal
+  @override
+  InfinitePlaybackEnabled create() => InfinitePlaybackEnabled();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(bool value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<bool>(value),
+    );
+  }
+}
+
+String _$infinitePlaybackEnabledHash() =>
+    r'a771a6f06836c49d7a0a3df99c9bc66429429523';
+
+/// Whether playback continues indefinitely with random library tracks when
+/// the queue reaches the end. On by default.
+
+abstract class _$InfinitePlaybackEnabled extends $Notifier<bool> {
+  bool build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<bool, bool>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<bool, bool>,
+              bool,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}

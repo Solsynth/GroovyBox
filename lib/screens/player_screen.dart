@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:auto_route/auto_route.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/services.dart';
 import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/core/responsive.dart';
@@ -413,7 +414,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           child: TextButton.icon(
             onPressed: () => context.router.maybePop(),
             icon: const Icon(Symbols.arrow_back_rounded),
-            label: const Text('Nothing is playing'),
+            label: Text('playerNothingPlaying'.tr()),
           ),
         ),
       );
@@ -551,7 +552,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                         top: _kCornerInset,
                         left: _kCornerInset,
                         child: IconButton(
-                          tooltip: 'Close',
+                          tooltip: 'playerClose'.tr(),
                           onPressed: () => context.router.maybePop(),
                           icon: const Icon(Symbols.keyboard_arrow_down_rounded),
                         ),
@@ -564,16 +565,16 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                           children: [
                             IconButton(
                               tooltip: _view == _PlayerView.queue
-                                  ? 'Hide queue'
-                                  : 'Show queue',
+                                  ? 'playerQueueHide'.tr()
+                                  : 'playerQueueShow'.tr(),
                               isSelected: _view == _PlayerView.queue,
                               onPressed: () => _showView(_PlayerView.queue),
                               icon: const Icon(Symbols.queue_music_rounded),
                             ),
                             IconButton(
                               tooltip: _view == _PlayerView.lyrics
-                                  ? 'Hide lyrics'
-                                  : 'Show lyrics',
+                                  ? 'playerLyricsHide'.tr()
+                                  : 'playerLyricsShow'.tr(),
                               isSelected: _view == _PlayerView.lyrics,
                               onPressed: () => _showView(_PlayerView.lyrics),
                               icon: const Icon(Symbols.lyrics_rounded),
@@ -1227,21 +1228,21 @@ class _Transport extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         IconButton(
-          tooltip: 'Shuffle',
+          tooltip: 'playerShuffle'.tr(),
           isSelected: playback.shuffle,
           onPressed: () => controller.setShuffle(!playback.shuffle),
           icon: const Icon(Symbols.shuffle_rounded),
         ),
         const SizedBox(width: SolSpace.xs),
         IconButton(
-          tooltip: 'Previous',
+          tooltip: 'playerPrevious'.tr(),
           onPressed: controller.previous,
           iconSize: 32,
           icon: const Icon(Symbols.skip_previous_rounded),
         ),
         const SizedBox(width: SolSpace.xs),
         IconButton.filled(
-          tooltip: playback.playing ? 'Pause' : 'Play',
+          tooltip: playback.playing ? 'playerPause'.tr() : 'playerPlay'.tr(),
           onPressed: controller.togglePlayPause,
           iconSize: 36,
           padding: const EdgeInsets.all(SolSpace.lg),
@@ -1249,7 +1250,7 @@ class _Transport extends StatelessWidget {
         ),
         const SizedBox(width: SolSpace.xs),
         IconButton(
-          tooltip: 'Next',
+          tooltip: 'playerNext'.tr(),
           onPressed: playback.hasNext ? controller.next : null,
           iconSize: 32,
           icon: const Icon(Symbols.skip_next_rounded),
@@ -1257,8 +1258,8 @@ class _Transport extends StatelessWidget {
         const SizedBox(width: SolSpace.xs),
         IconButton(
           tooltip: playback.repeatMode == PlaybackRepeatMode.single
-              ? 'Repeat song'
-              : 'Repeat',
+              ? 'playerRepeatSong'.tr()
+              : 'playerRepeat'.tr(),
           isSelected: playback.repeatMode != PlaybackRepeatMode.off,
           onPressed: controller.cycleRepeatMode,
           icon: Icon(

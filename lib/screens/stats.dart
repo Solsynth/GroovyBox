@@ -1,4 +1,5 @@
 import 'package:auto_route/auto_route.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/catalog.dart';
@@ -46,11 +47,11 @@ class StatsScreen extends ConsumerWidget {
             children: [
               PageHeader(
                 showRailToggle: true,
-                title: 'Stats',
-                subtitle: 'Listening kept on this device',
+                title: 'statsTitle'.tr(),
+                subtitle: 'statsSubtitle'.tr(),
                 actions: [
                   IconButton(
-                    tooltip: 'Refresh',
+                    tooltip: 'commonRefresh'.tr(),
                     onPressed: () => ref.invalidate(listeningStatsProvider),
                     icon: const Icon(Symbols.refresh_rounded),
                   ),
@@ -62,14 +63,12 @@ class StatsScreen extends ConsumerWidget {
                 AsyncValue(hasError: true) => [
                   EmptyState(
                     icon: Symbols.bar_chart_rounded,
-                    title: 'Could not read your history',
-                    message:
-                        'The local library did not answer. Playback is '
-                        'unaffected; try again in a moment.',
+                    title: 'statsErrorTitle'.tr(),
+                    message: 'statsErrorMessage'.tr(),
                     action: TextButton.icon(
                       onPressed: () => ref.invalidate(listeningStatsProvider),
                       icon: const Icon(Symbols.refresh_rounded),
-                      label: const Text('Try again'),
+                      label: Text('commonTryAgain'.tr()),
                     ),
                   ),
                 ],
@@ -96,13 +95,11 @@ class StatsScreen extends ConsumerWidget {
     ThemeData theme,
   ) {
     if (stats.isEmpty && stats.libraryTracks == 0) {
-      return const [
+      return [
         EmptyState(
           icon: Symbols.query_stats_rounded,
-          title: 'Nothing to count yet',
-          message:
-              'Play a song and this page fills in: how much you have listened '
-              'to, what you come back to, and what played last.',
+          title: 'statsEmptyTitle'.tr(),
+          message: 'statsEmptyMessage'.tr(),
         ),
       ];
     }
@@ -110,15 +107,15 @@ class StatsScreen extends ConsumerWidget {
     return [
       _Totals(stats: stats),
       if (stats.topTracks.isNotEmpty) ...[
-        const SectionLabel('Most played'),
+        SectionLabel('statsMostPlayed'.tr()),
         _TopTracks(tracks: stats.topTracks),
       ],
       if (stats.topArtists.isNotEmpty) ...[
-        const SectionLabel('Artists'),
+        SectionLabel('statsArtists'.tr()),
         _TopArtists(artists: stats.topArtists),
       ],
       if (stats.recent.isNotEmpty) ...[
-        const SectionLabel('Recently played'),
+        SectionLabel('statsRecentlyPlayed'.tr()),
         _RecentPlays(plays: stats.recent),
       ],
       Padding(
@@ -129,8 +126,7 @@ class StatsScreen extends ConsumerWidget {
           SolSpace.xl,
         ),
         child: Text(
-          'Counted from the plays recorded on this device. Removing a library '
-          'keeps its history, so these numbers survive a server change.',
+          'statsFooter'.tr(),
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
             height: 1.5,
@@ -165,7 +161,7 @@ class _Totals extends StatelessWidget {
                 child: _TotalTile(
                   icon: Symbols.play_arrow_rounded,
                   value: '${stats.plays}',
-                  label: stats.plays == 1 ? 'play' : 'plays',
+                  label: 'statsLabelPlays'.plural(stats.plays),
                 ),
               ),
               const SizedBox(width: SolSpace.md),
@@ -173,7 +169,7 @@ class _Totals extends StatelessWidget {
                 child: _TotalTile(
                   icon: Symbols.timer_rounded,
                   value: formatListeningTime(stats.listened),
-                  label: 'listened',
+                  label: 'statsLabelListened'.tr(),
                 ),
               ),
               const SizedBox(width: SolSpace.md),
@@ -181,7 +177,7 @@ class _Totals extends StatelessWidget {
                 child: _TotalTile(
                   icon: Symbols.library_music_rounded,
                   value: '${stats.distinctTracks}',
-                  label: stats.distinctTracks == 1 ? 'song' : 'songs',
+                  label: 'statsLabelSongs'.plural(stats.distinctTracks),
                 ),
               ),
             ],
@@ -257,13 +253,17 @@ class _CompletionLine extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final parts = <String>[
-      '${stats.completedPlays} of ${stats.plays} '
-          '${stats.plays == 1 ? 'play ran' : 'plays ran'} to the end',
+      'statsCompletionPlays'.plural(
+        stats.plays,
+        args: ['${stats.completedPlays}', '${stats.plays}'],
+      ),
       if (stats.libraryTracks > 0)
-        '${stats.distinctTracks} of ${stats.libraryTracks} known '
-            '${stats.libraryTracks == 1 ? 'song' : 'songs'} heard',
+        'statsCompletionLibrary'.plural(
+          stats.libraryTracks,
+          args: ['${stats.distinctTracks}', '${stats.libraryTracks}'],
+        ),
       if (stats.orphaned > 0)
-        '${stats.orphaned} no longer served by a connected library',
+        'statsOrphaned'.tr(args: ['${stats.orphaned}']),
     ];
 
     return Text(
@@ -295,7 +295,7 @@ class _TopTracks extends ConsumerWidget {
         for (final entry in tracks)
           TrackRow(
             title: entry.track.title,
-            subtitle: entry.track.artist ?? 'Unknown artist',
+            subtitle: entry.track.artist ?? 'commonUnknownArtist'.tr(),
             artwork: LibraryArtwork(
               sourceId: entry.link?.sourceId,
               artId: entry.link?.artId,
@@ -421,7 +421,7 @@ class _RecentPlays extends ConsumerWidget {
         for (final entry in plays)
           TrackRow(
             title: entry.track.title,
-            subtitle: entry.track.artist ?? 'Unknown artist',
+            subtitle: entry.track.artist ?? 'commonUnknownArtist'.tr(),
             artwork: LibraryArtwork(
               sourceId: entry.link?.sourceId,
               artId: entry.link?.artId,

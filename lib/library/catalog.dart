@@ -41,6 +41,7 @@ mixin _PlayableTrack {
       discNumber: track.discNumber,
       year: track.year,
       genre: track.genre,
+      mbid: track.mbid,
     );
   }
 }
@@ -181,6 +182,12 @@ class LibraryCatalog {
   /// The track [song] already is, adopting it if this is the first sight.
   Future<int> trackIdOf(LibrarySong song) async =>
       await _db.trackIdForLink(song.sourceId, song.id) ?? await adopt(song);
+
+  /// Every known playable link for [song]'s canonical track.
+  Future<List<TrackLinkRow>> linksOfSong(LibrarySong song) async {
+    final trackId = await trackIdOf(song);
+    return _db.linksOf(trackId);
+  }
 
   /// Adopts the song a lyrics lookup is about. The request carries only what
   /// a lookup needs, so a row it creates has a title, maybe an artist, and no
@@ -336,4 +343,29 @@ class LibraryCatalog {
 
   /// Tracks no currently connected source can reach.
   Future<int> orphanCount() => _db.orphanCount();
+
+  /// Loads the persisted playback session, if any.
+  Future<PlaybackSessionRow?> loadPlaybackSession() =>
+      _db.loadPlaybackSession();
+
+  /// Persists the active playback session.
+  Future<void> savePlaybackSession({
+    required String queueJson,
+    int? currentIndex,
+    int positionMs = 0,
+    int durationMs = 0,
+    bool shuffle = false,
+    String repeatMode = 'off',
+  }) => _db.savePlaybackSession(
+    queueJson: queueJson,
+    currentIndex: currentIndex,
+    positionMs: positionMs,
+    durationMs: durationMs,
+    shuffle: shuffle,
+    repeatMode: repeatMode,
+  );
+
+  /// Random playable tracks known to the local database.
+  Future<List<LibrarySong>> randomTracks({int limit = 30}) =>
+      _db.randomTracks(limit: limit);
 }

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/services.dart';
 import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/core/glass.dart';
@@ -16,6 +17,12 @@ import 'package:media_kit/media_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
+/// Translations live in `assets/i18n/<language>-<COUNTRY>.json`, one file per
+/// locale, matching the path declared under `flutter.assets` in pubspec.yaml.
+const kTranslationsPath = 'assets/i18n';
+const kSupportedLocales = [Locale('en', 'US'), Locale('zh', 'CN')];
+const kFallbackLocale = Locale('en', 'US');
+
 /// Window size on first launch. A player is a tall column — cover, title,
 /// scrubber, controls — so the default leans narrow rather than wide.
 const kDefaultWindowSize = Size(420, 760);
@@ -23,6 +30,10 @@ const kMinimumWindowSize = Size(380, 620);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Reads the saved locale and the device locale from prefs before the first
+  // frame, so the first frame is already in the user's language.
+  await EasyLocalization.ensureInitialized();
 
   // libmpv has to be loaded before the first Player is constructed, which the
   // shell does as soon as it mounts.
@@ -33,9 +44,12 @@ Future<void> main() async {
   // to exist to take it. Playback attaches itself once the shell mounts.
   final audioHandler = await AudioService.init(
     builder: GroovyBoxAudioHandler.new,
-    config: const AudioServiceConfig(
+    config: AudioServiceConfig(
       androidNotificationChannelId: 'dev.solsynth.rhythmBox.channel.audio',
-      androidNotificationChannelName: 'Playback',
+      // The channel name is what the OS settings screen shows. It is resolved
+      // before the widget tree exists, so the singleton translator is used;
+      // Android keeps the name from the first run anyway.
+      androidNotificationChannelName: 'notificationChannelName'.tr(),
       androidNotificationOngoing: true,
       // Covers are served by the library at whatever size is asked for; the
       // notification never needs more than a thumbnail.
@@ -94,7 +108,13 @@ Future<void> main() async {
         audioHandlerProvider.overrideWithValue(audioHandler),
         libraryDatabaseProvider.overrideWithValue(library),
       ],
-      child: const GroovyBoxApp(),
+      child: EasyLocalization(
+        supportedLocales: kSupportedLocales,
+        path: kTranslationsPath,
+        fallbackLocale: kFallbackLocale,
+        useFallbackTranslations: true,
+        child: const GroovyBoxApp(),
+      ),
     ),
   );
 }
@@ -121,6 +141,17 @@ class GroovyBoxApp extends ConsumerWidget {
         AppThemeMode.dark => ThemeMode.dark,
         AppThemeMode.system => ThemeMode.system,
       },
+      // The app's own strings come from easy_localization; Material, Cupertino
+      // and the widgets layer need their own delegates for zh-CN dates, dialog
+      // labels and text direction.
+      supportedLocales: kSupportedLocales,
+      locale: context.locale,
+      localizationsDelegates: [
+        ...context.localizationDelegates,
+        // material_ui's group carries the Material, Cupertino and widgets
+        // delegates, so zh-CN dialog labels and dates come from one import.
+        ...GlobalMaterialLocalizations.delegates,
+      ],
       routerConfig: router.config(),
       builder: (context, child) {
         // The frame is created once, around the routed content: pages never

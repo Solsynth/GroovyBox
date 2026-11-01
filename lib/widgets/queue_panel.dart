@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/artwork.dart';
@@ -45,16 +46,14 @@ class QueuePanel extends ConsumerWidget {
             children: [
               Expanded(
                 child: Text(
-                  'Queue',
+                  'queueTitle'.tr(),
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
               Text(
-                playback.shuffle
-                    ? '${playback.queue.length} tracks  ·  shuffled'
-                    : '${playback.queue.length} tracks',
+                queueSummary(playback.queue.length, playback.shuffle),
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -64,11 +63,11 @@ class QueuePanel extends ConsumerWidget {
         ),
         Expanded(
           child: playback.queue.isEmpty
-              ? const EmptyState(
+              ? EmptyState(
                   compact: true,
                   icon: Symbols.queue_music,
-                  title: 'Nothing queued',
-                  message: 'Play a song or an album and it lands here.',
+                  title: 'queueEmptyTitle'.tr(),
+                  message: 'queueEmptyMessage'.tr(),
                 )
               : ListView.builder(
                   padding: EdgeInsets.zero,

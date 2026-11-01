@@ -39,9 +39,13 @@ class JellyfinAdapter implements LibraryAdapter {
       );
     } on DioException catch (error) {
       if (error.response?.statusCode == 401) {
-        throw const LibraryException('Wrong username or password.', code: 401);
+        throw const LibraryException(
+          'Wrong username or password.',
+          code: 401,
+          messageKey: 'libraryWrongCredentials',
+        );
       }
-      throw LibraryException(_describeAuthError(error));
+      throw _describeAuthError(error);
     }
 
     final body = auth.data;
@@ -51,6 +55,7 @@ class JellyfinAdapter implements LibraryAdapter {
     if (token is! String || userId is! String) {
       throw const LibraryException(
         'That address does not look like a Jellyfin server.',
+        messageKey: 'libraryNotJellyfin',
       );
     }
 
@@ -95,12 +100,15 @@ class JellyfinAdapter implements LibraryAdapter {
   /// A 400 from the auth endpoint is never about the password: the server
   /// rejected the client identity, which means it is not a Jellyfin server, or
   /// a proxy in front of it strips the `Authorization` header.
-  static String _describeAuthError(DioException error) {
+  static LibraryException _describeAuthError(DioException error) {
     if (error.type == DioExceptionType.badResponse &&
         error.response?.statusCode == 400) {
-      return 'The server rejected the client identity. Check that this is a '
-          'Jellyfin address, and that no proxy strips the Authorization '
-          'header.';
+      return const LibraryException(
+        'The server rejected the client identity. Check that this is a '
+        'Jellyfin address, and that no proxy strips the Authorization '
+        'header.',
+        messageKey: 'libraryRejectedIdentity',
+      );
     }
     return describeDioError(error);
   }
@@ -148,6 +156,7 @@ class JellyfinSource extends LibrarySource {
 
   static const _signedOut = LibraryException(
     'This library is not signed in. Connect it again from Settings.',
+    messageKey: 'librarySignedOut',
   );
 
   /// Confirms the stored token still works.
@@ -165,17 +174,26 @@ class JellyfinSource extends LibrarySource {
       if (error.type == DioExceptionType.badResponse) {
         final data = error.response?.data;
         final message = data is Map ? data['Message'] : null;
-        throw LibraryException(
-          message is String ? message : 'Jellyfin returned HTTP $status.',
-          code: status,
-        );
+        // A server's own words are shown as sent; ours are not translated
+        // here, and carry the key the UI resolves.
+        throw message is String
+            ? LibraryException(message, code: status)
+            : LibraryException(
+                'Jellyfin returned HTTP $status.',
+                code: status,
+                messageKey: 'libraryHttpError',
+                messageArgs: [status.toString()],
+              );
       }
-      throw LibraryException(describeDioError(error));
+      throw describeDioError(error);
     }
 
     final data = response.data;
     if (data is! Map) {
-      throw const LibraryException('Malformed server response.');
+      throw const LibraryException(
+        'Malformed server response.',
+        messageKey: 'libraryMalformedResponse',
+      );
     }
     return Map<String, dynamic>.from(data);
   }
@@ -388,6 +406,7 @@ class JellyfinSource extends LibrarySource {
     discNumber: (json['ParentIndexNumber'] as num?)?.toInt(),
     year: (json['ProductionYear'] as num?)?.toInt(),
     genre: (json['Genres'] as List?)?.firstOrNull as String?,
+    mbid: _mbid(json),
   );
 
   LibraryAlbum _album(Map<String, dynamic> json) => LibraryAlbum(
@@ -401,6 +420,16 @@ class JellyfinSource extends LibrarySource {
     year: (json['ProductionYear'] as num?)?.toInt(),
     genre: (json['Genres'] as List?)?.firstOrNull as String?,
   );
+
+  static String? _mbid(Map<String, dynamic> json) {
+    final providerIds = json['ProviderIds'];
+    if (providerIds is Map) {
+      return providerIds['MusicBrainzTrack'] as String? ??
+          providerIds['MusicBrainzRecording'] as String? ??
+          providerIds['MusicBrainzId'] as String?;
+    }
+    return null;
+  }
 
   static String? _artist(Map<String, dynamic> json) {
     final albumArtist = json['AlbumArtist'];

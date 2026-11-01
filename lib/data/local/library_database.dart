@@ -13,6 +13,7 @@ import 'package:drift_flutter/drift_flutter.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../../library/models.dart';
 import '../../library/track_identity.dart';
 
 part 'library_database.g.dart';
@@ -34,6 +35,9 @@ class Tracks extends Table {
   IntColumn get trackNumber => integer().nullable()();
   IntColumn get discNumber => integer().nullable()();
   IntColumn get durationMs => integer().withDefault(const Constant(0))();
+
+  /// Optional MusicBrainz Recording ID or Track ID.
+  TextColumn get mbid => text().nullable()();
 
   /// [trackFingerprint] at first sight. It is the key a second source is
   /// matched on, and it is deliberately not recomputed when metadata is
@@ -60,6 +64,7 @@ extension TrackIdentityRow on TrackIdentity {
     trackNumber: Value.absentIfNull(trackNumber),
     discNumber: Value.absentIfNull(discNumber),
     durationMs: Value(duration.inMilliseconds),
+    mbid: Value.absentIfNull(mbid),
   );
 }
 
@@ -130,12 +135,34 @@ class PlayEvents extends Table {
   BoolColumn get completed => boolean().withDefault(const Constant(false))();
 }
 
+/// The last active playback session: the full queue in play order, the active
+/// index, and the scrubber position.
+///
+/// Recovered on startup so relaunching the app leaves the user's queue and
+/// dock ready right where they left off.
+@DataClassName('PlaybackSessionRow')
+class PlaybackSessions extends Table {
+  IntColumn get id => integer().withDefault(const Constant(1))();
+  TextColumn get queueJson => text()();
+  IntColumn get currentIndex => integer().nullable()();
+  IntColumn get positionMs => integer().withDefault(const Constant(0))();
+  IntColumn get durationMs => integer().withDefault(const Constant(0))();
+  BoolColumn get shuffle => boolean().withDefault(const Constant(false))();
+  TextColumn get repeatMode => text().withDefault(const Constant('off'))();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 /// Everything the app remembers about songs, in one SQLite file.
 ///
 /// [executor] exists for tests, which open `NativeDatabase.memory()` on a
 /// plain Dart VM. The app passes nothing and gets the file under the app's
 /// support directory (or IndexedDB on the web, with the wasm assets in `web/`).
-@DriftDatabase(tables: [Tracks, TrackLinks, LyricsEntries, PlayEvents])
+@DriftDatabase(
+  tables: [Tracks, TrackLinks, LyricsEntries, PlayEvents, PlaybackSessions],
+)
 class LibraryDatabase extends _$LibraryDatabase {
   LibraryDatabase([QueryExecutor? executor]) : super(executor ?? _open());
 
@@ -144,12 +171,20 @@ class LibraryDatabase extends _$LibraryDatabase {
   static const databaseName = 'library';
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) async {
       await m.createAll();
+    },
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        await m.addColumn(tracks, tracks.mbid);
+      }
+      if (from < 3) {
+        await m.createTable(playbackSessions);
+      }
     },
     beforeOpen: (details) async {
       // Links, lyrics and plays are owned by their track; deleting a track
@@ -224,10 +259,41 @@ class LibraryDatabase extends _$LibraryDatabase {
         return existing;
       }
 
-      final matched =
-          await (select(tracks)
-                ..where((track) => track.fingerprint.equals(identity.fingerprint)))
-              .getSingleOrNull();
+      // Tier 1: Deterministic MusicBrainz ID match
+      TrackRow? matched;
+      if (identity.mbid != null && identity.mbid!.isNotEmpty) {
+        matched = await (select(tracks)
+              ..where((track) => track.mbid.equals(identity.mbid!)))
+            .getSingleOrNull();
+      }
+
+      // Tier 2: Fingerprint and continuous duration window match
+      matched ??= await (select(tracks)
+            ..where((track) => track.fingerprint.equals(identity.fingerprint)))
+          .getSingleOrNull();
+
+      if (matched == null && identity.duration > Duration.zero) {
+        final base = identity.baseFingerprint;
+        final candidates = await (select(tracks)
+              ..where(
+                (track) =>
+                    track.fingerprint.equals(base) |
+                    track.fingerprint.like('$base|%'),
+              ))
+            .get();
+        for (final candidate in candidates) {
+          final candidateIdentity = TrackIdentity(
+            title: candidate.title,
+            artist: candidate.artist,
+            duration: Duration(milliseconds: candidate.durationMs),
+            mbid: candidate.mbid,
+          );
+          if (identity.matches(candidateIdentity)) {
+            matched = candidate;
+            break;
+          }
+        }
+      }
       final trackId = matched?.id ?? await into(tracks).insert(companion);
       if (matched != null) await _updateTrack(matched.id, companion);
 
@@ -449,5 +515,80 @@ class LibraryDatabase extends _$LibraryDatabase {
       }
     }
     return preferred;
+  }
+
+  /// The saved active playback session, or null if none was saved.
+  Future<PlaybackSessionRow?> loadPlaybackSession() =>
+      (select(playbackSessions)..where((s) => s.id.equals(1))).getSingleOrNull();
+
+  /// Persists the active playback session in a single row.
+  Future<void> savePlaybackSession({
+    required String queueJson,
+    int? currentIndex,
+    int positionMs = 0,
+    int durationMs = 0,
+    bool shuffle = false,
+    String repeatMode = 'off',
+    DateTime? updatedAt,
+  }) async {
+    final at = updatedAt ?? DateTime.now();
+    await into(playbackSessions).insert(
+      PlaybackSessionsCompanion(
+        id: const Value(1),
+        queueJson: Value(queueJson),
+        currentIndex: Value(currentIndex),
+        positionMs: Value(positionMs),
+        durationMs: Value(durationMs),
+        shuffle: Value(shuffle),
+        repeatMode: Value(repeatMode),
+        updatedAt: Value(at),
+      ),
+      onConflict: DoUpdate(
+        (old) => PlaybackSessionsCompanion(
+          queueJson: Value(queueJson),
+          currentIndex: Value(currentIndex),
+          positionMs: Value(positionMs),
+          durationMs: Value(durationMs),
+          shuffle: Value(shuffle),
+          repeatMode: Value(repeatMode),
+          updatedAt: Value(at),
+        ),
+        target: [playbackSessions.id],
+      ),
+    );
+  }
+
+  /// Random playable tracks known to the local library.
+  Future<List<LibrarySong>> randomTracks({int limit = 30}) async {
+    if (limit <= 0) return const [];
+    final rows = await customSelect(
+      'SELECT t.title, t.artist, t.album, t.genre, t.year, '
+      't.track_number, t.disc_number, t.duration_ms, t.mbid, '
+      'l.source_id, l.external_id, l.album_external_id, l.artist_external_id, l.art_id '
+      'FROM tracks t '
+      'JOIN track_links l ON t.id = l.track_id '
+      'GROUP BY t.id '
+      'ORDER BY RANDOM() LIMIT ?',
+      variables: [Variable.withInt(limit)],
+    ).get();
+    return [
+      for (final row in rows)
+        LibrarySong(
+          sourceId: row.read<String>('source_id'),
+          id: row.read<String>('external_id'),
+          title: row.read<String>('title'),
+          artist: row.readNullable<String>('artist'),
+          album: row.readNullable<String>('album'),
+          albumId: row.readNullable<String>('album_external_id'),
+          artistId: row.readNullable<String>('artist_external_id'),
+          artId: row.readNullable<String>('art_id'),
+          duration: Duration(milliseconds: row.read<int>('duration_ms')),
+          track: row.readNullable<int>('track_number'),
+          discNumber: row.readNullable<int>('disc_number'),
+          year: row.readNullable<int>('year'),
+          genre: row.readNullable<String>('genre'),
+          mbid: row.readNullable<String>('mbid'),
+        ),
+    ];
   }
 }

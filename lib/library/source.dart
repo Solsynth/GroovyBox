@@ -1,3 +1,5 @@
+import 'package:easy_localization/easy_localization.dart';
+
 import 'jellyfin_adapter.dart';
 import 'lyrics.dart';
 import 'models.dart';
@@ -5,16 +7,21 @@ import 'subsonic_adapter.dart';
 
 /// The kinds of library GroovyBox can talk to.
 enum LibraryKind {
-  subsonic('Subsonic', 'music.example.com'),
-  jellyfin('Jellyfin', 'https://jellyfin.example.com:8096');
+  subsonic('libraryKindSubsonic', 'libraryAddressSubsonic'),
+  jellyfin('libraryKindJellyfin', 'libraryAddressJellyfin');
 
-  const LibraryKind(this.label, this.addressHint);
+  const LibraryKind(this.labelKey, this.addressHintKey);
+
+  /// Translation keys, resolved on read: the enum is `const`, so the name and
+  /// placeholder cannot be translated at definition time.
+  final String labelKey;
+  final String addressHintKey;
 
   /// Shown in the setup picker and settings rows.
-  final String label;
+  String get label => labelKey.tr();
 
   /// Setup field placeholder.
-  final String addressHint;
+  String get addressHint => addressHintKey.tr();
 }
 
 /// A persisted library connection.

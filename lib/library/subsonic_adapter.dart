@@ -101,6 +101,7 @@ class SubsonicSource extends LibrarySource {
 
   static const _signedOut = LibraryException(
     'This library is not signed in. Connect it again from Settings.',
+    messageKey: 'librarySignedOut',
   );
 
   String get _serverRoot {
@@ -129,7 +130,7 @@ class SubsonicSource extends LibrarySource {
         queryParameters: {..._authParams(), ...?query},
       );
     } on DioException catch (error) {
-      throw LibraryException(describeDioError(error));
+      throw describeDioError(error);
     }
 
     final data = response.data;
@@ -137,21 +138,26 @@ class SubsonicSource extends LibrarySource {
       throw const LibraryException(
         'The server did not return a Subsonic response. '
         'Check that the URL points at a Subsonic-compatible API.',
+        messageKey: 'libraryNotSubsonic',
       );
     }
 
     final envelope = data['subsonic-response'] ?? data['openSubsonic-response'];
     if (envelope is! Map) {
-      throw const LibraryException('Malformed server response.');
+      throw const LibraryException(
+        'Malformed server response.',
+        messageKey: 'libraryMalformedResponse',
+      );
     }
 
     if (envelope['status'] == 'failed') {
       final error = envelope['error'];
+      final message = error is Map ? error['message'] as String? : null;
       throw LibraryException(
-        error is Map
-            ? (error['message'] as String? ?? 'Request failed')
-            : 'Request failed',
+        // A Subsonic server names its own failure; show it untranslated.
+        message ?? 'Request failed',
         code: error is Map ? (error['code'] as num?)?.toInt() : null,
+        messageKey: message == null ? 'libraryRequestFailed' : null,
       );
     }
 
@@ -444,6 +450,7 @@ class SubsonicSource extends LibrarySource {
     discNumber: (json['discNumber'] as num?)?.toInt(),
     year: (json['year'] as num?)?.toInt(),
     genre: json['genre'] as String?,
+    mbid: json['musicBrainzId'] as String? ?? json['musicbrainzId'] as String?,
   );
 
   LibraryAlbum _albumFromJson(Map<String, dynamic> json) => LibraryAlbum(

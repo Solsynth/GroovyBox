@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:easy_localization/easy_localization.dart';
+import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/lyrics.dart';
 import 'package:groovy_box/library/providers.dart';
@@ -34,6 +36,12 @@ class LyricsView extends StatefulWidget {
   /// Whether to fade the column's edges into the surface behind it.
   final bool fade;
 
+  /// Whether to show pronunciation (Romaji/Pinyin/Hangul) layers.
+  final bool showPronunciation;
+
+  /// Whether to show translation layers.
+  final bool showTranslation;
+
   const LyricsView({
     super.key,
     required this.lyrics,
@@ -41,6 +49,8 @@ class LyricsView extends StatefulWidget {
     this.onSeek,
     this.padding = const EdgeInsets.symmetric(horizontal: SolSpace.xl),
     this.fade = true,
+    this.showPronunciation = true,
+    this.showTranslation = true,
   });
 
   @override
@@ -127,6 +137,8 @@ class _LyricsViewState extends State<LyricsView> {
                   key: _keys.putIfAbsent(index, GlobalKey.new),
                   line: lyrics.lines[index],
                   current: lyrics.synced && index == current,
+                  showPronunciation: widget.showPronunciation,
+                  showTranslation: widget.showTranslation,
                   onTap: widget.onSeek == null
                       ? null
                       : () => widget.onSeek!(
@@ -209,12 +221,16 @@ class _LyricsViewState extends State<LyricsView> {
 class _LyricLine extends StatelessWidget {
   final LyricLine line;
   final bool current;
+  final bool showPronunciation;
+  final bool showTranslation;
   final VoidCallback? onTap;
 
   const _LyricLine({
     super.key,
     required this.line,
     required this.current,
+    this.showPronunciation = true,
+    this.showTranslation = true,
     this.onTap,
   });
 
@@ -250,6 +266,18 @@ class _LyricLine extends StatelessWidget {
       color: colorScheme.onSurface.withValues(alpha: current ? 0.82 : 0.26),
     );
 
+    final cleanText = line.text.trim().toLowerCase();
+    final hasPronunciation = showPronunciation &&
+        line.pronunciation != null &&
+        line.pronunciation!.trim().isNotEmpty &&
+        line.pronunciation!.trim().toLowerCase() != cleanText;
+    final hasTranslation = showTranslation &&
+        line.translation != null &&
+        line.translation!.trim().isNotEmpty &&
+        line.translation!.trim().toLowerCase() != cleanText &&
+        line.translation!.trim().toLowerCase() !=
+            line.pronunciation?.trim().toLowerCase();
+
     return Semantics(
       selected: current,
       child: InkWell(
@@ -276,7 +304,7 @@ class _LyricLine extends StatelessWidget {
                   style: words!,
                   child: Text(line.text),
                 ),
-                if (line.pronunciation != null) ...[
+                if (hasPronunciation) ...[
                   const SizedBox(height: SolSpace.xxs),
                   AnimatedDefaultTextStyle(
                     duration: const Duration(milliseconds: 360),
@@ -285,7 +313,7 @@ class _LyricLine extends StatelessWidget {
                     child: Text(line.pronunciation!),
                   ),
                 ],
-                if (line.translation != null) ...[
+                if (hasTranslation) ...[
                   const SizedBox(height: SolSpace.xxs),
                   AnimatedDefaultTextStyle(
                     duration: const Duration(milliseconds: 360),
@@ -394,7 +422,7 @@ class SongLyricsPane extends ConsumerWidget {
                         .read(lyricsMaintenanceProvider.notifier)
                         .refresh(LyricsRequest.of(song!)),
                     icon: const Icon(Symbols.refresh_rounded, size: 18),
-                    label: const Text('Ask again'),
+                    label: Text('lyricsAskAgain'.tr()),
                   ),
                 ],
               ],
@@ -405,27 +433,29 @@ class SongLyricsPane extends ConsumerWidget {
     }
 
     if (song == null) {
-      return status(Symbols.lyrics_rounded, 'Nothing is playing');
+      return status(Symbols.lyrics_rounded, 'lyricsNothingPlaying'.tr());
     }
 
     final lyrics = ref.watch(songLyricsProvider(LyricsRequest.of(song)));
     final controller = ref.read(playbackProvider.notifier);
+    final showPronunciation = ref.watch(lyricsPronunciationEnabledProvider);
+    final showTranslation = ref.watch(lyricsTranslationEnabledProvider);
 
     return lyrics.when(
       skipLoadingOnRefresh: true,
-      loading: () => status(null, 'Loading lyrics'),
+      loading: () => status(null, 'lyricsLoading'.tr()),
       error: (_, _) => status(
         Symbols.cloud_off_rounded,
-        'Lyrics unavailable',
-        detail: 'Neither the library nor LRCLIB answered.',
+        'lyricsUnavailable'.tr(),
+        detail: 'lyricsUnavailableDetail'.tr(),
         retry: true,
       ),
       data: (lyrics) {
         if (lyrics.isEmpty) {
           return status(
             Symbols.lyrics_rounded,
-            'No lyrics for this track',
-            detail: 'Neither the library nor LRCLIB has words for it.',
+            'lyricsEmpty'.tr(),
+            detail: 'lyricsEmptyDetail'.tr(),
             retry: true,
           );
         }
@@ -437,6 +467,8 @@ class SongLyricsPane extends ConsumerWidget {
             padding: padding,
             fade: fade,
             onSeek: lyrics.synced ? controller.seek : null,
+            showPronunciation: showPronunciation,
+            showTranslation: showTranslation,
           ),
         );
       },

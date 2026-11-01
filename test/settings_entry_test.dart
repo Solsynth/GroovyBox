@@ -126,4 +126,29 @@ void main() {
     expect(_playback.volumes, isNotEmpty);
     expect(_playback.volumes.last, lessThan(100));
   });
+
+  testWidgets('adding a library from settings allows navigating back', (tester) async {
+    await _pumpShell(tester, const Size(900, 900));
+    await tester.tap(find.byIcon(Symbols.settings));
+    await tester.pumpAndSettle();
+
+    final addLibraryButton = find.text('Add library');
+    expect(addLibraryButton, findsOneWidget);
+
+    await tester.tap(addLibraryButton);
+    await tester.pumpAndSettle();
+
+    // Verify setup screen opened with Back and Cancel buttons
+    expect(find.text('Connect a library'), findsOneWidget);
+    final backButton = find.byTooltip('Back');
+    expect(backButton, findsOneWidget);
+    expect(find.text('Cancel'), findsOneWidget);
+
+    // Tapping Back returns to settings
+    await tester.tap(backButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Add library'), findsOneWidget);
+    expect(find.text('Connect a library'), findsNothing);
+  });
 }

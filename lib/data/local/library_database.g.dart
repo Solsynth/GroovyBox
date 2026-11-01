@@ -111,6 +111,15 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _mbidMeta = const VerificationMeta('mbid');
+  @override
+  late final GeneratedColumn<String> mbid = GeneratedColumn<String>(
+    'mbid',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _fingerprintMeta = const VerificationMeta(
     'fingerprint',
   );
@@ -157,6 +166,7 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
     trackNumber,
     discNumber,
     durationMs,
+    mbid,
     fingerprint,
     createdAt,
     updatedAt,
@@ -238,6 +248,12 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
         durationMs.isAcceptableOrUnknown(data['duration_ms']!, _durationMsMeta),
       );
     }
+    if (data.containsKey('mbid')) {
+      context.handle(
+        _mbidMeta,
+        mbid.isAcceptableOrUnknown(data['mbid']!, _mbidMeta),
+      );
+    }
     if (data.containsKey('fingerprint')) {
       context.handle(
         _fingerprintMeta,
@@ -314,6 +330,10 @@ class $TracksTable extends Tracks with TableInfo<$TracksTable, TrackRow> {
         DriftSqlType.int,
         data['${effectivePrefix}duration_ms'],
       )!,
+      mbid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}mbid'],
+      ),
       fingerprint: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}fingerprint'],
@@ -347,6 +367,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
   final int? discNumber;
   final int durationMs;
 
+  /// Optional MusicBrainz Recording ID or Track ID.
+  final String? mbid;
+
   /// [trackFingerprint] at first sight. It is the key a second source is
   /// matched on, and it is deliberately not recomputed when metadata is
   /// re-tagged: the row's identity is what it was when it was first adopted.
@@ -364,6 +387,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     this.trackNumber,
     this.discNumber,
     required this.durationMs,
+    this.mbid,
     required this.fingerprint,
     required this.createdAt,
     required this.updatedAt,
@@ -395,6 +419,9 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       map['disc_number'] = Variable<int>(discNumber);
     }
     map['duration_ms'] = Variable<int>(durationMs);
+    if (!nullToAbsent || mbid != null) {
+      map['mbid'] = Variable<String>(mbid);
+    }
     map['fingerprint'] = Variable<String>(fingerprint);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -425,6 +452,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           ? const Value.absent()
           : Value(discNumber),
       durationMs: Value(durationMs),
+      mbid: mbid == null && nullToAbsent ? const Value.absent() : Value(mbid),
       fingerprint: Value(fingerprint),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -447,6 +475,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       trackNumber: serializer.fromJson<int?>(json['trackNumber']),
       discNumber: serializer.fromJson<int?>(json['discNumber']),
       durationMs: serializer.fromJson<int>(json['durationMs']),
+      mbid: serializer.fromJson<String?>(json['mbid']),
       fingerprint: serializer.fromJson<String>(json['fingerprint']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
@@ -466,6 +495,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       'trackNumber': serializer.toJson<int?>(trackNumber),
       'discNumber': serializer.toJson<int?>(discNumber),
       'durationMs': serializer.toJson<int>(durationMs),
+      'mbid': serializer.toJson<String?>(mbid),
       'fingerprint': serializer.toJson<String>(fingerprint),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
@@ -483,6 +513,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     Value<int?> trackNumber = const Value.absent(),
     Value<int?> discNumber = const Value.absent(),
     int? durationMs,
+    Value<String?> mbid = const Value.absent(),
     String? fingerprint,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -497,6 +528,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     trackNumber: trackNumber.present ? trackNumber.value : this.trackNumber,
     discNumber: discNumber.present ? discNumber.value : this.discNumber,
     durationMs: durationMs ?? this.durationMs,
+    mbid: mbid.present ? mbid.value : this.mbid,
     fingerprint: fingerprint ?? this.fingerprint,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -521,6 +553,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
       durationMs: data.durationMs.present
           ? data.durationMs.value
           : this.durationMs,
+      mbid: data.mbid.present ? data.mbid.value : this.mbid,
       fingerprint: data.fingerprint.present
           ? data.fingerprint.value
           : this.fingerprint,
@@ -542,6 +575,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           ..write('trackNumber: $trackNumber, ')
           ..write('discNumber: $discNumber, ')
           ..write('durationMs: $durationMs, ')
+          ..write('mbid: $mbid, ')
           ..write('fingerprint: $fingerprint, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
@@ -561,6 +595,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
     trackNumber,
     discNumber,
     durationMs,
+    mbid,
     fingerprint,
     createdAt,
     updatedAt,
@@ -579,6 +614,7 @@ class TrackRow extends DataClass implements Insertable<TrackRow> {
           other.trackNumber == this.trackNumber &&
           other.discNumber == this.discNumber &&
           other.durationMs == this.durationMs &&
+          other.mbid == this.mbid &&
           other.fingerprint == this.fingerprint &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
@@ -595,6 +631,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
   final Value<int?> trackNumber;
   final Value<int?> discNumber;
   final Value<int> durationMs;
+  final Value<String?> mbid;
   final Value<String> fingerprint;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
@@ -609,6 +646,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     this.trackNumber = const Value.absent(),
     this.discNumber = const Value.absent(),
     this.durationMs = const Value.absent(),
+    this.mbid = const Value.absent(),
     this.fingerprint = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -624,6 +662,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     this.trackNumber = const Value.absent(),
     this.discNumber = const Value.absent(),
     this.durationMs = const Value.absent(),
+    this.mbid = const Value.absent(),
     required String fingerprint,
     required DateTime createdAt,
     required DateTime updatedAt,
@@ -642,6 +681,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Expression<int>? trackNumber,
     Expression<int>? discNumber,
     Expression<int>? durationMs,
+    Expression<String>? mbid,
     Expression<String>? fingerprint,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
@@ -657,6 +697,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       if (trackNumber != null) 'track_number': trackNumber,
       if (discNumber != null) 'disc_number': discNumber,
       if (durationMs != null) 'duration_ms': durationMs,
+      if (mbid != null) 'mbid': mbid,
       if (fingerprint != null) 'fingerprint': fingerprint,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -674,6 +715,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     Value<int?>? trackNumber,
     Value<int?>? discNumber,
     Value<int>? durationMs,
+    Value<String?>? mbid,
     Value<String>? fingerprint,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
@@ -689,6 +731,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
       trackNumber: trackNumber ?? this.trackNumber,
       discNumber: discNumber ?? this.discNumber,
       durationMs: durationMs ?? this.durationMs,
+      mbid: mbid ?? this.mbid,
       fingerprint: fingerprint ?? this.fingerprint,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -728,6 +771,9 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
     if (durationMs.present) {
       map['duration_ms'] = Variable<int>(durationMs.value);
     }
+    if (mbid.present) {
+      map['mbid'] = Variable<String>(mbid.value);
+    }
     if (fingerprint.present) {
       map['fingerprint'] = Variable<String>(fingerprint.value);
     }
@@ -753,6 +799,7 @@ class TracksCompanion extends UpdateCompanion<TrackRow> {
           ..write('trackNumber: $trackNumber, ')
           ..write('discNumber: $discNumber, ')
           ..write('durationMs: $durationMs, ')
+          ..write('mbid: $mbid, ')
           ..write('fingerprint: $fingerprint, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
@@ -2255,6 +2302,513 @@ class PlayEventsCompanion extends UpdateCompanion<PlayEventRow> {
   }
 }
 
+class $PlaybackSessionsTable extends PlaybackSessions
+    with TableInfo<$PlaybackSessionsTable, PlaybackSessionRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PlaybackSessionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _queueJsonMeta = const VerificationMeta(
+    'queueJson',
+  );
+  @override
+  late final GeneratedColumn<String> queueJson = GeneratedColumn<String>(
+    'queue_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _currentIndexMeta = const VerificationMeta(
+    'currentIndex',
+  );
+  @override
+  late final GeneratedColumn<int> currentIndex = GeneratedColumn<int>(
+    'current_index',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _positionMsMeta = const VerificationMeta(
+    'positionMs',
+  );
+  @override
+  late final GeneratedColumn<int> positionMs = GeneratedColumn<int>(
+    'position_ms',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _durationMsMeta = const VerificationMeta(
+    'durationMs',
+  );
+  @override
+  late final GeneratedColumn<int> durationMs = GeneratedColumn<int>(
+    'duration_ms',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _shuffleMeta = const VerificationMeta(
+    'shuffle',
+  );
+  @override
+  late final GeneratedColumn<bool> shuffle = GeneratedColumn<bool>(
+    'shuffle',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("shuffle" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _repeatModeMeta = const VerificationMeta(
+    'repeatMode',
+  );
+  @override
+  late final GeneratedColumn<String> repeatMode = GeneratedColumn<String>(
+    'repeat_mode',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('off'),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    queueJson,
+    currentIndex,
+    positionMs,
+    durationMs,
+    shuffle,
+    repeatMode,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'playback_sessions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<PlaybackSessionRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('queue_json')) {
+      context.handle(
+        _queueJsonMeta,
+        queueJson.isAcceptableOrUnknown(data['queue_json']!, _queueJsonMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_queueJsonMeta);
+    }
+    if (data.containsKey('current_index')) {
+      context.handle(
+        _currentIndexMeta,
+        currentIndex.isAcceptableOrUnknown(
+          data['current_index']!,
+          _currentIndexMeta,
+        ),
+      );
+    }
+    if (data.containsKey('position_ms')) {
+      context.handle(
+        _positionMsMeta,
+        positionMs.isAcceptableOrUnknown(data['position_ms']!, _positionMsMeta),
+      );
+    }
+    if (data.containsKey('duration_ms')) {
+      context.handle(
+        _durationMsMeta,
+        durationMs.isAcceptableOrUnknown(data['duration_ms']!, _durationMsMeta),
+      );
+    }
+    if (data.containsKey('shuffle')) {
+      context.handle(
+        _shuffleMeta,
+        shuffle.isAcceptableOrUnknown(data['shuffle']!, _shuffleMeta),
+      );
+    }
+    if (data.containsKey('repeat_mode')) {
+      context.handle(
+        _repeatModeMeta,
+        repeatMode.isAcceptableOrUnknown(data['repeat_mode']!, _repeatModeMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  PlaybackSessionRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return PlaybackSessionRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      queueJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}queue_json'],
+      )!,
+      currentIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}current_index'],
+      ),
+      positionMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}position_ms'],
+      )!,
+      durationMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}duration_ms'],
+      )!,
+      shuffle: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}shuffle'],
+      )!,
+      repeatMode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}repeat_mode'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $PlaybackSessionsTable createAlias(String alias) {
+    return $PlaybackSessionsTable(attachedDatabase, alias);
+  }
+}
+
+class PlaybackSessionRow extends DataClass
+    implements Insertable<PlaybackSessionRow> {
+  final int id;
+  final String queueJson;
+  final int? currentIndex;
+  final int positionMs;
+  final int durationMs;
+  final bool shuffle;
+  final String repeatMode;
+  final DateTime updatedAt;
+  const PlaybackSessionRow({
+    required this.id,
+    required this.queueJson,
+    this.currentIndex,
+    required this.positionMs,
+    required this.durationMs,
+    required this.shuffle,
+    required this.repeatMode,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['queue_json'] = Variable<String>(queueJson);
+    if (!nullToAbsent || currentIndex != null) {
+      map['current_index'] = Variable<int>(currentIndex);
+    }
+    map['position_ms'] = Variable<int>(positionMs);
+    map['duration_ms'] = Variable<int>(durationMs);
+    map['shuffle'] = Variable<bool>(shuffle);
+    map['repeat_mode'] = Variable<String>(repeatMode);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  PlaybackSessionsCompanion toCompanion(bool nullToAbsent) {
+    return PlaybackSessionsCompanion(
+      id: Value(id),
+      queueJson: Value(queueJson),
+      currentIndex: currentIndex == null && nullToAbsent
+          ? const Value.absent()
+          : Value(currentIndex),
+      positionMs: Value(positionMs),
+      durationMs: Value(durationMs),
+      shuffle: Value(shuffle),
+      repeatMode: Value(repeatMode),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory PlaybackSessionRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return PlaybackSessionRow(
+      id: serializer.fromJson<int>(json['id']),
+      queueJson: serializer.fromJson<String>(json['queueJson']),
+      currentIndex: serializer.fromJson<int?>(json['currentIndex']),
+      positionMs: serializer.fromJson<int>(json['positionMs']),
+      durationMs: serializer.fromJson<int>(json['durationMs']),
+      shuffle: serializer.fromJson<bool>(json['shuffle']),
+      repeatMode: serializer.fromJson<String>(json['repeatMode']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'queueJson': serializer.toJson<String>(queueJson),
+      'currentIndex': serializer.toJson<int?>(currentIndex),
+      'positionMs': serializer.toJson<int>(positionMs),
+      'durationMs': serializer.toJson<int>(durationMs),
+      'shuffle': serializer.toJson<bool>(shuffle),
+      'repeatMode': serializer.toJson<String>(repeatMode),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  PlaybackSessionRow copyWith({
+    int? id,
+    String? queueJson,
+    Value<int?> currentIndex = const Value.absent(),
+    int? positionMs,
+    int? durationMs,
+    bool? shuffle,
+    String? repeatMode,
+    DateTime? updatedAt,
+  }) => PlaybackSessionRow(
+    id: id ?? this.id,
+    queueJson: queueJson ?? this.queueJson,
+    currentIndex: currentIndex.present ? currentIndex.value : this.currentIndex,
+    positionMs: positionMs ?? this.positionMs,
+    durationMs: durationMs ?? this.durationMs,
+    shuffle: shuffle ?? this.shuffle,
+    repeatMode: repeatMode ?? this.repeatMode,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  PlaybackSessionRow copyWithCompanion(PlaybackSessionsCompanion data) {
+    return PlaybackSessionRow(
+      id: data.id.present ? data.id.value : this.id,
+      queueJson: data.queueJson.present ? data.queueJson.value : this.queueJson,
+      currentIndex: data.currentIndex.present
+          ? data.currentIndex.value
+          : this.currentIndex,
+      positionMs: data.positionMs.present
+          ? data.positionMs.value
+          : this.positionMs,
+      durationMs: data.durationMs.present
+          ? data.durationMs.value
+          : this.durationMs,
+      shuffle: data.shuffle.present ? data.shuffle.value : this.shuffle,
+      repeatMode: data.repeatMode.present
+          ? data.repeatMode.value
+          : this.repeatMode,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PlaybackSessionRow(')
+          ..write('id: $id, ')
+          ..write('queueJson: $queueJson, ')
+          ..write('currentIndex: $currentIndex, ')
+          ..write('positionMs: $positionMs, ')
+          ..write('durationMs: $durationMs, ')
+          ..write('shuffle: $shuffle, ')
+          ..write('repeatMode: $repeatMode, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    queueJson,
+    currentIndex,
+    positionMs,
+    durationMs,
+    shuffle,
+    repeatMode,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PlaybackSessionRow &&
+          other.id == this.id &&
+          other.queueJson == this.queueJson &&
+          other.currentIndex == this.currentIndex &&
+          other.positionMs == this.positionMs &&
+          other.durationMs == this.durationMs &&
+          other.shuffle == this.shuffle &&
+          other.repeatMode == this.repeatMode &&
+          other.updatedAt == this.updatedAt);
+}
+
+class PlaybackSessionsCompanion extends UpdateCompanion<PlaybackSessionRow> {
+  final Value<int> id;
+  final Value<String> queueJson;
+  final Value<int?> currentIndex;
+  final Value<int> positionMs;
+  final Value<int> durationMs;
+  final Value<bool> shuffle;
+  final Value<String> repeatMode;
+  final Value<DateTime> updatedAt;
+  const PlaybackSessionsCompanion({
+    this.id = const Value.absent(),
+    this.queueJson = const Value.absent(),
+    this.currentIndex = const Value.absent(),
+    this.positionMs = const Value.absent(),
+    this.durationMs = const Value.absent(),
+    this.shuffle = const Value.absent(),
+    this.repeatMode = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  PlaybackSessionsCompanion.insert({
+    this.id = const Value.absent(),
+    required String queueJson,
+    this.currentIndex = const Value.absent(),
+    this.positionMs = const Value.absent(),
+    this.durationMs = const Value.absent(),
+    this.shuffle = const Value.absent(),
+    this.repeatMode = const Value.absent(),
+    required DateTime updatedAt,
+  }) : queueJson = Value(queueJson),
+       updatedAt = Value(updatedAt);
+  static Insertable<PlaybackSessionRow> custom({
+    Expression<int>? id,
+    Expression<String>? queueJson,
+    Expression<int>? currentIndex,
+    Expression<int>? positionMs,
+    Expression<int>? durationMs,
+    Expression<bool>? shuffle,
+    Expression<String>? repeatMode,
+    Expression<DateTime>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (queueJson != null) 'queue_json': queueJson,
+      if (currentIndex != null) 'current_index': currentIndex,
+      if (positionMs != null) 'position_ms': positionMs,
+      if (durationMs != null) 'duration_ms': durationMs,
+      if (shuffle != null) 'shuffle': shuffle,
+      if (repeatMode != null) 'repeat_mode': repeatMode,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  PlaybackSessionsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? queueJson,
+    Value<int?>? currentIndex,
+    Value<int>? positionMs,
+    Value<int>? durationMs,
+    Value<bool>? shuffle,
+    Value<String>? repeatMode,
+    Value<DateTime>? updatedAt,
+  }) {
+    return PlaybackSessionsCompanion(
+      id: id ?? this.id,
+      queueJson: queueJson ?? this.queueJson,
+      currentIndex: currentIndex ?? this.currentIndex,
+      positionMs: positionMs ?? this.positionMs,
+      durationMs: durationMs ?? this.durationMs,
+      shuffle: shuffle ?? this.shuffle,
+      repeatMode: repeatMode ?? this.repeatMode,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (queueJson.present) {
+      map['queue_json'] = Variable<String>(queueJson.value);
+    }
+    if (currentIndex.present) {
+      map['current_index'] = Variable<int>(currentIndex.value);
+    }
+    if (positionMs.present) {
+      map['position_ms'] = Variable<int>(positionMs.value);
+    }
+    if (durationMs.present) {
+      map['duration_ms'] = Variable<int>(durationMs.value);
+    }
+    if (shuffle.present) {
+      map['shuffle'] = Variable<bool>(shuffle.value);
+    }
+    if (repeatMode.present) {
+      map['repeat_mode'] = Variable<String>(repeatMode.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PlaybackSessionsCompanion(')
+          ..write('id: $id, ')
+          ..write('queueJson: $queueJson, ')
+          ..write('currentIndex: $currentIndex, ')
+          ..write('positionMs: $positionMs, ')
+          ..write('durationMs: $durationMs, ')
+          ..write('shuffle: $shuffle, ')
+          ..write('repeatMode: $repeatMode, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$LibraryDatabase extends GeneratedDatabase {
   _$LibraryDatabase(QueryExecutor e) : super(e);
   $LibraryDatabaseManager get managers => $LibraryDatabaseManager(this);
@@ -2262,6 +2816,9 @@ abstract class _$LibraryDatabase extends GeneratedDatabase {
   late final $TrackLinksTable trackLinks = $TrackLinksTable(this);
   late final $LyricsEntriesTable lyricsEntries = $LyricsEntriesTable(this);
   late final $PlayEventsTable playEvents = $PlayEventsTable(this);
+  late final $PlaybackSessionsTable playbackSessions = $PlaybackSessionsTable(
+    this,
+  );
   late final Index trackLinksTrack = Index(
     'track_links_track',
     'CREATE INDEX track_links_track ON track_links (track_id)',
@@ -2283,6 +2840,7 @@ abstract class _$LibraryDatabase extends GeneratedDatabase {
     trackLinks,
     lyricsEntries,
     playEvents,
+    playbackSessions,
     trackLinksTrack,
     playEventsTrack,
     playEventsStarted,
@@ -2324,6 +2882,7 @@ typedef $$TracksTableCreateCompanionBuilder = TracksCompanion Function({
   Value<int?> trackNumber,
   Value<int?> discNumber,
   Value<int> durationMs,
+  Value<String?> mbid,
   required String fingerprint,
   required DateTime createdAt,
   required DateTime updatedAt,
@@ -2339,6 +2898,7 @@ typedef $$TracksTableUpdateCompanionBuilder = TracksCompanion Function({
   Value<int?> trackNumber,
   Value<int?> discNumber,
   Value<int> durationMs,
+  Value<String?> mbid,
   Value<String> fingerprint,
   Value<DateTime> createdAt,
   Value<DateTime> updatedAt,
@@ -2460,6 +3020,11 @@ class $$TracksTableFilterComposer
 
   ColumnFilters<int> get durationMs => $composableBuilder(
     column: $table.durationMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mbid => $composableBuilder(
+    column: $table.mbid,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2613,6 +3178,11 @@ class $$TracksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get mbid => $composableBuilder(
+    column: $table.mbid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get fingerprint => $composableBuilder(
     column: $table.fingerprint,
     builder: (column) => ColumnOrderings(column),
@@ -2675,6 +3245,9 @@ class $$TracksTableAnnotationComposer
     column: $table.durationMs,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get mbid =>
+      $composableBuilder(column: $table.mbid, builder: (column) => column);
 
   GeneratedColumn<String> get fingerprint => $composableBuilder(
     column: $table.fingerprint,
@@ -2805,6 +3378,7 @@ class $$TracksTableTableManager
                 Value<int?> trackNumber = const Value.absent(),
                 Value<int?> discNumber = const Value.absent(),
                 Value<int> durationMs = const Value.absent(),
+                Value<String?> mbid = const Value.absent(),
                 Value<String> fingerprint = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -2819,6 +3393,7 @@ class $$TracksTableTableManager
                 trackNumber: trackNumber,
                 discNumber: discNumber,
                 durationMs: durationMs,
+                mbid: mbid,
                 fingerprint: fingerprint,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -2835,6 +3410,7 @@ class $$TracksTableTableManager
                 Value<int?> trackNumber = const Value.absent(),
                 Value<int?> discNumber = const Value.absent(),
                 Value<int> durationMs = const Value.absent(),
+                Value<String?> mbid = const Value.absent(),
                 required String fingerprint,
                 required DateTime createdAt,
                 required DateTime updatedAt,
@@ -2849,6 +3425,7 @@ class $$TracksTableTableManager
                 trackNumber: trackNumber,
                 discNumber: discNumber,
                 durationMs: durationMs,
+                mbid: mbid,
                 fingerprint: fingerprint,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -4056,6 +4633,286 @@ typedef $$PlayEventsTableProcessedTableManager =
       PlayEventRow,
       PrefetchHooks Function({bool trackId})
     >;
+typedef $$PlaybackSessionsTableCreateCompanionBuilder =
+    PlaybackSessionsCompanion Function({
+      Value<int> id,
+      required String queueJson,
+      Value<int?> currentIndex,
+      Value<int> positionMs,
+      Value<int> durationMs,
+      Value<bool> shuffle,
+      Value<String> repeatMode,
+      required DateTime updatedAt,
+    });
+typedef $$PlaybackSessionsTableUpdateCompanionBuilder =
+    PlaybackSessionsCompanion Function({
+      Value<int> id,
+      Value<String> queueJson,
+      Value<int?> currentIndex,
+      Value<int> positionMs,
+      Value<int> durationMs,
+      Value<bool> shuffle,
+      Value<String> repeatMode,
+      Value<DateTime> updatedAt,
+    });
+
+class $$PlaybackSessionsTableFilterComposer
+    extends Composer<_$LibraryDatabase, $PlaybackSessionsTable> {
+  $$PlaybackSessionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get queueJson => $composableBuilder(
+    column: $table.queueJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get currentIndex => $composableBuilder(
+    column: $table.currentIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get positionMs => $composableBuilder(
+    column: $table.positionMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get durationMs => $composableBuilder(
+    column: $table.durationMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get shuffle => $composableBuilder(
+    column: $table.shuffle,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get repeatMode => $composableBuilder(
+    column: $table.repeatMode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$PlaybackSessionsTableOrderingComposer
+    extends Composer<_$LibraryDatabase, $PlaybackSessionsTable> {
+  $$PlaybackSessionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get queueJson => $composableBuilder(
+    column: $table.queueJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get currentIndex => $composableBuilder(
+    column: $table.currentIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get positionMs => $composableBuilder(
+    column: $table.positionMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get durationMs => $composableBuilder(
+    column: $table.durationMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get shuffle => $composableBuilder(
+    column: $table.shuffle,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get repeatMode => $composableBuilder(
+    column: $table.repeatMode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$PlaybackSessionsTableAnnotationComposer
+    extends Composer<_$LibraryDatabase, $PlaybackSessionsTable> {
+  $$PlaybackSessionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get queueJson =>
+      $composableBuilder(column: $table.queueJson, builder: (column) => column);
+
+  GeneratedColumn<int> get currentIndex => $composableBuilder(
+    column: $table.currentIndex,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get positionMs => $composableBuilder(
+    column: $table.positionMs,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get durationMs => $composableBuilder(
+    column: $table.durationMs,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get shuffle =>
+      $composableBuilder(column: $table.shuffle, builder: (column) => column);
+
+  GeneratedColumn<String> get repeatMode => $composableBuilder(
+    column: $table.repeatMode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$PlaybackSessionsTableTableManager
+    extends
+        RootTableManager<
+          _$LibraryDatabase,
+          $PlaybackSessionsTable,
+          PlaybackSessionRow,
+          $$PlaybackSessionsTableFilterComposer,
+          $$PlaybackSessionsTableOrderingComposer,
+          $$PlaybackSessionsTableAnnotationComposer,
+          $$PlaybackSessionsTableCreateCompanionBuilder,
+          $$PlaybackSessionsTableUpdateCompanionBuilder,
+          (
+            PlaybackSessionRow,
+            BaseReferences<
+              _$LibraryDatabase,
+              $PlaybackSessionsTable,
+              PlaybackSessionRow
+            >,
+          ),
+          PlaybackSessionRow,
+          PrefetchHooks Function()
+        > {
+  $$PlaybackSessionsTableTableManager(
+    _$LibraryDatabase db,
+    $PlaybackSessionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PlaybackSessionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PlaybackSessionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PlaybackSessionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> queueJson = const Value.absent(),
+                Value<int?> currentIndex = const Value.absent(),
+                Value<int> positionMs = const Value.absent(),
+                Value<int> durationMs = const Value.absent(),
+                Value<bool> shuffle = const Value.absent(),
+                Value<String> repeatMode = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+              }) => PlaybackSessionsCompanion(
+                id: id,
+                queueJson: queueJson,
+                currentIndex: currentIndex,
+                positionMs: positionMs,
+                durationMs: durationMs,
+                shuffle: shuffle,
+                repeatMode: repeatMode,
+                updatedAt: updatedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String queueJson,
+                Value<int?> currentIndex = const Value.absent(),
+                Value<int> positionMs = const Value.absent(),
+                Value<int> durationMs = const Value.absent(),
+                Value<bool> shuffle = const Value.absent(),
+                Value<String> repeatMode = const Value.absent(),
+                required DateTime updatedAt,
+              }) => PlaybackSessionsCompanion.insert(
+                id: id,
+                queueJson: queueJson,
+                currentIndex: currentIndex,
+                positionMs: positionMs,
+                durationMs: durationMs,
+                shuffle: shuffle,
+                repeatMode: repeatMode,
+                updatedAt: updatedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$PlaybackSessionsTable, PlaybackSessionRow>(
+                    table,
+                  ),
+                  BaseReferences<
+                    _$LibraryDatabase,
+                    $PlaybackSessionsTable,
+                    PlaybackSessionRow
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$PlaybackSessionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LibraryDatabase,
+      $PlaybackSessionsTable,
+      PlaybackSessionRow,
+      $$PlaybackSessionsTableFilterComposer,
+      $$PlaybackSessionsTableOrderingComposer,
+      $$PlaybackSessionsTableAnnotationComposer,
+      $$PlaybackSessionsTableCreateCompanionBuilder,
+      $$PlaybackSessionsTableUpdateCompanionBuilder,
+      (
+        PlaybackSessionRow,
+        BaseReferences<
+          _$LibraryDatabase,
+          $PlaybackSessionsTable,
+          PlaybackSessionRow
+        >,
+      ),
+      PlaybackSessionRow,
+      PrefetchHooks Function()
+    >;
 
 class $LibraryDatabaseManager {
   final _$LibraryDatabase _db;
@@ -4068,4 +4925,6 @@ class $LibraryDatabaseManager {
       $$LyricsEntriesTableTableManager(_db, _db.lyricsEntries);
   $$PlayEventsTableTableManager get playEvents =>
       $$PlayEventsTableTableManager(_db, _db.playEvents);
+  $$PlaybackSessionsTableTableManager get playbackSessions =>
+      $$PlaybackSessionsTableTableManager(_db, _db.playbackSessions);
 }

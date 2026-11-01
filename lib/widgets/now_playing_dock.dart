@@ -1,4 +1,5 @@
 import 'package:auto_route/auto_route.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:groovy_box/core/glass.dart';
 import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/router.gr.dart';
@@ -364,15 +365,25 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
                                         ),
                                         Text(
                                           switch (_shownSheet) {
-                                            _DockSheet.lyrics => 'Lyrics',
-                                            _DockSheet.queue =>
-                                              '${playback.queue.length} tracks'
-                                                  '${playback.shuffle ? '  ·  shuffled' : ''}',
-                                            _DockSheet.none =>
-                                              wide
-                                                  ? song.subtitle
-                                                  : '${formatDuration(playback.position)}'
-                                                        ' / ${formatDuration(duration)}',
+                                            _DockSheet.lyrics => 'lyricsTitle'
+                                                .tr(),
+                                            _DockSheet.queue => queueSummary(
+                                              playback.queue.length,
+                                              playback.shuffle,
+                                            ),
+                                            _DockSheet.none => wide
+                                                ? song.subtitle
+                                                : 'formatPositionOfDuration'
+                                                      .tr(
+                                                        args: [
+                                                          formatDuration(
+                                                            playback.position,
+                                                          ),
+                                                          formatDuration(
+                                                            duration,
+                                                          ),
+                                                        ],
+                                                      ),
                                           },
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
@@ -434,8 +445,8 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
                                       if (wide) ...[
                                         IconButton(
                                           tooltip: _queueOpen
-                                              ? 'Hide queue'
-                                              : 'Show queue',
+                                              ? 'playerQueueHide'.tr()
+                                              : 'playerQueueShow'.tr(),
                                           visualDensity: VisualDensity.compact,
                                           isSelected: _queueOpen,
                                           onPressed: () =>
@@ -446,8 +457,8 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
                                         ),
                                         IconButton(
                                           tooltip: _lyricsOpen
-                                              ? 'Hide lyrics'
-                                              : 'Show lyrics',
+                                              ? 'playerLyricsHide'.tr()
+                                              : 'playerLyricsShow'.tr(),
                                           visualDensity: VisualDensity.compact,
                                           isSelected: _lyricsOpen,
                                           onPressed: () =>
@@ -458,7 +469,7 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
                                         ),
                                       ],
                                       IconButton(
-                                        tooltip: 'Previous',
+                                        tooltip: 'playerPrevious'.tr(),
                                         visualDensity: VisualDensity.compact,
                                         onPressed: controller.previous,
                                         icon: const Icon(
@@ -467,15 +478,15 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
                                       ),
                                       IconButton.filled(
                                         tooltip: playback.playing
-                                            ? 'Pause'
-                                            : 'Play',
+                                            ? 'playerPause'.tr()
+                                            : 'playerPlay'.tr(),
                                         onPressed: controller.togglePlayPause,
                                         icon: PlayPauseIcon(
                                           playing: playback.playing,
                                         ),
                                       ),
                                       IconButton(
-                                        tooltip: 'Next',
+                                        tooltip: 'playerNext'.tr(),
                                         visualDensity: VisualDensity.compact,
                                         onPressed: playback.hasNext
                                             ? controller.next

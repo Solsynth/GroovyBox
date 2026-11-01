@@ -722,7 +722,7 @@ final class LibraryDatabaseProvider
   }
 }
 
-String _$libraryDatabaseHash() => r'020c2e3b1d1b70b6a14f53feb20a96e2a32fc02d';
+String _$libraryDatabaseHash() => r'f5bf2d6304e0234366ad3d24af380df86624a09a';
 
 /// The app's view of the local library.
 

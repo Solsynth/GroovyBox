@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -7,17 +8,22 @@ class TabDestination {
 
   /// Position in `AutoTabsRouter.routes`.
   final int routeIndex;
-  final String label;
+  /// Translation key for the tab's name. Resolved with `.tr()` where the
+  /// label is drawn: these destinations are `const`, so they cannot translate
+  /// at definition time, and the key keeps one label in one place.
+  final String labelKey;
   final IconData icon;
   final IconData selectedIcon;
 
   const TabDestination({
     required this.id,
     required this.routeIndex,
-    required this.label,
+    required this.labelKey,
     required this.icon,
     required this.selectedIcon,
   });
+
+  String get label => labelKey.tr();
 
   Widget iconFor(bool selected) => Icon(selected ? selectedIcon : icon);
 }
@@ -32,28 +38,28 @@ List<TabDestination> get allTabDestinations => const [
   TabDestination(
     id: 'browse',
     routeIndex: 0,
-    label: 'Browse',
+    labelKey: 'tabBrowse',
     icon: Symbols.explore,
     selectedIcon: Symbols.explore_rounded,
   ),
   TabDestination(
     id: 'albums',
     routeIndex: 1,
-    label: 'Albums',
+    labelKey: 'tabAlbums',
     icon: Symbols.album,
     selectedIcon: Symbols.album_rounded,
   ),
   TabDestination(
     id: 'playlists',
     routeIndex: 2,
-    label: 'Playlists',
+    labelKey: 'tabPlaylists',
     icon: Symbols.playlist_play,
     selectedIcon: Symbols.playlist_play_rounded,
   ),
   TabDestination(
     id: 'stats',
     routeIndex: 3,
-    label: 'Stats',
+    labelKey: 'tabStats',
     icon: Symbols.query_stats,
     selectedIcon: Symbols.query_stats_rounded,
   ),
@@ -68,13 +74,13 @@ const kBottomBarIds = ['browse', 'albums', 'playlists', 'stats'];
 /// must not disagree about its label or icon — hence one constant
 /// destination. `routeIndex` is -1 on purpose: nothing may select it through
 /// the tabs router.
-const kSettingsLabel = 'Settings';
+const kSettingsLabelKey = 'tabSettings';
 const kSettingsIcon = Symbols.settings;
 
 const kSettingsDestination = TabDestination(
   id: 'settings',
   routeIndex: -1,
-  label: kSettingsLabel,
+  labelKey: kSettingsLabelKey,
   icon: kSettingsIcon,
   selectedIcon: kSettingsIcon,
 );

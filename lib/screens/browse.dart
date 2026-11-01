@@ -1,4 +1,5 @@
 import 'package:auto_route/auto_route.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/router.gr.dart';
 import 'package:groovy_box/core/tab_navigation.dart';
@@ -67,10 +68,16 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen> {
               SliverToBoxAdapter(
                 child: PageHeader(
                   showRailToggle: true,
-                  title: 'Browse',
+                  title: 'browseTitle'.tr(),
                   subtitle: sources.isEmpty
                       ? null
-                      : 'Streaming from ${sources.length == 1 ? sources.single.displayName : '${sources.length} libraries'}',
+                      : sources.length == 1
+                      ? 'browseStreamingFrom'.tr(
+                          args: [sources.single.displayName],
+                        )
+                      : 'browseStreamingFromLibraries'.tr(
+                          args: ['${sources.length}'],
+                        ),
                   actions: [
                     HeaderSettingsButton(
                       onPressed: () =>
@@ -90,12 +97,12 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen> {
                   ),
                   child: SearchBar(
                     controller: _searchController,
-                    hintText: 'Search songs',
+                    hintText: 'browseSearchPlaceholder'.tr(),
                     leading: const Icon(Symbols.search_rounded),
                     trailing: [
                       if (_query.isNotEmpty)
                         IconButton(
-                          tooltip: 'Clear',
+                          tooltip: 'commonClear'.tr(),
                           onPressed: () {
                             _searchController.clear();
                             setState(() => _query = '');
@@ -113,7 +120,7 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen> {
                 ...search.when<List<Widget>>(
                   data: (songs) => _songSliver(
                     songs,
-                    emptyMessage: 'No songs match “$_query”.',
+                    emptyMessage: 'browseSearchEmpty'.tr(args: [_query]),
                   ),
                   loading: () => [const _LoadingSliver()],
                   error: (error, _) => [
@@ -127,13 +134,13 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen> {
               else ...[
                 SliverToBoxAdapter(
                   child: _SectionHeader(
-                    title: 'Made for you',
+                    title: 'browseMadeForYou'.tr(),
                     trailing: TextButton.icon(
                       onPressed: () async {
                         await ref.read(randomSongsProvider.notifier).refresh();
                       },
                       icon: const Icon(Symbols.refresh_rounded, size: 18),
-                      label: const Text('Shuffle'),
+                      label: Text('browseShuffle'.tr()),
                     ),
                   ),
                 ),
@@ -154,12 +161,12 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen> {
                 ),
                 SliverToBoxAdapter(
                   child: _SectionHeader(
-                    title: 'Recently added',
+                    title: 'browseRecentlyAdded'.tr(),
                     trailing: TextButton(
                       // Albums is another tab, not a page above this one:
                       // selecting it is the same move the bottom bar makes.
                       onPressed: () => activateTab(context, 'albums'),
-                      child: const Text('See all'),
+                      child: Text('browseSeeAll'.tr()),
                     ),
                   ),
                 ),
@@ -230,7 +237,7 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen> {
           hasScrollBody: false,
           child: EmptyState(
             icon: Symbols.search_rounded,
-            title: 'Nothing found',
+            title: 'browseSearchNotFoundTitle'.tr(),
             message: emptyMessage,
           ),
         ),
@@ -416,12 +423,12 @@ class _ErrorSliver extends StatelessWidget {
       hasScrollBody: false,
       child: EmptyState(
         icon: Symbols.error_rounded,
-        title: 'Could not load this',
+        title: 'browseLoadError'.tr(),
         message: describeServerError(error),
         iconColor: Theme.of(context).colorScheme.error,
         action: FilledButton(
           onPressed: onRetry,
-          child: const Text('Try again'),
+          child: Text('commonTryAgain'.tr()),
         ),
       ),
     );
@@ -457,7 +464,7 @@ class _InlineError extends StatelessWidget {
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
-          TextButton(onPressed: onRetry, child: const Text('Retry')),
+          TextButton(onPressed: onRetry, child: Text('commonRetry'.tr())),
         ],
       ),
     );

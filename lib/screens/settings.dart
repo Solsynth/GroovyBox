@@ -1,4 +1,5 @@
 import 'package:auto_route/auto_route.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/router.gr.dart';
@@ -25,6 +26,7 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
     final glass = ref.watch(glassEffectsEnabledProvider);
+    final infinitePlayback = ref.watch(infinitePlaybackEnabledProvider);
     final sources = ref.watch(librarySourcesProvider);
     final failures = ref.watch(sourceFailuresProvider);
     final theme = Theme.of(context);
@@ -46,12 +48,12 @@ class SettingsScreen extends ConsumerWidget {
           padding: EdgeInsets.only(bottom: bottomInset),
           children: [
             PageHeader(
-              title: 'Settings',
+              title: 'tabSettings'.tr(),
               leading: HeaderBackButton(
                 onPressed: () => context.router.maybePop(),
               ),
             ),
-            const SectionLabel('Appearance'),
+            SectionLabel('settingsSectionAppearance'.tr()),
             IslandCard(
               margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
               padding: const EdgeInsets.all(SolSpace.lg),
@@ -59,28 +61,28 @@ class SettingsScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'Theme',
+                    'settingsThemeLabel'.tr(),
                     style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: SolSpace.md),
                   SegmentedButton<AppThemeMode>(
-                    segments: const [
+                    segments: [
                       ButtonSegment(
                         value: AppThemeMode.system,
-                        icon: Icon(Symbols.brightness_auto_rounded),
-                        label: Text('System'),
+                        icon: const Icon(Symbols.brightness_auto_rounded),
+                        label: Text('settingsThemeSystem'.tr()),
                       ),
                       ButtonSegment(
                         value: AppThemeMode.light,
-                        icon: Icon(Symbols.light_mode_rounded),
-                        label: Text('Light'),
+                        icon: const Icon(Symbols.light_mode_rounded),
+                        label: Text('settingsThemeLight'.tr()),
                       ),
                       ButtonSegment(
                         value: AppThemeMode.dark,
-                        icon: Icon(Symbols.dark_mode_rounded),
-                        label: Text('Dark'),
+                        icon: const Icon(Symbols.dark_mode_rounded),
+                        label: Text('settingsThemeDark'.tr()),
                       ),
                     ],
                     selected: {themeMode},
@@ -96,17 +98,13 @@ class SettingsScreen extends ConsumerWidget {
                         .read(glassEffectsEnabledProvider.notifier)
                         .set(value),
                     secondary: const Icon(Symbols.blur_on_rounded),
-                    title: const Text('Liquid glass'),
-                    subtitle: const Text(
-                      'Floating chrome refracts the page behind it. Turn off '
-                      'to paint the same bars as flat surfaces, which costs '
-                      'less on every scroll frame.',
-                    ),
+                    title: Text('settingsLiquidGlass'.tr()),
+                    subtitle: Text('settingsLiquidGlassSubtitle'.tr()),
                   ),
                 ],
               ),
             ),
-            const SectionLabel('Playback'),
+            SectionLabel('settingsSectionPlayback'.tr()),
             IslandCard(
               margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
               padding: const EdgeInsets.all(SolSpace.lg),
@@ -114,7 +112,7 @@ class SettingsScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'Volume',
+                    'settingsVolumeLabel'.tr(),
                     style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
@@ -142,18 +140,29 @@ class SettingsScreen extends ConsumerWidget {
                     ],
                   ),
                   Text(
-                    'The player page does not show this: level is set once and '
-                    'rarely touched. Arrow keys still change it while the '
-                    'player has focus.',
+                    'settingsVolumeHint'.tr(),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                       height: 1.5,
                     ),
                   ),
+                  const SizedBox(height: SolSpace.lg),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: infinitePlayback,
+                    onChanged: (value) => ref
+                        .read(infinitePlaybackEnabledProvider.notifier)
+                        .set(value),
+                    secondary: const Icon(Symbols.all_inclusive_rounded),
+                    title: Text('settingsInfinitePlayback'.tr()),
+                    subtitle: Text(
+                      'settingsInfinitePlaybackSubtitle'.tr(),
+                    ),
+                  ),
                 ],
               ),
             ),
-            const SectionLabel('Libraries'),
+            SectionLabel('settingsSectionLibraries'.tr()),
             IslandCard(
               margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
               child: Column(
@@ -171,21 +180,21 @@ class SettingsScreen extends ConsumerWidget {
                       ),
                       isThreeLine: failures[source.id] != null,
                       trailing: IconButton(
-                        tooltip: 'Remove',
+                        tooltip: 'settingsRemoveLibrary'.tr(),
                         onPressed: () =>
                             _confirmRemove(context, ref, source.id),
                         icon: const Icon(Symbols.delete_outline_rounded),
                       ),
                     ),
                   if (sources.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
                         horizontal: SolSpace.lg,
                         vertical: SolSpace.md,
                       ),
                       child: Align(
                         alignment: Alignment.centerLeft,
-                        child: Text('Not connected to a library.'),
+                        child: Text('settingsNoLibraries'.tr()),
                       ),
                     ),
                   Padding(
@@ -201,14 +210,14 @@ class SettingsScreen extends ConsumerWidget {
                         onPressed: () =>
                             context.router.push(const SetupRoute()),
                         icon: const Icon(Symbols.add_rounded),
-                        label: const Text('Add library'),
+                        label: Text('settingsAddLibrary'.tr()),
                       ),
                     ),
                   ),
                 ],
               ),
             ),
-            const SectionLabel('Library'),
+            SectionLabel('settingsSectionLibrary'.tr()),
             IslandCard(
               margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
               child: Column(
@@ -218,11 +227,11 @@ class SettingsScreen extends ConsumerWidget {
                       horizontal: SolSpace.lg,
                     ),
                     leading: const Icon(Symbols.storage_rounded),
-                    title: const Text('On this device'),
+                    title: Text('settingsOnThisDevice'.tr()),
                     subtitle: Text(
                       switch (ref.watch(libraryStatsProvider).value) {
                         final stats? => _describeLibrary(stats),
-                        null => 'Songs, lyrics and plays are kept locally.',
+                        null => 'settingsOnThisDeviceSubtitleEmpty'.tr(),
                       },
                     ),
                   ),
@@ -231,10 +240,9 @@ class SettingsScreen extends ConsumerWidget {
                       horizontal: SolSpace.lg,
                     ),
                     leading: const Icon(Symbols.refresh_rounded),
-                    title: const Text('Refresh everything'),
-                    subtitle: const Text(
-                      'Reload albums, playlists and the random shelf from '
-                      'every library.',
+                    title: Text('settingsRefreshEverything'.tr()),
+                    subtitle: Text(
+                      'settingsRefreshEverythingSubtitle'.tr(),
                     ),
                     onTap: () {
                       ref.invalidate(recentAlbumsProvider);
@@ -245,28 +253,59 @@ class SettingsScreen extends ConsumerWidget {
                 ],
               ),
             ),
-            const SectionLabel('Lyrics'),
+            SectionLabel('settingsSectionLyrics'.tr()),
             IslandCard(
               margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: SolSpace.lg,
-                ),
-                leading: const Icon(Symbols.lyrics_rounded),
-                title: const Text('Stored lyrics'),
-                subtitle: Text(switch (ref.watch(storedLyricsProvider).value) {
-                  final count? =>
-                    '$count song${count == 1 ? '' : 's'} cached on this '
-                        'device. They show without asking the server again, '
-                        'and stay available offline.',
-                  null =>
-                    'Lyrics downloaded from the library and LRCLIB '
-                        'stay available offline.',
-                }),
-                trailing: TextButton(
-                  onPressed: () => _confirmClearLyrics(context, ref),
-                  child: const Text('Clear'),
-                ),
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: SolSpace.lg,
+                    ),
+                    value: ref.watch(lyricsPronunciationEnabledProvider),
+                    onChanged: (value) => ref
+                        .read(lyricsPronunciationEnabledProvider.notifier)
+                        .set(value),
+                    secondary: const Icon(Symbols.subtitles_rounded),
+                    title: Text('settingsPronunciation'.tr()),
+                    subtitle: Text(
+                      'settingsPronunciationSubtitle'.tr(),
+                    ),
+                  ),
+                  SwitchListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: SolSpace.lg,
+                    ),
+                    value: ref.watch(lyricsTranslationEnabledProvider),
+                    onChanged: (value) => ref
+                        .read(lyricsTranslationEnabledProvider.notifier)
+                        .set(value),
+                    secondary: const Icon(Symbols.translate_rounded),
+                    title: Text('settingsTranslation'.tr()),
+                    subtitle: Text(
+                      'settingsTranslationSubtitle'.tr(),
+                    ),
+                  ),
+                  ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: SolSpace.lg,
+                    ),
+                    leading: const Icon(Symbols.lyrics_rounded),
+                    title: Text('settingsStoredLyrics'.tr()),
+                    subtitle: Text(
+                      switch (ref.watch(storedLyricsProvider).value) {
+                        final count? => 'settingsStoredLyricsCached'.plural(
+                          count,
+                        ),
+                        null => 'settingsStoredLyricsNone'.tr(),
+                      },
+                    ),
+                    trailing: TextButton(
+                      onPressed: () => _confirmClearLyrics(context, ref),
+                      child: Text('commonClear'.tr()),
+                    ),
+                  ),
+                ],
               ),
             ),
 
@@ -278,8 +317,7 @@ class SettingsScreen extends ConsumerWidget {
                 SolSpace.xl,
               ),
               child: Text(
-                'GroovyBox streams from your own music servers. '
-                'Nothing is copied to this device.',
+                'settingsStreamsFooter'.tr(),
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                   height: 1.5,
@@ -300,21 +338,16 @@ class SettingsScreen extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Remove this library?'),
-        content: const Text(
-          'The server address and signed-in account are removed from this '
-          'device. Its songs stay in the local library with their lyrics and '
-          'play history, so adding the same server back keeps them. Your '
-          'music is untouched.',
-        ),
+        title: Text('settingsRemoveLibraryTitle'.tr()),
+        content: Text('settingsRemoveLibraryMessage'.tr()),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
+            child: Text('commonCancel'.tr()),
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Remove'),
+            child: Text('commonRemove'.tr()),
           ),
         ],
       ),
@@ -331,20 +364,16 @@ class SettingsScreen extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Clear stored lyrics?'),
-        content: const Text(
-          'Every downloaded lyric is removed from this device. They are '
-          'fetched again the next time each song plays, so nothing is lost — '
-          'only the offline copies.',
-        ),
+        title: Text('settingsClearLyricsTitle'.tr()),
+        content: Text('settingsClearLyricsMessage'.tr()),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
+            child: Text('commonCancel'.tr()),
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Clear'),
+            child: Text('commonClear'.tr()),
           ),
         ],
       ),
@@ -359,14 +388,13 @@ class SettingsScreen extends ConsumerWidget {
 /// of them only a removed server could play.
 String _describeLibrary(({int tracks, int orphaned}) stats) {
   if (stats.tracks == 0) {
-    return 'Songs are stored here as you browse, so their lyrics and play '
-        'history survive a server change.';
+    return 'settingsLibraryEmpty'.tr();
   }
-  final songs = '${stats.tracks} song${stats.tracks == 1 ? '' : 's'}';
   if (stats.orphaned == 0) {
-    return '$songs known on this device, every one still playable.';
+    return 'settingsLibraryKnown'.plural(stats.tracks);
   }
-  return '$songs known on this device, ${stats.orphaned} no longer served by '
-      'a connected library. Their lyrics and history are kept in case one is '
-      'added back.';
+  return 'settingsLibraryOrphaned'.plural(
+    stats.tracks,
+    args: ['${stats.tracks}', '${stats.orphaned}'],
+  );
 }

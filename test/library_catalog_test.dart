@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:groovy_box/data/local/library_database.dart';
@@ -5,6 +7,7 @@ import 'package:groovy_box/library/catalog.dart';
 import 'package:groovy_box/library/lyrics.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/track_identity.dart';
+import 'package:groovy_box/player/player.dart';
 
 ({LibraryDatabase db, LibraryCatalog catalog}) _open() {
   final db = LibraryDatabase(NativeDatabase.memory());
@@ -21,6 +24,7 @@ LibrarySong _song({
   String? albumId,
   String? artId,
   Duration duration = const Duration(seconds: 266),
+  String? mbid,
 }) => LibrarySong(
   sourceId: sourceId,
   id: id,
@@ -30,6 +34,7 @@ LibrarySong _song({
   albumId: albumId,
   artId: artId,
   duration: duration,
+  mbid: mbid,
 );
 
 void main() {
@@ -243,8 +248,186 @@ void main() {
 
     expect(key('Yellow'), key('YELLOW'));
     expect(key('Yellow (Live)'), key('Yellow'));
+    expect(key('Yellow - Live'), key('Yellow'));
+    expect(key('Yellow - 2021 Remaster'), key('Yellow'));
+    expect(key('Yellow - Remastered'), key('Yellow'));
     expect(key('Yellow', seconds: 267), key('Yellow'));
     expect(key('Yellow', artist: 'Coldplay'), isNot(key('Yellow')));
     expect(key('Yellow', seconds: 200), isNot(key('Yellow')));
+    expect(
+      key('Princess of China ft. Rihanna', artist: 'Coldplay'),
+      key('Princess of China', artist: 'Coldplay ft. Rihanna'),
+    );
+    expect(
+      key('Halo', artist: 'Beyoncé'),
+      key('Halo', artist: 'Beyonce'),
+    );
+  });
+
+  test('adopting tracks across duration bucket boundary matches canonical track', () async {
+    final (:db, :catalog) = _open();
+
+    // 199s is bucket 39 (199 ~/ 5), 201s is bucket 40 (201 ~/ 5)
+    final first = await catalog.adopt(
+      _song(sourceId: 'src1', id: 't1', duration: const Duration(seconds: 199)),
+    );
+    final second = await catalog.adopt(
+      _song(sourceId: 'src2', id: 't2', duration: const Duration(seconds: 201)),
+    );
+
+    expect(second, first, reason: '2-second difference across bucket boundary should match');
+    expect(await db.trackCount(), 1);
+    expect(await db.linksOf(first), hasLength(2));
+  });
+
+  test('playback state recognizes the same track from a different source as current', () {
+    final jellyfinSong = _song(
+      sourceId: 'jellyfin',
+      id: 'j1',
+      title: 'Yellow - Remastered',
+      artist: 'Coldplay',
+      duration: const Duration(seconds: 266),
+    );
+    final subsonicSong = _song(
+      sourceId: 'subsonic',
+      id: 's2',
+      title: 'Yellow',
+      artist: 'Coldplay',
+      duration: const Duration(seconds: 267),
+    );
+
+    final state = PlaybackState(
+      queue: [jellyfinSong],
+      currentIndex: 0,
+      playing: true,
+    );
+
+    expect(state.isCurrentSong(jellyfinSong), isTrue, reason: 'exact source match');
+    expect(state.isCurrentSong(subsonicSong), isTrue, reason: 'canonical match across sources');
+
+    final differentSong = _song(
+      sourceId: 'subsonic',
+      id: 's3',
+      title: 'Fix You',
+      artist: 'Coldplay',
+      duration: const Duration(seconds: 295),
+    );
+    expect(state.isCurrentSong(differentSong), isFalse);
+  });
+
+  test('sources with different titles but same MusicBrainz ID match canonical track', () async {
+    final (:db, :catalog) = _open();
+
+    const mbid = 'b10bbbfc-cf9e-42e0-be17-e2c3e1d52365';
+    final sourceA = await catalog.adopt(
+      _song(
+        sourceId: 'jellyfin',
+        id: 'jf-1',
+        title: 'Song One',
+        artist: 'Band A',
+        mbid: mbid,
+      ),
+    );
+
+    final sourceB = await catalog.adopt(
+      _song(
+        sourceId: 'subsonic',
+        id: 'sub-2',
+        title: 'Completely Different Title',
+        artist: 'Different Artist Tag',
+        mbid: mbid,
+      ),
+    );
+
+    expect(sourceB, sourceA, reason: 'MusicBrainz ID guarantees deterministic match');
+    expect(await db.trackCount(), 1);
+    expect(await db.linksOf(sourceA), hasLength(2));
+  });
+
+  test('LibrarySong toJson and fromJson preserve all metadata', () {
+    final song = _song(
+      sourceId: 'src-1',
+      id: 'item-99',
+      title: 'Bohemian Rhapsody',
+      artist: 'Queen',
+      album: 'A Night at the Opera',
+      albumId: 'alb-1',
+      artId: 'cover-1',
+      duration: const Duration(seconds: 354),
+      mbid: 'mbid-123',
+    );
+
+    final json = song.toJson();
+    final restored = LibrarySong.fromJson(json);
+
+    expect(restored.sourceId, song.sourceId);
+    expect(restored.id, song.id);
+    expect(restored.title, song.title);
+    expect(restored.artist, song.artist);
+    expect(restored.album, song.album);
+    expect(restored.albumId, song.albumId);
+    expect(restored.artId, song.artId);
+    expect(restored.duration, song.duration);
+    expect(restored.mbid, song.mbid);
+  });
+
+  test('playback session saves and restores from database', () async {
+    final (:db, :catalog) = _open();
+
+    expect(await catalog.loadPlaybackSession(), isNull);
+
+    final songs = [
+      _song(sourceId: 's1', id: 't1', title: 'Song 1'),
+      _song(sourceId: 's1', id: 't2', title: 'Song 2', duration: const Duration(seconds: 200)),
+    ];
+
+    await catalog.savePlaybackSession(
+      queueJson: jsonEncode([for (final s in songs) s.toJson()]),
+      currentIndex: 1,
+      positionMs: 45000,
+      durationMs: 200000,
+      shuffle: true,
+      repeatMode: 'all',
+    );
+
+    final session = await catalog.loadPlaybackSession();
+    expect(session, isNotNull);
+    expect(session!.currentIndex, 1);
+    expect(session.positionMs, 45000);
+    expect(session.durationMs, 200000);
+    expect(session.shuffle, isTrue);
+    expect(session.repeatMode, 'all');
+
+    // Overwriting the session
+    await catalog.savePlaybackSession(
+      queueJson: '[{"sourceId":"s1","id":"t1","title":"Song 1","durationMs":266000}]',
+      currentIndex: 0,
+      positionMs: 12000,
+      durationMs: 266000,
+      shuffle: false,
+      repeatMode: 'off',
+    );
+
+    final updated = await catalog.loadPlaybackSession();
+    expect(updated, isNotNull);
+    expect(updated!.currentIndex, 0);
+    expect(updated.positionMs, 12000);
+    expect(updated.shuffle, isFalse);
+    expect(updated.repeatMode, 'off');
+  });
+
+  test('randomTracks returns playable songs known to database', () async {
+    final (:db, :catalog) = _open();
+
+    await catalog.adopt(_song(sourceId: 's1', id: 'track-a', title: 'Alpha'));
+    await catalog.adopt(_song(sourceId: 's1', id: 'track-b', title: 'Beta'));
+    await catalog.adopt(_song(sourceId: 's2', id: 'track-c', title: 'Gamma'));
+
+    final random = await catalog.randomTracks(limit: 2);
+    expect(random, hasLength(2));
+    for (final song in random) {
+      expect(song.title, anyOf('Alpha', 'Beta', 'Gamma'));
+      expect(song.id, isNotEmpty);
+    }
   });
 }

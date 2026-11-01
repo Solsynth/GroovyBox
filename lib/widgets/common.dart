@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -269,7 +270,7 @@ class HeaderBackButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      tooltip: 'Back',
+      tooltip: 'commonBack'.tr(),
       onPressed: onPressed,
       icon: const Icon(Symbols.arrow_back_rounded),
     );
@@ -289,7 +290,9 @@ class RailToggleButton extends StatelessWidget {
     final rail = RailScope.maybeOf(context);
     if (rail == null || !rail.available) return const SizedBox.shrink();
     return IconButton(
-      tooltip: rail.expanded ? 'Collapse navigation' : 'Expand navigation',
+      tooltip: rail.expanded
+          ? 'commonNavCollapse'.tr()
+          : 'commonNavExpand'.tr(),
       onPressed: rail.toggle,
       icon: const Icon(Symbols.menu_rounded),
     );
@@ -310,7 +313,7 @@ class HeaderSettingsButton extends StatelessWidget {
     final rail = RailScope.maybeOf(context);
     if (rail != null && rail.available) return const SizedBox.shrink();
     return IconButton(
-      tooltip: 'Settings',
+      tooltip: 'tabSettings'.tr(),
       onPressed: onPressed,
       icon: const Icon(Symbols.settings),
     );
@@ -464,9 +467,14 @@ class TrackRow extends StatelessWidget {
 
 /// Turns any thrown value into a line the UI can show.
 ///
-/// Server failures carry their own message; anything else is reported without
+/// Server failures carry their own message, and a key when the app diagnosed
+/// the failure itself: the key is resolved against the current locale here, so
+/// adapters stay free of UI concerns. Anything else is reported without
 /// claiming more than we know.
 String describeServerError(Object error) {
-  if (error is LibraryException) return error.message;
-  return 'The library did not answer. Check the connection and try again.';
+  if (error is LibraryException) {
+    final key = error.messageKey;
+    return key == null ? error.message : key.tr(args: error.messageArgs);
+  }
+  return 'commonLibraryUnreachable'.tr();
 }

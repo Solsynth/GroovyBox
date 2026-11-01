@@ -5,11 +5,12 @@ import 'package:groovy_box/library/source.dart';
 
 /// A source that answers `recentlyAdded` and throws everywhere else.
 class _FakeSource extends LibrarySource {
-  _FakeSource(this.id, this._albums, {this.failure});
+  _FakeSource(this.id, this._albums, {this.failure, this.songs = const []});
 
   @override
   final String id;
   final List<LibraryAlbum> _albums;
+  final List<LibrarySong> songs;
   final Object? failure;
 
   @override
@@ -24,6 +25,12 @@ class _FakeSource extends LibrarySource {
   Future<List<LibraryAlbum>> recentlyAdded({int limit = 50}) async {
     if (failure != null) throw failure!;
     return _albums;
+  }
+
+  @override
+  Future<List<LibrarySong>> search(String query, {int limit = 40}) async {
+    if (failure != null) throw failure!;
+    return songs;
   }
 
   @override
@@ -82,5 +89,39 @@ void main() {
 
   test('an empty source list returns nothing and never fails', () async {
     expect(await LibraryAggregator(const []).recentlyAdded(), isEmpty);
+  });
+
+  test('search deduplicates identical songs across sources', () async {
+    final songFromA = LibrarySong(
+      sourceId: 'a',
+      id: 's1',
+      title: 'Song Alpha - Remastered',
+      artist: 'Band Beta',
+      duration: const Duration(seconds: 200),
+    );
+    final songFromB = LibrarySong(
+      sourceId: 'b',
+      id: 's2',
+      title: 'Song Alpha',
+      artist: 'Band Beta',
+      duration: const Duration(seconds: 200),
+    );
+    final songUnique = LibrarySong(
+      sourceId: 'b',
+      id: 's3',
+      title: 'Song Gamma',
+      artist: 'Band Beta',
+      duration: const Duration(seconds: 180),
+    );
+
+    final aggregator = LibraryAggregator([
+      _FakeSource('a', const [], songs: [songFromA]),
+      _FakeSource('b', const [], songs: [songFromB, songUnique]),
+    ]);
+
+    final results = await aggregator.search('Song');
+    expect(results, hasLength(2));
+    expect(results.first.id, 's1');
+    expect(results.last.id, 's3');
   });
 }

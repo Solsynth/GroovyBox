@@ -106,6 +106,7 @@ class _FakeJellyfin {
         'IndexNumber': 2,
         'ParentIndexNumber': 1,
         'Genres': ['Electronic'],
+        'ProviderIds': {'MusicBrainzTrack': 'mbid-123'},
       },
     ];
   }
@@ -216,6 +217,7 @@ void main() {
     expect(song.artist, 'An Artist');
     expect(song.albumId, 'al1');
     expect(song.artId, 'al1');
+    expect(song.mbid, 'mbid-123');
 
     final uri = source.streamUri(song).toString();
     expect(uri, contains('/Audio/s1/stream'));

@@ -21,6 +21,9 @@ enum AppThemeMode { system, light, dark }
 const _kThemeModeKey = 'app_theme_mode';
 const _kVolumeKey = 'app_volume';
 const _kGlassEffectsKey = 'app_glass_effects';
+const _kLyricsPronunciationKey = 'app_lyrics_pronunciation';
+const _kLyricsTranslationKey = 'app_lyrics_translation';
+const _kInfinitePlaybackKey = 'app_infinite_playback';
 
 @Riverpod(keepAlive: true)
 class ThemeModeNotifier extends Notifier<AppThemeMode> {
@@ -68,5 +71,55 @@ class GlassEffectsEnabled extends Notifier<bool> {
     await ref
         .read(sharedPreferencesProvider)
         .setBool(_kGlassEffectsKey, enabled);
+  }
+}
+
+/// Whether lyrics show pronunciation (Romanization / Romaji / Pinyin / Hangul).
+/// On by default.
+@Riverpod(keepAlive: true)
+class LyricsPronunciationEnabled extends Notifier<bool> {
+  @override
+  bool build() =>
+      ref.watch(sharedPreferencesProvider).getBool(_kLyricsPronunciationKey) ??
+      true;
+
+  Future<void> set(bool enabled) async {
+    state = enabled;
+    await ref
+        .read(sharedPreferencesProvider)
+        .setBool(_kLyricsPronunciationKey, enabled);
+  }
+}
+
+/// Whether lyrics show translations. On by default.
+@Riverpod(keepAlive: true)
+class LyricsTranslationEnabled extends Notifier<bool> {
+  @override
+  bool build() =>
+      ref.watch(sharedPreferencesProvider).getBool(_kLyricsTranslationKey) ??
+      true;
+
+  Future<void> set(bool enabled) async {
+    state = enabled;
+    await ref
+        .read(sharedPreferencesProvider)
+        .setBool(_kLyricsTranslationKey, enabled);
+  }
+}
+
+/// Whether playback continues indefinitely with random library tracks when
+/// the queue reaches the end. On by default.
+@Riverpod(keepAlive: true)
+class InfinitePlaybackEnabled extends Notifier<bool> {
+  @override
+  bool build() =>
+      ref.watch(sharedPreferencesProvider).getBool(_kInfinitePlaybackKey) ??
+      true;
+
+  Future<void> set(bool enabled) async {
+    state = enabled;
+    await ref
+        .read(sharedPreferencesProvider)
+        .setBool(_kInfinitePlaybackKey, enabled);
   }
 }

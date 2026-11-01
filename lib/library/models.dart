@@ -30,6 +30,9 @@ class LibrarySong {
   final int? year;
   final String? genre;
 
+  /// Optional MusicBrainz Recording ID or Track ID.
+  final String? mbid;
+
   const LibrarySong({
     required this.sourceId,
     required this.id,
@@ -44,9 +47,44 @@ class LibrarySong {
     this.discNumber,
     this.year,
     this.genre,
+    this.mbid,
   });
 
   String get subtitle => artist ?? album ?? 'Unknown artist';
+
+  Map<String, dynamic> toJson() => {
+    'sourceId': sourceId,
+    'id': id,
+    'title': title,
+    if (artist != null) 'artist': artist,
+    if (artistId != null) 'artistId': artistId,
+    if (album != null) 'album': album,
+    if (albumId != null) 'albumId': albumId,
+    if (artId != null) 'artId': artId,
+    'durationMs': duration.inMilliseconds,
+    if (track != null) 'track': track,
+    if (discNumber != null) 'discNumber': discNumber,
+    if (year != null) 'year': year,
+    if (genre != null) 'genre': genre,
+    if (mbid != null) 'mbid': mbid,
+  };
+
+  factory LibrarySong.fromJson(Map<String, dynamic> json) => LibrarySong(
+    sourceId: json['sourceId'] as String,
+    id: json['id'] as String,
+    title: json['title'] as String,
+    artist: json['artist'] as String?,
+    artistId: json['artistId'] as String?,
+    album: json['album'] as String?,
+    albumId: json['albumId'] as String?,
+    artId: json['artId'] as String?,
+    duration: Duration(milliseconds: (json['durationMs'] as num?)?.toInt() ?? 0),
+    track: (json['track'] as num?)?.toInt(),
+    discNumber: (json['discNumber'] as num?)?.toInt(),
+    year: (json['year'] as num?)?.toInt(),
+    genre: json['genre'] as String?,
+    mbid: json['mbid'] as String?,
+  );
 }
 
 class LibraryAlbum {
@@ -114,11 +152,23 @@ class LibraryPlaylist {
 /// Thrown when a library answers with an error or returns an unusable
 /// response. Carries the server's own code and message so the UI can show what
 /// the server said instead of a generic failure. Adapters throw only this.
+///
+/// [messageKey] names the translation for failures the app diagnoses itself
+/// (a timeout, a bad certificate); [message] stays as the English text and the
+/// fallback for servers that send their own words. The UI resolves the key, so
+/// adapters never need the current locale.
 class LibraryException implements Exception {
   final int? code;
   final String message;
+  final String? messageKey;
+  final List<String> messageArgs;
 
-  const LibraryException(this.message, {this.code});
+  const LibraryException(
+    this.message, {
+    this.code,
+    this.messageKey,
+    this.messageArgs = const [],
+  });
 
   @override
   String toString() => code == null ? message : 'Library error $code: $message';

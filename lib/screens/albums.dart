@@ -1,4 +1,5 @@
 import 'package:auto_route/auto_route.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/router.gr.dart';
 import 'package:groovy_box/core/theme.dart';
@@ -37,15 +38,14 @@ class AlbumsScreen extends ConsumerWidget {
           children: [
             PageHeader(
               showRailToggle: true,
-              title: 'Albums',
+              title: 'albumsTitle'.tr(),
               subtitle: albums.maybeWhen(
-                data: (list) =>
-                    '${list.length} ${list.length == 1 ? 'album' : 'albums'}',
+                data: (list) => 'albumsCount'.plural(list.length),
                 orElse: () => null,
               ),
               actions: [
                 IconButton(
-                  tooltip: 'Refresh',
+                  tooltip: 'commonRefresh'.tr(),
                   onPressed: () =>
                       ref.read(recentAlbumsProvider.notifier).refresh(),
                   icon: const Icon(Symbols.refresh_rounded),
@@ -56,12 +56,10 @@ class AlbumsScreen extends ConsumerWidget {
             Expanded(
               child: albums.when(
                 data: (list) => list.isEmpty
-                    ? const EmptyState(
+                    ? EmptyState(
                         icon: Symbols.album,
-                        title: 'No albums yet',
-                        message:
-                            'Anything with an album tag in your libraries '
-                            'shows up here.',
+                        title: 'albumsEmptyTitle'.tr(),
+                        message: 'albumsEmptyMessage'.tr(),
                       )
                     : GridView.builder(
                         padding: EdgeInsets.fromLTRB(
@@ -95,13 +93,13 @@ class AlbumsScreen extends ConsumerWidget {
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (error, _) => EmptyState(
                   icon: Symbols.error_rounded,
-                  title: 'Could not load albums',
+                  title: 'albumsLoadError'.tr(),
                   message: describeServerError(error),
                   iconColor: Theme.of(context).colorScheme.error,
                   action: FilledButton(
                     onPressed: () =>
                         ref.read(recentAlbumsProvider.notifier).refresh(),
-                    child: const Text('Try again'),
+                    child: Text('commonTryAgain'.tr()),
                   ),
                 ),
               ),
@@ -187,7 +185,7 @@ class _AlbumCardState extends State<AlbumCard> {
                 ),
               ),
               Text(
-                widget.album.artist ?? 'Unknown artist',
+                widget.album.artist ?? 'commonUnknownArtist'.tr(),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodySmall?.copyWith(
@@ -235,25 +233,32 @@ class AlbumDetailScreen extends ConsumerWidget {
         child: Column(
           children: [
             PageHeader(
-              title: albumName ?? 'Album',
+              title: albumName ?? 'albumsDetailTitleFallback'.tr(),
               leading: HeaderBackButton(
                 onPressed: () => context.router.maybePop(),
               ),
               subtitle: songs.maybeWhen(
                 data: (list) => list.isEmpty
                     ? null
-                    : '${list.length} tracks  ·  '
-                          '${formatDuration(list.fold(Duration.zero, (sum, s) => sum + s.duration))}',
+                    : 'albumsTrackCount'.plural(
+                        list.length,
+                        args: [
+                          '${list.length}',
+                          formatDuration(
+                            list.fold(Duration.zero, (sum, s) => sum + s.duration),
+                          ),
+                        ],
+                      ),
                 orElse: () => null,
               ),
             ),
             Expanded(
               child: songs.when(
                 data: (list) => list.isEmpty
-                    ? const EmptyState(
+                    ? EmptyState(
                         icon: Symbols.album,
-                        title: 'This album is empty',
-                        message: 'The server returned no tracks for it.',
+                        title: 'albumsDetailEmptyTitle'.tr(),
+                        message: 'albumsDetailEmptyMessage'.tr(),
                       )
                     : ListView.builder(
                         padding: EdgeInsets.only(bottom: bottomInset),
@@ -271,7 +276,7 @@ class AlbumDetailScreen extends ConsumerWidget {
                           final song = list[index - 1];
                           return TrackRow(
                             title: song.title,
-                            subtitle: song.artist ?? 'Unknown artist',
+                            subtitle: song.artist ?? 'commonUnknownArtist'.tr(),
                             selected: playback.isCurrentSong(song),
                             trailing: formatDuration(song.duration),
                             artwork: LibraryArtwork(
@@ -289,14 +294,14 @@ class AlbumDetailScreen extends ConsumerWidget {
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (error, _) => EmptyState(
                   icon: Symbols.error_rounded,
-                  title: 'Could not load this album',
+                  title: 'albumsDetailLoadError'.tr(),
                   message: describeServerError(error),
                   iconColor: Theme.of(context).colorScheme.error,
                   action: FilledButton(
                     onPressed: () => ref.invalidate(
                       albumSongsProvider((sourceId: sourceId, id: albumId)),
                     ),
-                    child: const Text('Try again'),
+                    child: Text('commonTryAgain'.tr()),
                   ),
                 ),
               ),
@@ -337,7 +342,7 @@ class _AlbumHero extends StatelessWidget {
         ),
         const SizedBox(height: SolSpace.xxs),
         Text(
-          '${first.artist ?? 'Unknown artist'}'
+          '${first.artist ?? 'commonUnknownArtist'.tr()}'
           '${first.year == null ? '' : '  ·  ${first.year}'}',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -349,7 +354,7 @@ class _AlbumHero extends StatelessWidget {
         FilledButton.icon(
           onPressed: onPlay,
           icon: const Icon(Symbols.play_arrow_rounded),
-          label: const Text('Play album'),
+          label: Text('albumsPlayAlbum'.tr()),
         ),
       ],
     );

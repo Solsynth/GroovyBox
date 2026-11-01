@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:audio_service/audio_service.dart';
+import 'package:groovy_box/core/app.dart';
+import 'package:groovy_box/library/catalog.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
+import 'package:groovy_box/library/track_identity.dart';
 import 'package:groovy_box/player/session.dart';
 import 'package:groovy_box/player/play_tracker.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -53,10 +57,14 @@ class PlaybackState {
           ? null
           : queue[currentIndex!];
 
-  /// Whether [song] is the one playing. Ids are only unique per source, so
-  /// both halves of the identity have to match.
-  bool isCurrentSong(LibrarySong song) =>
-      current?.sourceId == song.sourceId && current?.id == song.id;
+  /// Whether [song] is the one playing. Either the exact source item matches,
+  /// or their canonical identities match (same song across different sources).
+  bool isCurrentSong(LibrarySong song) {
+    final now = current;
+    if (now == null) return false;
+    if (now.sourceId == song.sourceId && now.id == song.id) return true;
+    return TrackIdentity.of(now).matches(TrackIdentity.of(song));
+  }
 
   bool get hasNext =>
       queue.isNotEmpty && (currentIndex ?? -1) < queue.length - 1;
@@ -100,6 +108,9 @@ class PlaybackState {
 /// The transport. Created lazily and kept alive for the whole session.
 @Riverpod(keepAlive: true)
 class Playback extends Notifier<PlaybackState> implements AudioTransport {
+  Playback([Player? player]) : _injectedPlayer = player;
+
+  final Player? _injectedPlayer;
   late final Player _player;
   final List<StreamSubscription<dynamic>> _subscriptions = [];
 
@@ -118,11 +129,24 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
 
   /// Writes what the transport plays into the local library's history.
   late final PlayTracker _tracker;
+  LibraryCatalog? _catalog;
+  PlaybackState _lastState = const PlaybackState();
+
+  @override
+  set state(PlaybackState value) {
+    _lastState = value;
+    super.state = value;
+  }
+
+  Duration _lastSavedPosition = Duration.zero;
+  bool _hasOpenedCurrent = false;
+  bool _isFetchingInfinite = false;
 
   @override
   PlaybackState build() {
-    _player = Player();
-    _tracker = PlayTracker(ref.read(libraryCatalogProvider));
+    _player = _injectedPlayer ?? Player();
+    _catalog = ref.read(libraryCatalogProvider);
+    _tracker = PlayTracker(_catalog);
 
     // Hand the transport over before any subscription fires: a media button
     // that arrived while the app was starting has been waiting for one.
@@ -139,6 +163,11 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
         // Fire and forget: history is written at its own pace, and playback
         // must never wait on a transaction.
         _tracker.observe(position, duration: state.duration);
+        if ((position - _lastSavedPosition).abs() >=
+            const Duration(seconds: 5)) {
+          _lastSavedPosition = position;
+          _saveSession();
+        }
       }),
       _player.stream.duration.listen((duration) {
         state = state.copyWith(duration: duration);
@@ -156,12 +185,15 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       for (final subscription in _subscriptions) {
         subscription.cancel();
       }
+      _saveSession();
       // Whatever the play reached is written before the database goes away,
       // so closing the window mid-track still leaves an honest row.
       _tracker.flush();
       if (identical(_session?.transport, this)) _session!.transport = null;
       _player.dispose();
     });
+
+    _restoreSession();
 
     return const PlaybackState();
   }
@@ -172,6 +204,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
 
     _order = List.of(songs);
     _sourceOrder = List.of(songs);
+    _hasOpenedCurrent = true;
     state = state.copyWith(
       queue: _order,
       currentIndex: startIndex,
@@ -179,29 +212,46 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       position: Duration.zero,
     );
 
-
     await _openCurrent();
     _publish();
+    _saveSession();
   }
 
   @override
   Future<void> play() async {
-    await _player.play();
+    if (!_hasOpenedCurrent && state.current != null) {
+      final resumePosition = state.position;
+      await _openCurrent();
+      if (resumePosition > Duration.zero) {
+        await _player.seek(resumePosition);
+      }
+    } else {
+      await _player.play();
+    }
     _publish();
+    _saveSession();
   }
 
   @override
   Future<void> pause() async {
     await _player.pause();
     _publish();
+    _saveSession();
   }
 
   Future<void> togglePlayPause() => state.playing ? pause() : play();
 
   @override
   Future<void> seek(Duration position) async {
+    if (!_hasOpenedCurrent && state.current != null) {
+      state = state.copyWith(position: position);
+      _publish();
+      _saveSession();
+      return;
+    }
     await _player.seek(position);
     _publish();
+    _saveSession();
   }
 
   @override
@@ -210,6 +260,13 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       if (state.repeatMode == PlaybackRepeatMode.all && state.queue.isNotEmpty) {
         await _jumpTo(0);
         _publish();
+      } else if (state.repeatMode == PlaybackRepeatMode.off &&
+          ref.read(infinitePlaybackEnabledProvider)) {
+        final appended = await _appendInfiniteTracks();
+        if (appended) {
+          await _jumpTo((state.currentIndex ?? 0) + 1);
+          _publish();
+        }
       }
       return;
     }
@@ -225,6 +282,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
         !state.hasPrevious) {
       await _player.seek(Duration.zero);
       _publish();
+      _saveSession();
       return;
     }
     final target = (state.currentIndex ?? 0) - 1;
@@ -238,6 +296,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     if (current == null || shuffle == state.shuffle) {
       state = state.copyWith(shuffle: shuffle);
       _publish();
+      _saveSession();
       return;
     }
 
@@ -262,6 +321,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       duration: current.duration,
     );
     _publish();
+    _saveSession();
   }
 
   Future<void> cycleRepeatMode() async {
@@ -273,6 +333,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       PlaybackRepeatMode.single => PlaylistMode.single,
     });
     _publish();
+    _saveSession();
   }
 
   /// The system's repeat switch is the same three-state cycle the button
@@ -293,6 +354,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       });
     }
     _publish();
+    _saveSession();
   }
 
   @override
@@ -309,18 +371,89 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
   Future<void> setVolume(double volume) => _player.setVolume(volume);
 
   /// Opens the song at the current index through its library's stream
-  /// endpoint. A source that has since been removed leaves the transport
-  /// stopped rather than throwing.
+  /// endpoint, falling back to alternate sources that host the same canonical
+  /// track if the primary source is missing or offline.
   Future<void> _openCurrent() async {
     final song = state.current;
     if (song == null) return;
+    _hasOpenedCurrent = true;
     // The play is recorded before the stream opens, so a source that has been
     // removed still leaves the row that says the user tried to play it.
     await _tracker.start(song);
-    final source = ref.read(librarySourceByIdProvider)[song.sourceId];
+    final sources = ref.read(librarySourceByIdProvider);
+    var source = sources[song.sourceId];
+    var toPlay = song;
+
+    if (source == null) {
+      final catalog = ref.read(libraryCatalogProvider);
+      if (catalog != null) {
+        final links = await catalog.linksOfSong(song);
+        for (final link in links) {
+          final altSource = sources[link.sourceId];
+          if (altSource != null) {
+            source = altSource;
+            toPlay = LibrarySong(
+              sourceId: link.sourceId,
+              id: link.externalId,
+              title: song.title,
+              artist: song.artist,
+              album: song.album,
+              albumId: link.albumExternalId,
+              artistId: link.artistExternalId,
+              artId: link.artId,
+              duration: song.duration,
+              track: song.track,
+              discNumber: song.discNumber,
+              year: song.year,
+              genre: song.genre,
+              mbid: song.mbid,
+            );
+            break;
+          }
+        }
+      }
+    }
+
     if (source == null) return;
 
-    await _player.open(Media(source.streamUri(song).toString()));
+    try {
+      await _player.open(Media(source.streamUri(toPlay).toString()));
+    } catch (_) {
+      final catalog = ref.read(libraryCatalogProvider);
+      if (catalog != null) {
+        final links = await catalog.linksOfSong(song);
+        for (final link in links) {
+          if (link.sourceId == toPlay.sourceId && link.externalId == toPlay.id) {
+            continue;
+          }
+          final altSource = sources[link.sourceId];
+          if (altSource != null) {
+            final fallbackSong = LibrarySong(
+              sourceId: link.sourceId,
+              id: link.externalId,
+              title: song.title,
+              artist: song.artist,
+              album: song.album,
+              albumId: link.albumExternalId,
+              artistId: link.artistExternalId,
+              artId: link.artId,
+              duration: song.duration,
+              track: song.track,
+              discNumber: song.discNumber,
+              year: song.year,
+              genre: song.genre,
+              mbid: song.mbid,
+            );
+            try {
+              await _player.open(Media(altSource.streamUri(fallbackSong).toString()));
+              return;
+            } catch (_) {
+              // Try next link
+            }
+          }
+        }
+      }
+    }
   }
 
   Future<void> _jumpTo(int index) async {
@@ -330,6 +463,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       duration: _order[index].duration,
     );
     await _openCurrent();
+    _saveSession();
   }
 
   /// Tells the media session what is playing and where.
@@ -379,9 +513,134 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
         if (state.hasNext) {
           await next();
         } else {
+          if (ref.read(infinitePlaybackEnabledProvider)) {
+            final appended = await _appendInfiniteTracks();
+            if (appended) {
+              await next();
+              return;
+            }
+          }
           state = state.copyWith(playing: false, position: Duration.zero);
           _publish();
+          _saveSession();
         }
+    }
+  }
+
+  Future<void> _restoreSession() async {
+    final catalog = _catalog;
+    if (catalog == null) return;
+    try {
+      final session = await catalog.loadPlaybackSession();
+      if (session == null) return;
+      if (state.queue.isNotEmpty) return;
+
+      final decoded = jsonDecode(session.queueJson);
+      if (decoded is! List) return;
+      final songs = [
+        for (final item in decoded)
+          if (item is Map<String, dynamic>)
+            LibrarySong.fromJson(item)
+          else if (item is Map)
+            LibrarySong.fromJson(item.cast<String, dynamic>()),
+      ];
+      if (songs.isEmpty) return;
+
+      final index = (session.currentIndex != null &&
+              session.currentIndex! >= 0 &&
+              session.currentIndex! < songs.length)
+          ? session.currentIndex!
+          : 0;
+
+      final repeat = switch (session.repeatMode) {
+        'all' => PlaybackRepeatMode.all,
+        'single' => PlaybackRepeatMode.single,
+        _ => PlaybackRepeatMode.off,
+      };
+
+      _order = List.of(songs);
+      _sourceOrder = List.of(songs);
+      _hasOpenedCurrent = false;
+
+      final restoredPosition = Duration(milliseconds: session.positionMs);
+      final restoredDuration = Duration(milliseconds: session.durationMs);
+      final songDuration = songs[index].duration;
+      final duration =
+          restoredDuration > Duration.zero ? restoredDuration : songDuration;
+
+      state = state.copyWith(
+        queue: _order,
+        currentIndex: index,
+        position: restoredPosition,
+        duration: duration,
+        shuffle: session.shuffle,
+        repeatMode: repeat,
+        playing: false,
+      );
+      _publish();
+    } catch (_) {
+      // Corrupted or unreadable session data: start empty
+    }
+  }
+
+  void _saveSession() {
+    final catalog = _catalog;
+    final current = _lastState;
+    if (catalog == null || current.queue.isEmpty) return;
+    try {
+      final queueJson = jsonEncode([
+        for (final song in current.queue) song.toJson(),
+      ]);
+      catalog.savePlaybackSession(
+        queueJson: queueJson,
+        currentIndex: current.currentIndex,
+        positionMs: current.position.inMilliseconds,
+        durationMs: current.duration.inMilliseconds,
+        shuffle: current.shuffle,
+        repeatMode: current.repeatMode.name,
+      );
+    } catch (_) {
+      // Session saving must never disrupt playback
+    }
+  }
+
+  Future<bool> _appendInfiniteTracks() async {
+    if (_isFetchingInfinite) return false;
+    _isFetchingInfinite = true;
+    try {
+      final aggregator = ref.read(libraryAggregatorProvider);
+      List<LibrarySong> songs = [];
+      try {
+        songs = await aggregator.randomSongs(size: 30);
+      } catch (_) {
+        // Network or source failure: try local database fallback
+      }
+      if (songs.isEmpty) {
+        final catalog = _catalog;
+        if (catalog != null) {
+          songs = await catalog.randomTracks(limit: 30);
+        }
+      }
+      if (songs.isEmpty) return false;
+
+      final existingKeys = {
+        for (final song in state.queue) '${song.sourceId}:${song.id}',
+      };
+      final candidates = songs
+          .where((s) => !existingKeys.contains('${s.sourceId}:${s.id}'))
+          .toList();
+      final toAdd = candidates.isNotEmpty ? candidates : songs;
+      if (toAdd.isEmpty) return false;
+
+      _order = [..._order, ...toAdd];
+      _sourceOrder = [..._sourceOrder, ...toAdd];
+      state = state.copyWith(queue: _order);
+      _saveSession();
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      _isFetchingInfinite = false;
     }
   }
 }

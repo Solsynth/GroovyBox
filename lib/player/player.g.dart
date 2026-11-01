@@ -77,7 +77,7 @@ final class PlaybackProvider
   }
 }
 
-String _$playbackHash() => r'de5826f64ef1f79f422e44542e4e5c27b1e3a833';
+String _$playbackHash() => r'8c644ff4b14568bbfc045a2bac19a07d73451e11';
 
 /// Owns the one [Player] for the app's lifetime and translates its streams
 /// into [PlaybackState].

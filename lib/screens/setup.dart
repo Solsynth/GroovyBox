@@ -1,4 +1,5 @@
 import 'package:auto_route/auto_route.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/services.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/models.dart';
@@ -52,156 +53,203 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     super.dispose();
   }
 
+  void _leave() {
+    final router = StackRouterScope.of(context)?.controller;
+    if (router != null && router.canPop()) {
+      router.maybePop();
+    } else {
+      Navigator.maybePop(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final router = StackRouterScope.of(context)?.controller;
+    final canLeave = _hadSources ||
+        (router?.canPop() ?? false) ||
+        (Navigator.maybeOf(context)?.canPop() ?? false);
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(SolSpace.xxxl),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 460),
-            child: IslandCard(
-              cornerRadius: SolRadius.xxl,
-              padding: const EdgeInsets.all(SolSpace.xxl),
-              emphasised: true,
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Icon(
-                      Symbols.graphic_eq_rounded,
-                      size: 44,
-                      color: colorScheme.primary,
-                    ),
-                    const SizedBox(height: SolSpace.lg),
-                    Text(
-                      'Connect a library',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
+    return PopScope(
+      canPop: canLeave && !_busy,
+      child: CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.escape): () {
+            if (canLeave && !_busy) _leave();
+          },
+        },
+        child: FocusScope(
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            body: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(SolSpace.xxxl),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 460),
+                  child: IslandCard(
+                    cornerRadius: SolRadius.xxl,
+                    padding: const EdgeInsets.all(SolSpace.xxl),
+                    emphasised: true,
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (canLeave) ...[
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: IconButton(
+                                icon: const Icon(Symbols.arrow_back_rounded),
+                                tooltip: 'commonBack'.tr(),
+                                onPressed: _busy ? null : _leave,
+                              ),
+                            ),
+                            const SizedBox(height: SolSpace.xs),
+                          ],
+                          Icon(
+                            Symbols.graphic_eq_rounded,
+                            size: 44,
+                            color: colorScheme.primary,
+                          ),
+                          const SizedBox(height: SolSpace.lg),
+                          Text(
+                            'setupTitle'.tr(),
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: SolSpace.sm),
+                          Text(
+                            'setupSubtitle'.tr(),
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              height: 1.5,
+                            ),
+                          ),
+                          const SizedBox(height: SolSpace.xl),
+                          SegmentedButton<LibraryKind>(
+                            segments: [
+                              for (final kind in LibraryKind.values)
+                                ButtonSegment(
+                                  value: kind,
+                                  label: Text(kind.label),
+                                ),
+                            ],
+                            selected: {_kind},
+                            onSelectionChanged: (selection) => setState(() {
+                              _kind = selection.first;
+                              _error = null;
+                              _success = null;
+                            }),
+                          ),
+                          const SizedBox(height: SolSpace.lg),
+                          TextFormField(
+                            controller: _serverController,
+                            autofocus: true,
+                            keyboardType: TextInputType.url,
+                            textInputAction: TextInputAction.next,
+                            decoration: InputDecoration(
+                              labelText: 'setupServerAddress'.tr(),
+                              hintText: _kind.addressHint,
+                              prefixIcon: const Icon(Symbols.dns_rounded),
+                            ),
+                            validator: (value) {
+                              final text = value?.trim() ?? '';
+                              if (text.isEmpty) {
+                                return 'setupServerAddressError'.tr();
+                              }
+                              final uri = Uri.tryParse(
+                                text.contains('://') ? text : 'https://$text',
+                              );
+                              if (uri == null || uri.host.isEmpty) {
+                                return 'setupServerAddressInvalid'.tr();
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: SolSpace.md),
+                          TextFormField(
+                            controller: _usernameController,
+                            textInputAction: TextInputAction.next,
+                            decoration: InputDecoration(
+                              labelText: 'setupUsername'.tr(),
+                              prefixIcon: const Icon(Symbols.person_rounded),
+                            ),
+                            validator: (value) =>
+                                (value?.trim().isEmpty ?? true)
+                                ? 'setupUsernameError'.tr()
+                                : null,
+                          ),
+                          const SizedBox(height: SolSpace.md),
+                          TextFormField(
+                            controller: _passwordController,
+                            obscureText: true,
+                            onFieldSubmitted: (_) => _connect(),
+                            decoration: InputDecoration(
+                              labelText: 'setupPassword'.tr(),
+                              prefixIcon: const Icon(Symbols.lock_rounded),
+                            ),
+                            validator: (value) => (value?.isEmpty ?? true)
+                                ? 'setupPasswordError'.tr()
+                                : null,
+                          ),
+                          if (_error != null) ...[
+                            const SizedBox(height: SolSpace.lg),
+                            _Banner(
+                              icon: Symbols.error_rounded,
+                              message: _error!,
+                              color: colorScheme.error,
+                            ),
+                          ],
+                          if (_success != null) ...[
+                            const SizedBox(height: SolSpace.lg),
+                            _Banner(
+                              icon: Symbols.check_circle_rounded,
+                              message: _success!,
+                              color: colorScheme.primary,
+                            ),
+                          ],
+                          const SizedBox(height: SolSpace.xl),
+                          FilledButton(
+                            onPressed: _busy ? null : _connect,
+                            child: _busy
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Text('setupConnect'.tr()),
+                          ),
+                          const SizedBox(height: SolSpace.sm),
+                          TextButton(
+                            onPressed: _busy ? null : _test,
+                            child: Text('setupTestConnection'.tr()),
+                          ),
+                          if (canLeave) ...[
+                            const SizedBox(height: SolSpace.xs),
+                            TextButton(
+                              onPressed: _busy ? null : _leave,
+                              child: Text('commonCancel'.tr()),
+                            ),
+                          ],
+                          const SizedBox(height: SolSpace.lg),
+                          Text(
+                            'setupSecurityNote'.tr(),
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: SolSpace.sm),
-                    Text(
-                      'GroovyBox streams from your own music servers. '
-                      'Nothing is copied to this device.',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        height: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: SolSpace.xl),
-                    SegmentedButton<LibraryKind>(
-                      segments: [
-                        for (final kind in LibraryKind.values)
-                          ButtonSegment(value: kind, label: Text(kind.label)),
-                      ],
-                      selected: {_kind},
-                      onSelectionChanged: (selection) => setState(() {
-                        _kind = selection.first;
-                        _error = null;
-                        _success = null;
-                      }),
-                    ),
-                    const SizedBox(height: SolSpace.lg),
-                    TextFormField(
-                      controller: _serverController,
-                      autofocus: true,
-                      keyboardType: TextInputType.url,
-                      textInputAction: TextInputAction.next,
-                      decoration: InputDecoration(
-                        labelText: 'Server address',
-                        hintText: _kind.addressHint,
-                        prefixIcon: const Icon(Symbols.dns_rounded),
-                      ),
-                      validator: (value) {
-                        final text = value?.trim() ?? '';
-                        if (text.isEmpty) {
-                          return 'Enter your server address';
-                        }
-                        final uri = Uri.tryParse(
-                          text.contains('://') ? text : 'https://$text',
-                        );
-                        if (uri == null || uri.host.isEmpty) {
-                          return 'That does not look like a server address';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: SolSpace.md),
-                    TextFormField(
-                      controller: _usernameController,
-                      textInputAction: TextInputAction.next,
-                      decoration: const InputDecoration(
-                        labelText: 'Username',
-                        prefixIcon: Icon(Symbols.person_rounded),
-                      ),
-                      validator: (value) => (value?.trim().isEmpty ?? true)
-                          ? 'Enter your username'
-                          : null,
-                    ),
-                    const SizedBox(height: SolSpace.md),
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: true,
-                      onFieldSubmitted: (_) => _connect(),
-                      decoration: const InputDecoration(
-                        labelText: 'Password',
-                        prefixIcon: Icon(Symbols.lock_rounded),
-                      ),
-                      validator: (value) => (value?.isEmpty ?? true)
-                          ? 'Enter your password'
-                          : null,
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: SolSpace.lg),
-                      _Banner(
-                        icon: Symbols.error_rounded,
-                        message: _error!,
-                        color: colorScheme.error,
-                      ),
-                    ],
-                    if (_success != null) ...[
-                      const SizedBox(height: SolSpace.lg),
-                      _Banner(
-                        icon: Symbols.check_circle_rounded,
-                        message: _success!,
-                        color: colorScheme.primary,
-                      ),
-                    ],
-                    const SizedBox(height: SolSpace.xl),
-                    FilledButton(
-                      onPressed: _busy ? null : _connect,
-                      child: _busy
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Connect'),
-                    ),
-                    const SizedBox(height: SolSpace.sm),
-                    TextButton(
-                      onPressed: _busy ? null : _test,
-                      child: const Text('Test connection'),
-                    ),
-                    const SizedBox(height: SolSpace.lg),
-                    Text(
-                      'Your password is never stored: only a token, the way each '
-                      'API expects clients to authenticate.',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        height: 1.5,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -233,10 +281,10 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     try {
       final config = await _connectConfig();
       if (config == null || !mounted) return;
-      setState(() => _success = 'Server responded. You can connect now.');
+      setState(() => _success = 'setupTestSuccess'.tr());
     } on LibraryException catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.message);
+      setState(() => _error = describeServerError(error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -256,10 +304,10 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       // With a library already connected this was pushed from settings, so
       // the user needs to go back; on first run the app swaps the shell in
       // underneath and popping would leave nothing.
-      if (mounted && _hadSources) context.router.maybePop();
+      if (mounted && _hadSources) _leave();
     } on LibraryException catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.message);
+      setState(() => _error = describeServerError(error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

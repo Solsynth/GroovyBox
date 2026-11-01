@@ -31,6 +31,7 @@ class LyricsEnricher {
   static bool _initialized = false;
   static const _kanaKit = KanaKit();
 
+  static final _latinRegex = RegExp(r'[a-zA-Z]');
   static final _kanaRegex = RegExp(r'[\u3040-\u309F\u30A0-\u30FF]');
   static final _hangulRegex = RegExp(r'[\uAC00-\uD7AF\u1100-\u11FF]');
   static final _hanziRegex = RegExp(r'[\u4E00-\u9FFF]');
@@ -55,21 +56,36 @@ class LyricsEnricher {
     var kana = 0;
     var hangul = 0;
     var hanzi = 0;
+    var latin = 0;
     for (final line in lines) {
-      final t = line.text;
+      final t = line.text.trim();
+      if (t.isEmpty) continue;
       if (_kanaRegex.hasMatch(t)) kana++;
       if (_hangulRegex.hasMatch(t)) hangul++;
       if (_hanziRegex.hasMatch(t)) hanzi++;
+      if (_latinRegex.hasMatch(t)) latin++;
     }
-    if (kana > 0) return 'ja';
+
+    if (kana > 0 && kana >= hanzi) return 'ja';
     if (hangul > 0) return 'ko';
-    if (hanzi > 0) return 'zh';
+    if (hanzi > 0 && hanzi >= latin) return 'zh';
     return 'en';
   }
 
-  /// Whether the lyrics have CJK text or missing translations that can be enriched.
+  /// Whether the lyrics have CJK text, missing translations, or duplicate layers
+  /// that can be cleaned and enriched.
   bool needsEnrichment(Lyrics lyrics) {
     if (lyrics.isEmpty) return false;
+    // Check if there are dirty duplicate layers from earlier stores that need cleaning
+    final hasDuplicates = lyrics.lines.any((l) {
+      final t = l.text.trim().toLowerCase();
+      if (t.isEmpty) return false;
+      final p = l.pronunciation?.trim().toLowerCase();
+      final x = l.translation?.trim().toLowerCase();
+      return (p != null && p == t) || (x != null && (x == t || x == p));
+    });
+    if (hasDuplicates) return true;
+
     final hasCjkLines = lyrics.lines.any((l) => hasCjk(l.text));
     final needsPronunciation =
         hasCjkLines && lyrics.lines.any((l) => l.pronunciation == null && hasCjk(l.text));
@@ -184,40 +200,81 @@ class LyricsEnricher {
     final songLang = lyrics.language ?? detectLanguage(lyrics.lines);
     final targetLang = targetLanguage ?? resolveTargetLanguage();
 
-    // 1. Romanization for CJK lines
+    // 1. Romanization for CJK lines only (and clean up any identical pronunciations)
     final withPronunciation = <LyricLine>[];
     for (final line in lyrics.lines) {
-      if (line.pronunciation != null || !hasCjk(line.text)) {
+      final trimmed = line.text.trim();
+      final lowerText = trimmed.toLowerCase();
+
+      // Clean existing pronunciation if it matches text exactly
+      if (line.pronunciation != null) {
+        if (line.pronunciation!.trim().toLowerCase() == lowerText) {
+          withPronunciation.add(
+            LyricLine(line.at, line.text, translation: line.translation),
+          );
+        } else {
+          withPronunciation.add(line);
+        }
+        continue;
+      }
+
+      // Do not romanize if line has no CJK characters (e.g. English lines)
+      if (!hasCjk(trimmed)) {
+        withPronunciation.add(line);
+        continue;
+      }
+
+      final roman = romanizeLine(trimmed, songLang);
+      final romanClean = roman.trim();
+      if (romanClean.isEmpty || romanClean.toLowerCase() == lowerText) {
         withPronunciation.add(line);
       } else {
-        final roman = romanizeLine(line.text, songLang);
         withPronunciation.add(
-          line.withLayers(
-            pronunciation: roman.trim().isEmpty ? null : roman.trim(),
-          ),
+          line.withLayers(pronunciation: romanClean),
         );
       }
     }
 
-    // 2. Translation (if target language is different from song language)
-    final shouldTranslate = !songLang.startsWith(targetLang.split('-').first);
-    if (!shouldTranslate) {
-      return Lyrics(
-        lines: withPronunciation,
-        synced: lyrics.synced,
-        language: songLang,
-      );
-    }
-
-    // Identify non-empty lines that still need a translation
+    // 2. Translation
+    // Identify lines that actually need a translation
     final indicesToTranslate = <int>[];
     final textsToTranslate = <String>[];
     for (var i = 0; i < withPronunciation.length; i++) {
       final line = withPronunciation[i];
-      if (line.translation == null && line.text.trim().isNotEmpty) {
-        indicesToTranslate.add(i);
-        textsToTranslate.add(line.text);
+      final trimmed = line.text.trim();
+      final lowerText = trimmed.toLowerCase();
+      if (trimmed.isEmpty) continue;
+
+      if (line.translation != null) {
+        // Strip if duplicate of text or pronunciation
+        final transLower = line.translation!.trim().toLowerCase();
+        if (transLower == lowerText ||
+            transLower == line.pronunciation?.trim().toLowerCase()) {
+          withPronunciation[i] = LyricLine(
+            line.at,
+            line.text,
+            pronunciation: line.pronunciation,
+          );
+        } else {
+          continue;
+        }
       }
+
+      // If line is already in target language, do not translate:
+      // - English line and target is English:
+      if (targetLang.startsWith('en') && !hasCjk(trimmed)) {
+        continue;
+      }
+      // - Chinese line and target is Chinese:
+      if (targetLang.startsWith('zh') &&
+          _hanziRegex.hasMatch(trimmed) &&
+          !_kanaRegex.hasMatch(trimmed) &&
+          !_hangulRegex.hasMatch(trimmed)) {
+        continue;
+      }
+
+      indicesToTranslate.add(i);
+      textsToTranslate.add(trimmed);
     }
 
     if (textsToTranslate.isEmpty) {
@@ -233,9 +290,15 @@ class LyricsEnricher {
     final finalLines = List<LyricLine>.from(withPronunciation);
     for (var i = 0; i < indicesToTranslate.length; i++) {
       final index = indicesToTranslate[i];
-      final translated = translations[i];
-      if (translated != null && translated.isNotEmpty) {
-        finalLines[index] = finalLines[index].withLayers(translation: translated);
+      final original = textsToTranslate[i].trim().toLowerCase();
+      final translated = translations[i]?.trim();
+      if (translated != null &&
+          translated.isNotEmpty &&
+          translated.toLowerCase() != original &&
+          translated.toLowerCase() !=
+              finalLines[index].pronunciation?.trim().toLowerCase()) {
+        finalLines[index] =
+            finalLines[index].withLayers(translation: translated);
       }
     }
 

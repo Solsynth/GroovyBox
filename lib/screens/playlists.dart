@@ -1,4 +1,5 @@
 import 'package:auto_route/auto_route.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/router.gr.dart';
 import 'package:groovy_box/core/theme.dart';
@@ -36,16 +37,16 @@ class PlaylistsScreen extends ConsumerWidget {
           children: [
             PageHeader(
               showRailToggle: true,
-              title: 'Playlists',
+              title: 'playlistsTitle'.tr(),
               subtitle: playlists.maybeWhen(
                 data: (list) => list.isEmpty
-                    ? 'No playlists in your libraries'
-                    : '${list.length} ${list.length == 1 ? 'playlist' : 'playlists'}',
+                    ? 'playlistsEmptyHeader'.tr()
+                    : 'playlistsCount'.plural(list.length),
                 orElse: () => null,
               ),
               actions: [
                 IconButton(
-                  tooltip: 'Refresh',
+                  tooltip: 'commonRefresh'.tr(),
                   onPressed: () =>
                       ref.read(playlistsProvider.notifier).refresh(),
                   icon: const Icon(Symbols.refresh_rounded),
@@ -56,12 +57,10 @@ class PlaylistsScreen extends ConsumerWidget {
             Expanded(
               child: playlists.when(
                 data: (list) => list.isEmpty
-                    ? const EmptyState(
+                    ? EmptyState(
                         icon: Symbols.playlist_play,
-                        title: 'No playlists yet',
-                        message:
-                            'Playlists you make in Navidrome or Jellyfin appear '
-                            'here automatically.',
+                        title: 'playlistsEmptyTitle'.tr(),
+                        message: 'playlistsEmptyMessage'.tr(),
                       )
                     : ListView.builder(
                         padding: EdgeInsets.only(bottom: bottomInset),
@@ -79,7 +78,9 @@ class PlaylistsScreen extends ConsumerWidget {
                             title: playlist.name,
                             subtitle: [
                               if (playlist.songCount != null)
-                                '${playlist.songCount} tracks',
+                                'playlistsTrackCount'.plural(
+                                  playlist.songCount!,
+                                ),
                               formatDuration(playlist.duration),
                               if (playlist.owner != null) playlist.owner!,
                             ].join('  ·  '),
@@ -96,13 +97,13 @@ class PlaylistsScreen extends ConsumerWidget {
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (error, _) => EmptyState(
                   icon: Symbols.error_rounded,
-                  title: 'Could not load playlists',
+                  title: 'playlistsLoadError'.tr(),
                   message: describeServerError(error),
                   iconColor: Theme.of(context).colorScheme.error,
                   action: FilledButton(
                     onPressed: () =>
                         ref.read(playlistsProvider.notifier).refresh(),
-                    child: const Text('Try again'),
+                    child: Text('commonTryAgain'.tr()),
                   ),
                 ),
               ),
@@ -213,15 +214,22 @@ class PlaylistDetailScreen extends ConsumerWidget {
         child: Column(
           children: [
             PageHeader(
-              title: playlistName ?? 'Playlist',
+              title: playlistName ?? 'playlistsDetailTitleFallback'.tr(),
               leading: HeaderBackButton(
                 onPressed: () => context.router.maybePop(),
               ),
               subtitle: songs.maybeWhen(
                 data: (list) => list.isEmpty
-                    ? 'Empty playlist'
-                    : '${list.length} tracks  ·  '
-                          '${formatDuration(list.fold(Duration.zero, (sum, s) => sum + s.duration))}',
+                    ? 'playlistsDetailEmptyHeader'.tr()
+                    : 'playlistsDetailTrackCount'.plural(
+                        list.length,
+                        args: [
+                          '${list.length}',
+                          formatDuration(
+                            list.fold(Duration.zero, (sum, s) => sum + s.duration),
+                          ),
+                        ],
+                      ),
                 orElse: () => null,
               ),
               actions: [
@@ -231,7 +239,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
                         .read(playbackProvider.notifier)
                         .playQueue(songs.value!),
                     icon: const Icon(Symbols.play_arrow_rounded, size: 20),
-                    label: const Text('Play'),
+                    label: Text('commonPlay'.tr()),
                   ),
                 const SizedBox(width: SolSpace.sm),
               ],
@@ -239,10 +247,10 @@ class PlaylistDetailScreen extends ConsumerWidget {
             Expanded(
               child: songs.when(
                 data: (list) => list.isEmpty
-                    ? const EmptyState(
+                    ? EmptyState(
                         icon: Symbols.playlist_play,
-                        title: 'This playlist is empty',
-                        message: 'Add tracks from your server, then refresh.',
+                        title: 'playlistsDetailEmptyTitle'.tr(),
+                        message: 'playlistsDetailEmptyMessage'.tr(),
                       )
                     : ListView.builder(
                         padding: EdgeInsets.only(bottom: bottomInset),
@@ -269,7 +277,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (error, _) => EmptyState(
                   icon: Symbols.error_rounded,
-                  title: 'Could not load this playlist',
+                  title: 'playlistsDetailLoadError'.tr(),
                   message: describeServerError(error),
                   iconColor: Theme.of(context).colorScheme.error,
                   action: FilledButton(
@@ -279,7 +287,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
                         id: playlistId,
                       )),
                     ),
-                    child: const Text('Try again'),
+                    child: Text('commonTryAgain'.tr()),
                   ),
                 ),
               ),
