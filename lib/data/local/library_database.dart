@@ -114,6 +114,12 @@ class LyricsEntries extends Table {
   IntColumn get remoteId => integer().nullable()();
   DateTimeColumn get fetchedAt => dateTime()();
 
+  /// The language the translation layer was generated in, or null when the
+  /// lyrics carry no generated translation. Translations are cached *with*
+  /// their target language so a row written for English is not served to a
+  /// reader who has since switched to Chinese.
+  TextColumn get translationLanguage => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {trackId};
 }
@@ -170,8 +176,18 @@ class LibraryDatabase extends _$LibraryDatabase {
   /// database on the web.
   static const databaseName = 'library';
 
+  /// The absolute path to the SQLite file on native platforms, or null if on web.
+  static Future<String?> databaseFilePath() async {
+    try {
+      final directory = await getApplicationSupportDirectory();
+      return p.join(directory.path, '$databaseName.sqlite');
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -184,6 +200,9 @@ class LibraryDatabase extends _$LibraryDatabase {
       }
       if (from < 3) {
         await m.createTable(playbackSessions);
+      }
+      if (from < 4) {
+        await m.addColumn(lyricsEntries, lyricsEntries.translationLanguage);
       }
     },
     beforeOpen: (details) async {
@@ -259,41 +278,7 @@ class LibraryDatabase extends _$LibraryDatabase {
         return existing;
       }
 
-      // Tier 1: Deterministic MusicBrainz ID match
-      TrackRow? matched;
-      if (identity.mbid != null && identity.mbid!.isNotEmpty) {
-        matched = await (select(tracks)
-              ..where((track) => track.mbid.equals(identity.mbid!)))
-            .getSingleOrNull();
-      }
-
-      // Tier 2: Fingerprint and continuous duration window match
-      matched ??= await (select(tracks)
-            ..where((track) => track.fingerprint.equals(identity.fingerprint)))
-          .getSingleOrNull();
-
-      if (matched == null && identity.duration > Duration.zero) {
-        final base = identity.baseFingerprint;
-        final candidates = await (select(tracks)
-              ..where(
-                (track) =>
-                    track.fingerprint.equals(base) |
-                    track.fingerprint.like('$base|%'),
-              ))
-            .get();
-        for (final candidate in candidates) {
-          final candidateIdentity = TrackIdentity(
-            title: candidate.title,
-            artist: candidate.artist,
-            duration: Duration(milliseconds: candidate.durationMs),
-            mbid: candidate.mbid,
-          );
-          if (identity.matches(candidateIdentity)) {
-            matched = candidate;
-            break;
-          }
-        }
-      }
+      final matched = await findMatchingTrack(identity);
       final trackId = matched?.id ?? await into(tracks).insert(companion);
       if (matched != null) await _updateTrack(matched.id, companion);
 
@@ -590,5 +575,400 @@ class LibraryDatabase extends _$LibraryDatabase {
           mbid: row.readNullable<String>('mbid'),
         ),
     ];
+  }
+
+  /// Finds an existing canonical track matching [identity], using:
+  /// 1) MusicBrainz ID (if present)
+  /// 2) Exact fingerprint
+  /// 3) Fingerprint base prefix with continuous duration window
+  Future<TrackRow?> findMatchingTrack(TrackIdentity identity) async {
+    if (identity.mbid != null && identity.mbid!.isNotEmpty) {
+      final matched = await (select(tracks)
+            ..where((track) => track.mbid.equals(identity.mbid!)))
+          .getSingleOrNull();
+      if (matched != null) return matched;
+    }
+
+    final byFp = await (select(tracks)
+          ..where((track) => track.fingerprint.equals(identity.fingerprint)))
+        .getSingleOrNull();
+    if (byFp != null) return byFp;
+
+    if (identity.duration > Duration.zero) {
+      final base = identity.baseFingerprint;
+      final candidates = await (select(tracks)
+            ..where(
+              (track) =>
+                  track.fingerprint.equals(base) |
+                  track.fingerprint.like('$base|%'),
+            ))
+          .get();
+      for (final candidate in candidates) {
+        final candidateIdentity = TrackIdentity(
+          title: candidate.title,
+          artist: candidate.artist,
+          duration: Duration(milliseconds: candidate.durationMs),
+          mbid: candidate.mbid,
+        );
+        if (identity.matches(candidateIdentity)) {
+          return candidate;
+        }
+      }
+    }
+    return null;
+  }
+
+  /// Exports all tracks, links, cached lyrics, and play events as a JSON-encodable map.
+  Future<Map<String, dynamic>> exportData() async {
+    final allTracks = await select(tracks).get();
+    final allLinks = await select(trackLinks).get();
+    final allLyrics = await select(lyricsEntries).get();
+    final allPlays = await select(playEvents).get();
+
+    return {
+      'tracks': [
+        for (final t in allTracks)
+          {
+            'id': t.id,
+            'title': t.title,
+            'artist': t.artist,
+            'albumArtist': t.albumArtist,
+            'album': t.album,
+            'genre': t.genre,
+            'year': t.year,
+            'trackNumber': t.trackNumber,
+            'discNumber': t.discNumber,
+            'durationMs': t.durationMs,
+            'mbid': t.mbid,
+            'fingerprint': t.fingerprint,
+            'createdAt': t.createdAt.toIso8601String(),
+            'updatedAt': t.updatedAt.toIso8601String(),
+          },
+      ],
+      'links': [
+        for (final l in allLinks)
+          {
+            'trackId': l.trackId,
+            'sourceId': l.sourceId,
+            'externalId': l.externalId,
+            'albumExternalId': l.albumExternalId,
+            'artistExternalId': l.artistExternalId,
+            'artId': l.artId,
+            'linkedAt': l.linkedAt.toIso8601String(),
+            'lastSeenAt': l.lastSeenAt.toIso8601String(),
+          },
+      ],
+      'lyrics': [
+        for (final e in allLyrics)
+          {
+            'trackId': e.trackId,
+            'lines': e.lines,
+            'synced': e.synced,
+            'language': e.language,
+            'origin': e.origin,
+            'remoteId': e.remoteId,
+            'fetchedAt': e.fetchedAt.toIso8601String(),
+            'translationLanguage': e.translationLanguage,
+          },
+      ],
+      'plays': [
+        for (final p in allPlays)
+          {
+            'trackId': p.trackId,
+            'sourceId': p.sourceId,
+            'startedAt': p.startedAt.toIso8601String(),
+            'listenedMs': p.listenedMs,
+            'positionMs': p.positionMs,
+            'completed': p.completed,
+          },
+      ],
+    };
+  }
+
+  /// Imports and merges tracks, links, lyrics, and play events from an export map.
+  /// Track IDs are dynamically re-mapped to avoid foreign key collisions.
+  /// Returns counts of merged/inserted entities.
+  Future<({int tracks, int links, int lyrics, int plays})> importData(
+    Map<String, dynamic> data,
+  ) {
+    return transaction(() async {
+      final idMap = <int, int>{};
+      var tracksCount = 0;
+      var linksCount = 0;
+      var lyricsCount = 0;
+      var playsCount = 0;
+
+      final rawTracks = data['tracks'];
+      if (rawTracks is List) {
+        for (final raw in rawTracks) {
+          if (raw is! Map) continue;
+          final oldId = raw['id'];
+          if (oldId is! int) continue;
+
+          final title = raw['title'] as String? ?? 'Unknown';
+          final artist = raw['artist'] as String?;
+          final albumArtist = raw['albumArtist'] as String?;
+          final album = raw['album'] as String?;
+          final genre = raw['genre'] as String?;
+          final year = raw['year'] as int?;
+          final trackNumber = raw['trackNumber'] as int?;
+          final discNumber = raw['discNumber'] as int?;
+          final durationMs = (raw['durationMs'] as num?)?.toInt() ?? 0;
+          final mbid = raw['mbid'] as String?;
+          final fingerprint = raw['fingerprint'] as String? ??
+              trackFingerprint(
+                title: title,
+                artist: artist,
+                duration: Duration(milliseconds: durationMs),
+              );
+          final createdAtStr = raw['createdAt'] as String?;
+          final createdAt = createdAtStr != null
+              ? DateTime.tryParse(createdAtStr) ?? DateTime.now()
+              : DateTime.now();
+          final updatedAtStr = raw['updatedAt'] as String?;
+          final updatedAt = updatedAtStr != null
+              ? DateTime.tryParse(updatedAtStr) ?? DateTime.now()
+              : DateTime.now();
+
+          final identity = TrackIdentity(
+            title: title,
+            artist: artist,
+            albumArtist: albumArtist,
+            album: album,
+            genre: genre,
+            year: year,
+            trackNumber: trackNumber,
+            discNumber: discNumber,
+            duration: Duration(milliseconds: durationMs),
+            mbid: mbid,
+          );
+
+          final matched = await findMatchingTrack(identity);
+          if (matched != null) {
+            idMap[oldId] = matched.id;
+            final needsUpdate = (matched.album == null && album != null) ||
+                (matched.albumArtist == null && albumArtist != null) ||
+                (matched.genre == null && genre != null) ||
+                (matched.year == null && year != null) ||
+                (matched.trackNumber == null && trackNumber != null) ||
+                (matched.discNumber == null && discNumber != null) ||
+                (matched.mbid == null && mbid != null);
+            if (needsUpdate) {
+              await (update(tracks)..where((t) => t.id.equals(matched.id)))
+                  .write(
+                TracksCompanion(
+                  albumArtist: Value.absentIfNull(albumArtist),
+                  album: Value.absentIfNull(album),
+                  genre: Value.absentIfNull(genre),
+                  year: Value.absentIfNull(year),
+                  trackNumber: Value.absentIfNull(trackNumber),
+                  discNumber: Value.absentIfNull(discNumber),
+                  mbid: Value.absentIfNull(mbid),
+                  updatedAt: Value(DateTime.now()),
+                ),
+              );
+            }
+          } else {
+            final newId = await into(tracks).insert(
+              TracksCompanion.insert(
+                title: title,
+                fingerprint: fingerprint,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                artist: Value.absentIfNull(artist),
+                albumArtist: Value.absentIfNull(albumArtist),
+                album: Value.absentIfNull(album),
+                genre: Value.absentIfNull(genre),
+                year: Value.absentIfNull(year),
+                trackNumber: Value.absentIfNull(trackNumber),
+                discNumber: Value.absentIfNull(discNumber),
+                durationMs: Value(durationMs),
+                mbid: Value.absentIfNull(mbid),
+              ),
+            );
+            idMap[oldId] = newId;
+            tracksCount++;
+          }
+        }
+      }
+
+      final rawLinks = data['links'];
+      if (rawLinks is List) {
+        for (final raw in rawLinks) {
+          if (raw is! Map) continue;
+          final oldTrackId = raw['trackId'];
+          if (oldTrackId is! int) continue;
+          final localTrackId = idMap[oldTrackId];
+          if (localTrackId == null) continue;
+
+          final sourceId = raw['sourceId'] as String?;
+          final externalId = raw['externalId'] as String?;
+          if (sourceId == null || externalId == null) continue;
+
+          final albumExternalId = raw['albumExternalId'] as String?;
+          final artistExternalId = raw['artistExternalId'] as String?;
+          final artId = raw['artId'] as String?;
+          final linkedAtStr = raw['linkedAt'] as String?;
+          final linkedAt = linkedAtStr != null
+              ? DateTime.tryParse(linkedAtStr) ?? DateTime.now()
+              : DateTime.now();
+          final lastSeenAtStr = raw['lastSeenAt'] as String?;
+          final lastSeenAt = lastSeenAtStr != null
+              ? DateTime.tryParse(lastSeenAtStr) ?? linkedAt
+              : linkedAt;
+
+          await into(trackLinks).insert(
+            TrackLinksCompanion.insert(
+              trackId: localTrackId,
+              sourceId: sourceId,
+              externalId: externalId,
+              albumExternalId: Value.absentIfNull(albumExternalId),
+              artistExternalId: Value.absentIfNull(artistExternalId),
+              artId: Value.absentIfNull(artId),
+              linkedAt: linkedAt,
+              lastSeenAt: lastSeenAt,
+            ),
+            onConflict: DoUpdate(
+              (old) => TrackLinksCompanion(
+                trackId: Value(localTrackId),
+                lastSeenAt: Value(lastSeenAt),
+                albumExternalId: Value.absentIfNull(albumExternalId),
+                artistExternalId: Value.absentIfNull(artistExternalId),
+                artId: Value.absentIfNull(artId),
+              ),
+              target: [trackLinks.sourceId, trackLinks.externalId],
+            ),
+          );
+          linksCount++;
+        }
+      }
+
+      final rawLyrics = data['lyrics'];
+      if (rawLyrics is List) {
+        for (final raw in rawLyrics) {
+          if (raw is! Map) continue;
+          final oldTrackId = raw['trackId'];
+          if (oldTrackId is! int) continue;
+          final localTrackId = idMap[oldTrackId];
+          if (localTrackId == null) continue;
+
+          final lines = raw['lines'];
+          if (lines is! String) continue;
+          final synced = raw['synced'] == true;
+          final language = raw['language'] as String?;
+          final origin = raw['origin'] as String? ?? 'library';
+          final remoteId = raw['remoteId'] as int?;
+          final fetchedAtStr = raw['fetchedAt'] as String?;
+          final fetchedAt = fetchedAtStr != null
+              ? DateTime.tryParse(fetchedAtStr) ?? DateTime.now()
+              : DateTime.now();
+          final translationLanguage = raw['translationLanguage'] as String?;
+
+          final existing = await (select(lyricsEntries)
+                ..where((e) => e.trackId.equals(localTrackId)))
+              .getSingleOrNull();
+
+          if (existing == null) {
+            await into(lyricsEntries).insert(
+              LyricsEntriesCompanion.insert(
+                trackId: Value(localTrackId),
+                lines: lines,
+                synced: synced,
+                language: Value.absentIfNull(language),
+                origin: origin,
+                remoteId: Value.absentIfNull(remoteId),
+                fetchedAt: fetchedAt,
+                translationLanguage: Value.absentIfNull(translationLanguage),
+              ),
+            );
+            lyricsCount++;
+          } else {
+            final existingOrigin = existing.origin;
+            final incomingHasLyrics = origin != 'none';
+            if (existingOrigin == 'none' && incomingHasLyrics) {
+              await (update(lyricsEntries)
+                    ..where((e) => e.trackId.equals(localTrackId)))
+                  .write(
+                LyricsEntriesCompanion(
+                  lines: Value(lines),
+                  synced: Value(synced),
+                  language: Value(language),
+                  origin: Value(origin),
+                  remoteId: Value(remoteId),
+                  fetchedAt: Value(fetchedAt),
+                  translationLanguage: Value(translationLanguage),
+                ),
+              );
+              lyricsCount++;
+            } else if (fetchedAt.isAfter(existing.fetchedAt) && incomingHasLyrics) {
+              await (update(lyricsEntries)
+                    ..where((e) => e.trackId.equals(localTrackId)))
+                  .write(
+                LyricsEntriesCompanion(
+                  lines: Value(lines),
+                  synced: Value(synced),
+                  language: Value(language),
+                  origin: Value(origin),
+                  remoteId: Value(remoteId),
+                  fetchedAt: Value(fetchedAt),
+                  translationLanguage: Value(translationLanguage),
+                ),
+              );
+              lyricsCount++;
+            }
+          }
+        }
+      }
+
+      final rawPlays = data['plays'];
+      if (rawPlays is List) {
+        for (final raw in rawPlays) {
+          if (raw is! Map) continue;
+          final oldTrackId = raw['trackId'];
+          if (oldTrackId is! int) continue;
+          final localTrackId = idMap[oldTrackId];
+          if (localTrackId == null) continue;
+
+          final sourceId = raw['sourceId'] as String? ?? '';
+          final startedAtStr = raw['startedAt'] as String?;
+          if (startedAtStr == null) continue;
+          final startedAt = DateTime.tryParse(startedAtStr);
+          if (startedAt == null) continue;
+
+          final listenedMs = (raw['listenedMs'] as num?)?.toInt() ?? 0;
+          final positionMs = (raw['positionMs'] as num?)?.toInt() ?? 0;
+          final completed = raw['completed'] == true;
+
+          final existing = await (select(playEvents)
+                ..where(
+                  (p) =>
+                      p.trackId.equals(localTrackId) &
+                      p.startedAt.equals(startedAt),
+                ))
+              .getSingleOrNull();
+
+          if (existing == null) {
+            await into(playEvents).insert(
+              PlayEventsCompanion.insert(
+                trackId: localTrackId,
+                sourceId: sourceId,
+                startedAt: startedAt,
+                listenedMs: Value(listenedMs),
+                positionMs: Value(positionMs),
+                completed: Value(completed),
+              ),
+            );
+            playsCount++;
+          }
+        }
+      }
+
+      return (
+        tracks: tracksCount,
+        links: linksCount,
+        lyrics: lyricsCount,
+        plays: playsCount,
+      );
+    });
   }
 }

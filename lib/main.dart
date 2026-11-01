@@ -1,7 +1,9 @@
 import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
+import 'package:audio_session/audio_session.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/core/glass.dart';
@@ -38,6 +40,17 @@ Future<void> main() async {
   // libmpv has to be loaded before the first Player is constructed, which the
   // shell does as soon as it mounts.
   MediaKit.ensureInitialized();
+
+  // Configure mobile/desktop audio session category for background playback
+  // and system media focus before initializing AudioService.
+  if (!kIsWeb && (Platform.isAndroid || Platform.isIOS || Platform.isMacOS)) {
+    try {
+      final session = await AudioSession.instance;
+      await session.configure(const AudioSessionConfiguration.music());
+    } catch (error) {
+      debugPrint('[AudioSession] Pre-init error: $error');
+    }
+  }
 
   // The media session comes up before the UI: the platform can hand a media
   // button to an app whose first frame has not been drawn, and the handler has
@@ -154,25 +167,33 @@ class GroovyBoxApp extends ConsumerWidget {
       ],
       routerConfig: router.config(),
       builder: (context, child) {
-        // The frame is created once, around the routed content: pages never
-        // draw window chrome themselves.
-        // The glass scope wraps the frame, so every floating surface shares
-        // one setting and one paint switch.
-        return GlassEffects(
-          enabled: glass,
-          child: DesktopWindowFrame(
-            isDesktopPlatform: DesktopWindowFrame.isPlatformDesktop,
-            title: const _WindowTitle(),
-            // Closing the window ends the app; a music player sitting in the
-            // tray with no UI would be a surprise, not a convenience.
-            onClose: () => windowManager.close(),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                connected
-                    ? (child ?? const SizedBox.shrink())
-                    : const SetupScreen(),
-              ],
+        // A plain `'key'.tr()` reads easy_localization's process-wide
+        // singleton and does not subscribe to it, so a locale change only
+        // rebuilds the widgets above the delegate. Keying the frame on the
+        // locale remounts the routed content, which is what makes every
+        // label on screen change language the moment the user picks one.
+        return KeyedSubtree(
+          key: ValueKey(context.locale),
+          // The frame is created once, around the routed content: pages never
+          // draw window chrome themselves.
+          // The glass scope wraps the frame, so every floating surface shares
+          // one setting and one paint switch.
+          child: GlassEffects(
+            enabled: glass,
+            child: DesktopWindowFrame(
+              isDesktopPlatform: DesktopWindowFrame.isPlatformDesktop,
+              title: const _WindowTitle(),
+              // Closing the window ends the app; a music player sitting in the
+              // tray with no UI would be a surprise, not a convenience.
+              onClose: () => windowManager.close(),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  connected
+                      ? (child ?? const SizedBox.shrink())
+                      : const SetupScreen(),
+                ],
+              ),
             ),
           ),
         );

@@ -148,15 +148,30 @@ class LyricsEnricher {
     }
   }
 
-  /// Determines the best target translation language based on user locale.
-  static String resolveTargetLanguage() {
+  /// The language lyric translations should be written in, for an app running
+  /// in [languageCode].
+  ///
+  /// The *app's* locale, not the device's: a user who set the interface to
+  /// Chinese on an English machine wants Chinese translations.
+  static String targetLanguageFor(String? languageCode) {
+    final code = (languageCode ?? '').toLowerCase();
+    if (code.startsWith('zh')) return 'zh-CN';
+    return code.isEmpty ? 'en' : code;
+  }
+
+  /// Best guess when no caller supplied a language: the device locale.
+  ///
+  /// Lyrics resolve on a background provider with no widget tree, so the
+  /// app's own choice is only known when a caller passes it in.
+  static String resolveTargetLanguage() =>
+      targetLanguageFor(_deviceLanguageCode());
+
+  static String _deviceLanguageCode() {
     try {
-      final code =
-          ui.PlatformDispatcher.instance.locale.languageCode.toLowerCase();
-      if (code.startsWith('zh')) return 'zh-CN';
-      if (code.isNotEmpty) return code;
-    } catch (_) {}
-    return 'en';
+      return ui.PlatformDispatcher.instance.locale.languageCode.toLowerCase();
+    } catch (_) {
+      return '';
+    }
   }
 
   /// Translates a batch of lyric lines via Google Translate Web endpoint.
@@ -282,6 +297,9 @@ class LyricsEnricher {
         lines: withPronunciation,
         synced: lyrics.synced,
         language: songLang,
+        // Nothing was generated, so the row keeps whatever translation it
+        // already had (and the language that one was written in).
+        translationLanguage: lyrics.translationLanguage,
       );
     }
 
@@ -306,6 +324,11 @@ class LyricsEnricher {
       lines: finalLines,
       synced: lyrics.synced,
       language: songLang,
+      // Only claim the language when a translation actually landed: a batch
+      // that failed should not mark the row as translated.
+      translationLanguage: finalLines.any((line) => line.translation != null)
+          ? targetLang
+          : lyrics.translationLanguage,
     );
   }
 }

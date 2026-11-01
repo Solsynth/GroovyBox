@@ -73,14 +73,29 @@ class LyricsResolver {
   ///
   /// [refresh] skips the stored answer for this call: the user asked for the
   /// lyrics again because the ones on screen are wrong.
-  Future<Lyrics> resolve(LyricsRequest song, {bool refresh = false}) async {
+  Future<Lyrics> resolve(
+    LyricsRequest song, {
+    bool refresh = false,
+    String? languageCode,
+  }) async {
     final trackId = await _trackId(song);
+    // One target for the whole call, so the cache key it reads with is the
+    // same one it writes with.
+    final targetLang = languageCode == null
+        ? null
+        : LyricsEnricher.targetLanguageFor(languageCode);
 
     if (!refresh && trackId != null) {
-      final stored = await store?.read(trackId);
+      final stored = await store?.read(
+        trackId,
+        translationLanguage: targetLang,
+      );
       if (stored != null) {
         if (enricher.needsEnrichment(stored.lyrics)) {
-          final enriched = await enricher.enrich(stored.lyrics);
+          final enriched = await enricher.enrich(
+            stored.lyrics,
+            targetLanguage: targetLang,
+          );
           await store?.write(
             trackId,
             enriched,
@@ -105,7 +120,10 @@ class LyricsResolver {
 
     final library = await _fromLibrary(song);
     if (library != null && library.synced) {
-      final enriched = await enricher.enrich(library);
+      final enriched = await enricher.enrich(
+        library,
+        targetLanguage: targetLang,
+      );
       await remember(enriched, LyricsOrigin.library);
       return enriched;
     }
@@ -117,7 +135,10 @@ class LyricsResolver {
       // only wins because its version is timed.
       final useRemote = remote.synced || library == null;
       final lyrics = useRemote ? remote : library;
-      final enriched = await enricher.enrich(lyrics);
+      final enriched = await enricher.enrich(
+        lyrics,
+        targetLanguage: targetLang,
+      );
       await remember(
         enriched,
         useRemote ? LyricsOrigin.lrclib : LyricsOrigin.library,
@@ -127,7 +148,10 @@ class LyricsResolver {
     }
 
     if (library != null) {
-      final enriched = await enricher.enrich(library);
+      final enriched = await enricher.enrich(
+        library,
+        targetLanguage: targetLang,
+      );
       await remember(enriched, LyricsOrigin.library);
       return enriched;
     }

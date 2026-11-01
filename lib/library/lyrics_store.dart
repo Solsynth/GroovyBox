@@ -58,12 +58,22 @@ class LyricsStore {
   static const missTtl = Duration(days: 1);
 
   /// The stored answer for [trackId], or null when there is none worth using.
-  Future<CachedLyrics?> read(int trackId) async {
+  ///
+  /// [translationLanguage] is the language the caller needs its translation
+  /// layer in. A row translated into a different language is a miss: serving
+  /// it would show the reader the language they just switched away from.
+  Future<CachedLyrics?> read(
+    int trackId, {
+    String? translationLanguage,
+  }) async {
     final row = await (_db.select(
       _db.lyricsEntries,
     )..where((entry) => entry.trackId.equals(trackId))).getSingleOrNull();
     if (row == null) return null;
-
+    if (row.translationLanguage != null &&
+        row.translationLanguage != translationLanguage) {
+      return null;
+    }
     final origin = LyricsOrigin.values.firstWhere(
       (value) => value.name == row.origin,
       orElse: () => LyricsOrigin.library,
@@ -81,6 +91,7 @@ class LyricsStore {
         lines: _decodeLines(row.lines),
         synced: row.synced,
         language: row.language,
+        translationLanguage: row.translationLanguage,
       ),
       origin: origin,
       fetchedAt: row.fetchedAt,
@@ -102,6 +113,7 @@ class LyricsStore {
           lines: _encodeLines(lyrics.lines),
           synced: lyrics.synced,
           language: Value(lyrics.language),
+          translationLanguage: Value(lyrics.translationLanguage),
           origin: origin.name,
           remoteId: Value(remoteId),
           fetchedAt: _clock(),

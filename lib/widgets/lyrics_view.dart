@@ -420,7 +420,12 @@ class SongLyricsPane extends ConsumerWidget {
                   TextButton.icon(
                     onPressed: () => ref
                         .read(lyricsMaintenanceProvider.notifier)
-                        .refresh(LyricsRequest.of(song!)),
+                        .refresh(
+                          LyricsRequest.of(song!),
+                          languageCode: Localizations.localeOf(
+                            context,
+                          ).languageCode,
+                        ),
                     icon: const Icon(Symbols.refresh_rounded, size: 18),
                     label: Text('lyricsAskAgain'.tr()),
                   ),
@@ -436,7 +441,15 @@ class SongLyricsPane extends ConsumerWidget {
       return status(Symbols.lyrics_rounded, 'lyricsNothingPlaying'.tr());
     }
 
-    final lyrics = ref.watch(songLyricsProvider(LyricsRequest.of(song)));
+    // The interface language, so translations are generated in the language
+    // the reader is actually reading: a user who switched the app to Chinese
+    // wants Chinese words under the lyrics, not their device's English.
+    final lyrics = ref.watch(
+      songLyricsProvider(
+        LyricsRequest.of(song),
+        languageCode: Localizations.localeOf(context).languageCode,
+      ),
+    );
     final controller = ref.read(playbackProvider.notifier);
     final showPronunciation = ref.watch(lyricsPronunciationEnabledProvider);
     final showTranslation = ref.watch(lyricsTranslationEnabledProvider);

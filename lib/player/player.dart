@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
+import 'package:audio_session/audio_session.dart';
+import 'package:flutter/foundation.dart';
 import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/library/catalog.dart';
 import 'package:groovy_box/library/models.dart';
@@ -11,6 +14,7 @@ import 'package:groovy_box/player/session.dart';
 import 'package:groovy_box/player/play_tracker.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'player.g.dart';
@@ -35,6 +39,7 @@ class PlaybackState {
   final List<LibrarySong> queue;
   final int? currentIndex;
   final bool playing;
+  final bool buffering;
   final Duration position;
   final Duration duration;
   final bool shuffle;
@@ -45,6 +50,7 @@ class PlaybackState {
     this.queue = const [],
     this.currentIndex,
     this.playing = false,
+    this.buffering = false,
     this.position = Duration.zero,
     this.duration = Duration.zero,
     this.shuffle = false,
@@ -76,6 +82,7 @@ class PlaybackState {
     List<LibrarySong>? queue,
     int? currentIndex,
     bool? playing,
+    bool? buffering,
     Duration? position,
     Duration? duration,
     bool? shuffle,
@@ -86,6 +93,7 @@ class PlaybackState {
     queue: queue ?? this.queue,
     currentIndex: clearIndex ? null : currentIndex ?? this.currentIndex,
     playing: playing ?? this.playing,
+    buffering: buffering ?? this.buffering,
     position: position ?? this.position,
     duration: duration ?? this.duration,
     shuffle: shuffle ?? this.shuffle,
@@ -132,6 +140,12 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
   LibraryCatalog? _catalog;
   PlaybackState _lastState = const PlaybackState();
 
+  AudioSession? _audioSession;
+  StreamSubscription<dynamic>? _interruptionSub;
+  StreamSubscription<dynamic>? _noisySub;
+  bool _playInterrupted = false;
+  bool _disposed = false;
+
   @override
   set state(PlaybackState value) {
     _lastState = value;
@@ -158,6 +172,10 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
         state = state.copyWith(playing: playing);
         _publish();
       }),
+      _player.stream.buffering.listen((buffering) {
+        state = state.copyWith(buffering: buffering);
+        _publish();
+      }),
       _player.stream.position.listen((position) {
         state = state.copyWith(position: position);
         // Fire and forget: history is written at its own pace, and playback
@@ -181,10 +199,15 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       }),
     ]);
 
+    _initAudioSession();
+
     ref.onDispose(() {
+      _disposed = true;
       for (final subscription in _subscriptions) {
         subscription.cancel();
       }
+      _interruptionSub?.cancel();
+      _noisySub?.cancel();
       _saveSession();
       // Whatever the play reached is written before the database goes away,
       // so closing the window mid-track still leaves an honest row.
@@ -198,9 +221,80 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     return const PlaybackState();
   }
 
+  Future<void> _initAudioSession() async {
+    if (kIsWeb ||
+        (!Platform.isAndroid && !Platform.isIOS && !Platform.isMacOS)) {
+      return;
+    }
+    try {
+      final session = await AudioSession.instance;
+      if (_disposed) return;
+      _audioSession = session;
+      await session.configure(const AudioSessionConfiguration.music());
+
+      _interruptionSub = session.interruptionEventStream.listen((event) {
+        if (event.begin) {
+          switch (event.type) {
+            case AudioInterruptionType.duck:
+              _player.setVolume(state.volume * 0.5);
+            case AudioInterruptionType.pause:
+            case AudioInterruptionType.unknown:
+              if (state.playing) {
+                _playInterrupted = true;
+                pause();
+              }
+          }
+        } else {
+          switch (event.type) {
+            case AudioInterruptionType.duck:
+              _player.setVolume(state.volume);
+            case AudioInterruptionType.pause:
+              if (_playInterrupted) {
+                _playInterrupted = false;
+                play();
+              }
+            case AudioInterruptionType.unknown:
+              _playInterrupted = false;
+          }
+        }
+      });
+
+      _noisySub = session.becomingNoisyEventStream.listen((_) {
+        pause();
+      });
+    } catch (e) {
+      debugPrint('[Playback] AudioSession initialization error: $e');
+    }
+  }
+
+  Future<void> _ensureNotificationPermission() async {
+    if (kIsWeb || !Platform.isAndroid) return;
+    try {
+      final status = await Permission.notification.status;
+      if (status.isDenied) {
+        await Permission.notification.request();
+      }
+    } catch (e) {
+      debugPrint('[Playback] Notification permission check error: $e');
+    }
+  }
+
+  Future<void> _activateAudioSession() async {
+    if (_audioSession != null) {
+      try {
+        await _audioSession!.setActive(true);
+      } catch (e) {
+        debugPrint('[Playback] AudioSession activation error: $e');
+      }
+    }
+  }
+
   /// Replaces the queue with [songs] and starts at [startIndex].
   Future<void> playQueue(List<LibrarySong> songs, {int startIndex = 0}) async {
     if (songs.isEmpty || startIndex < 0 || startIndex >= songs.length) return;
+
+    unawaited(_ensureNotificationPermission());
+    await _activateAudioSession();
 
     _order = List.of(songs);
     _sourceOrder = List.of(songs);
@@ -219,6 +313,9 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
 
   @override
   Future<void> play() async {
+    unawaited(_ensureNotificationPermission());
+    await _activateAudioSession();
+
     if (!_hasOpenedCurrent && state.current != null) {
       final resumePosition = state.position;
       await _openCurrent();
@@ -486,6 +583,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
         ],
         index: state.currentIndex,
         playing: state.playing,
+        buffering: state.buffering,
         position: state.position,
         repeatMode: switch (state.repeatMode) {
           PlaybackRepeatMode.off => AudioServiceRepeatMode.none,

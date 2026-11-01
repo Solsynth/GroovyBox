@@ -52,8 +52,17 @@ class Lyrics {
 
   /// Language the server reported, when it did (`'und'`/`'xxx'` when unknown).
   final String? language;
+  /// Language the translation layer was generated into, when the app added
+  /// one (e.g. `'zh-CN'`). Null when the lines carry no generated
+  /// translation, or when a server supplied one in a language it did not name.
+  final String? translationLanguage;
 
-  const Lyrics({required this.lines, required this.synced, this.language});
+  const Lyrics({
+    required this.lines,
+    required this.synced,
+    this.language,
+    this.translationLanguage,
+  });
 
   static const empty = Lyrics(lines: [], synced: false);
 
@@ -96,6 +105,7 @@ Lyrics mergeLyricLayers({
     ],
     synced: main.synced,
     language: main.language,
+    translationLanguage: main.translationLanguage,
   );
 }
 

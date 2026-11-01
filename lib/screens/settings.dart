@@ -4,6 +4,7 @@ import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/router.gr.dart';
 import 'package:groovy_box/core/theme.dart';
+import 'package:groovy_box/library/backup.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/store.dart';
 import 'package:groovy_box/player/player.dart';
@@ -90,6 +91,8 @@ class SettingsScreen extends ConsumerWidget {
                         .read(themeModeProvider.notifier)
                         .set(selection.first),
                   ),
+                  const SizedBox(height: SolSpace.lg),
+                  _LanguageTile(),
                   const SizedBox(height: SolSpace.lg),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
@@ -308,6 +311,45 @@ class SettingsScreen extends ConsumerWidget {
                 ],
               ),
             ),
+            SectionLabel('settingsSectionData'.tr()),
+            IslandCard(
+              margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
+              child: Column(
+                children: [
+                  ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: SolSpace.lg,
+                    ),
+                    leading: const Icon(Symbols.upload_rounded),
+                    title: Text('settingsExportBackup'.tr()),
+                    subtitle: Text('settingsExportBackupSubtitle'.tr()),
+                    onTap: () => ref
+                        .read(backupServiceProvider)
+                        .exportBackupFile(context),
+                  ),
+                  ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: SolSpace.lg,
+                    ),
+                    leading: const Icon(Symbols.download_rounded),
+                    title: Text('settingsImportBackup'.tr()),
+                    subtitle: Text('settingsImportBackupSubtitle'.tr()),
+                    onTap: () => ref
+                        .read(backupServiceProvider)
+                        .importBackupFile(context),
+                  ),
+                  ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: SolSpace.lg,
+                    ),
+                    leading: const Icon(Symbols.database_rounded),
+                    title: Text('settingsExportDatabase'.tr()),
+                    subtitle: Text('settingsExportDatabaseSubtitle'.tr()),
+                    onTap: () => BackupService.exportRawDatabase(context),
+                  ),
+                ],
+              ),
+            ),
 
             Padding(
               padding: const EdgeInsets.fromLTRB(
@@ -383,6 +425,91 @@ class SettingsScreen extends ConsumerWidget {
     await ref.read(lyricsMaintenanceProvider.notifier).clear();
   }
 }
+/// The language picker: a row with a dropdown of the app's locales.
+///
+/// `savedLocale` is null until the user picks one, and null means "follow the
+/// device" — the first entry clears the saved choice back to that, so a later
+/// change of system language still moves the app with it.
+class _LanguageTile extends StatelessWidget {
+  const _LanguageTile();
+
+  /// The names a speaker of each language expects to read, not what the other
+  /// locale would call them: a switcher you cannot read is useless.
+  static const _names = {'en': 'English', 'zh': '中文'};
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // The row only means anything under an EasyLocalization ancestor, which
+    // every real caller has. Without one (a widget test mounting the page
+    // alone) there is nothing to switch, so the row is simply absent rather
+    // than crashing the settings page.
+    if (EasyLocalization.of(context) == null) return const SizedBox.shrink();
+    final saved = context.savedLocale;
+
+    // The value must be one of the dropdown's items, so "follow system" is its
+    // own entry rather than the absence of one.
+    final current = saved?.languageCode ?? _systemValue;
+    final items = {
+      _systemValue: 'settingsLanguageSystem'.tr(),
+      for (final locale in context.supportedLocales)
+        locale.languageCode: _names[locale.languageCode] ??
+            locale.toLanguageTag(),
+    };
+
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: const Icon(Symbols.translate_rounded),
+      title: Text(
+        'settingsLanguageLabel'.tr(),
+        style: theme.textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      subtitle: Text(
+        'settingsLanguageSubtitle'.tr(),
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+          height: 1.5,
+        ),
+      ),
+      trailing: DropdownButton<String>(
+        value: items.containsKey(current) ? current : _systemValue,
+        underline: const SizedBox.shrink(),
+        borderRadius: SolRadius.controlRadius,
+        items: [
+          for (final entry in items.entries)
+            DropdownMenuItem(value: entry.key, child: Text(entry.value)),
+        ],
+        onChanged: (language) => _select(context, language),
+      ),
+    );
+  }
+
+  Future<void> _select(BuildContext context, String? language) async {
+    if (language == null) return;
+    // Read before the first await: the locale change may unmount this context,
+    // and both the locale list and the switch have to come from a live one.
+    final locales = context.supportedLocales;
+    final easy = EasyLocalization.of(context)!;
+    if (language == _systemValue) {
+      // Reset first, then forget: `resetLocale` goes through `setLocale`,
+      // which writes the choice back, so deleting before it would be undone.
+      await easy.resetLocale();
+      await easy.deleteSaveLocale();
+      return;
+    }
+    await easy.setLocale(
+      locales.firstWhere((locale) => locale.languageCode == language),
+    );
+  }
+}
+
+/// The dropdown value that means "no saved locale": follow the device.
+///
+/// Deliberately not the empty string: [DropdownButton] reads `''` as "nothing
+/// selected" and then never calls `onChanged`, so picking it would be a no-op.
+const _systemValue = 'system';
 
 /// One sentence about the local library: how many songs it knows, and how many
 /// of them only a removed server could play.

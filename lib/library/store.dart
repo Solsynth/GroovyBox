@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -89,6 +90,32 @@ class SourceStore extends Notifier<List<SourceConfig>> {
         if (config.id != sourceId) config,
     ];
     await _persist(next);
+  }
+
+  /// Merges a list of sources from a backup: adds new sources and updates
+  /// existing ones if changed.
+  Future<int> mergeSources(List<SourceConfig> incoming) async {
+    final currentMap = {for (final s in state) s.id: s};
+    var addedOrUpdated = 0;
+    for (final source in incoming) {
+      final existing = currentMap[source.id];
+      if (existing == null) {
+        currentMap[source.id] = source;
+        addedOrUpdated++;
+      } else {
+        if (existing.baseUrl != source.baseUrl ||
+            existing.displayName != source.displayName ||
+            !mapEquals(existing.auth, source.auth)) {
+          currentMap[source.id] = source;
+          addedOrUpdated++;
+        }
+      }
+    }
+    if (addedOrUpdated > 0) {
+      final next = currentMap.values.toList();
+      await _persist(next);
+    }
+    return addedOrUpdated;
   }
 
   Future<void> _persist(List<SourceConfig> configs) async {

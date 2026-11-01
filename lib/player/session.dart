@@ -26,6 +26,7 @@ class AudioSnapshot {
   final List<MediaItem> items;
   final int? index;
   final bool playing;
+  final bool buffering;
   final Duration position;
   final AudioServiceRepeatMode repeatMode;
   final bool shuffle;
@@ -34,6 +35,7 @@ class AudioSnapshot {
     required this.items,
     required this.index,
     required this.playing,
+    this.buffering = false,
     required this.position,
     required this.repeatMode,
     required this.shuffle,
@@ -79,13 +81,20 @@ class GroovyBoxAudioHandler extends BaseAudioHandler with SeekHandler {
         : snapshot.items[index];
     mediaItem.add(item);
 
+    final AudioProcessingState processingState;
+    if (item == null) {
+      processingState = AudioProcessingState.idle;
+    } else if (snapshot.buffering) {
+      processingState = AudioProcessingState.buffering;
+    } else {
+      processingState = AudioProcessingState.ready;
+    }
+
     playbackState.add(
       PlaybackState(
         // A loaded but paused track is `ready`, not idle: idle hides the
         // notification, and pausing is not the same as unloading.
-        processingState: item == null
-            ? AudioProcessingState.idle
-            : AudioProcessingState.ready,
+        processingState: processingState,
         playing: snapshot.playing,
         controls: item == null
             ? const <MediaControl>[]
@@ -99,6 +108,8 @@ class GroovyBoxAudioHandler extends BaseAudioHandler with SeekHandler {
           MediaAction.seek,
           MediaAction.seekForward,
           MediaAction.seekBackward,
+          MediaAction.setRepeatMode,
+          MediaAction.setShuffleMode,
         },
         updatePosition: snapshot.position,
         repeatMode: snapshot.repeatMode,

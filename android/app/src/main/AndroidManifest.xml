@@ -1,9 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
+    <!-- Network access to stream remote libraries (Subsonic, Jellyfin) and fetch art/lyrics -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Background playback: the media session runs in a foreground service. -->
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+    <!-- Notification permission required on Android 13+ (API 33+) for the media playback foreground service notification -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <application
         android:label="GroovyBox"

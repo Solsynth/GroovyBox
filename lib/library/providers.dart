@@ -204,10 +204,17 @@ Future<LyricsResolver> lyricsResolver(Ref ref) async => LyricsResolver(
 /// Kept for the session as well as on disk: the pane is rebuilt on every
 /// position tick's parent rebuild, and a family entry means it never asks
 /// twice for the track it is already showing.
+/// [languageCode] is the app's current language, so a translation is generated
+/// in the language the interface is actually in. A language change gives the
+/// family a new argument, which refetches instead of serving the old one.
 @Riverpod(keepAlive: true)
-Future<Lyrics> songLyrics(Ref ref, LyricsRequest song) async {
+Future<Lyrics> songLyrics(
+  Ref ref,
+  LyricsRequest song, {
+  String? languageCode,
+}) async {
   final resolver = await ref.watch(lyricsResolverProvider.future);
-  return resolver.resolve(song);
+  return resolver.resolve(song, languageCode: languageCode);
 }
 
 /// How many tracks have a stored lyric, for the settings row.
@@ -248,10 +255,15 @@ class LyricsMaintenance extends Notifier<void> {
 
   /// Forgets one song and rebuilds its pane, so a wrong or missing lyric is
   /// fetched again instead of served from disk.
-  Future<void> refresh(LyricsRequest song) async {
+  ///
+  /// [languageCode] must match the one the pane watches with, or the family
+  /// entry holding what is on screen is not the one invalidated.
+  Future<void> refresh(LyricsRequest song, {String? languageCode}) async {
     final resolver = await ref.read(lyricsResolverProvider.future);
     await resolver.forget(song);
-    ref.invalidate(songLyricsProvider(song));
+    ref.invalidate(
+      songLyricsProvider(song, languageCode: languageCode),
+    );
     ref.invalidate(storedLyricsProvider);
   }
 

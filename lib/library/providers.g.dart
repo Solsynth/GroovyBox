@@ -911,6 +911,9 @@ String _$lyricsResolverHash() => r'515bb0a65e677a7a600483106f87ef8e229f219e';
 /// Kept for the session as well as on disk: the pane is rebuilt on every
 /// position tick's parent rebuild, and a family entry means it never asks
 /// twice for the track it is already showing.
+/// [languageCode] is the app's current language, so a translation is generated
+/// in the language the interface is actually in. A language change gives the
+/// family a new argument, which refetches instead of serving the old one.
 
 @ProviderFor(songLyrics)
 final songLyricsProvider = SongLyricsFamily._();
@@ -920,6 +923,9 @@ final songLyricsProvider = SongLyricsFamily._();
 /// Kept for the session as well as on disk: the pane is rebuilt on every
 /// position tick's parent rebuild, and a family entry means it never asks
 /// twice for the track it is already showing.
+/// [languageCode] is the app's current language, so a translation is generated
+/// in the language the interface is actually in. A language change gives the
+/// family a new argument, which refetches instead of serving the old one.
 
 final class SongLyricsProvider
     extends $FunctionalProvider<AsyncValue<Lyrics>, Lyrics, FutureOr<Lyrics>>
@@ -929,9 +935,12 @@ final class SongLyricsProvider
   /// Kept for the session as well as on disk: the pane is rebuilt on every
   /// position tick's parent rebuild, and a family entry means it never asks
   /// twice for the track it is already showing.
+  /// [languageCode] is the app's current language, so a translation is generated
+  /// in the language the interface is actually in. A language change gives the
+  /// family a new argument, which refetches instead of serving the old one.
   SongLyricsProvider._({
     required SongLyricsFamily super.from,
-    required LyricsRequest super.argument,
+    required (LyricsRequest, {String? languageCode}) super.argument,
   }) : super(
          retry: null,
          name: r'songLyricsProvider',
@@ -947,7 +956,7 @@ final class SongLyricsProvider
   String toString() {
     return r'songLyricsProvider'
         ''
-        '($argument)';
+        '$argument';
   }
 
   @$internal
@@ -957,8 +966,8 @@ final class SongLyricsProvider
 
   @override
   FutureOr<Lyrics> create(Ref ref) {
-    final argument = this.argument as LyricsRequest;
-    return songLyrics(ref, argument);
+    final argument = this.argument as (LyricsRequest, {String? languageCode});
+    return songLyrics(ref, argument.$1, languageCode: argument.languageCode);
   }
 
   @override
@@ -972,16 +981,23 @@ final class SongLyricsProvider
   }
 }
 
-String _$songLyricsHash() => r'36ca3c44f6de75e42431107451ad13b0d337507e';
+String _$songLyricsHash() => r'b6899bce9a05c28a0b1d8a37a99111164d1049fd';
 
 /// Lyrics of one song, from the local library or the network.
 ///
 /// Kept for the session as well as on disk: the pane is rebuilt on every
 /// position tick's parent rebuild, and a family entry means it never asks
 /// twice for the track it is already showing.
+/// [languageCode] is the app's current language, so a translation is generated
+/// in the language the interface is actually in. A language change gives the
+/// family a new argument, which refetches instead of serving the old one.
 
 final class SongLyricsFamily extends $Family
-    with $FunctionalFamilyOverride<FutureOr<Lyrics>, LyricsRequest> {
+    with
+        $FunctionalFamilyOverride<
+          FutureOr<Lyrics>,
+          (LyricsRequest, {String? languageCode})
+        > {
   SongLyricsFamily._()
     : super(
         retry: null,
@@ -996,9 +1012,15 @@ final class SongLyricsFamily extends $Family
   /// Kept for the session as well as on disk: the pane is rebuilt on every
   /// position tick's parent rebuild, and a family entry means it never asks
   /// twice for the track it is already showing.
+  /// [languageCode] is the app's current language, so a translation is generated
+  /// in the language the interface is actually in. A language change gives the
+  /// family a new argument, which refetches instead of serving the old one.
 
-  SongLyricsProvider call(LyricsRequest song) =>
-      SongLyricsProvider._(argument: song, from: this);
+  SongLyricsProvider call(LyricsRequest song, {String? languageCode}) =>
+      SongLyricsProvider._(
+        argument: (song, languageCode: languageCode),
+        from: this,
+      );
 
   @override
   String toString() => r'songLyricsProvider';
@@ -1195,7 +1217,7 @@ final class LyricsMaintenanceProvider
   }
 }
 
-String _$lyricsMaintenanceHash() => r'dce5eb68712c53e0373884d954a8dd17d0e79025';
+String _$lyricsMaintenanceHash() => r'2f223327c32c1535924e176ba108e4ca4b3205cf';
 
 /// Actions the library UI needs beyond reading: re-ask the network, forget a
 /// removed source, empty the stored lyrics.
