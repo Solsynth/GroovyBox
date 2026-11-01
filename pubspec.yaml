@@ -2,7 +2,7 @@ name: groovy_box
 description: "The LittleSheep's music player"
 publish_to: 'none'
 
-version: 0.1.0+1
+version: 2.0.0+20
 
 environment:
   sdk: ^3.13.5
