@@ -39,8 +39,8 @@ class PlaylistsTab extends StatelessWidget {
 
 /// See [BrowseTab].
 @RoutePage()
-class QueueTab extends StatelessWidget {
-  const QueueTab({super.key});
+class StatsTab extends StatelessWidget {
+  const StatsTab({super.key});
 
   @override
   Widget build(BuildContext context) => const AutoRouter();

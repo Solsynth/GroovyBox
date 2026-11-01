@@ -7,19 +7,90 @@
 /// rows as the servers do today.
 library;
 
-import 'package:drift/drift.dart' show Variable, Value;
+import 'package:drift/drift.dart';
 
 import '../data/local/library_database.dart';
 import 'lyrics.dart';
 import 'models.dart';
 import 'track_identity.dart';
 
-/// One song, as the app knows it locally, plus where each source can find it.
-class CatalogEntry {
-  final TrackRow track;
-  final List<TrackLinkRow> links;
+/// What a play-history row needs to be listed and replayed: the track, one
+/// source that can still serve it, and when it was last played.
+mixin _PlayableTrack {
+  TrackRow get track;
 
-  const CatalogEntry({required this.track, required this.links});
+  /// Null once every source that had this song is gone. The row still exists —
+  /// the history is worth keeping — but there is nowhere to stream it from.
+  TrackLinkRow? get link;
+
+  /// The song as a source would hand it over, or null when no source can.
+  LibrarySong? get song {
+    final served = link;
+    if (served == null) return null;
+    return LibrarySong(
+      sourceId: served.sourceId,
+      id: served.externalId,
+      title: track.title,
+      artist: track.artist,
+      album: track.album,
+      albumId: served.albumExternalId,
+      artistId: served.artistExternalId,
+      artId: served.artId,
+      duration: Duration(milliseconds: track.durationMs),
+      track: track.trackNumber,
+      discNumber: track.discNumber,
+      year: track.year,
+      genre: track.genre,
+    );
+  }
+}
+
+/// One song the library has played, and when it last was.
+class RecentPlay with _PlayableTrack {
+  @override
+  final TrackRow track;
+  final DateTime playedAt;
+
+  /// A source that can still serve it, for its artwork. Null once every
+  /// source that had it is gone; the row is kept either way.
+  @override
+  final TrackLinkRow? link;
+
+  const RecentPlay({
+    required this.track,
+    required this.playedAt,
+    this.link,
+  });
+}
+
+/// One of the library's most played tracks.
+class TopTrack with _PlayableTrack {
+  @override
+  final TrackRow track;
+  final int plays;
+  final Duration listened;
+  @override
+  final TrackLinkRow? link;
+
+  const TopTrack({
+    required this.track,
+    required this.plays,
+    required this.listened,
+    this.link,
+  });
+}
+
+/// One of the library's most played artists.
+class TopArtist {
+  final String name;
+  final int plays;
+  final Duration listened;
+
+  const TopArtist({
+    required this.name,
+    required this.plays,
+    required this.listened,
+  });
 }
 
 /// How often a track has been played, and when it last was.
@@ -30,6 +101,51 @@ class PlayStats {
   const PlayStats({required this.count, this.lastPlayedAt});
 
   static const none = PlayStats(count: 0);
+}
+
+/// Everything the stats page shows, read from the play history in one go.
+class ListeningStats {
+  final int plays;
+  final int completedPlays;
+  final Duration listened;
+
+  /// Songs played at least once. One song played ten times counts once.
+  final int distinctTracks;
+  final List<TopTrack> topTracks;
+  final List<TopArtist> topArtists;
+  final List<RecentPlay> recent;
+
+  /// Songs the local library knows, and how many of those no connected source
+  /// can play any more.
+  final int libraryTracks;
+  final int orphaned;
+
+  const ListeningStats({
+    required this.plays,
+    required this.completedPlays,
+    required this.listened,
+    required this.distinctTracks,
+    required this.topTracks,
+    required this.topArtists,
+    required this.recent,
+    required this.libraryTracks,
+    required this.orphaned,
+  });
+
+  /// Nothing has played, or this device keeps no history.
+  static const none = ListeningStats(
+    plays: 0,
+    completedPlays: 0,
+    listened: Duration.zero,
+    distinctTracks: 0,
+    topTracks: [],
+    topArtists: [],
+    recent: [],
+    libraryTracks: 0,
+    orphaned: 0,
+  );
+
+  bool get isEmpty => plays == 0;
 }
 
 /// Writes and reads everything the app remembers about songs.
@@ -130,26 +246,85 @@ class LibraryCatalog {
   );
 
   /// The most recent plays, newest first, with the tracks they were of.
-  Future<List<CatalogEntry>> recentlyPlayed({int limit = 50}) async {
-    if (limit <= 0) return const [];
-    final rows = await _db.customSelect(
-      'SELECT DISTINCT track_id FROM play_events '
-      'GROUP BY track_id ORDER BY MAX(started_at) DESC LIMIT ?',
-      variables: [Variable.withInt(limit)],
-    ).get();
-    final ids = [for (final row in rows) row.read<int>('track_id')];
-    if (ids.isEmpty) return const [];
-
-    final tracks = await (_db.select(
-      _db.tracks,
-    )..where((track) => track.id.isIn(ids))).get();
-    final byId = {for (final track in tracks) track.id: track};
+  Future<List<RecentPlay>> recentlyPlayed({int limit = 50}) async {
+    final latest = await _db.latestPlays(limit: limit);
+    if (latest.isEmpty) return const [];
+    final tracks = await _db.tracksById(latest.map((play) => play.trackId));
+    final links = await _db.preferredLinksOf(tracks.keys);
     return [
-      for (final id in ids)
-        if (byId[id] case final track?)
-          CatalogEntry(track: track, links: await _db.linksOf(track.id)),
+      for (final play in latest)
+        if (tracks[play.trackId] case final track?)
+          RecentPlay(
+            track: track,
+            playedAt: play.playedAt,
+            link: links[track.id],
+          ),
     ];
   }
+
+  /// Everything the stats page shows, in one read.
+  ///
+  /// The lists are capped rather than paged: a stats page is a summary, and
+  /// the top ten of anything is what a summary is for.
+  Future<ListeningStats> listeningStats({
+    int topTracks = 10,
+    int topArtists = 6,
+    int recent = 12,
+  }) async {
+    final totals = await _db.playTotals();
+    final counts = await _db.playCountsByTrack(limit: topTracks);
+    final artists = await _db.playCountsByArtist(limit: topArtists);
+    final latest = await _db.latestPlays(limit: recent);
+    final tracks = await _db.tracksById([
+      ...counts.map((entry) => entry.trackId),
+      ...latest.map((play) => play.trackId),
+    ]);
+    final links = await _db.preferredLinksOf(tracks.keys);
+    final stats = await libraryCounts();
+
+    return ListeningStats(
+      plays: totals.plays,
+      completedPlays: totals.completed,
+      listened: totals.listened,
+      distinctTracks: totals.tracks,
+      topTracks: [
+        for (final entry in counts)
+          if (tracks[entry.trackId] case final track?)
+            TopTrack(
+              track: track,
+              plays: entry.plays,
+              listened: entry.listened,
+              link: links[track.id],
+            ),
+      ],
+      topArtists: [
+        for (final entry in artists)
+          TopArtist(
+            name: entry.name,
+            plays: entry.plays,
+            listened: entry.listened,
+          ),
+      ],
+      recent: [
+        for (final play in latest)
+          if (tracks[play.trackId] case final track?)
+            RecentPlay(
+              track: track,
+              playedAt: play.playedAt,
+              link: links[track.id],
+            ),
+      ],
+      libraryTracks: stats.tracks,
+      orphaned: stats.orphaned,
+    );
+  }
+
+  /// How many songs the library knows, and how many of those no connected
+  /// source can still play.
+  Future<({int tracks, int orphaned})> libraryCounts() async => (
+    tracks: await _db.trackCount(),
+    orphaned: await _db.orphanCount(),
+  );
 
   /// Drops the links of a source that is no longer connected. Its tracks,
   /// lyrics and play history stay, so re-adding the same server — or adding a

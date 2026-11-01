@@ -1098,7 +1098,63 @@ final class LibraryStatsProvider
   }
 }
 
-String _$libraryStatsHash() => r'cf720945567c241f2ef7f205714aea0e5f589b5b';
+String _$libraryStatsHash() => r'0a527cb92be47e3406957d0381d87a38215b738a';
+
+/// What the play history says, for the stats page.
+///
+/// Auto-disposed and rebuilt on open: the page is a summary of a database that
+/// changes as music plays, and re-reading it is a handful of aggregate
+/// queries, not a sync.
+
+@ProviderFor(listeningStats)
+final listeningStatsProvider = ListeningStatsProvider._();
+
+/// What the play history says, for the stats page.
+///
+/// Auto-disposed and rebuilt on open: the page is a summary of a database that
+/// changes as music plays, and re-reading it is a handful of aggregate
+/// queries, not a sync.
+
+final class ListeningStatsProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<ListeningStats>,
+          ListeningStats,
+          FutureOr<ListeningStats>
+        >
+    with $FutureModifier<ListeningStats>, $FutureProvider<ListeningStats> {
+  /// What the play history says, for the stats page.
+  ///
+  /// Auto-disposed and rebuilt on open: the page is a summary of a database that
+  /// changes as music plays, and re-reading it is a handful of aggregate
+  /// queries, not a sync.
+  ListeningStatsProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'listeningStatsProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$listeningStatsHash();
+
+  @$internal
+  @override
+  $FutureProviderElement<ListeningStats> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<ListeningStats> create(Ref ref) {
+    return listeningStats(ref);
+  }
+}
+
+String _$listeningStatsHash() => r'793553a868ec243c59e38e569d130ffb81505740';
 
 /// Actions the library UI needs beyond reading: re-ask the network, forget a
 /// removed source, empty the stored lyrics.

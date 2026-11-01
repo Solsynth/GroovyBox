@@ -225,10 +225,19 @@ Future<int> storedLyrics(Ref ref) async =>
 Future<({int tracks, int orphaned})> libraryStats(Ref ref) async {
   final catalog = ref.watch(libraryCatalogProvider);
   if (catalog == null) return (tracks: 0, orphaned: 0);
-  return (
-    tracks: await catalog.trackCount(),
-    orphaned: await catalog.orphanCount(),
-  );
+  return catalog.libraryCounts();
+}
+
+/// What the play history says, for the stats page.
+///
+/// Auto-disposed and rebuilt on open: the page is a summary of a database that
+/// changes as music plays, and re-reading it is a handful of aggregate
+/// queries, not a sync.
+@riverpod
+Future<ListeningStats> listeningStats(Ref ref) async {
+  final catalog = ref.watch(libraryCatalogProvider);
+  if (catalog == null) return ListeningStats.none;
+  return catalog.listeningStats();
 }
 
 /// Actions the library UI needs beyond reading: re-ask the network, forget a

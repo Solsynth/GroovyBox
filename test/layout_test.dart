@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:groovy_box/core/theme.dart';
+import 'package:groovy_box/library/catalog.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/source.dart';
@@ -7,7 +8,7 @@ import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/screens/albums.dart';
 import 'package:groovy_box/screens/browse.dart';
 import 'package:groovy_box/screens/playlists.dart';
-import 'package:groovy_box/screens/queue.dart';
+import 'package:groovy_box/screens/stats.dart';
 import 'package:groovy_box/screens/settings.dart';
 import 'package:groovy_box/widgets/now_playing_dock.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -79,6 +80,21 @@ Future<void> _pump(
         ),
         recentAlbumsProvider.overrideWith(() => _FakeAlbums()),
         playlistsProvider.overrideWith(() => _FakePlaylists()),
+        listeningStatsProvider.overrideWithValue(
+          const AsyncData(
+            ListeningStats(
+              plays: 3,
+              completedPlays: 2,
+              listened: Duration(minutes: 12),
+              distinctTracks: 1,
+              topTracks: [],
+              topArtists: [],
+              recent: [],
+              libraryTracks: 1,
+              orphaned: 0,
+            ),
+          ),
+        ),
       ],
       child: MaterialApp(
         theme: createAppThemeSet().light,
@@ -152,9 +168,10 @@ void main() {
         expect(tester.takeException(), isNull);
       });
 
-      testWidgets('queue — $label', (tester) async {
-        await _pump(tester, const QueueScreen(), size: size, dock: true);
-        expect(find.text('Queue'), findsOneWidget);
+      testWidgets('stats — $label', (tester) async {
+        await _pump(tester, const StatsScreen(), size: size, dock: true);
+        expect(find.text('Stats'), findsOneWidget);
+        expect(find.text('listened'), findsOneWidget);
         expect(tester.takeException(), isNull);
       });
 

@@ -330,4 +330,124 @@ class LibraryDatabase extends _$LibraryDatabase {
         ).getSingle();
     return row.read<int>('n');
   }
+
+  /// Totals over every play this device has recorded.
+  ///
+  /// One row, four scalars: the stats page's headline numbers, which no
+  /// per-track query can answer.
+  Future<({int plays, int completed, Duration listened, int tracks})>
+  playTotals() async {
+    final row = await customSelect(
+      'SELECT COUNT(*) AS plays, '
+      'COALESCE(SUM(completed), 0) AS completed, '
+      'COALESCE(SUM(listened_ms), 0) AS listened, '
+      'COUNT(DISTINCT track_id) AS tracks '
+      'FROM play_events',
+    ).getSingle();
+    return (
+      plays: row.read<int>('plays'),
+      completed: row.read<int>('completed'),
+      listened: Duration(milliseconds: row.read<int>('listened')),
+      tracks: row.read<int>('tracks'),
+    );
+  }
+
+  /// How often each track was played, most played first.
+  ///
+  /// Ties go to whichever played most recently, so a list of songs played
+  /// once is also a list of what was played last.
+  Future<List<({int trackId, int plays, Duration listened})>>
+  playCountsByTrack({int limit = 10}) async {
+    if (limit <= 0) return const [];
+    final rows = await customSelect(
+      'SELECT track_id, COUNT(*) AS plays, '
+      'COALESCE(SUM(listened_ms), 0) AS listened '
+      'FROM play_events GROUP BY track_id '
+      'ORDER BY plays DESC, MAX(started_at) DESC LIMIT ?',
+      variables: [Variable.withInt(limit)],
+    ).get();
+    return [
+      for (final row in rows)
+        (
+          trackId: row.read<int>('track_id'),
+          plays: row.read<int>('plays'),
+          listened: Duration(milliseconds: row.read<int>('listened')),
+        ),
+    ];
+  }
+
+  /// How often each artist was played, most played first.
+  ///
+  /// A play is attributed to the track's own artist column, so a song with no
+  /// artist tag lands in one bucket rather than vanishing from the list.
+  Future<List<({String name, int plays, Duration listened})>>
+  playCountsByArtist({int limit = 10}) async {
+    if (limit <= 0) return const [];
+    final rows = await customSelect(
+      "SELECT COALESCE(NULLIF(TRIM(t.artist), ''), 'Unknown artist') AS name, "
+      'COUNT(*) AS plays, COALESCE(SUM(p.listened_ms), 0) AS listened '
+      'FROM play_events p JOIN tracks t ON t.id = p.track_id '
+      'GROUP BY name ORDER BY plays DESC, listened DESC LIMIT ?',
+      variables: [Variable.withInt(limit)],
+    ).get();
+    return [
+      for (final row in rows)
+        (
+          name: row.read<String>('name'),
+          plays: row.read<int>('plays'),
+          listened: Duration(milliseconds: row.read<int>('listened')),
+        ),
+    ];
+  }
+
+  /// When each track was last played, most recent first.
+  Future<List<({int trackId, DateTime playedAt})>> latestPlays({
+    int limit = 12,
+  }) async {
+    if (limit <= 0) return const [];
+    final rows = await customSelect(
+      'SELECT track_id, MAX(started_at) AS played_at FROM play_events '
+      'GROUP BY track_id ORDER BY played_at DESC LIMIT ?',
+      variables: [Variable.withInt(limit)],
+    ).get();
+    return [
+      for (final row in rows)
+        (
+          trackId: row.read<int>('track_id'),
+          playedAt: row.read<DateTime>('played_at'),
+        ),
+    ];
+  }
+
+  /// The tracks with [ids], keyed by id. Missing ids are simply absent.
+  Future<Map<int, TrackRow>> tracksById(Iterable<int> ids) async {
+    final wanted = ids.toSet().toList();
+    if (wanted.isEmpty) return const {};
+    final rows = await (select(
+      tracks,
+    )..where((track) => track.id.isIn(wanted))).get();
+    return {for (final row in rows) row.id: row};
+  }
+
+  /// One link per track, keyed by track id.
+  ///
+  /// A track can be served by several sources; a list row only needs one that
+  /// still exists, and artwork when any source has it.
+  Future<Map<int, TrackLinkRow>> preferredLinksOf(
+    Iterable<int> trackIds,
+  ) async {
+    final wanted = trackIds.toSet().toList();
+    if (wanted.isEmpty) return const {};
+    final rows = await (select(
+      trackLinks,
+    )..where((link) => link.trackId.isIn(wanted))).get();
+    final preferred = <int, TrackLinkRow>{};
+    for (final link in rows) {
+      final current = preferred[link.trackId];
+      if (current == null || (current.artId == null && link.artId != null)) {
+        preferred[link.trackId] = link;
+      }
+    }
+    return preferred;
+  }
 }

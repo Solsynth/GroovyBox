@@ -60,8 +60,8 @@ class AppRouter extends RootStackRouter {
           ),
         ),
         AutoRoute(
-          page: QueueTab.page,
-          children: _tabChildren(AutoRoute(page: QueueRoute.page, initial: true)),
+          page: StatsTab.page,
+          children: _tabChildren(AutoRoute(page: StatsRoute.page, initial: true)),
         ),
       ],
     ),

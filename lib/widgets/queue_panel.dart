@@ -10,10 +10,11 @@ import 'package:material_ui/material_ui.dart';
 /// The queue, as a panel: a sheet in the now-playing capsule, a page-wide
 /// list in the player.
 ///
-/// The dock's queue button opens this instead of navigating to the Queue tab:
-/// a glance at what is next should not cost the page underneath, and the
-/// transport stays visible below it while it is open. The full Queue tab still
-/// exists for the repeat and shuffle controls that need room.
+/// The dock's queue button opens this instead of navigating anywhere: a
+/// glance at what is next should not cost the page underneath, and the
+/// transport stays visible below it while it is open. Shuffle and repeat live
+/// on the player page's transport, which is the only place the whole queue is
+/// a page of its own.
 ///
 /// It paints no surface of its own — the capsule around it already is one, and
 /// a second glass panel inside it would sample an already-sampled backdrop.

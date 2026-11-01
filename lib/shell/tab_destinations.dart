@@ -23,6 +23,11 @@ class TabDestination {
 }
 
 /// Every root tab, in route order. Mirrors the child order in `AppRouter`.
+///
+/// There is no Queue tab: the queue is a pane of the player and a sheet in the
+/// now-playing dock, so a third place to see the same list only made the
+/// transport's own controls compete with a page. Stats took the slot, because
+/// a play history with nowhere to read it is a database nobody sees.
 List<TabDestination> get allTabDestinations => const [
   TabDestination(
     id: 'browse',
@@ -46,17 +51,17 @@ List<TabDestination> get allTabDestinations => const [
     selectedIcon: Symbols.playlist_play_rounded,
   ),
   TabDestination(
-    id: 'queue',
+    id: 'stats',
     routeIndex: 3,
-    label: 'Queue',
-    icon: Symbols.queue_music,
-    selectedIcon: Symbols.queue_music_rounded,
+    label: 'Stats',
+    icon: Symbols.query_stats,
+    selectedIcon: Symbols.query_stats_rounded,
   ),
 ];
 
-/// The compact bottom bar carries Browse, Albums, Playlists and Queue. Settings
-/// lives behind the header's overflow there instead of taking a slot.
-const kBottomBarIds = ['browse', 'albums', 'playlists', 'queue'];
+/// The compact bottom bar carries every root tab. Settings lives behind the
+/// header's overflow there instead of taking a slot.
+const kBottomBarIds = ['browse', 'albums', 'playlists', 'stats'];
 
 /// Settings is a pushed route, not a tab, so it is not part of
 /// [allTabDestinations]. Both shells still need one button for it, and they

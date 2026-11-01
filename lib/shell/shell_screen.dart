@@ -45,7 +45,7 @@ class ShellScreen extends StatelessWidget {
           // Each tab is an `AutoRouter` with its own stack, so pushing an
           // album or playlist inside a tab keeps the shell — and the
           // now-playing capsule that floats in it — on screen.
-          routes: const [BrowseTab(), AlbumsTab(), PlaylistsTab(), QueueTab()],
+          routes: const [BrowseTab(), AlbumsTab(), PlaylistsTab(), StatsTab()],
           duration: const Duration(milliseconds: 320),
           builder: (context, child) => _ShellFrame(child: child),
         );

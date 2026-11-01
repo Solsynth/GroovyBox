@@ -15,10 +15,10 @@ import 'package:groovy_box/screens/albums.dart' as _i1;
 import 'package:groovy_box/screens/browse.dart' as _i3;
 import 'package:groovy_box/screens/player_screen.dart' as _i4;
 import 'package:groovy_box/screens/playlists.dart' as _i5;
-import 'package:groovy_box/screens/queue.dart' as _i6;
-import 'package:groovy_box/screens/settings.dart' as _i7;
-import 'package:groovy_box/screens/setup.dart' as _i8;
-import 'package:groovy_box/shell/shell_screen.dart' as _i9;
+import 'package:groovy_box/screens/settings.dart' as _i6;
+import 'package:groovy_box/screens/setup.dart' as _i7;
+import 'package:groovy_box/screens/stats.dart' as _i9;
+import 'package:groovy_box/shell/shell_screen.dart' as _i8;
 import 'package:groovy_box/shell/tab_stack.dart' as _i2;
 import 'package:material_ui/material_ui.dart' as _i11;
 
@@ -296,39 +296,7 @@ class PlaylistsTab extends _i10.PageRouteInfo<void> {
 }
 
 /// generated route for
-/// [_i6.QueueScreen]
-class QueueRoute extends _i10.PageRouteInfo<void> {
-  const QueueRoute({List<_i10.PageRouteInfo>? children})
-    : super(QueueRoute.name, initialChildren: children);
-
-  static const String name = 'QueueRoute';
-
-  static _i10.PageInfo page = _i10.PageInfo(
-    name,
-    builder: (data) {
-      return const _i6.QueueScreen();
-    },
-  );
-}
-
-/// generated route for
-/// [_i2.QueueTab]
-class QueueTab extends _i10.PageRouteInfo<void> {
-  const QueueTab({List<_i10.PageRouteInfo>? children})
-    : super(QueueTab.name, initialChildren: children);
-
-  static const String name = 'QueueTab';
-
-  static _i10.PageInfo page = _i10.PageInfo(
-    name,
-    builder: (data) {
-      return const _i2.QueueTab();
-    },
-  );
-}
-
-/// generated route for
-/// [_i7.SettingsScreen]
+/// [_i6.SettingsScreen]
 class SettingsRoute extends _i10.PageRouteInfo<void> {
   const SettingsRoute({List<_i10.PageRouteInfo>? children})
     : super(SettingsRoute.name, initialChildren: children);
@@ -338,13 +306,13 @@ class SettingsRoute extends _i10.PageRouteInfo<void> {
   static _i10.PageInfo page = _i10.PageInfo(
     name,
     builder: (data) {
-      return const _i7.SettingsScreen();
+      return const _i6.SettingsScreen();
     },
   );
 }
 
 /// generated route for
-/// [_i8.SetupScreen]
+/// [_i7.SetupScreen]
 class SetupRoute extends _i10.PageRouteInfo<void> {
   const SetupRoute({List<_i10.PageRouteInfo>? children})
     : super(SetupRoute.name, initialChildren: children);
@@ -354,13 +322,13 @@ class SetupRoute extends _i10.PageRouteInfo<void> {
   static _i10.PageInfo page = _i10.PageInfo(
     name,
     builder: (data) {
-      return const _i8.SetupScreen();
+      return const _i7.SetupScreen();
     },
   );
 }
 
 /// generated route for
-/// [_i9.ShellScreen]
+/// [_i8.ShellScreen]
 class ShellRoute extends _i10.PageRouteInfo<void> {
   const ShellRoute({List<_i10.PageRouteInfo>? children})
     : super(ShellRoute.name, initialChildren: children);
@@ -370,7 +338,39 @@ class ShellRoute extends _i10.PageRouteInfo<void> {
   static _i10.PageInfo page = _i10.PageInfo(
     name,
     builder: (data) {
-      return const _i9.ShellScreen();
+      return const _i8.ShellScreen();
+    },
+  );
+}
+
+/// generated route for
+/// [_i9.StatsScreen]
+class StatsRoute extends _i10.PageRouteInfo<void> {
+  const StatsRoute({List<_i10.PageRouteInfo>? children})
+    : super(StatsRoute.name, initialChildren: children);
+
+  static const String name = 'StatsRoute';
+
+  static _i10.PageInfo page = _i10.PageInfo(
+    name,
+    builder: (data) {
+      return const _i9.StatsScreen();
+    },
+  );
+}
+
+/// generated route for
+/// [_i2.StatsTab]
+class StatsTab extends _i10.PageRouteInfo<void> {
+  const StatsTab({List<_i10.PageRouteInfo>? children})
+    : super(StatsTab.name, initialChildren: children);
+
+  static const String name = 'StatsTab';
+
+  static _i10.PageInfo page = _i10.PageInfo(
+    name,
+    builder: (data) {
+      return const _i2.StatsTab();
     },
   );
 }

@@ -163,7 +163,8 @@ void main() {
     expect((await catalog.statsOf(first)).count, 1);
     final recent = await catalog.recentlyPlayed();
     expect(recent.map((entry) => entry.track.title), ['Fix You', 'Yellow']);
-    expect(recent.first.links.single.sourceId, 'a');
+    expect(recent.first.link?.sourceId, 'a');
+    expect(recent.first.playedAt, morning.add(const Duration(hours: 2)));
   });
 
   test('a play is updated in place rather than duplicated', () async {

@@ -56,7 +56,17 @@ SQLite database, independent of whichever server happens to serve them.
   re-linked song keeps its words. A confirmed miss is cached for a day; a
   timeout never is.
 - **Screens** — Browse (search + random shelf + recently added), Albums, album
-  detail, Playlists, playlist detail, Queue, full Player, Setup, Settings.
+  detail, Playlists, playlist detail, Stats, full Player, Setup, Settings. The
+  queue has no page of its own: it is a pane of the player and a sheet in the
+  dock, because a third view of one list only made the transport compete with
+  itself.
+- **Stats** — `lib/screens/stats.dart` reads `play_events` and shows what the
+  history adds up to: plays, time listened, songs heard, how many plays ran to
+  the end, the most played tracks and artists, and the last dozen plays. All of
+  it is aggregate SQL (`LibraryDatabase.playTotals`, `playCountsByTrack`,
+  `playCountsByArtist`, `latestPlays`) behind one `ListeningStats` read, so the
+  page never walks the play table in Dart. A track no connected source can
+  serve still appears — it just is not tappable.
 
 ## Design
 
