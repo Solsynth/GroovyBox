@@ -16,6 +16,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakePlayerStream extends Fake implements PlayerStream {
   final _playing = StreamController<bool>.broadcast();
+  final _buffering = StreamController<bool>.broadcast();
   final _position = StreamController<Duration>.broadcast();
   final _duration = StreamController<Duration>.broadcast();
   final _completed = StreamController<bool>.broadcast();
@@ -23,6 +24,8 @@ class _FakePlayerStream extends Fake implements PlayerStream {
 
   @override
   Stream<bool> get playing => _playing.stream;
+  @override
+  Stream<bool> get buffering => _buffering.stream;
   @override
   Stream<Duration> get position => _position.stream;
   @override

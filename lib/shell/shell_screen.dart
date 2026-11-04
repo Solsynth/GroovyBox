@@ -9,6 +9,7 @@ import '../core/responsive.dart';
 import '../core/tab_navigation.dart';
 import '../core/theme.dart';
 import '../player/player.dart';
+import '../solarpass/providers.dart';
 import '../widgets/now_playing_dock.dart';
 import 'rail_scope.dart';
 import 'tab_destinations.dart';
@@ -40,6 +41,7 @@ class ShellScreen extends StatelessWidget {
         // starts the moment the window does and keeps running when the dock is
         // rebuilt.
         ref.read(playbackProvider);
+        ref.read(solarpassScrobblerProvider);
 
         return AutoTabsRouter(
           // Each tab is an `AutoRouter` with its own stack, so pushing an

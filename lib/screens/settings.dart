@@ -8,6 +8,7 @@ import 'package:groovy_box/library/backup.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/store.dart';
 import 'package:groovy_box/player/player.dart';
+import 'package:groovy_box/solarpass/solarpass_section.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -311,6 +312,7 @@ class SettingsScreen extends ConsumerWidget {
                 ],
               ),
             ),
+            const SolarpassSettingsSection(),
             SectionLabel('settingsSectionData'.tr()),
             IslandCard(
               margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
