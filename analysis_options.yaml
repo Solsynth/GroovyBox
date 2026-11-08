@@ -18,6 +18,9 @@ analyzer:
     - windows/**
     - macos/**
     - linux/**
+    # Vendored plugin (MIT, packages/music_kit): its own generated
+    # serialization code is not the app's to keep clean.
+    - packages/**/*.g.dart
 
 linter:
   # The lint rules applied to this project can be customized in the

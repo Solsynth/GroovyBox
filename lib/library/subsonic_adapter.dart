@@ -14,6 +14,14 @@ class SubsonicAdapter implements LibraryAdapter {
   @override
   LibraryKind get kind => LibraryKind.subsonic;
 
+  /// Runs anywhere with a network.
+  @override
+  bool get isAvailable => true;
+
+  /// Address, username and password are exactly what a Subsonic server needs.
+  @override
+  bool get needsCredentials => true;
+
   @override
   Future<SourceConfig> connect({
     required String baseUrl,

@@ -28,6 +28,10 @@
 	<true/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- MusicKir requests the user's consent before reading the Apple Music
+	     account; this is the sentence iOS shows in that prompt. -->
+	<key>NSAppleMusicUsageDescription</key>
+	<string>GroovyBox plays and browses the music in your Apple Music library.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

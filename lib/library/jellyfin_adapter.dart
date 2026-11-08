@@ -12,6 +12,14 @@ class JellyfinAdapter implements LibraryAdapter {
   @override
   LibraryKind get kind => LibraryKind.jellyfin;
 
+  /// Runs anywhere with a network.
+  @override
+  bool get isAvailable => true;
+
+  /// Address, username and password are exactly what a Jellyfin server needs.
+  @override
+  bool get needsCredentials => true;
+
   @override
   Future<SourceConfig> connect({
     required String baseUrl,

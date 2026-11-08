@@ -180,8 +180,12 @@ class SettingsScreen extends ConsumerWidget {
                       leading: const Icon(Symbols.cloud_rounded),
                       title: Text(source.displayName),
                       subtitle: Text(
-                        '${source.kind.label} · ${source.config.baseUrl}'
-                        '${failures[source.id] == null ? '' : '\n${failures[source.id]}'}',
+                        [
+                          source.kind.label,
+                          if (source.addressLabel.isNotEmpty)
+                            source.addressLabel,
+                          if (failures[source.id] != null) failures[source.id]!,
+                        ].join(' · '),
                       ),
                       isThreeLine: failures[source.id] != null,
                       trailing: IconButton(

@@ -1,5 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 
+import 'apple_adapter.dart';
 import 'jellyfin_adapter.dart';
 import 'lyrics.dart';
 import 'models.dart';
@@ -9,6 +10,10 @@ import 'subsonic_adapter.dart';
 enum LibraryKind {
   subsonic('libraryKindSubsonic', 'libraryAddressSubsonic'),
   jellyfin('libraryKindJellyfin', 'libraryAddressJellyfin'),
+
+  /// Apple Music: the account comes from the system, so there is no address
+  /// or password to ask for and the setup form shows one button.
+  appleMusic('libraryKindAppleMusic', ''),
 
   /// Files this device owns. There is nothing to sign in to, so this kind has
   /// no adapter: [LocalLibrarySource] is constructed directly.
@@ -98,6 +103,10 @@ abstract class LibrarySource {
 
   String get displayName => config.displayName;
 
+  /// The address shown next to a source in Settings. Empty when there is
+  /// nothing to show: an Apple Music account has no server address.
+  String get addressLabel => config.baseUrl;
+
   Future<List<LibraryAlbum>> recentlyAdded({int limit});
   Future<List<LibraryAlbum>> albums({int limit, int offset});
   Future<LibraryAlbum?> album(String albumId);
@@ -108,6 +117,12 @@ abstract class LibrarySource {
   Future<List<LibrarySong>> playlistSongs(String playlistId);
   Future<List<LibrarySong>> search(String query, {int limit});
   Future<List<LibrarySong>> randomSongs({int size});
+
+  /// Whether items are played by the platform instead of opened as a URL.
+  ///
+  /// Apple Music has no stream URL: the system's own player is handed the
+  /// item. A source that answers true is never asked for [streamUri].
+  bool get usesPlatformPlayer => false;
 
   /// Lyrics for [song], synced when the server has a timed version.
   ///
@@ -137,12 +152,25 @@ abstract interface class LibraryAdapter {
 
   /// Cheap, offline: builds the source object from a stored config.
   LibrarySource sourceFor(SourceConfig config);
+
+  /// Whether this platform can run the adapter at all.
+  ///
+  /// Apple Music is iOS/macOS only, so the setup picker hides it elsewhere
+  /// rather than offering a connection that can only fail.
+  bool get isAvailable => true;
+
+  /// Whether this adapter's form takes an address, a username and a password.
+  ///
+  /// Apple Music signs in through the system, so the setup screen hides the
+  /// three fields instead of showing inputs it would ignore.
+  bool get needsCredentials => true;
 }
 
 /// One adapter per kind.
 final Map<LibraryKind, LibraryAdapter> libraryAdapters = {
   LibraryKind.subsonic: SubsonicAdapter(),
   LibraryKind.jellyfin: JellyfinAdapter(),
+  LibraryKind.appleMusic: AppleMusicAdapter(),
 };
 
 LibrarySource librarySourceFromConfig(SourceConfig config) =>

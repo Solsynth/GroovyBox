@@ -18,10 +18,20 @@ than block you behind a form.
   (`lib/shell/window_frame.dart`), a responsive shell built from floating
   chrome, and the same design tokens (spacing, radii, warm-paper color ramp) in
   `lib/core/theme.dart`.
-- **Server layer** — `lib/library/` maps Subsonic and Jellyfin onto one
-  provider-neutral model. Subsonic uses salted token auth (never the password);
-  Jellyfin signs in with the `Authorization: MediaBrowser …` header that 10.11+
-  requires and keeps the issued access token in that same header.
+- **Server layer** — `lib/library/` maps Subsonic, Jellyfin and Apple Music
+  onto one provider-neutral model. Subsonic uses salted token auth (never the
+  password); Jellyfin signs in with the `Authorization: MediaBrowser …` header
+  that 10.11+ requires and keeps the issued access token in that same header.
+  Apple Music is read over its REST API with the two tokens MusicKit hands
+  the app (a developer token it generates itself, and the account's music
+  user token), and is played by the system's `ApplicationMusicPlayer`
+  instead of a stream URL: `lib/library/apple_kit.dart` is the only file that
+  imports the plugin, `lib/player/apple_player.dart` drives it, and the
+  transport routes to it through `LibrarySource.usesPlatformPlayer`. Covers
+  are Apple's own `{w}x{h}` art templates, resized per painted box in
+  `artworkUri`. The plugin is vendored under `packages/music_kit` (MIT) so
+  the darwin player can expose seek and stay inert on macOS 12/13, where
+  `ApplicationMusicPlayer` does not exist.
 - **Playback** — one `media_kit` player for the app's lifetime
   (`lib/player/player.dart`), exposed through Riverpod. Shuffle reorders the
   visible queue instead of hiding randomization underneath. The media session
@@ -137,6 +147,15 @@ The app opens on the setup screen until a server is connected. Enter the server
 address (a bare host works — `/rest` is appended for Subsonic, the root for
 Jellyfin), username and password, then **Test connection** or **Connect**.
 
+**Apple Music** is the one kind with no fields: the account is whatever
+MusicKit reports for this device, so the screen shows a single Connect button
+that asks for permission, fetches both tokens and proves them with one read.
+It needs the *MusicKit App Service* enabled for the bundle id in the developer
+portal, `NSAppleMusicUsageDescription` in `Info.plist` (both already set), and
+macOS 14 or iOS 15 for playback. Reads work on macOS 12/13 from the SDK but
+the system has no `ApplicationMusicPlayer` there, so the kind stays hidden on
+those.
+
 ## Development
 
 ```sh
@@ -149,7 +168,7 @@ flutter run -d macos
 
 Generated files: `lib/core/router.gr.dart`, `lib/core/app.g.dart`,
 `lib/library/providers.g.dart`, `lib/library/store.g.dart`,
-`lib/player/player.g.dart`. Do not edit them.
+`lib/player/player.g.dart`, `lib/player/apple_player.g.dart`. Do not edit them.
 
 ## Layout
 

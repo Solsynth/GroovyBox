@@ -10,6 +10,8 @@ import 'package:groovy_box/library/catalog.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/track_identity.dart';
+import 'package:groovy_box/library/apple_kit.dart';
+import 'package:groovy_box/player/apple_player.dart';
 import 'package:groovy_box/player/session.dart';
 import 'package:groovy_box/player/play_tracker.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -60,8 +62,8 @@ class PlaybackState {
 
   LibrarySong? get current =>
       currentIndex == null || currentIndex! >= queue.length
-          ? null
-          : queue[currentIndex!];
+      ? null
+      : queue[currentIndex!];
 
   /// Whether [song] is the one playing. Either the exact source item matches,
   /// or their canonical identities match (same song across different sources).
@@ -156,6 +158,19 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
   bool _hasOpenedCurrent = false;
   bool _isFetchingInfinite = false;
 
+  /// Set while the current track is played by the platform's own player
+  /// (Apple Music). The media-kit player is idle then, and every transport
+  /// call has to go to [_apple] instead.
+  bool _appleMode = false;
+
+  /// Lazily built: a device that never opens an Apple Music library never
+  /// touches the plugin.
+  ApplePlayer? _apple;
+
+  /// Whether the platform player's end-of-track was already acted on, so a
+  /// second position tick past the duration does not fire the next track again.
+  bool _appleCompleted = false;
+
   @override
   PlaybackState build() {
     _player = _injectedPlayer ?? Player();
@@ -168,33 +183,30 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     _session?.transport = this;
 
     _subscriptions.addAll([
+      // The platform player owns the transport while it is playing, so
+      // media-kit's streams are only meaningful when it is the one playing.
       _player.stream.playing.listen((playing) {
+        if (_appleMode) return;
         state = state.copyWith(playing: playing);
         _publish();
       }),
       _player.stream.buffering.listen((buffering) {
+        if (_appleMode) return;
         state = state.copyWith(buffering: buffering);
         _publish();
       }),
-      _player.stream.position.listen((position) {
-        state = state.copyWith(position: position);
-        // Fire and forget: history is written at its own pace, and playback
-        // must never wait on a transaction.
-        _tracker.observe(position, duration: state.duration);
-        if ((position - _lastSavedPosition).abs() >=
-            const Duration(seconds: 5)) {
-          _lastSavedPosition = position;
-          _saveSession();
-        }
-      }),
+      _player.stream.position.listen(_onPosition),
       _player.stream.duration.listen((duration) {
+        if (_appleMode) return;
         state = state.copyWith(duration: duration);
         _publish();
       }),
       _player.stream.completed.listen((completed) {
+        if (_appleMode) return;
         if (completed) _onTrackCompleted();
       }),
       _player.stream.volume.listen((volume) {
+        if (_appleMode) return;
         state = state.copyWith(volume: volume);
       }),
     ]);
@@ -208,6 +220,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       }
       _interruptionSub?.cancel();
       _noisySub?.cancel();
+      _apple?.dispose();
       _saveSession();
       // Whatever the play reached is written before the database goes away,
       // so closing the window mid-track still leaves an honest row.
@@ -219,6 +232,35 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     _restoreSession();
 
     return const PlaybackState();
+  }
+
+  /// One position update, whichever player produced it: the state, the play
+  /// history and the saved session all follow the same rules.
+  void _onPosition(Duration position) {
+    state = state.copyWith(position: position);
+    // The system player has no "completed" event the plugin forwards, so the
+    // end of the track is read off the clock: one trigger per track, and only
+    // when a real duration is known.
+    if (_appleMode && state.duration > Duration.zero) {
+      if (position >= state.duration - const Duration(milliseconds: 300)) {
+        if (!_appleCompleted) {
+          _appleCompleted = true;
+          unawaited(_onTrackCompleted());
+        }
+      } else if (_appleCompleted &&
+          position < state.duration - const Duration(seconds: 1)) {
+        // A restart or a seek back past the end re-arms the trigger, so a
+        // repeating track completes again instead of silently running on.
+        _appleCompleted = false;
+      }
+    }
+    // Fire and forget: history is written at its own pace, and playback must
+    // never wait on a transaction.
+    _tracker.observe(position, duration: state.duration);
+    if ((position - _lastSavedPosition).abs() >= const Duration(seconds: 5)) {
+      _lastSavedPosition = position;
+      _saveSession();
+    }
   }
 
   Future<void> _initAudioSession() async {
@@ -316,6 +358,20 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     unawaited(_ensureNotificationPermission());
     await _activateAudioSession();
 
+    if (_appleMode) {
+      final apple = _apple;
+      if (!_hasOpenedCurrent && state.current != null) {
+        final resumePosition = state.position;
+        await _openCurrent();
+        if (resumePosition > Duration.zero) await apple?.seek(resumePosition);
+      } else {
+        await apple?.play();
+      }
+      _publish();
+      _saveSession();
+      return;
+    }
+
     if (!_hasOpenedCurrent && state.current != null) {
       final resumePosition = state.position;
       await _openCurrent();
@@ -331,7 +387,12 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
 
   @override
   Future<void> pause() async {
-    await _player.pause();
+    if (_appleMode) {
+      await _apple?.pause();
+      state = state.copyWith(playing: false);
+    } else {
+      await _player.pause();
+    }
     _publish();
     _saveSession();
   }
@@ -346,7 +407,11 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       _saveSession();
       return;
     }
-    await _player.seek(position);
+    if (_appleMode) {
+      await _apple?.seek(position);
+    } else {
+      await _player.seek(position);
+    }
     _publish();
     _saveSession();
   }
@@ -354,7 +419,8 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
   @override
   Future<void> next() async {
     if (!state.hasNext) {
-      if (state.repeatMode == PlaybackRepeatMode.all && state.queue.isNotEmpty) {
+      if (state.repeatMode == PlaybackRepeatMode.all &&
+          state.queue.isNotEmpty) {
         await _jumpTo(0);
         _publish();
       } else if (state.repeatMode == PlaybackRepeatMode.off &&
@@ -375,9 +441,12 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
   Future<void> previous() async {
     // Ten seconds in, "previous" means restart the track — the behaviour every
     // player shares — rather than jump back a row.
-    if (state.position > const Duration(seconds: 10) ||
-        !state.hasPrevious) {
-      await _player.seek(Duration.zero);
+    if (state.position > const Duration(seconds: 10) || !state.hasPrevious) {
+      if (_appleMode) {
+        await _apple?.seek(Duration.zero);
+      } else {
+        await _player.seek(Duration.zero);
+      }
       _publish();
       _saveSession();
       return;
@@ -424,11 +493,13 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
   Future<void> cycleRepeatMode() async {
     final next = nextRepeatMode(state.repeatMode);
     state = state.copyWith(repeatMode: next);
-    await _player.setPlaylistMode(switch (next) {
-      PlaybackRepeatMode.off => PlaylistMode.none,
-      PlaybackRepeatMode.all => PlaylistMode.loop,
-      PlaybackRepeatMode.single => PlaylistMode.single,
-    });
+    if (!_appleMode) {
+      await _player.setPlaylistMode(switch (next) {
+        PlaybackRepeatMode.off => PlaylistMode.none,
+        PlaybackRepeatMode.all => PlaylistMode.loop,
+        PlaybackRepeatMode.single => PlaylistMode.single,
+      });
+    }
     _publish();
     _saveSession();
   }
@@ -444,11 +515,13 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     };
     if (target != state.repeatMode) {
       state = state.copyWith(repeatMode: target);
-      await _player.setPlaylistMode(switch (target) {
-        PlaybackRepeatMode.off => PlaylistMode.none,
-        PlaybackRepeatMode.all => PlaylistMode.loop,
-        PlaybackRepeatMode.single => PlaylistMode.single,
-      });
+      if (!_appleMode) {
+        await _player.setPlaylistMode(switch (target) {
+          PlaybackRepeatMode.off => PlaylistMode.none,
+          PlaybackRepeatMode.all => PlaylistMode.loop,
+          PlaybackRepeatMode.single => PlaylistMode.single,
+        });
+      }
     }
     _publish();
     _saveSession();
@@ -474,12 +547,22 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     final song = state.current;
     if (song == null) return;
     _hasOpenedCurrent = true;
+    _appleCompleted = false;
     // The play is recorded before the stream opens, so a source that has been
     // removed still leaves the row that says the user tried to play it.
     await _tracker.start(song);
     final sources = ref.read(librarySourceByIdProvider);
     var source = sources[song.sourceId];
     var toPlay = song;
+
+    // Whatever plays next, the platform player must not keep sounding under
+    // a track the app thinks it started. This runs before the source lookup
+    // can bail out, because a song whose source is gone still ends Apple's
+    // playback.
+    if (_appleMode) {
+      _appleMode = false;
+      unawaited(_apple?.stop());
+    }
 
     if (source == null) {
       final catalog = ref.read(libraryCatalogProvider);
@@ -513,6 +596,37 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
 
     if (source == null) return;
 
+    // A source with a platform player is not opened as a URL: the item is
+    // handed to the system's own player, which brings its playback time and
+    // its pause/interrupt handling with it.
+    if (source.usesPlatformPlayer) {
+      _appleMode = true;
+      _apple ??= ApplePlayer(
+        ref.read(musicKitClientProvider),
+        onStatus: (status) {
+          switch (status) {
+            case ApplePlayerStatus.playing:
+              state = state.copyWith(playing: true);
+            case ApplePlayerStatus.paused:
+            case ApplePlayerStatus.interrupted:
+              state = state.copyWith(playing: false);
+            case ApplePlayerStatus.stopped:
+              state = state.copyWith(playing: false, buffering: false);
+            case ApplePlayerStatus.seeking:
+              state = state.copyWith(buffering: true);
+          }
+          _publish();
+        },
+        onPosition: _onPosition,
+      );
+      try {
+        await _apple!.open(toPlay);
+      } catch (error) {
+        logAppleFailure(error);
+      }
+      return;
+    }
+
     try {
       await _player.open(Media(source.streamUri(toPlay).toString()));
     } catch (_) {
@@ -520,7 +634,8 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       if (catalog != null) {
         final links = await catalog.linksOfSong(song);
         for (final link in links) {
-          if (link.sourceId == toPlay.sourceId && link.externalId == toPlay.id) {
+          if (link.sourceId == toPlay.sourceId &&
+              link.externalId == toPlay.id) {
             continue;
           }
           final altSource = sources[link.sourceId];
@@ -542,7 +657,9 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
               mbid: song.mbid,
             );
             try {
-              await _player.open(Media(altSource.streamUri(fallbackSong).toString()));
+              await _player.open(
+                Media(altSource.streamUri(fallbackSong).toString()),
+              );
               return;
             } catch (_) {
               // Try next link
@@ -602,9 +719,16 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     switch (state.repeatMode) {
       case PlaybackRepeatMode.single:
         // media-kit already honours single mode on its own; this keeps the
-        // state honest for the UI when we drive the transport manually.
-        await _player.seek(Duration.zero);
-        await _player.play();
+        // state honest for the UI when we drive the transport manually. The
+        // platform player has no repeat of its own, so it is driven the same
+        // way here.
+        if (_appleMode) {
+          await _apple?.seek(Duration.zero);
+          await _apple?.play();
+        } else {
+          await _player.seek(Duration.zero);
+          await _player.play();
+        }
       case PlaybackRepeatMode.all:
         await next();
       case PlaybackRepeatMode.off:
@@ -644,7 +768,8 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       ];
       if (songs.isEmpty) return;
 
-      final index = (session.currentIndex != null &&
+      final index =
+          (session.currentIndex != null &&
               session.currentIndex! >= 0 &&
               session.currentIndex! < songs.length)
           ? session.currentIndex!
@@ -663,8 +788,9 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       final restoredPosition = Duration(milliseconds: session.positionMs);
       final restoredDuration = Duration(milliseconds: session.durationMs);
       final songDuration = songs[index].duration;
-      final duration =
-          restoredDuration > Duration.zero ? restoredDuration : songDuration;
+      final duration = restoredDuration > Duration.zero
+          ? restoredDuration
+          : songDuration;
 
       state = state.copyWith(
         queue: _order,

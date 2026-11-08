@@ -34,6 +34,9 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   String? _error;
   String? _success;
 
+  /// The adapter of the kind currently picked in the picker.
+  LibraryAdapter get adapter => libraryAdapters[_kind]!;
+
   @override
   void dispose() {
     _serverController.dispose();
@@ -120,11 +123,15 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                           const SizedBox(height: SolSpace.xl),
                           SegmentedButton<LibraryKind>(
                             segments: [
-                              for (final kind in LibraryKind.values)
-                                ButtonSegment(
-                                  value: kind,
-                                  label: Text(kind.label),
-                                ),
+                              // Only kinds this platform can run: the local
+                              // library is not a connection and has nothing to
+                              // set up, and Apple Music needs iOS or macOS 14.
+                              for (final entry in libraryAdapters.entries)
+                                if (entry.value.isAvailable)
+                                  ButtonSegment(
+                                    value: entry.key,
+                                    label: Text(entry.key.label),
+                                  ),
                             ],
                             selected: {_kind},
                             onSelectionChanged: (selection) => setState(() {
@@ -134,56 +141,69 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                             }),
                           ),
                           const SizedBox(height: SolSpace.lg),
-                          TextFormField(
-                            controller: _serverController,
-                            autofocus: true,
-                            keyboardType: TextInputType.url,
-                            textInputAction: TextInputAction.next,
-                            decoration: InputDecoration(
-                              labelText: 'setupServerAddress'.tr(),
-                              hintText: _kind.addressHint,
-                              prefixIcon: const Icon(Symbols.dns_rounded),
+                          if (!adapter.needsCredentials) ...[
+                            Text(
+                              'setupAppleMusicNote'.tr(),
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                height: 1.5,
+                              ),
                             ),
-                            validator: (value) {
-                              final text = value?.trim() ?? '';
-                              if (text.isEmpty) {
-                                return 'setupServerAddressError'.tr();
-                              }
-                              final uri = Uri.tryParse(
-                                text.contains('://') ? text : 'https://$text',
-                              );
-                              if (uri == null || uri.host.isEmpty) {
-                                return 'setupServerAddressInvalid'.tr();
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: SolSpace.md),
-                          TextFormField(
-                            controller: _usernameController,
-                            textInputAction: TextInputAction.next,
-                            decoration: InputDecoration(
-                              labelText: 'setupUsername'.tr(),
-                              prefixIcon: const Icon(Symbols.person_rounded),
+                            const SizedBox(height: SolSpace.lg),
+                          ],
+                          if (adapter.needsCredentials) ...[
+                            TextFormField(
+                              controller: _serverController,
+                              autofocus: true,
+                              keyboardType: TextInputType.url,
+                              textInputAction: TextInputAction.next,
+                              decoration: InputDecoration(
+                                labelText: 'setupServerAddress'.tr(),
+                                hintText: _kind.addressHint,
+                                prefixIcon: const Icon(Symbols.dns_rounded),
+                              ),
+                              validator: (value) {
+                                final text = value?.trim() ?? '';
+                                if (text.isEmpty) {
+                                  return 'setupServerAddressError'.tr();
+                                }
+                                final uri = Uri.tryParse(
+                                  text.contains('://') ? text : 'https://$text',
+                                );
+                                if (uri == null || uri.host.isEmpty) {
+                                  return 'setupServerAddressInvalid'.tr();
+                                }
+                                return null;
+                              },
                             ),
-                            validator: (value) =>
-                                (value?.trim().isEmpty ?? true)
-                                ? 'setupUsernameError'.tr()
-                                : null,
-                          ),
-                          const SizedBox(height: SolSpace.md),
-                          TextFormField(
-                            controller: _passwordController,
-                            obscureText: true,
-                            onFieldSubmitted: (_) => _connect(),
-                            decoration: InputDecoration(
-                              labelText: 'setupPassword'.tr(),
-                              prefixIcon: const Icon(Symbols.lock_rounded),
+                            const SizedBox(height: SolSpace.md),
+                            TextFormField(
+                              controller: _usernameController,
+                              textInputAction: TextInputAction.next,
+                              decoration: InputDecoration(
+                                labelText: 'setupUsername'.tr(),
+                                prefixIcon: const Icon(Symbols.person_rounded),
+                              ),
+                              validator: (value) =>
+                                  (value?.trim().isEmpty ?? true)
+                                  ? 'setupUsernameError'.tr()
+                                  : null,
                             ),
-                            validator: (value) => (value?.isEmpty ?? true)
-                                ? 'setupPasswordError'.tr()
-                                : null,
-                          ),
+                            const SizedBox(height: SolSpace.md),
+                            TextFormField(
+                              controller: _passwordController,
+                              obscureText: true,
+                              onFieldSubmitted: (_) => _connect(),
+                              decoration: InputDecoration(
+                                labelText: 'setupPassword'.tr(),
+                                prefixIcon: const Icon(Symbols.lock_rounded),
+                              ),
+                              validator: (value) => (value?.isEmpty ?? true)
+                                  ? 'setupPasswordError'.tr()
+                                  : null,
+                            ),
+                          ],
                           if (_error != null) ...[
                             const SizedBox(height: SolSpace.lg),
                             _Banner(
@@ -213,11 +233,13 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                                   )
                                 : Text('setupConnect'.tr()),
                           ),
-                          const SizedBox(height: SolSpace.sm),
-                          TextButton(
-                            onPressed: _busy ? null : _test,
-                            child: Text('setupTestConnection'.tr()),
-                          ),
+                          if (adapter.needsCredentials) ...[
+                            const SizedBox(height: SolSpace.sm),
+                            TextButton(
+                              onPressed: _busy ? null : _test,
+                              child: Text('setupTestConnection'.tr()),
+                            ),
+                          ],
                           if (canLeave) ...[
                             const SizedBox(height: SolSpace.xs),
                             TextButton(
@@ -226,14 +248,15 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                             ),
                           ],
                           const SizedBox(height: SolSpace.lg),
-                          Text(
-                            'setupSecurityNote'.tr(),
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              height: 1.5,
+                          if (adapter.needsCredentials)
+                            Text(
+                              'setupSecurityNote'.tr(),
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                height: 1.5,
+                              ),
                             ),
-                          ),
                         ],
                       ),
                     ),
@@ -251,8 +274,12 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   /// invalid or the server rejected the credentials (in which case the error
   /// banner is already set).
   Future<SourceConfig?> _connectConfig() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return null;
-    final adapter = libraryAdapters[_kind]!;
+    // A kind that signs in through the system has no fields to validate:
+    // validating them would fail on the empty address the form never asked for.
+    if (adapter.needsCredentials &&
+        !(_formKey.currentState?.validate() ?? false)) {
+      return null;
+    }
     return adapter.connect(
       baseUrl: _serverController.text.trim(),
       username: _usernameController.text.trim(),
