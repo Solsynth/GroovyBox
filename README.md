@@ -1,10 +1,16 @@
 # GroovyBox
 
 A Flutter music player that streams from any **OpenSubsonic**-compatible
-server — Navidrome, Jellyfin, Gonic, Airsonic — rather than managing local
-files. Nothing is downloaded: playback streams straight from the server. What
-the app keeps locally is its own library — songs, lyrics and play history in one
-SQLite database, independent of whichever server happens to serve them.
+server — Navidrome, Jellyfin, Gonic, Airsonic — and plays audio files imported
+from the device itself. Streams are never downloaded; an import is the one copy
+the app makes, and it is the user's own music, not a cache. What the app keeps
+locally is its own library — songs, lyrics and play history in one SQLite
+database, independent of whichever server or file happens to serve them.
+
+There is no setup gate: the app opens on the library it has. Imported files
+live in its own storage (`lib/library/local_import.dart`), and a page would
+rather nudge you to connect a server or import something (`browseNoSource*`)
+than block you behind a form.
 
 ## What is here
 
@@ -37,8 +43,11 @@ SQLite database, independent of whichever server happens to serve them.
   library independent of a *playback source*: removing a source drops its
   links and keeps the track, its lyrics and its play history, so re-adding it —
   or adding a different one with the same songs — picks them up again. Local
-  files can join the same rows later. `play_events` is one row per play,
-  written when a track opens and updated as it advances
+  files join the same rows through `local_files`
+  (`lib/library/local_library.dart`), a `LibrarySource` that answers from the
+  device instead of the network, so browse, search, albums and the play history
+  treat an imported track exactly like a streamed one. `play_events` is one row
+  per play, written when a track opens and updated as it advances
   (`lib/player/play_tracker.dart`); play counts and "recently played" are
   queries over it, so no counter can drift.
 - **Lyrics** — `lib/library/lyrics.dart` normalizes OpenSubsonic structured
@@ -55,6 +64,13 @@ SQLite database, independent of whichever server happens to serve them.
   play — and any play offline — never asks the network, and a re-tagged or
   re-linked song keeps its words. A confirmed miss is cached for a day; a
   timeout never is.
+- **Import** — `LocalImportService` copies picked audio into the app's support
+  directory, reads ID3/Vorbis/MP4 tags off the UI isolate, extracts an embedded
+  cover next to the file, writes synced or plain lyrics from the tags onto the
+  canonical track, and adopts the song. The copy is what plays, so the original
+  folder can move or disappear. Importing the same file again is recognised by
+  name and length instead of duplicating it; a different file with the same name
+  is kept beside the first rather than overwriting it.
 - **Screens** — Browse (search + random shelf + recently added), Albums, album
   detail, Playlists, playlist detail, Stats, full Player, Setup, Settings. The
   queue has no page of its own: it is a pane of the player and a sheet in the

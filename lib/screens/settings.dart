@@ -5,6 +5,7 @@ import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/router.gr.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/backup.dart';
+import 'package:groovy_box/library/local_import.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/store.dart';
 import 'package:groovy_box/player/player.dart';
@@ -238,6 +239,15 @@ class SettingsScreen extends ConsumerWidget {
                         null => 'settingsOnThisDeviceSubtitleEmpty'.tr(),
                       },
                     ),
+                  ),
+                  ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: SolSpace.lg,
+                    ),
+                    leading: const Icon(Symbols.library_music_rounded),
+                    title: Text('settingsImportMusic'.tr()),
+                    subtitle: Text('settingsImportMusicSubtitle'.tr()),
+                    onTap: () => importMusicFiles(context, ref),
                   ),
                   ListTile(
                     contentPadding: const EdgeInsets.symmetric(

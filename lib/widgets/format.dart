@@ -93,13 +93,15 @@ String songRowSubtitle(WidgetRef ref, LibrarySong song) =>
     ? '${song.subtitle}${sourceSuffix(ref, song.sourceId) ?? ''}'
     : song.subtitle;
 
-/// `' · <library name>'`, or null when only one library is connected.
+/// `' · <library name>'`, or null when the name would be noise.
 ///
-/// With a single server the name is noise on every row; with several it is the
-/// only way to tell two identically-titled tracks apart.
+/// With a single server every row would carry the same name; with several the
+/// name is the only way to tell two identically-titled tracks apart. A local
+/// file is always labelled, because "on this device" is the one distinction a
+/// merged list cannot make on its own.
 String? sourceSuffix(WidgetRef ref, String sourceId) {
-  final sources = ref.watch(librarySourcesProvider);
-  if (sources.length < 2) return null;
+  final servers = ref.watch(librarySourcesProvider);
+  if (servers.length < 2 && sourceId != kLocalSourceId) return null;
   final source = ref.watch(librarySourceByIdProvider)[sourceId];
   if (source == null) return null;
   return 'formatSourceSuffix'.tr(args: [source.displayName]);

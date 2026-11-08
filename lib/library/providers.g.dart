@@ -8,12 +8,125 @@ part of 'providers.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
+/// Where imported files live, injected by `main` once the platform has told
+/// the app its support directory. Null in tests and on a platform that cannot
+/// provide one, which simply means no local library.
+
+@ProviderFor(localLibraryPath)
+final localLibraryPathProvider = LocalLibraryPathProvider._();
+
+/// Where imported files live, injected by `main` once the platform has told
+/// the app its support directory. Null in tests and on a platform that cannot
+/// provide one, which simply means no local library.
+
+final class LocalLibraryPathProvider
+    extends $FunctionalProvider<String?, String?, String?>
+    with $Provider<String?> {
+  /// Where imported files live, injected by `main` once the platform has told
+  /// the app its support directory. Null in tests and on a platform that cannot
+  /// provide one, which simply means no local library.
+  LocalLibraryPathProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'localLibraryPathProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$localLibraryPathHash();
+
+  @$internal
+  @override
+  $ProviderElement<String?> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  String? create(Ref ref) {
+    return localLibraryPath(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(String? value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<String?>(value),
+    );
+  }
+}
+
+String _$localLibraryPathHash() => r'feb22e537a027a5fee048fe0a0b61b1bec4e0cd9';
+
+/// The library this device owns, or null when it cannot exist (no database,
+/// or no storage directory).
+
+@ProviderFor(localLibrary)
+final localLibraryProvider = LocalLibraryProvider._();
+
+/// The library this device owns, or null when it cannot exist (no database,
+/// or no storage directory).
+
+final class LocalLibraryProvider
+    extends
+        $FunctionalProvider<
+          LocalLibrarySource?,
+          LocalLibrarySource?,
+          LocalLibrarySource?
+        >
+    with $Provider<LocalLibrarySource?> {
+  /// The library this device owns, or null when it cannot exist (no database,
+  /// or no storage directory).
+  LocalLibraryProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'localLibraryProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$localLibraryHash();
+
+  @$internal
+  @override
+  $ProviderElement<LocalLibrarySource?> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  LocalLibrarySource? create(Ref ref) {
+    return localLibrary(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(LocalLibrarySource? value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<LocalLibrarySource?>(value),
+    );
+  }
+}
+
+String _$localLibraryHash() => r'2b88d4a4b494380fe6ce81b09b3ad43ed994f7ed';
+
 /// Every connected library, in the order the user added them.
+///
+/// Servers only: [librarySourcesWithLocalProvider] is what reads from when the
+/// question is "what music is there".
 
 @ProviderFor(librarySources)
 final librarySourcesProvider = LibrarySourcesProvider._();
 
 /// Every connected library, in the order the user added them.
+///
+/// Servers only: [librarySourcesWithLocalProvider] is what reads from when the
+/// question is "what music is there".
 
 final class LibrarySourcesProvider
     extends
@@ -24,6 +137,9 @@ final class LibrarySourcesProvider
         >
     with $Provider<List<LibrarySource>> {
   /// Every connected library, in the order the user added them.
+  ///
+  /// Servers only: [librarySourcesWithLocalProvider] is what reads from when the
+  /// question is "what music is there".
   LibrarySourcesProvider._()
     : super(
         from: null,
@@ -59,6 +175,68 @@ final class LibrarySourcesProvider
 }
 
 String _$librarySourcesHash() => r'c79aaf9f2061f5b44592a30768758528bbd5e83b';
+
+/// Everything that can serve music: the local library first, then the servers.
+///
+/// Local files come first because they are the ones guaranteed to answer; a
+/// dead server must not push a device's own music down a merged list.
+
+@ProviderFor(librarySourcesWithLocal)
+final librarySourcesWithLocalProvider = LibrarySourcesWithLocalProvider._();
+
+/// Everything that can serve music: the local library first, then the servers.
+///
+/// Local files come first because they are the ones guaranteed to answer; a
+/// dead server must not push a device's own music down a merged list.
+
+final class LibrarySourcesWithLocalProvider
+    extends
+        $FunctionalProvider<
+          List<LibrarySource>,
+          List<LibrarySource>,
+          List<LibrarySource>
+        >
+    with $Provider<List<LibrarySource>> {
+  /// Everything that can serve music: the local library first, then the servers.
+  ///
+  /// Local files come first because they are the ones guaranteed to answer; a
+  /// dead server must not push a device's own music down a merged list.
+  LibrarySourcesWithLocalProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'librarySourcesWithLocalProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$librarySourcesWithLocalHash();
+
+  @$internal
+  @override
+  $ProviderElement<List<LibrarySource>> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  List<LibrarySource> create(Ref ref) {
+    return librarySourcesWithLocal(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(List<LibrarySource> value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<List<LibrarySource>>(value),
+    );
+  }
+}
+
+String _$librarySourcesWithLocalHash() =>
+    r'5dc4eb9ac9b8b9de06d27d8f9e16a2df08261f6a';
 
 /// The same sources keyed by id, for resolving a stream or art URL from an
 /// item that only carries `sourceId`.
@@ -113,7 +291,7 @@ final class LibrarySourceByIdProvider
   }
 }
 
-String _$librarySourceByIdHash() => r'358b629591f619ef4c61c41761b87225d9ce132f';
+String _$librarySourceByIdHash() => r'a683ac40f05cc3393529e7f24838d993cb8465d5';
 
 /// The last failure of each source, so settings can show why it went quiet.
 
@@ -238,7 +416,7 @@ final class LibraryAggregatorProvider
   }
 }
 
-String _$libraryAggregatorHash() => r'46a75259b5e5ec956a8fae942c862d96b23d611a';
+String _$libraryAggregatorHash() => r'f1ea87b7710d29925baf59385b113e91f5cf83fc';
 
 /// Recently added albums, merged across every library.
 
@@ -268,7 +446,7 @@ final class RecentAlbumsProvider
   RecentAlbums create() => RecentAlbums();
 }
 
-String _$recentAlbumsHash() => r'cd1310af5190fca7b82f48fc14953bdc963ed4fd';
+String _$recentAlbumsHash() => r'5fcd7a62bd2cbcafc0bf7501e12a0e07cdf0ca64';
 
 /// Recently added albums, merged across every library.
 
@@ -319,7 +497,7 @@ final class RandomSongsProvider
   RandomSongs create() => RandomSongs();
 }
 
-String _$randomSongsHash() => r'49390fe9f308060636f729bb8e722ad5bee5689d';
+String _$randomSongsHash() => r'35c4aec12508dbde9e5efd9869048206890e343a';
 
 /// Songs from a random draw, used as the browse page's instant-play shelf.
 
@@ -370,7 +548,7 @@ final class PlaylistsProvider
   Playlists create() => Playlists();
 }
 
-String _$playlistsHash() => r'2bae1759f681bd0274dab2313a3510fdf27e220d';
+String _$playlistsHash() => r'ef8de34fbb68a3980908d4fa16a12ec1a4298629';
 
 /// The user's playlists, merged across every library.
 
@@ -631,7 +809,7 @@ final class SearchSongsProvider
   }
 }
 
-String _$searchSongsHash() => r'747e45d07ca22b415dd7d992b68c0fe026de63f9';
+String _$searchSongsHash() => r'411dfe1f6850fe1c019b0ac2c47d2dfc330b3ac3';
 
 /// Search results for the browse page's field. Empty query = no request.
 

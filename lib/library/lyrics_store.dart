@@ -13,6 +13,8 @@ import 'lyrics.dart';
 enum LyricsOrigin {
   /// The connected library answered it.
   library,
+  /// Carried by an imported file's own tags.
+  file,
 
   /// Downloaded from LRCLIB.
   lrclib,

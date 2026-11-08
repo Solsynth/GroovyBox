@@ -160,6 +160,38 @@ class PlaybackSessions extends Table {
   @override
   Set<Column> get primaryKey => {id};
 }
+/// One audio file this device owns: copied into the app's own storage on
+/// import, so the library keeps playing after the picker's source folder is
+/// moved, unplugged or deleted.
+///
+/// [path] is both the row's identity and the song's id on the local source,
+/// which is what lets the transport build a `file:` URI without a lookup.
+@DataClassName('LocalFileRow')
+@TableIndex(name: 'local_files_album', columns: {#album})
+class LocalFiles extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get path => text().unique()();
+  TextColumn get fileName => text()();
+  IntColumn get sizeBytes => integer()();
+  TextColumn get title => text()();
+  TextColumn get artist => text().nullable()();
+  TextColumn get albumArtist => text().nullable()();
+  TextColumn get album => text().nullable()();
+  TextColumn get genre => text().nullable()();
+  IntColumn get year => integer().nullable()();
+
+  /// Stable, URL-safe id for the album these tags name, derived from the
+  /// album title and album artist. The album detail page takes it as a route
+  /// segment, so it cannot be the raw title.
+  TextColumn get albumKey => text().nullable()();
+  IntColumn get trackNumber => integer().nullable()();
+  IntColumn get discNumber => integer().nullable()();
+  IntColumn get durationMs => integer().withDefault(const Constant(0))();
+
+  /// Cover extracted from the file's own tags, or null when it had none.
+  TextColumn get artPath => text().nullable()();
+  DateTimeColumn get addedAt => dateTime()();
+}
 
 /// Everything the app remembers about songs, in one SQLite file.
 ///
@@ -167,7 +199,14 @@ class PlaybackSessions extends Table {
 /// plain Dart VM. The app passes nothing and gets the file under the app's
 /// support directory (or IndexedDB on the web, with the wasm assets in `web/`).
 @DriftDatabase(
-  tables: [Tracks, TrackLinks, LyricsEntries, PlayEvents, PlaybackSessions],
+  tables: [
+    Tracks,
+    TrackLinks,
+    LyricsEntries,
+    PlayEvents,
+    PlaybackSessions,
+    LocalFiles,
+  ],
 )
 class LibraryDatabase extends _$LibraryDatabase {
   LibraryDatabase([QueryExecutor? executor]) : super(executor ?? _open());
@@ -187,7 +226,7 @@ class LibraryDatabase extends _$LibraryDatabase {
   }
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -203,6 +242,9 @@ class LibraryDatabase extends _$LibraryDatabase {
       }
       if (from < 4) {
         await m.addColumn(lyricsEntries, lyricsEntries.translationLanguage);
+      }
+      if (from < 5) {
+        await m.createTable(localFiles);
       }
     },
     beforeOpen: (details) async {
@@ -618,10 +660,44 @@ class LibraryDatabase extends _$LibraryDatabase {
     return null;
   }
 
+  /// Writes or refreshes the row for one imported file, keyed by its copied
+  /// path, and reports whether the row is new. Re-importing therefore updates
+  /// the row instead of adding a second copy of the same song.
+  Future<bool> upsertLocalFile(LocalFilesCompanion row) async {
+    final existing = await localFileRow(row.path.value);
+    await into(localFiles).insert(
+      row,
+      // Identity is the copied path, not the auto-increment row id: a conflict
+      // here means "the same file is already imported", which must update it.
+      onConflict: DoUpdate((old) => row, target: [localFiles.path]),
+    );
+    return existing == null;
+  }
+
+  Future<List<LocalFileRow>> localFileRows() => (select(
+    localFiles,
+  )..orderBy([
+    (file) => OrderingTerm(expression: file.album),
+    (file) => OrderingTerm(expression: file.discNumber),
+    (file) => OrderingTerm(expression: file.trackNumber),
+    (file) => OrderingTerm(expression: file.title),
+  ])).get();
+
+  Future<LocalFileRow?> localFileRow(String path) => (select(
+    localFiles,
+  )..where((file) => file.path.equals(path))).getSingleOrNull();
+
   /// Exports all tracks, links, cached lyrics, and play events as a JSON-encodable map.
+  ///
+  /// Local files are deliberately left out: their rows point at copies that
+  /// live on *this* device, so a backup restored elsewhere would claim music
+  /// it does not have. The canonical tracks still travel, which is what keeps
+  /// their lyrics and play history.
   Future<Map<String, dynamic>> exportData() async {
     final allTracks = await select(tracks).get();
-    final allLinks = await select(trackLinks).get();
+    final allLinks = await (select(
+      trackLinks,
+    )..where((link) => link.sourceId.equals(kLocalSourceId).not())).get();
     final allLyrics = await select(lyricsEntries).get();
     final allPlays = await select(playEvents).get();
 
@@ -804,6 +880,9 @@ class LibraryDatabase extends _$LibraryDatabase {
           final sourceId = raw['sourceId'] as String?;
           final externalId = raw['externalId'] as String?;
           if (sourceId == null || externalId == null) continue;
+          // A local link names a file in the exporting device's storage; the
+          // file is not in the backup, so the link would dangle here.
+          if (sourceId == kLocalSourceId) continue;
 
           final albumExternalId = raw['albumExternalId'] as String?;
           final artistExternalId = raw['artistExternalId'] as String?;

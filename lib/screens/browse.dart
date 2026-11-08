@@ -4,6 +4,7 @@ import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/router.gr.dart';
 import 'package:groovy_box/core/tab_navigation.dart';
 import 'package:groovy_box/core/theme.dart';
+import 'package:groovy_box/library/local_import.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
@@ -47,13 +48,20 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen> {
     final recentAlbums = ref.watch(recentAlbumsProvider);
     final randomSongs = ref.watch(randomSongsProvider);
     final search = ref.watch(searchSongsProvider(_query));
-    final sources = ref.watch(librarySourcesProvider);
+    // The local library is always present, so "no library yet" means "no
+    // server yet": the page nudges instead of blocking.
+    final servers = ref.watch(librarySourcesProvider);
     // Select the identity, not the state: watching the whole transport would
     // rebuild this page on every position tick, once a second.
     final hasSong = ref.watch(
       playbackProvider.select((state) => state.current != null),
     );
     final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
+    // Empty until a read answers, so a first frame never flashes a shelf that
+    // the next frame removes.
+    final hasMusic =
+        (randomSongs.value?.isNotEmpty ?? false) ||
+        (recentAlbums.value?.isNotEmpty ?? false);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -69,14 +77,14 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen> {
                 child: PageHeader(
                   showRailToggle: true,
                   title: 'browseTitle'.tr(),
-                  subtitle: sources.isEmpty
+                  subtitle: servers.isEmpty
                       ? null
-                      : sources.length == 1
+                      : servers.length == 1
                       ? 'browseStreamingFrom'.tr(
-                          args: [sources.single.displayName],
+                          args: [servers.single.displayName],
                         )
                       : 'browseStreamingFromLibraries'.tr(
-                          args: ['${sources.length}'],
+                          args: ['${servers.length}'],
                         ),
                   actions: [
                     HeaderSettingsButton(
@@ -114,6 +122,8 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen> {
                   ),
                 ),
               ),
+              if (servers.isEmpty)
+                const SliverToBoxAdapter(child: _AddSourceCard()),
               if (_query.trim().isNotEmpty)
                 // Every branch returns a list of slivers, so `when` is typed
                 // to that and the whole thing spreads into the outer list.
@@ -131,6 +141,10 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen> {
                     ),
                   ],
                 )
+              else if (!hasMusic)
+                // Nothing to shelve yet: the card above is the whole page.
+                // Two empty headings would say the same thing twice.
+                const SliverToBoxAdapter(child: SizedBox.shrink())
               else ...[
                 SliverToBoxAdapter(
                   child: _SectionHeader(
@@ -257,6 +271,77 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen> {
         },
       ),
     ];
+  }
+}
+
+/// The one nudge this page makes: with no server connected the library is
+/// empty, and the way out is either connecting one or importing files already
+/// on this device. It is a card in the page, not a gate — the app is usable
+/// before either happens.
+class _AddSourceCard extends ConsumerWidget {
+  const _AddSourceCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        SolSpace.xl,
+        SolSpace.sm,
+        SolSpace.xl,
+        SolSpace.sm,
+      ),
+      child: IslandCard(
+        padding: const EdgeInsets.all(SolSpace.xl),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Symbols.cloud_off_rounded,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: SolSpace.sm),
+                Expanded(
+                  child: Text(
+                    'browseNoSourceTitle'.tr(),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: SolSpace.sm),
+            Text(
+              'browseNoSourceMessage'.tr(),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: SolSpace.lg),
+            Wrap(
+              spacing: SolSpace.sm,
+              runSpacing: SolSpace.sm,
+              children: [
+                FilledButton.icon(
+                  onPressed: () => context.router.push(const SetupRoute()),
+                  icon: const Icon(Symbols.add_rounded, size: 18),
+                  label: Text('browseAddSource'.tr()),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => importMusicFiles(context, ref),
+                  icon: const Icon(Symbols.file_open_rounded, size: 18),
+                  label: Text('browseImportFiles'.tr()),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

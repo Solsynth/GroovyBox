@@ -9,9 +9,9 @@ import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/core/glass.dart';
 import 'package:groovy_box/core/router.dart';
 import 'package:groovy_box/data/local/library_database.dart';
+import 'package:groovy_box/library/local_import.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/session.dart';
-import 'package:groovy_box/screens/setup.dart';
 import 'package:groovy_box/shell/window_frame.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
@@ -114,12 +114,24 @@ Future<void> main() async {
   }
   final prefs = await SharedPreferences.getInstance();
 
+  // Imported files live in the app's own support directory. Resolving it
+  // before the first frame keeps the local library synchronous to read, like
+  // the database; a platform that refuses it still runs, just without local
+  // files.
+  String? localLibraryPath;
+  try {
+    localLibraryPath = await localMusicDirectory();
+  } catch (error) {
+    debugPrint('[Library] Local music directory unavailable: $error');
+  }
+
   runApp(
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
         audioHandlerProvider.overrideWithValue(audioHandler),
         libraryDatabaseProvider.overrideWithValue(library),
+        localLibraryPathProvider.overrideWithValue(localLibraryPath),
       ],
       child: EasyLocalization(
         supportedLocales: kSupportedLocales,
@@ -140,7 +152,6 @@ class GroovyBoxApp extends ConsumerWidget {
     final themes = ref.watch(appThemeProvider);
     final themeMode = ref.watch(themeModeProvider);
     final router = ref.watch(routerProvider);
-    final connected = ref.watch(librarySourcesProvider).isNotEmpty;
     final glass = ref.watch(glassEffectsEnabledProvider);
 
     return MaterialApp.router(
@@ -186,14 +197,7 @@ class GroovyBoxApp extends ConsumerWidget {
               // Closing the window ends the app; a music player sitting in the
               // tray with no UI would be a surprise, not a convenience.
               onClose: () => windowManager.close(),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  connected
-                      ? (child ?? const SizedBox.shrink())
-                      : const SetupScreen(),
-                ],
-              ),
+              child: child ?? const SizedBox.shrink(),
             ),
           ),
         );

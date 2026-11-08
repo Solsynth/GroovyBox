@@ -10,6 +10,12 @@ library;
 /// as two route path segments.
 typedef LibraryRef = ({String sourceId, String id});
 
+/// The one source id files imported into this device are linked under.
+///
+/// Lives here rather than with the local source so the database can recognise
+/// a device-local link without importing the source implementation.
+const kLocalSourceId = 'local';
+
 class LibrarySong {
   /// Which [LibrarySource] owns this item.
   final String sourceId;
@@ -20,15 +26,16 @@ class LibrarySong {
   final String? artist;
   final String? artistId;
   final String? album;
+  final String? albumArtist;
   final String? albumId;
-
-  /// Opaque art handle; adapters interpret it.
-  final String? artId;
   final Duration duration;
   final int? track;
   final int? discNumber;
   final int? year;
   final String? genre;
+
+  /// Opaque art handle; adapters interpret it.
+  final String? artId;
 
   /// Optional MusicBrainz Recording ID or Track ID.
   final String? mbid;
@@ -41,6 +48,7 @@ class LibrarySong {
     this.artist,
     this.artistId,
     this.album,
+    this.albumArtist,
     this.albumId,
     this.artId,
     this.track,
@@ -58,11 +66,11 @@ class LibrarySong {
     'title': title,
     if (artist != null) 'artist': artist,
     if (artistId != null) 'artistId': artistId,
-    if (album != null) 'album': album,
+    if (albumArtist != null) 'albumArtist': albumArtist,
     if (albumId != null) 'albumId': albumId,
     if (artId != null) 'artId': artId,
     'durationMs': duration.inMilliseconds,
-    if (track != null) 'track': track,
+    if (album != null) 'album': album,
     if (discNumber != null) 'discNumber': discNumber,
     if (year != null) 'year': year,
     if (genre != null) 'genre': genre,
@@ -76,6 +84,7 @@ class LibrarySong {
     artist: json['artist'] as String?,
     artistId: json['artistId'] as String?,
     album: json['album'] as String?,
+    albumArtist: json['albumArtist'] as String?,
     albumId: json['albumId'] as String?,
     artId: json['artId'] as String?,
     duration: Duration(milliseconds: (json['durationMs'] as num?)?.toInt() ?? 0),

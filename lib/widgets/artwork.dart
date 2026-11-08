@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
@@ -158,16 +160,27 @@ class _Art extends StatelessWidget {
                 fit: StackFit.expand,
                 children: [
                   placeholder,
-                  Image.network(
-                    uri.toString(),
-                    fit: BoxFit.cover,
-                    gaplessPlayback: true,
-                    // The server is local or user-hosted and the URL carries
-                    // the signed token; caching it on disk would keep
-                    // credentials in the image cache. The in-memory cache is
-                    // enough for scrolling.
-                    errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                  ),
+                  // A local file is painted from disk; a server's cover is
+                  // fetched over HTTP. Both go through one widget so a list
+                  // mixing local and streamed songs never switches styles.
+                  if (uri.isScheme('file'))
+                    Image.file(
+                      File(uri.toFilePath()),
+                      fit: BoxFit.cover,
+                      gaplessPlayback: true,
+                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                    )
+                  else
+                    Image.network(
+                      uri.toString(),
+                      fit: BoxFit.cover,
+                      gaplessPlayback: true,
+                      // The server is local or user-hosted and the URL carries
+                      // the signed token; caching it on disk would keep
+                      // credentials in the image cache. The in-memory cache is
+                      // enough for scrolling.
+                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                    ),
                 ],
               ),
       ),

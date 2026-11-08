@@ -6,6 +6,7 @@ import '../data/local/library_database.dart';
 import '../widgets/common.dart';
 import 'aggregate.dart';
 import 'catalog.dart';
+import 'local_library.dart';
 import 'lrclib.dart';
 import 'lyrics.dart';
 import 'lyrics_resolver.dart';
@@ -16,18 +17,48 @@ import 'store.dart';
 
 part 'providers.g.dart';
 
+/// Where imported files live, injected by `main` once the platform has told
+/// the app its support directory. Null in tests and on a platform that cannot
+/// provide one, which simply means no local library.
+@Riverpod(keepAlive: true)
+String? localLibraryPath(Ref ref) => null;
+
+/// The library this device owns, or null when it cannot exist (no database,
+/// or no storage directory).
+@Riverpod(keepAlive: true)
+LocalLibrarySource? localLibrary(Ref ref) {
+  final database = ref.watch(libraryDatabaseProvider);
+  final path = ref.watch(localLibraryPathProvider);
+  if (database == null || path == null) return null;
+  return LocalLibrarySource(database: database, directory: path);
+}
+
 /// Every connected library, in the order the user added them.
+///
+/// Servers only: [librarySourcesWithLocalProvider] is what reads from when the
+/// question is "what music is there".
 @Riverpod(keepAlive: true)
 List<LibrarySource> librarySources(Ref ref) => [
   for (final config in ref.watch(sourceStoreProvider))
     librarySourceFromConfig(config),
 ];
 
+/// Everything that can serve music: the local library first, then the servers.
+///
+/// Local files come first because they are the ones guaranteed to answer; a
+/// dead server must not push a device's own music down a merged list.
+@Riverpod(keepAlive: true)
+List<LibrarySource> librarySourcesWithLocal(Ref ref) => [
+  ?ref.watch(localLibraryProvider),
+  ...ref.watch(librarySourcesProvider),
+];
+
 /// The same sources keyed by id, for resolving a stream or art URL from an
 /// item that only carries `sourceId`.
 @Riverpod(keepAlive: true)
 Map<String, LibrarySource> librarySourceById(Ref ref) => {
-  for (final source in ref.watch(librarySourcesProvider)) source.id: source,
+  for (final source in ref.watch(librarySourcesWithLocalProvider))
+    source.id: source,
 };
 
 /// The last failure of each source, so settings can show why it went quiet.
@@ -69,7 +100,7 @@ LibraryAggregator libraryAggregator(Ref ref) {
   }
 
   return LibraryAggregator(
-    ref.watch(librarySourcesProvider),
+    ref.watch(librarySourcesWithLocalProvider),
     onSongs: adopt,
     onFailure: (sourceId, error) =>
         ref.read(sourceFailuresProvider.notifier).report(sourceId, error),
@@ -88,7 +119,7 @@ class RecentAlbums extends AsyncNotifier<List<LibraryAlbum>> {
   Future<List<LibraryAlbum>> build() => _fetch();
 
   Future<List<LibraryAlbum>> _fetch() async {
-    if (ref.watch(librarySourcesProvider).isEmpty) return const [];
+    if (ref.watch(librarySourcesWithLocalProvider).isEmpty) return const [];
     return ref.watch(libraryAggregatorProvider).recentlyAdded(limit: 50);
   }
 
@@ -106,7 +137,7 @@ class RandomSongs extends AsyncNotifier<List<LibrarySong>> {
   Future<List<LibrarySong>> build() => _fetch();
 
   Future<List<LibrarySong>> _fetch() async {
-    if (ref.watch(librarySourcesProvider).isEmpty) return const [];
+    if (ref.watch(librarySourcesWithLocalProvider).isEmpty) return const [];
     return ref.watch(libraryAggregatorProvider).randomSongs(size: 40);
   }
 
@@ -124,7 +155,7 @@ class Playlists extends AsyncNotifier<List<LibraryPlaylist>> {
   Future<List<LibraryPlaylist>> build() => _fetch();
 
   Future<List<LibraryPlaylist>> _fetch() async {
-    if (ref.watch(librarySourcesProvider).isEmpty) return const [];
+    if (ref.watch(librarySourcesWithLocalProvider).isEmpty) return const [];
     return ref.watch(libraryAggregatorProvider).playlists();
   }
 
@@ -156,7 +187,7 @@ Future<List<LibrarySong>> playlistSongs(Ref ref, LibraryRef playlist) async {
 Future<List<LibrarySong>> searchSongs(Ref ref, String query) async {
   final trimmed = query.trim();
   if (trimmed.isEmpty) return const [];
-  if (ref.watch(librarySourcesProvider).isEmpty) return const [];
+  if (ref.watch(librarySourcesWithLocalProvider).isEmpty) return const [];
   return ref.watch(libraryAggregatorProvider).search(trimmed);
 }
 

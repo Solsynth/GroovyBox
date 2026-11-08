@@ -8,7 +8,11 @@ import 'subsonic_adapter.dart';
 /// The kinds of library GroovyBox can talk to.
 enum LibraryKind {
   subsonic('libraryKindSubsonic', 'libraryAddressSubsonic'),
-  jellyfin('libraryKindJellyfin', 'libraryAddressJellyfin');
+  jellyfin('libraryKindJellyfin', 'libraryAddressJellyfin'),
+
+  /// Files this device owns. There is nothing to sign in to, so this kind has
+  /// no adapter: [LocalLibrarySource] is constructed directly.
+  local('libraryKindLocal', '');
 
   const LibraryKind(this.labelKey, this.addressHintKey);
 

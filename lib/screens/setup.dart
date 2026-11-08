@@ -3,7 +3,6 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/services.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/models.dart';
-import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/library/store.dart';
 import 'package:groovy_box/widgets/common.dart';
@@ -11,12 +10,12 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// Connection screen for a music library.
+/// Adding a library.
 ///
-/// Shown instead of the shell whenever no library is connected, and pushed from
-/// settings to add another one. "Test connection" and "Connect" run the same
-/// adapter call; the test button exists so the user can validate an address
-/// without committing to it.
+/// Pushed from settings and from the browse page's nudge; it is never the app's
+/// root any more, so it always has somewhere to go back to. "Test connection"
+/// and "Connect" run the same adapter call; the test button exists so the user
+/// can validate an address without committing to it.
 @RoutePage()
 class SetupScreen extends ConsumerStatefulWidget {
   const SetupScreen({super.key});
@@ -34,16 +33,6 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   bool _busy = false;
   String? _error;
   String? _success;
-
-  /// Whether the app already had a library when this screen opened: adding a
-  /// second one returns to settings, the first one just enters the app.
-  late final bool _hadSources;
-
-  @override
-  void initState() {
-    super.initState();
-    _hadSources = ref.read(librarySourcesProvider).isNotEmpty;
-  }
 
   @override
   void dispose() {
@@ -66,9 +55,8 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final router = StackRouterScope.of(context)?.controller;
-    final canLeave = _hadSources ||
-        (router?.canPop() ?? false) ||
+    final canLeave =
+        (StackRouterScope.of(context)?.controller.canPop() ?? false) ||
         (Navigator.maybeOf(context)?.canPop() ?? false);
 
     return PopScope(
@@ -301,10 +289,9 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       if (config == null) return;
       await ref.read(sourceStoreProvider.notifier).add(config);
       TextInput.finishAutofillContext();
-      // With a library already connected this was pushed from settings, so
-      // the user needs to go back; on first run the app swaps the shell in
-      // underneath and popping would leave nothing.
-      if (mounted && _hadSources) _leave();
+      // The screen was pushed over the shell, so the shell is always there to
+      // return to; a first connection is no different from a fifth.
+      if (mounted) _leave();
     } on LibraryException catch (error) {
       if (!mounted) return;
       setState(() => _error = describeServerError(error));
