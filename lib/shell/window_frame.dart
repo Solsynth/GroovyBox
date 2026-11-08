@@ -84,7 +84,10 @@ class DesktopWindowFrame extends HookWidget {
               ],
             ),
           )
-        : Stack(fit: StackFit.expand, children: [child, ...overlays]);
+        : Material(
+            color: Theme.of(context).colorScheme.surface,
+            child: Stack(fit: StackFit.expand, children: [child, ...overlays]),
+          );
 
     return Focus(
       focusNode: keyboardFocusNode,
