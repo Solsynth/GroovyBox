@@ -256,6 +256,11 @@ class SolarpassScrobbler {
   String? _lastScrobbledKey;
   bool _disposed = false;
 
+  LibrarySong? _activeSong;
+  DateTime? _playStartedAt;
+  Duration _listenedDuration = Duration.zero;
+  DateTime? _lastResumeTime;
+
   void init() {
     _ref.listen<PlaybackState>(playbackProvider, (prev, next) {
       _onPlaybackChanged(prev, next);
@@ -286,26 +291,99 @@ class SolarpassScrobbler {
       _pauseDebounceTimer = null;
 
       final key = '${song.sourceId}:${song.id}';
-      if (_lastScrobbledKey != key || prev?.playing != true) {
+      if (_lastScrobbledKey != key) {
+        // Different song started: finalize previous song scrobble if eligible
+        _commitPendingScrobble();
+
+        _activeSong = song;
+        _playStartedAt = DateTime.now();
+        _listenedDuration = Duration.zero;
+        _lastResumeTime = DateTime.now();
         _lastScrobbledKey = key;
+
+        _scrobbleTrack(song, next.position);
+      } else if (prev?.playing != true) {
+        // Resumed playing same song
+        _lastResumeTime = DateTime.now();
         _scrobbleTrack(song, next.position);
       }
       _ensureHeartbeat();
     } else {
-      // If paused or queue cleared, debounce clearing activity by 30 seconds
-      // so seeking/buffering/pausing doesn't flap presence
+      // Paused or playback stopped
+      if (_lastResumeTime != null) {
+        _listenedDuration += DateTime.now().difference(_lastResumeTime!);
+        _lastResumeTime = null;
+      }
+
       _heartbeatTimer?.cancel();
       _heartbeatTimer = null;
+
       if (song == null) {
-        // Immediate clear if queue ended
+        // Queue finished or cleared: commit pending scrobble and clear presence
+        _commitPendingScrobble();
         _clearPresence();
       } else {
+        // Paused on track: debounce clearing activity by 30 seconds
         _pauseDebounceTimer ??= Timer(const Duration(seconds: 30), () {
           if (!_disposed && !_ref.read(playbackProvider).playing) {
             _clearPresence();
           }
         });
       }
+    }
+  }
+
+  void _commitPendingScrobble() {
+    if (_activeSong == null) return;
+    if (_lastResumeTime != null) {
+      _listenedDuration += DateTime.now().difference(_lastResumeTime!);
+      _lastResumeTime = null;
+    }
+
+    final song = _activeSong!;
+    final listened = _listenedDuration;
+    final playedAt = _playStartedAt ?? DateTime.now();
+
+    // Check Last.fm standard rule: listened >= 30s or >= 50% track duration
+    final songSec = song.duration.inSeconds;
+    final listenedSec = listened.inSeconds;
+    final isEligible = listenedSec >= 30 || (songSec > 0 && listenedSec >= (songSec / 2));
+
+    if (isEligible) {
+      _submitPermanentScrobble(song, listened, playedAt);
+    }
+
+    _activeSong = null;
+    _listenedDuration = Duration.zero;
+    _playStartedAt = null;
+  }
+
+  Future<void> _submitPermanentScrobble(
+    LibrarySong song,
+    Duration listened,
+    DateTime playedAt,
+  ) async {
+    final session = await _ref.read(solarpassSessionProvider.notifier).validSession();
+    if (session == null) return;
+
+    final client = _ref.read(solarpassClientProvider);
+    final sources = _ref.read(librarySourceByIdProvider);
+    final artUri = sources[song.sourceId]?.artworkUri(song.artId);
+
+    try {
+      await client.submitScrobble(
+        session: session,
+        title: song.title,
+        artist: song.artist,
+        album: song.album,
+        duration: song.duration,
+        listened: listened,
+        artworkUrl: artUri?.toString(),
+        trackId: song.id,
+        playedAt: playedAt,
+      );
+    } catch (e) {
+      debugPrint('[Solarpass] Submit scrobble error: $e');
     }
   }
 
@@ -385,6 +463,7 @@ class SolarpassScrobbler {
 
   void dispose() {
     _disposed = true;
+    _commitPendingScrobble();
     _heartbeatTimer?.cancel();
     _pauseDebounceTimer?.cancel();
   }

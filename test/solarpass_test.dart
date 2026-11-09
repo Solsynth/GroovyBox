@@ -251,6 +251,96 @@ void main() {
       expect(deleteRequest, isNotNull);
       expect(deleteRequest!.queryParameters['manualId'], 'groovybox:now_playing');
     });
+
+    test('setPresenceActivity prioritizes Pulsar now-playing endpoint', () async {
+      final dio = Dio();
+      RequestOptions? recordedRequest;
+      dio.httpClientAdapter = _MockDioAdapter((options) async {
+        if (options.path.contains('/pulsar/sessions/now-playing')) {
+          recordedRequest = options;
+          return ResponseBody.fromString('{"status":"ok"}', 200);
+        }
+        return ResponseBody.fromString('Not Found', 404);
+      });
+
+      final client = SolarpassClient(dio: dio);
+      await client.setPresenceActivity(
+        session: const OAuthSession(accessToken: 'valid_token'),
+        title: 'Brave Song',
+        artist: 'Aoi Tada',
+        album: 'Angel Beats! OST',
+        duration: const Duration(minutes: 5, seconds: 25),
+        position: const Duration(minutes: 1, seconds: 15),
+        trackId: 'track_99',
+      );
+
+      expect(recordedRequest, isNotNull);
+      final data = recordedRequest!.data as Map<String, dynamic>;
+      expect(data['domain'], 'music');
+      expect(data['manual_id'], 'groovybox:now_playing');
+      expect(data['provider'], 'groovybox');
+      expect(data['provider_key'], 'track_99');
+      expect(data['title'], 'Brave Song');
+      expect(data['subtitle'], 'Aoi Tada');
+      expect(data['caption'], 'Angel Beats! OST');
+      expect(data['progress_seconds'], 75);
+      expect(data['duration_seconds'], 325);
+    });
+
+    test('submitScrobble posts to Pulsar scrobbles endpoint', () async {
+      final dio = Dio();
+      RequestOptions? recordedRequest;
+      dio.httpClientAdapter = _MockDioAdapter((options) async {
+        if (options.path.contains('/pulsar/scrobbles')) {
+          recordedRequest = options;
+          return ResponseBody.fromString('{"id":"scrobble_1"}', 200);
+        }
+        return ResponseBody.fromString('Not Found', 404);
+      });
+
+      final client = SolarpassClient(dio: dio);
+      await client.submitScrobble(
+        session: const OAuthSession(accessToken: 'valid_token'),
+        title: 'Brave Song',
+        artist: 'Aoi Tada',
+        album: 'Angel Beats! OST',
+        duration: const Duration(minutes: 5, seconds: 25),
+        listened: const Duration(minutes: 4),
+        trackId: 'track_99',
+      );
+
+      expect(recordedRequest, isNotNull);
+      final data = recordedRequest!.data as Map<String, dynamic>;
+      expect(data['domain'], 'music');
+      expect(data['client_name'], 'groovybox');
+      expect(data['title'], 'Brave Song');
+      expect(data['subtitle'], 'Aoi Tada');
+      expect(data['duration_seconds'], 325);
+      expect(data['listened_seconds'], 240);
+      expect(data['provider'], 'groovybox');
+      expect(data['provider_key'], 'track_99');
+    });
+
+    test('clearPresenceActivity prioritizes Pulsar sessions end endpoint', () async {
+      final dio = Dio();
+      RequestOptions? recordedRequest;
+      dio.httpClientAdapter = _MockDioAdapter((options) async {
+        if (options.path.contains('/pulsar/sessions/end')) {
+          recordedRequest = options;
+          return ResponseBody.fromString('{"status":"ended"}', 200);
+        }
+        return ResponseBody.fromString('Not Found', 404);
+      });
+
+      final client = SolarpassClient(dio: dio);
+      await client.clearPresenceActivity(
+        session: const OAuthSession(accessToken: 'valid_token'),
+      );
+
+      expect(recordedRequest, isNotNull);
+      final data = recordedRequest!.data as Map<String, dynamic>;
+      expect(data['manual_id'], 'groovybox:now_playing');
+    });
   });
 
   group('Solarpass Providers and Scrobbler', () {

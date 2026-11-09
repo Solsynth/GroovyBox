@@ -315,7 +315,7 @@ class SolarpassClient {
     throw const OAuthException('Failed to fetch account info from Solarpass.');
   }
 
-  /// Sends now playing activity to Solar Network presence.
+  /// Sends now playing activity to Solar Network presence (Pulsar or Stargate fallback).
   Future<void> setPresenceActivity({
     required OAuthSession session,
     required String title,
@@ -332,6 +332,44 @@ class SolarpassClient {
       'Authorization': '${session.tokenType} ${session.accessToken}',
     };
 
+    // 1. Try Pulsar modern playback session endpoint
+    final pulsarPayload = <String, dynamic>{
+      'manual_id': 'groovybox:now_playing',
+      'domain': 'music',
+      'title': title,
+      if (artist != null && artist.isNotEmpty) 'subtitle': artist,
+      if (album != null && album.isNotEmpty) 'caption': album,
+      if (artworkUrl != null && artworkUrl.isNotEmpty) 'artwork_url': artworkUrl,
+      'progress_seconds': position?.inSeconds ?? 0,
+      'duration_seconds': duration?.inSeconds ?? 0,
+      'lease_minutes': 5,
+      'provider': 'groovybox',
+      if (trackId != null && trackId.isNotEmpty) 'provider_key': trackId,
+      'meta': {
+        'source': 'groovybox',
+        'provider': 'groovybox',
+        'playback_rate': 1.0,
+      },
+    };
+
+    for (final path in ['/pulsar/sessions/now-playing', '/api/sessions/now-playing']) {
+      try {
+        await _dio.post(
+          '$_issuer$path',
+          data: pulsarPayload,
+          options: Options(headers: headers),
+        );
+        debugPrint('[Solarpass] Successfully reported now-playing to Pulsar ($path): $title - $artist');
+        return;
+      } on DioException catch (e) {
+        if (e.response?.statusCode != 404) {
+          debugPrint('[Solarpass] Error posting now-playing to $path: ${e.response?.statusCode} ${e.response?.data}');
+          rethrow;
+        }
+      }
+    }
+
+    // 2. Fallback to legacy Stargate activities endpoints
     final terms = <String>[
       if (title.isNotEmpty) title,
       if (artist != null && artist.isNotEmpty) artist,
@@ -361,7 +399,6 @@ class SolarpassClient {
       'lease_minutes': 5,
     };
 
-    // Try /stargate/activities first, then /api/activities
     for (final path in ['/stargate/activities', '/api/activities']) {
       try {
         await _dio.post(
@@ -380,13 +417,86 @@ class SolarpassClient {
     }
   }
 
-  /// Clears active presence activity.
-  Future<void> clearPresenceActivity({required OAuthSession session}) async {
+  /// Submits completed playback scrobble to Pulsar scrobbles history.
+  Future<void> submitScrobble({
+    required OAuthSession session,
+    required String title,
+    String? artist,
+    String? album,
+    Duration? duration,
+    Duration? listened,
+    String? artworkUrl,
+    String? trackId,
+    DateTime? playedAt,
+  }) async {
     final headers = {
       'Accept': 'application/json',
+      'Content-Type': 'application/json',
       'Authorization': '${session.tokenType} ${session.accessToken}',
     };
 
+    final pulsarPayload = <String, dynamic>{
+      'domain': 'music',
+      'client_name': 'groovybox',
+      'title': title,
+      if (artist != null && artist.isNotEmpty) 'subtitle': artist,
+      if (album != null && album.isNotEmpty) 'caption': album,
+      if (artworkUrl != null && artworkUrl.isNotEmpty) 'artwork_url': artworkUrl,
+      'duration_seconds': duration?.inSeconds ?? 0,
+      'listened_seconds': listened?.inSeconds ?? duration?.inSeconds ?? 0,
+      if (playedAt != null) 'played_at': playedAt.toUtc().toIso8601String(),
+      'provider': 'groovybox',
+      if (trackId != null && trackId.isNotEmpty) 'provider_key': trackId,
+      'meta': {
+        'source': 'groovybox',
+        'client': 'groovybox',
+      },
+    };
+
+    for (final path in ['/pulsar/scrobbles', '/api/scrobbles']) {
+      try {
+        await _dio.post(
+          '$_issuer$path',
+          data: pulsarPayload,
+          options: Options(headers: headers),
+        );
+        debugPrint('[Solarpass] Successfully submitted scrobble to Pulsar ($path): $title - $artist');
+        return;
+      } on DioException catch (e) {
+        if (e.response?.statusCode != 404) {
+          debugPrint('[Solarpass] Error submitting scrobble to $path: ${e.response?.statusCode} ${e.response?.data}');
+          rethrow;
+        }
+      }
+    }
+  }
+
+  /// Clears active presence activity in Pulsar or Stargate.
+  Future<void> clearPresenceActivity({required OAuthSession session}) async {
+    final headers = {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'Authorization': '${session.tokenType} ${session.accessToken}',
+    };
+
+    // 1. Try Pulsar session end
+    for (final path in ['/pulsar/sessions/end', '/api/sessions/end']) {
+      try {
+        await _dio.post(
+          '$_issuer$path',
+          data: {'manual_id': 'groovybox:now_playing'},
+          options: Options(headers: headers),
+        );
+        debugPrint('[Solarpass] Ended active session on Pulsar ($path)');
+        return;
+      } on DioException catch (e) {
+        if (e.response?.statusCode != 404) {
+          debugPrint('[Solarpass] Error ending session on $path: ${e.response?.statusCode}');
+        }
+      }
+    }
+
+    // 2. Fallback to Stargate DELETE /activities
     for (final path in ['/stargate/activities', '/api/activities']) {
       try {
         await _dio.delete(
