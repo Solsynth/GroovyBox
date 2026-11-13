@@ -312,5 +312,15 @@
   "solarpassCopyCode": "复制验证码",
   "solarpassOpenPage": "打开验证页面",
   "solarpassCopiedToClipboard": "代码已复制到剪贴板",
-  "solarpassWaitingForApproval": "正在等待浏览器授权..."
+  "solarpassWaitingForApproval": "正在等待浏览器授权...",
+  "settingsSectionLibrarySync": "曲库同步",
+  "settingsLibrarySync": "同步此曲库",
+  "settingsLibrarySyncSubtitle": "将歌曲、歌词与播放历史同步到登录同一账号的每台设备。曲库来源及其密码永远不会离开本设备。",
+  "settingsLibrarySyncNow": "立即同步",
+  "settingsLibrarySyncDisabled": "本设备已关闭曲库同步。",
+  "settingsLibrarySyncNeedsSignIn": "登录 Solarpass 后即可同步曲库。",
+  "settingsLibrarySyncProgress": "正在同步…",
+  "settingsLibrarySyncFailed": "同步失败，请检查网络后重试。",
+  "settingsLibrarySyncLastSync": {"one": "{} 分钟前已同步", "other": "{} 分钟前已同步"},
+  "settingsLibrarySyncDevices": {"one": "{} 台设备", "other": "{} 台设备"}
 }

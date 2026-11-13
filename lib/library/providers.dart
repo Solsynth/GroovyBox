@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../core/app.dart';
 import '../data/local/library_database.dart';
 import '../widgets/common.dart';
 import 'aggregate.dart';
@@ -13,6 +14,7 @@ import 'lyrics_resolver.dart';
 import 'lyrics_store.dart';
 import 'models.dart';
 import 'source.dart';
+import '../library_sync/queue.dart';
 import 'store.dart';
 
 part 'providers.g.dart';
@@ -202,17 +204,31 @@ Future<List<LibrarySong>> searchSongs(Ref ref, String query) async {
 LibraryDatabase? libraryDatabase(Ref ref) => null;
 
 /// The app's view of the local library.
+///
+/// Its deletion callbacks queue the matching tombstones for Library Sync, so a
+/// forgotten source or a dropped lyric propagates to the other devices.
 @Riverpod(keepAlive: true)
 LibraryCatalog? libraryCatalog(Ref ref) {
   final database = ref.watch(libraryDatabaseProvider);
-  return database == null ? null : LibraryCatalog(database);
+  if (database == null) return null;
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return LibraryCatalog(
+    database,
+    onLinksForgotten: (sourceId, externalIds) =>
+        queueLinkDeletes(prefs, sourceId, externalIds),
+  );
 }
 
 /// The stored lyrics of each track.
 @Riverpod(keepAlive: true)
 LyricsStore? lyricsStore(Ref ref) {
   final database = ref.watch(libraryDatabaseProvider);
-  return database == null ? null : LyricsStore(database);
+  if (database == null) return null;
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return LyricsStore(
+    database,
+    onDropped: (fingerprints) => queueLyricsDeletes(prefs, fingerprints),
+  );
 }
 
 /// The LRCLIB client, shared so its rate-limit state is too.

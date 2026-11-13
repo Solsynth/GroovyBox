@@ -2002,6 +2002,17 @@ class $PlayEventsTable extends PlayEvents
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _touchedAtMeta = const VerificationMeta(
+    'touchedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> touchedAt = GeneratedColumn<DateTime>(
+    'touched_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -2011,6 +2022,7 @@ class $PlayEventsTable extends PlayEvents
     listenedMs,
     positionMs,
     completed,
+    touchedAt,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2069,6 +2081,12 @@ class $PlayEventsTable extends PlayEvents
         completed.isAcceptableOrUnknown(data['completed']!, _completedMeta),
       );
     }
+    if (data.containsKey('touched_at')) {
+      context.handle(
+        _touchedAtMeta,
+        touchedAt.isAcceptableOrUnknown(data['touched_at']!, _touchedAtMeta),
+      );
+    }
     return context;
   }
 
@@ -2106,6 +2124,10 @@ class $PlayEventsTable extends PlayEvents
         DriftSqlType.bool,
         data['${effectivePrefix}completed'],
       )!,
+      touchedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}touched_at'],
+      ),
     );
   }
 
@@ -2123,6 +2145,11 @@ class PlayEventRow extends DataClass implements Insertable<PlayEventRow> {
   final int listenedMs;
   final int positionMs;
   final bool completed;
+
+  /// When this row last changed in place. The row itself carries no other
+  /// clock: [PlayTracker] rewrites progress as the track plays, so without this
+  /// an advance would be invisible to any sync that compares timestamps.
+  final DateTime? touchedAt;
   const PlayEventRow({
     required this.id,
     required this.trackId,
@@ -2131,6 +2158,7 @@ class PlayEventRow extends DataClass implements Insertable<PlayEventRow> {
     required this.listenedMs,
     required this.positionMs,
     required this.completed,
+    this.touchedAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -2142,6 +2170,9 @@ class PlayEventRow extends DataClass implements Insertable<PlayEventRow> {
     map['listened_ms'] = Variable<int>(listenedMs);
     map['position_ms'] = Variable<int>(positionMs);
     map['completed'] = Variable<bool>(completed);
+    if (!nullToAbsent || touchedAt != null) {
+      map['touched_at'] = Variable<DateTime>(touchedAt);
+    }
     return map;
   }
 
@@ -2154,6 +2185,9 @@ class PlayEventRow extends DataClass implements Insertable<PlayEventRow> {
       listenedMs: Value(listenedMs),
       positionMs: Value(positionMs),
       completed: Value(completed),
+      touchedAt: touchedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(touchedAt),
     );
   }
 
@@ -2170,6 +2204,7 @@ class PlayEventRow extends DataClass implements Insertable<PlayEventRow> {
       listenedMs: serializer.fromJson<int>(json['listenedMs']),
       positionMs: serializer.fromJson<int>(json['positionMs']),
       completed: serializer.fromJson<bool>(json['completed']),
+      touchedAt: serializer.fromJson<DateTime?>(json['touchedAt']),
     );
   }
   @override
@@ -2183,6 +2218,7 @@ class PlayEventRow extends DataClass implements Insertable<PlayEventRow> {
       'listenedMs': serializer.toJson<int>(listenedMs),
       'positionMs': serializer.toJson<int>(positionMs),
       'completed': serializer.toJson<bool>(completed),
+      'touchedAt': serializer.toJson<DateTime?>(touchedAt),
     };
   }
 
@@ -2194,6 +2230,7 @@ class PlayEventRow extends DataClass implements Insertable<PlayEventRow> {
     int? listenedMs,
     int? positionMs,
     bool? completed,
+    Value<DateTime?> touchedAt = const Value.absent(),
   }) => PlayEventRow(
     id: id ?? this.id,
     trackId: trackId ?? this.trackId,
@@ -2202,6 +2239,7 @@ class PlayEventRow extends DataClass implements Insertable<PlayEventRow> {
     listenedMs: listenedMs ?? this.listenedMs,
     positionMs: positionMs ?? this.positionMs,
     completed: completed ?? this.completed,
+    touchedAt: touchedAt.present ? touchedAt.value : this.touchedAt,
   );
   PlayEventRow copyWithCompanion(PlayEventsCompanion data) {
     return PlayEventRow(
@@ -2216,6 +2254,7 @@ class PlayEventRow extends DataClass implements Insertable<PlayEventRow> {
           ? data.positionMs.value
           : this.positionMs,
       completed: data.completed.present ? data.completed.value : this.completed,
+      touchedAt: data.touchedAt.present ? data.touchedAt.value : this.touchedAt,
     );
   }
 
@@ -2228,7 +2267,8 @@ class PlayEventRow extends DataClass implements Insertable<PlayEventRow> {
           ..write('startedAt: $startedAt, ')
           ..write('listenedMs: $listenedMs, ')
           ..write('positionMs: $positionMs, ')
-          ..write('completed: $completed')
+          ..write('completed: $completed, ')
+          ..write('touchedAt: $touchedAt')
           ..write(')'))
         .toString();
   }
@@ -2242,6 +2282,7 @@ class PlayEventRow extends DataClass implements Insertable<PlayEventRow> {
     listenedMs,
     positionMs,
     completed,
+    touchedAt,
   );
   @override
   bool operator ==(Object other) =>
@@ -2253,7 +2294,8 @@ class PlayEventRow extends DataClass implements Insertable<PlayEventRow> {
           other.startedAt == this.startedAt &&
           other.listenedMs == this.listenedMs &&
           other.positionMs == this.positionMs &&
-          other.completed == this.completed);
+          other.completed == this.completed &&
+          other.touchedAt == this.touchedAt);
 }
 
 class PlayEventsCompanion extends UpdateCompanion<PlayEventRow> {
@@ -2264,6 +2306,7 @@ class PlayEventsCompanion extends UpdateCompanion<PlayEventRow> {
   final Value<int> listenedMs;
   final Value<int> positionMs;
   final Value<bool> completed;
+  final Value<DateTime?> touchedAt;
   const PlayEventsCompanion({
     this.id = const Value.absent(),
     this.trackId = const Value.absent(),
@@ -2272,6 +2315,7 @@ class PlayEventsCompanion extends UpdateCompanion<PlayEventRow> {
     this.listenedMs = const Value.absent(),
     this.positionMs = const Value.absent(),
     this.completed = const Value.absent(),
+    this.touchedAt = const Value.absent(),
   });
   PlayEventsCompanion.insert({
     this.id = const Value.absent(),
@@ -2281,6 +2325,7 @@ class PlayEventsCompanion extends UpdateCompanion<PlayEventRow> {
     this.listenedMs = const Value.absent(),
     this.positionMs = const Value.absent(),
     this.completed = const Value.absent(),
+    this.touchedAt = const Value.absent(),
   }) : trackId = Value(trackId),
        sourceId = Value(sourceId),
        startedAt = Value(startedAt);
@@ -2292,6 +2337,7 @@ class PlayEventsCompanion extends UpdateCompanion<PlayEventRow> {
     Expression<int>? listenedMs,
     Expression<int>? positionMs,
     Expression<bool>? completed,
+    Expression<DateTime>? touchedAt,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -2301,6 +2347,7 @@ class PlayEventsCompanion extends UpdateCompanion<PlayEventRow> {
       if (listenedMs != null) 'listened_ms': listenedMs,
       if (positionMs != null) 'position_ms': positionMs,
       if (completed != null) 'completed': completed,
+      if (touchedAt != null) 'touched_at': touchedAt,
     });
   }
 
@@ -2312,6 +2359,7 @@ class PlayEventsCompanion extends UpdateCompanion<PlayEventRow> {
     Value<int>? listenedMs,
     Value<int>? positionMs,
     Value<bool>? completed,
+    Value<DateTime?>? touchedAt,
   }) {
     return PlayEventsCompanion(
       id: id ?? this.id,
@@ -2321,6 +2369,7 @@ class PlayEventsCompanion extends UpdateCompanion<PlayEventRow> {
       listenedMs: listenedMs ?? this.listenedMs,
       positionMs: positionMs ?? this.positionMs,
       completed: completed ?? this.completed,
+      touchedAt: touchedAt ?? this.touchedAt,
     );
   }
 
@@ -2348,6 +2397,9 @@ class PlayEventsCompanion extends UpdateCompanion<PlayEventRow> {
     if (completed.present) {
       map['completed'] = Variable<bool>(completed.value);
     }
+    if (touchedAt.present) {
+      map['touched_at'] = Variable<DateTime>(touchedAt.value);
+    }
     return map;
   }
 
@@ -2360,7 +2412,8 @@ class PlayEventsCompanion extends UpdateCompanion<PlayEventRow> {
           ..write('startedAt: $startedAt, ')
           ..write('listenedMs: $listenedMs, ')
           ..write('positionMs: $positionMs, ')
-          ..write('completed: $completed')
+          ..write('completed: $completed, ')
+          ..write('touchedAt: $touchedAt')
           ..write(')'))
         .toString();
   }
@@ -5284,6 +5337,7 @@ typedef $$PlayEventsTableCreateCompanionBuilder = PlayEventsCompanion Function({
   Value<int> listenedMs,
   Value<int> positionMs,
   Value<bool> completed,
+  Value<DateTime?> touchedAt,
 });
 typedef $$PlayEventsTableUpdateCompanionBuilder = PlayEventsCompanion Function({
   Value<int> id,
@@ -5293,6 +5347,7 @@ typedef $$PlayEventsTableUpdateCompanionBuilder = PlayEventsCompanion Function({
   Value<int> listenedMs,
   Value<int> positionMs,
   Value<bool> completed,
+  Value<DateTime?> touchedAt,
 });
 
 final class $$PlayEventsTableReferences
@@ -5353,6 +5408,11 @@ class $$PlayEventsTableFilterComposer
 
   ColumnFilters<bool> get completed => $composableBuilder(
     column: $table.completed,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get touchedAt => $composableBuilder(
+    column: $table.touchedAt,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5419,6 +5479,11 @@ class $$PlayEventsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get touchedAt => $composableBuilder(
+    column: $table.touchedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$TracksTableOrderingComposer get trackId {
     final $$TracksTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -5473,6 +5538,9 @@ class $$PlayEventsTableAnnotationComposer
 
   GeneratedColumn<bool> get completed =>
       $composableBuilder(column: $table.completed, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get touchedAt =>
+      $composableBuilder(column: $table.touchedAt, builder: (column) => column);
 
   $$TracksTableAnnotationComposer get trackId {
     final $$TracksTableAnnotationComposer composer = $composerBuilder(
@@ -5533,6 +5601,7 @@ class $$PlayEventsTableTableManager
                 Value<int> listenedMs = const Value.absent(),
                 Value<int> positionMs = const Value.absent(),
                 Value<bool> completed = const Value.absent(),
+                Value<DateTime?> touchedAt = const Value.absent(),
               }) => PlayEventsCompanion(
                 id: id,
                 trackId: trackId,
@@ -5541,6 +5610,7 @@ class $$PlayEventsTableTableManager
                 listenedMs: listenedMs,
                 positionMs: positionMs,
                 completed: completed,
+                touchedAt: touchedAt,
               ),
           createCompanionCallback:
               ({
@@ -5551,6 +5621,7 @@ class $$PlayEventsTableTableManager
                 Value<int> listenedMs = const Value.absent(),
                 Value<int> positionMs = const Value.absent(),
                 Value<bool> completed = const Value.absent(),
+                Value<DateTime?> touchedAt = const Value.absent(),
               }) => PlayEventsCompanion.insert(
                 id: id,
                 trackId: trackId,
@@ -5559,6 +5630,7 @@ class $$PlayEventsTableTableManager
                 listenedMs: listenedMs,
                 positionMs: positionMs,
                 completed: completed,
+                touchedAt: touchedAt,
               ),
           withReferenceMapper: (p0) => p0
               .map(

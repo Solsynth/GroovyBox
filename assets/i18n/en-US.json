@@ -312,5 +312,15 @@
   "solarpassCopyCode": "Copy code",
   "solarpassOpenPage": "Open page",
   "solarpassCopiedToClipboard": "Code copied to clipboard",
-  "solarpassWaitingForApproval": "Waiting for authorization in browser..."
+  "solarpassWaitingForApproval": "Waiting for authorization in browser...",
+  "settingsSectionLibrarySync": "Library Sync",
+  "settingsLibrarySync": "Sync this library",
+  "settingsLibrarySyncSubtitle": "Keep tracks, lyrics and play history on every device signed in to this account. Sources and their passwords never leave this device.",
+  "settingsLibrarySyncNow": "Sync now",
+  "settingsLibrarySyncDisabled": "Library Sync is off on this device.",
+  "settingsLibrarySyncNeedsSignIn": "Sign in with Solarpass to sync your library.",
+  "settingsLibrarySyncProgress": "Syncing…",
+  "settingsLibrarySyncFailed": "Sync failed. Check the connection and try again.",
+  "settingsLibrarySyncLastSync": {"one": "Synced {} minute ago", "other": "Synced {} minutes ago"},
+  "settingsLibrarySyncDevices": {"one": "{} device", "other": "{} devices"}
 }

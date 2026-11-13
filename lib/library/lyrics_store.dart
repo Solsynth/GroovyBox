@@ -45,10 +45,15 @@ class CachedLyrics {
 /// the words belong to: re-tagged metadata, a re-linked server or a second
 /// source serving the same song all read the same answer.
 class LyricsStore {
-  LyricsStore(this._db, {DateTime Function()? clock})
+  LyricsStore(this._db, {DateTime Function()? clock, this.onDropped})
     : _clock = clock ?? DateTime.now;
 
   final LibraryDatabase _db;
+
+  /// Called with the fingerprints of every track whose stored answer was
+  /// dropped, so a sync can queue the matching tombstones. Null when nothing
+  /// listens, e.g. in tests.
+  final void Function(List<String> fingerprints)? onDropped;
 
   /// Read through on every use so a test can move time without a rebuild.
   final DateTime Function() _clock;
@@ -123,9 +128,16 @@ class LyricsStore {
       );
 
   /// Drops one track's answer, so the next play asks again.
-  Future<void> remove(int trackId) => (_db.delete(
-    _db.lyricsEntries,
-  )..where((entry) => entry.trackId.equals(trackId))).go();
+  ///
+  /// The fingerprint is resolved before the delete: the row that names it is
+  /// what a tombstone has to carry.
+  Future<void> remove(int trackId) async {
+    final fingerprint = await _db.fingerprintOf(trackId);
+    await (_db.delete(
+      _db.lyricsEntries,
+    )..where((entry) => entry.trackId.equals(trackId))).go();
+    if (fingerprint != null) onDropped?.call([fingerprint]);
+  }
 
   /// How many tracks have an answer stored, for the settings row.
   Future<int> count() async =>
@@ -135,9 +147,13 @@ class LyricsStore {
           .read<int>('n');
 
   /// Empties the cache and vacuum-packs the file it left behind.
+  ///
+  /// Every fingerprint is read before the delete, one tombstone per track.
   Future<void> clear() async {
+    final fingerprints = await _db.trackFingerprintsWithLyrics();
     await _db.delete(_db.lyricsEntries).go();
     await _db.customStatement('VACUUM');
+    if (fingerprints.isNotEmpty) onDropped?.call(fingerprints);
   }
 
   /// Lines are stored as JSON rather than as LRC text: the library's structured

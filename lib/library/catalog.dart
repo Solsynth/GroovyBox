@@ -151,9 +151,14 @@ class ListeningStats {
 
 /// Writes and reads everything the app remembers about songs.
 class LibraryCatalog {
-  LibraryCatalog(this._db);
+  LibraryCatalog(this._db, {this.onLinksForgotten});
 
   final LibraryDatabase _db;
+
+  /// Called with the external ids of every link a forgotten source dropped,
+  /// so a sync can queue their tombstones. Null when nothing listens.
+  final void Function(String sourceId, List<String> externalIds)?
+  onLinksForgotten;
 
   /// Adopts [song] as seen on its own source and returns its track id.
   Future<int> adopt(LibrarySong song) => _db.resolveTrack(
@@ -227,6 +232,7 @@ class LibraryCatalog {
       listenedMs: Value(listened.inMilliseconds),
       positionMs: Value(position.inMilliseconds),
       completed: Value(completed),
+      touchedAt: Value(DateTime.now()),
     ),
   );
 
@@ -244,6 +250,7 @@ class LibraryCatalog {
       listenedMs: Value(listened.inMilliseconds),
       positionMs: Value(position.inMilliseconds),
       completed: Value(completed),
+      touchedAt: Value(DateTime.now()),
     ),
   );
 
@@ -336,7 +343,13 @@ class LibraryCatalog {
   /// Drops the links of a source that is no longer connected. Its tracks,
   /// lyrics and play history stay, so re-adding the same server — or adding a
   /// different one with the same songs — picks them up again by fingerprint.
-  Future<void> forgetSource(String sourceId) => _db.unlinkSource(sourceId);
+  Future<void> forgetSource(String sourceId) async {
+    // The pairs are read before the delete: a tombstone needs the source id
+    // and the external id, and the rows that held them are about to go.
+    final externalIds = await _db.externalIdsOfSource(sourceId);
+    await _db.unlinkSource(sourceId);
+    if (externalIds.isNotEmpty) onLinksForgotten?.call(sourceId, externalIds);
+  }
 
   /// Songs the app knows about, whether or not a source still serves them.
   Future<int> trackCount() => _db.trackCount();

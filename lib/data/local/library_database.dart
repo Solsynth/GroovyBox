@@ -139,6 +139,11 @@ class PlayEvents extends Table {
   IntColumn get listenedMs => integer().withDefault(const Constant(0))();
   IntColumn get positionMs => integer().withDefault(const Constant(0))();
   BoolColumn get completed => boolean().withDefault(const Constant(false))();
+
+  /// When this row last changed in place. The row itself carries no other
+  /// clock: [PlayTracker] rewrites progress as the track plays, so without this
+  /// an advance would be invisible to any sync that compares timestamps.
+  DateTimeColumn get touchedAt => dateTime().nullable()();
 }
 
 /// The last active playback session: the full queue in play order, the active
@@ -226,7 +231,7 @@ class LibraryDatabase extends _$LibraryDatabase {
   }
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -245,6 +250,9 @@ class LibraryDatabase extends _$LibraryDatabase {
       }
       if (from < 5) {
         await m.createTable(localFiles);
+      }
+      if (from < 6) {
+        await m.addColumn(playEvents, playEvents.touchedAt);
       }
     },
     beforeOpen: (details) async {
@@ -389,6 +397,32 @@ class LibraryDatabase extends _$LibraryDatabase {
   /// server re-added, or a different one, re-adopts them by fingerprint.
   Future<void> unlinkSource(String sourceId) =>
       (delete(trackLinks)..where((link) => link.sourceId.equals(sourceId))).go();
+
+  /// Every external id one source is linked under, read before
+  /// [unlinkSource] deletes them: a synced tombstone needs the pair.
+  Future<List<String>> externalIdsOfSource(String sourceId) async {
+    final rows = await (select(
+      trackLinks,
+    )..where((link) => link.sourceId.equals(sourceId))).get();
+    return [for (final row in rows) row.externalId];
+  }
+
+  /// The fingerprint of one track, or null when the row is gone.
+  Future<String?> fingerprintOf(int trackId) async {
+    final row =
+        await (select(tracks)..where((track) => track.id.equals(trackId)))
+            .getSingleOrNull();
+    return row?.fingerprint;
+  }
+
+  /// The fingerprint of every track that currently has stored lyrics.
+  Future<List<String>> trackFingerprintsWithLyrics() async {
+    final rows = await customSelect(
+      'SELECT t.fingerprint AS fingerprint FROM lyrics_entries e '
+      'JOIN tracks t ON t.id = e.track_id',
+    ).get();
+    return [for (final row in rows) row.read<String>('fingerprint')];
+  }
 
   /// Tracks that no source can reach any more. Not an error — a song that was
   /// only ever known through a removed server is still history worth keeping.
