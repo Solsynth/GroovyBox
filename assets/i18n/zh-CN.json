@@ -239,6 +239,7 @@
   "playlistsDetailLoadError": "无法加载这个歌单",
 
   "queueTitle": "队列",
+  "queueRadioFrom": "来自 {} 的电台 · {}",
   "queueTrackCount": {
     "one": "{} 首曲目",
     "other": "{} 首曲目"

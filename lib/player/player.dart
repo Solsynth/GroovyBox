@@ -1000,6 +1000,49 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       stationIndex: queue.currentIndex,
     );
     _publish();
+    // The run reports `musicKit://` handles, so none of these rows has a
+    // cover yet: the list is drawn from what the store says about each.
+    unawaited(_resolveStationArtFor(row.sourceId, tracks));
+  }
+
+  /// Resolves covers for a station's whole run, a few at a time.
+  ///
+  /// One catalog read per track, so this walks them in order and folds each
+  /// cover in as it arrives rather than waiting for the last one: the list is
+  /// readable immediately and fills in behind the eye.
+  Future<void> _resolveStationArtFor(
+    String sourceId,
+    List<LibrarySong> tracks,
+  ) async {
+    final source = ref.read(librarySourceByIdProvider)[sourceId];
+    if (source is! PlatformPlayedSource) return;
+
+    for (final track in tracks) {
+      final art = await source.artworkTemplate(track);
+      if (art == null) continue;
+      if (!ref.mounted) return;
+      final row = state.queueRow;
+      if (row == null || !row.isRadio) return;
+      final index = state.stationTracks.indexWhere(
+        (candidate) => candidate.id == track.id,
+      );
+      if (index < 0) return;
+      if (state.stationTracks[index].artId == art) continue;
+
+      final next = List.of(state.stationTracks);
+      next[index] = LibrarySong(
+        sourceId: track.sourceId,
+        id: track.id,
+        title: track.title,
+        artist: track.artist,
+        album: track.album,
+        artId: art,
+        catalogId: track.catalogId,
+        duration: track.duration,
+      );
+      state = state.copyWith(stationTracks: next);
+      _publish();
+    }
   }
 
   /// Fills in a station track's cover once the source has resolved one.

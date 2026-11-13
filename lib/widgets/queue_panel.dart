@@ -1,5 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:groovy_box/core/theme.dart';
+import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/common.dart';
@@ -34,7 +35,8 @@ class QueuePanel extends ConsumerWidget {
     // A station plays a run the platform player generates, not the app's
     // queue: listing the queue under it would describe a list that is not
     // playing and cannot be reached.
-    final station = playback.queueRow?.isRadio ?? false;
+    final stationRow = playback.queueRow;
+    final station = stationRow?.isRadio ?? false;
     final rows = station ? playback.stationTracks : playback.queue;
     final currentRow = station ? playback.stationIndex : playback.currentIndex;
 
@@ -51,11 +53,39 @@ class QueuePanel extends ConsumerWidget {
           child: Row(
             children: [
               Expanded(
-                child: Text(
-                  'queueTitle'.tr(),
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'queueTitle'.tr(),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    // What this list *is*: a station's generated run is not
+                    // the app's queue, and saying so is the only thing that
+                    // explains why its rows cannot be tapped.
+                    if (station)
+                      Text(
+                        'queueRadioFrom'.tr(
+                          args: [
+                            ref
+                                    .watch(
+                                      librarySourceByIdProvider,
+                                    )[playback.queueRow!.sourceId]
+                                    ?.displayName ??
+                                '',
+                            playback.queueRow!.title,
+                          ],
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                  ],
                 ),
               ),
               Text(

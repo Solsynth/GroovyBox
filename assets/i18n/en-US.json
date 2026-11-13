@@ -239,6 +239,7 @@
   "playlistsDetailLoadError": "Could not load this playlist",
 
   "queueTitle": "Queue",
+  "queueRadioFrom": "radio from {} · {}",
   "queueTrackCount": {
     "one": "{} track",
     "other": "{} tracks"
