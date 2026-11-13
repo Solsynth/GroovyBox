@@ -1166,9 +1166,10 @@ class _TrackCopy extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // The library the track plays from, under the artist: the page answers
-    // "what is this, and where from?" without a settings trip, and a station
-    // is labelled as radio rather than as a nameless track.
+    // "what is this, and where from?" without a settings trip. A kind with
+    // its own mark is drawn as that mark; only a named server is spelled out.
     final source = playingSourceLabel(ref, song);
+    final mark = playingSourceMark(ref, song);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     return Column(
@@ -1189,18 +1190,29 @@ class _TrackCopy extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 2),
-        Text(
-          [
-            song.playing.subtitle,
-            if (song.playing.album != null) song.playing.album!,
-            ?source,
-          ].join('  ·  '),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: centered ? TextAlign.center : TextAlign.start,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-          ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (mark != null) ...[
+              Icon(mark, size: 13, color: colorScheme.onSurfaceVariant),
+              const SizedBox(width: 5),
+            ],
+            Flexible(
+              child: Text(
+                [
+                  song.playing.subtitle,
+                  if (song.playing.album != null) song.playing.album!,
+                  ?source,
+                ].join('  ·  '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: centered ? TextAlign.center : TextAlign.start,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );

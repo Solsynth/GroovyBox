@@ -1,6 +1,7 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 /// Format a duration the way a player does: `m:ss`, or `h:mm:ss` past an hour.
@@ -102,8 +103,20 @@ String songRowSubtitle(WidgetRef ref, LibrarySong song) => song.album == null
 String? playingSourceLabel(WidgetRef ref, LibrarySong song) {
   final source = ref.watch(librarySourceByIdProvider)[song.sourceId];
   if (source == null) return null;
+  // A kind with its own mark is drawn as that mark: "· Apple Music" beside a
+  // title costs the title space and says less than the glyph does.
+  if (source.kind.mark != null) return null;
   if (song.isRadio) return 'formatRadioFrom'.tr(args: [source.displayName]);
   return source.displayName;
+}
+
+/// The mark for the library a song plays from, when that library has one.
+///
+/// The companion to [playingSourceLabel]: exactly one of the two is set, so a
+/// row never shows both a glyph and a name for the same library.
+IconData? playingSourceMark(WidgetRef ref, LibrarySong song) {
+  final source = ref.watch(librarySourceByIdProvider)[song.sourceId];
+  return source?.kind.mark;
 }
 
 /// `' · <library name>'`, or null when the name would be noise.

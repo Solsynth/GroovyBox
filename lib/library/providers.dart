@@ -235,6 +235,60 @@ class LibraryDigests extends AsyncNotifier<List<LibraryDigest>> {
   }
 }
 
+/// The stores that can be searched beyond what the account already holds.
+@Riverpod(keepAlive: true)
+List<ExtendableSource> extendableSources(Ref ref) => [
+  for (final source in ref.watch(librarySourcesWithLocalProvider))
+    if (source is ExtendableSource) source,
+];
+
+/// A store search, fanned out over every library that has a store.
+///
+/// Empty query = no request: the field is the whole flow, so typing is what
+/// asks.
+@riverpod
+Future<CatalogSearch> catalogSearch(Ref ref, String query) async {
+  final term = query.trim();
+  if (term.isEmpty) return const CatalogSearch();
+  final sources = ref.watch(extendableSourcesProvider);
+  if (sources.isEmpty) return const CatalogSearch();
+
+  final results = await Future.wait([
+    for (final source in sources)
+      source.searchCatalog(term).catchError((Object error) {
+        debugPrint('[Library] catalog search on ${source.displayName}: $error');
+        return const CatalogSearch();
+      }),
+  ]);
+  var merged = const CatalogSearch();
+  for (final result in results) {
+    merged = merged.merge(result);
+  }
+  return merged;
+}
+
+/// Adds catalog items to the account that owns the store they came from.
+///
+/// A write, and the one place the app changes the user's account: it is only
+/// ever reached from an explicit action, never from a read or a play.
+@Riverpod(keepAlive: true)
+class LibraryEditor extends Notifier<void> {
+  @override
+  void build() {}
+
+  Future<int> add(CatalogKind kind, LibraryRef source, List<String> ids) async {
+    final library = ref.read(librarySourceByIdProvider)[source.sourceId];
+    if (library is! ExtendableSource) return 0;
+    final added = await library.addToLibrary(kind, ids);
+    // The read providers would otherwise keep serving the library as it was:
+    // what was just added has to appear without a restart.
+    ref.invalidate(libraryAggregatorProvider);
+    ref.invalidate(recentAlbumsProvider);
+    ref.invalidate(landingShelvesProvider);
+    return added;
+  }
+}
+
 /// Every connected library's copy of one song, for the "other versions" sheet.
 ///
 /// Two sources of truth, merged. The catalog knows the copies the app has

@@ -366,44 +366,67 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
                                                 fontWeight: FontWeight.w700,
                                               ),
                                         ),
-                                        Text(
-                                          switch (_shownSheet) {
-                                            _DockSheet.lyrics =>
-                                              'lyricsTitle'.tr(),
-                                            _DockSheet.queue => queueSummary(
-                                              playback.queue.length,
-                                              playback.shuffle,
-                                            ),
-                                            // The library is named while a
-                                            // track plays: with a streamed
-                                            // one and an Apple Music one on the
-                                            // same shelf, "which of them is
-                                            // this?" is a real question. A
-                                            // narrow window has no scrubber,
-                                            // so the position keeps its place
-                                            // after it.
-                                            _DockSheet.none => [
-                                              ?playingSourceLabel(ref, song),
-                                              if (wide)
-                                                song.playing.subtitle
-                                              else
-                                                'formatPositionOfDuration'.tr(
-                                                  args: [
-                                                    formatDuration(
-                                                      playback.position,
-                                                    ),
-                                                    formatDuration(duration),
-                                                  ],
-                                                ),
-                                            ].join(' · '),
-                                          },
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: theme.textTheme.bodySmall
-                                              ?.copyWith(
+                                        Row(
+                                          children: [
+                                            // Which library is playing, as a
+                                            // mark where the kind has one: a
+                                            // whole library name beside a
+                                            // title costs the title its room.
+                                            if (playingSourceMark(ref, song)
+                                                case final mark?) ...[
+                                              Icon(
+                                                mark,
+                                                size: 12,
                                                 color: colorScheme
                                                     .onSurfaceVariant,
                                               ),
+                                              const SizedBox(width: 4),
+                                            ],
+                                            Expanded(
+                                              child: Text(
+                                                switch (_shownSheet) {
+                                                  _DockSheet.lyrics =>
+                                                    'lyricsTitle'.tr(),
+                                                  _DockSheet.queue =>
+                                                    queueSummary(
+                                                      playback.queue.length,
+                                                      playback.shuffle,
+                                                    ),
+                                                  // A narrow window has no
+                                                  // scrubber, so the position
+                                                  // keeps its place here.
+                                                  _DockSheet.none => [
+                                                    ?playingSourceLabel(
+                                                      ref,
+                                                      song,
+                                                    ),
+                                                    if (wide)
+                                                      song.playing.subtitle
+                                                    else
+                                                      'formatPositionOfDuration'
+                                                          .tr(
+                                                            args: [
+                                                              formatDuration(
+                                                                playback
+                                                                    .position,
+                                                              ),
+                                                              formatDuration(
+                                                                duration,
+                                                              ),
+                                                            ],
+                                                          ),
+                                                  ].join(' · '),
+                                                },
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: theme.textTheme.bodySmall
+                                                    ?.copyWith(
+                                                      color: colorScheme
+                                                          .onSurfaceVariant,
+                                                    ),
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     ),

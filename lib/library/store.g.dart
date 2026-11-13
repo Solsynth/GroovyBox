@@ -53,7 +53,7 @@ final class SourceStoreProvider
   }
 }
 
-String _$sourceStoreHash() => r'13beb8ce7fba82b31bbffcedd81c946ad075fac7';
+String _$sourceStoreHash() => r'a663058c9d24eda39d7cbe332f32181e651c00aa';
 
 /// Every connected library, in the order the user added them.
 ///

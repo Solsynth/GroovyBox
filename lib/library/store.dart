@@ -30,10 +30,7 @@ class SourceStore extends Notifier<List<SourceConfig>> {
       try {
         final decoded = jsonDecode(rawSources);
         if (decoded is List) {
-          return [
-            for (final entry in decoded)
-              ?SourceConfig.fromJson(entry),
-          ];
+          return [for (final entry in decoded) ?SourceConfig.fromJson(entry)];
         }
       } on FormatException {
         // A corrupt list is treated as empty rather than crashing the app.
@@ -44,7 +41,10 @@ class SourceStore extends Notifier<List<SourceConfig>> {
     if (migrated != null) {
       // Fire and forget: the migration is idempotent, and `build` must stay
       // synchronous so the first frame already knows the library list.
-      prefs.setString(_kSourcesKey, jsonEncode(migrated.map((c) => c.toJson()).toList()));
+      prefs.setString(
+        _kSourcesKey,
+        jsonEncode(migrated.map((c) => c.toJson()).toList()),
+      );
       prefs.remove(_kLegacyServerKey);
       return migrated;
     }
@@ -81,6 +81,31 @@ class SourceStore extends Notifier<List<SourceConfig>> {
 
   Future<void> add(SourceConfig config) async {
     final next = [...state, config];
+    await _persist(next);
+  }
+
+  /// Renames a connected library.
+  ///
+  /// Several instances of one kind are common (two Jellyfin servers, a
+  /// self-hosted one and a friend's), and the host it was found at is not a
+  /// name. The address stays as it was: this renames the library, it does not
+  /// move it.
+  Future<void> rename(String sourceId, String name) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    final next = [
+      for (final config in state)
+        if (config.id == sourceId)
+          SourceConfig(
+            id: config.id,
+            kind: config.kind,
+            baseUrl: config.baseUrl,
+            displayName: trimmed,
+            auth: config.auth,
+          )
+        else
+          config,
+    ];
     await _persist(next);
   }
 

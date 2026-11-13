@@ -7,6 +7,7 @@ import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/backup.dart';
 import 'package:groovy_box/library/local_import.dart';
 import 'package:groovy_box/library/providers.dart';
+import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/library/store.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/screens/library_sync_section.dart';
@@ -173,9 +174,7 @@ class SettingsScreen extends ConsumerWidget {
                         .set(value),
                     secondary: const Icon(Symbols.all_inclusive_rounded),
                     title: Text('settingsInfinitePlayback'.tr()),
-                    subtitle: Text(
-                      'settingsInfinitePlaybackSubtitle'.tr(),
-                    ),
+                    subtitle: Text('settingsInfinitePlaybackSubtitle'.tr()),
                   ),
                 ],
               ),
@@ -186,26 +185,47 @@ class SettingsScreen extends ConsumerWidget {
               child: Column(
                 children: [
                   for (final source in sources)
-                    ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: SolSpace.lg,
-                      ),
-                      leading: const Icon(Symbols.cloud_rounded),
-                      title: Text(source.displayName),
-                      subtitle: Text(
-                        [
-                          source.kind.label,
-                          if (source.addressLabel.isNotEmpty)
-                            source.addressLabel,
-                          if (failures[source.id] != null) failures[source.id]!,
-                        ].join(' · '),
-                      ),
-                      isThreeLine: failures[source.id] != null,
-                      trailing: IconButton(
-                        tooltip: 'settingsRemoveLibrary'.tr(),
-                        onPressed: () =>
-                            _confirmRemove(context, ref, source.id),
-                        icon: const Icon(Symbols.delete_outline_rounded),
+                    // The full identity on hover: two installs of one kind
+                    // are told apart by their host, and a row wide enough to
+                    // spell it out is a row that has no room for the name.
+                    Tooltip(
+                      message: source.identityLabel,
+                      waitDuration: const Duration(milliseconds: 500),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: SolSpace.lg,
+                        ),
+                        leading: Icon(
+                          source.kind.mark ?? Symbols.cloud_rounded,
+                        ),
+                        title: Text(source.displayName),
+                        subtitle: Text(
+                          [
+                            source.kind.label,
+                            if (source.addressLabel.isNotEmpty)
+                              source.addressLabel,
+                            if (failures[source.id] != null)
+                              failures[source.id]!,
+                          ].join(' · '),
+                        ),
+                        isThreeLine: failures[source.id] != null,
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: 'settingsRenameLibrary'.tr(),
+                              onPressed: () =>
+                                  _renameSource(context, ref, source),
+                              icon: const Icon(Symbols.edit_rounded),
+                            ),
+                            IconButton(
+                              tooltip: 'settingsRemoveLibrary'.tr(),
+                              onPressed: () =>
+                                  _confirmRemove(context, ref, source.id),
+                              icon: const Icon(Symbols.delete_outline_rounded),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   if (sources.isEmpty)
@@ -250,12 +270,12 @@ class SettingsScreen extends ConsumerWidget {
                     ),
                     leading: const Icon(Symbols.storage_rounded),
                     title: Text('settingsOnThisDevice'.tr()),
-                    subtitle: Text(
-                      switch (ref.watch(libraryStatsProvider).value) {
-                        final stats? => _describeLibrary(stats),
-                        null => 'settingsOnThisDeviceSubtitleEmpty'.tr(),
-                      },
-                    ),
+                    subtitle: Text(switch (ref
+                        .watch(libraryStatsProvider)
+                        .value) {
+                      final stats? => _describeLibrary(stats),
+                      null => 'settingsOnThisDeviceSubtitleEmpty'.tr(),
+                    }),
                   ),
                   ListTile(
                     contentPadding: const EdgeInsets.symmetric(
@@ -272,9 +292,7 @@ class SettingsScreen extends ConsumerWidget {
                     ),
                     leading: const Icon(Symbols.refresh_rounded),
                     title: Text('settingsRefreshEverything'.tr()),
-                    subtitle: Text(
-                      'settingsRefreshEverythingSubtitle'.tr(),
-                    ),
+                    subtitle: Text('settingsRefreshEverythingSubtitle'.tr()),
                     onTap: () {
                       ref.invalidate(recentAlbumsProvider);
                       ref.invalidate(randomSongsProvider);
@@ -299,9 +317,7 @@ class SettingsScreen extends ConsumerWidget {
                         .set(value),
                     secondary: const Icon(Symbols.subtitles_rounded),
                     title: Text('settingsPronunciation'.tr()),
-                    subtitle: Text(
-                      'settingsPronunciationSubtitle'.tr(),
-                    ),
+                    subtitle: Text('settingsPronunciationSubtitle'.tr()),
                   ),
                   SwitchListTile(
                     contentPadding: const EdgeInsets.symmetric(
@@ -313,9 +329,7 @@ class SettingsScreen extends ConsumerWidget {
                         .set(value),
                     secondary: const Icon(Symbols.translate_rounded),
                     title: Text('settingsTranslation'.tr()),
-                    subtitle: Text(
-                      'settingsTranslationSubtitle'.tr(),
-                    ),
+                    subtitle: Text('settingsTranslationSubtitle'.tr()),
                   ),
                   ListTile(
                     contentPadding: const EdgeInsets.symmetric(
@@ -323,14 +337,14 @@ class SettingsScreen extends ConsumerWidget {
                     ),
                     leading: const Icon(Symbols.lyrics_rounded),
                     title: Text('settingsStoredLyrics'.tr()),
-                    subtitle: Text(
-                      switch (ref.watch(storedLyricsProvider).value) {
-                        final count? => 'settingsStoredLyricsCached'.plural(
-                          count,
-                        ),
-                        null => 'settingsStoredLyricsNone'.tr(),
-                      },
-                    ),
+                    subtitle: Text(switch (ref
+                        .watch(storedLyricsProvider)
+                        .value) {
+                      final count? => 'settingsStoredLyricsCached'.plural(
+                        count,
+                      ),
+                      null => 'settingsStoredLyricsNone'.tr(),
+                    }),
                     trailing: TextButton(
                       onPressed: () => _confirmClearLyrics(context, ref),
                       child: Text('commonClear'.tr()),
@@ -400,6 +414,47 @@ class SettingsScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// Renames a connected library.
+  ///
+  /// Two Jellyfin installs are common and both arrive named after their host;
+  /// the name is the user's, the address is not negotiable.
+  Future<void> _renameSource(
+    BuildContext context,
+    WidgetRef ref,
+    LibrarySource source,
+  ) async {
+    final controller = TextEditingController(text: source.displayName);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('settingsRenameLibraryTitle'.tr()),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textInputAction: TextInputAction.done,
+          decoration: InputDecoration(
+            labelText: 'settingsRenameLibraryLabel'.tr(),
+            hintText: source.addressLabel.isEmpty ? null : source.addressLabel,
+          ),
+          onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text('commonCancel'.tr()),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+            child: Text('commonSave'.tr()),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (name == null || name.trim().isEmpty) return;
+    await ref.read(sourceStoreProvider.notifier).rename(source.id, name);
   }
 
   Future<void> _confirmRemove(
@@ -484,8 +539,8 @@ class _LanguageTile extends StatelessWidget {
     final items = {
       _systemValue: 'settingsLanguageSystem'.tr(),
       for (final locale in context.supportedLocales)
-        locale.languageCode: _names[locale.languageCode] ??
-            locale.toLanguageTag(),
+        locale.languageCode:
+            _names[locale.languageCode] ?? locale.toLanguageTag(),
     };
 
     return ListTile(

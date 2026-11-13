@@ -11,6 +11,7 @@ import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/screens/albums.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/common.dart';
+import 'package:groovy_box/widgets/catalog_search.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:groovy_box/widgets/track_versions.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -52,6 +53,9 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen> {
     // library contributes nothing here and the shelves below carry it.
     final digests = ref.watch(libraryDigestsProvider);
     final curated = ref.watch(landingShelvesProvider);
+    // A library with a store behind it can be searched for what it does not
+    // hold yet; the field below only asks what it already holds.
+    final extendable = ref.watch(extendableSourcesProvider);
     final search = ref.watch(searchSongsProvider(_query));
     // The local library is always present, so "no library yet" means "no
     // server yet": the page nudges instead of blocking.
@@ -124,6 +128,18 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen> {
                             setState(() => _query = '');
                           },
                           icon: const Icon(Symbols.close_rounded),
+                        ),
+                      // The other direction from this field: the library
+                      // searches what is held, this searches what the store
+                      // has and can add.
+                      if (extendable.isNotEmpty)
+                        IconButton(
+                          tooltip: 'catalogOpen'.tr(),
+                          onPressed: () => CatalogSearchPanel.show(
+                            context,
+                            extendable.first,
+                          ),
+                          icon: const Icon(Symbols.travel_explore_rounded),
                         ),
                     ],
                     onChanged: (value) => setState(() => _query = value),

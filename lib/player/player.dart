@@ -49,6 +49,15 @@ class PlaybackState {
   final PlaybackRepeatMode repeatMode;
   final double volume;
 
+  /// The run a radio station is playing right now, as the platform player
+  /// holds it. Empty for every other kind of item: an app queue is [queue].
+  ///
+  /// A station generates tracks the app never asked for, so this is the only
+  /// description of "what is coming" and the only thing next/previous can
+  /// mean there.
+  final List<LibrarySong> stationTracks;
+  final int stationIndex;
+
   /// Whether the platform player owns the output level for the current track.
   /// MusicKit has no volume API, so the settings slider cannot move it.
   final bool volumeIsSystemControlled;
@@ -64,6 +73,8 @@ class PlaybackState {
     this.repeatMode = PlaybackRepeatMode.off,
     this.volume = 100,
     this.volumeIsSystemControlled = false,
+    this.stationTracks = const [],
+    this.stationIndex = -1,
   });
 
   /// The song the app is playing, as everything that *describes* a track
@@ -114,6 +125,8 @@ class PlaybackState {
     PlaybackRepeatMode? repeatMode,
     double? volume,
     bool? volumeIsSystemControlled,
+    List<LibrarySong>? stationTracks,
+    int? stationIndex,
     bool clearIndex = false,
   }) => PlaybackState(
     queue: queue ?? this.queue,
@@ -127,6 +140,8 @@ class PlaybackState {
     volume: volume ?? this.volume,
     volumeIsSystemControlled:
         volumeIsSystemControlled ?? this.volumeIsSystemControlled,
+    stationTracks: stationTracks ?? this.stationTracks,
+    stationIndex: stationIndex ?? this.stationIndex,
   );
 }
 
@@ -462,6 +477,13 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
 
   @override
   Future<void> next() async {
+    // A station is an endless run the platform player generates: "next" there
+    // means the next track *of the station*, never the next row of the app's
+    // queue, which is what starting a station put behind it.
+    if (state.queueRow?.isRadio ?? false) {
+      await _apple?.skipNext();
+      return;
+    }
     if (!state.hasNext) {
       if (state.repeatMode == PlaybackRepeatMode.all &&
           state.queue.isNotEmpty) {
@@ -483,6 +505,16 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
 
   @override
   Future<void> previous() async {
+    if (state.queueRow?.isRadio ?? false) {
+      // Ten seconds in it restarts the station's current track, the same rule
+      // the shared player follows.
+      if (state.position > const Duration(seconds: 10)) {
+        await _apple?.seek(Duration.zero);
+      } else {
+        await _apple?.skipPrevious();
+      }
+      return;
+    }
     // Ten seconds in, "previous" means restart the track — the behaviour every
     // player shares — rather than jump back a row.
     if (state.position > const Duration(seconds: 10) || !state.hasPrevious) {
@@ -709,6 +741,13 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     // item is handed to the system's own player, which brings its playback
     // time and its pause/interrupt handling with it.
     if (source is PlatformPlayedSource) {
+      // The mirror of the hand-over above: a streamed track that is already
+      // sounding must be stopped, or media-kit keeps playing under the system
+      // player and two tracks are audible at once.
+      if (!_appleMode) {
+        await _player.stop();
+        _hasOpenedCurrent = true;
+      }
       _appleMode = true;
       state = state.copyWith(volumeIsSystemControlled: true);
       _apple ??= ApplePlayer(
@@ -730,6 +769,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
         onPosition: _onPosition,
         onAdvance: _onAppleAdvance,
         onTrack: _onAppleTrack,
+        onQueue: _onAppleQueue,
         // The source that owns the item spells it for the platform player;
         // the bridge never learns which kind it is.
         sourceFor: (song) =>
@@ -889,8 +929,14 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       artist: entry.artist,
       album: entry.album,
       artId: entry.artTemplate,
+      catalogId: entry.catalogId,
       duration: entry.duration,
     );
+    // The player reports a `musicKit://` handle for a station's track, which
+    // nothing but the system player can load; the source turns the catalog id
+    // into a real cover. Resolved off the position tick, then folded in, so a
+    // cover that takes a moment is not a cover that never arrives.
+    unawaited(_resolveStationArt(station.sourceId, track));
     final queue = List.of(state.queue);
     queue[index] = LibrarySong(
       sourceId: station.sourceId,
@@ -908,6 +954,80 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       duration: entry.duration,
       position: state.position,
     );
+    _publish();
+  }
+
+  /// The platform player reported the run it holds.
+  ///
+  /// Only a station uses this: its tracks are generated, so the app cannot
+  /// know what is coming without being told. The entries are shaped into the
+  /// app's own song model so the queue panel draws them like any other row.
+  void _onAppleQueue(AppleQueue queue) {
+    final row = state.queueRow;
+    if (row == null || !row.isRadio) {
+      if (state.stationTracks.isNotEmpty) {
+        state = state.copyWith(stationTracks: const [], stationIndex: -1);
+      }
+      return;
+    }
+    final tracks = [
+      for (final entry in queue.entries)
+        if (entry.isTrack)
+          LibrarySong(
+            sourceId: row.sourceId,
+            id: entry.id!,
+            title: entry.title!,
+            artist: entry.artist,
+            album: entry.album,
+            artId: entry.artTemplate,
+            catalogId: entry.catalogId,
+            duration: entry.duration,
+          ),
+    ];
+    if (tracks.isEmpty) return;
+    state = state.copyWith(
+      stationTracks: tracks,
+      stationIndex: queue.currentIndex,
+    );
+    _publish();
+  }
+
+  /// Fills in a station track's cover once the source has resolved one.
+  Future<void> _resolveStationArt(String sourceId, LibrarySong track) async {
+    final source = ref.read(librarySourceByIdProvider)[sourceId];
+    if (source is! PlatformPlayedSource) return;
+    final art = await source.artworkTemplate(track);
+    if (art == null || art == track.artId) return;
+
+    final index = state.currentIndex;
+    if (index == null || index >= state.queue.length) return;
+    final row = state.queue[index];
+    final current = row.radioTrack;
+    // The station may have moved on while the cover was being fetched.
+    if (current == null || current.id != track.id) return;
+
+    final queue = List.of(state.queue);
+    queue[index] = LibrarySong(
+      sourceId: row.sourceId,
+      id: row.id,
+      title: row.title,
+      duration: Duration.zero,
+      artId: row.artId,
+      isRadio: true,
+      radioUrl: row.radioUrl,
+      radioPlayParams: row.radioPlayParams,
+      radioTrack: LibrarySong(
+        sourceId: current.sourceId,
+        id: current.id,
+        title: current.title,
+        artist: current.artist,
+        album: current.album,
+        artId: art,
+        catalogId: current.catalogId,
+        duration: current.duration,
+      ),
+    );
+    state = state.copyWith(queue: queue);
     _publish();
   }
 

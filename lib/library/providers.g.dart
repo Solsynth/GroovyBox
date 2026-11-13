@@ -615,7 +615,7 @@ final class LandingShelvesProvider
   LandingShelves create() => LandingShelves();
 }
 
-String _$landingShelvesHash() => r'1b8bca16dcd98b6470b929f84f99bccf01bb308f';
+String _$landingShelvesHash() => r'26cdfacb670009c58f85c2a8abe95fa84f4d7c51';
 
 /// The shelves the connected libraries curate themselves, in source order.
 ///
@@ -673,7 +673,7 @@ final class LibraryDigestsProvider
   LibraryDigests create() => LibraryDigests();
 }
 
-String _$libraryDigestsHash() => r'698c52f2dae8e11498c94e33e115fbf7cf284eb6';
+String _$libraryDigestsHash() => r'927e5f34009f4e92403dda5730b824f5913a69b8';
 
 /// What each connected account says about itself, for the landing page's
 /// header card. Empty when no source has anything of its own to report.
@@ -690,6 +690,227 @@ abstract class _$LibraryDigests extends $AsyncNotifier<List<LibraryDigest>> {
             as $ClassProviderElement<
               AnyNotifier<AsyncValue<List<LibraryDigest>>, List<LibraryDigest>>,
               AsyncValue<List<LibraryDigest>>,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
+/// The stores that can be searched beyond what the account already holds.
+
+@ProviderFor(extendableSources)
+final extendableSourcesProvider = ExtendableSourcesProvider._();
+
+/// The stores that can be searched beyond what the account already holds.
+
+final class ExtendableSourcesProvider
+    extends
+        $FunctionalProvider<
+          List<ExtendableSource>,
+          List<ExtendableSource>,
+          List<ExtendableSource>
+        >
+    with $Provider<List<ExtendableSource>> {
+  /// The stores that can be searched beyond what the account already holds.
+  ExtendableSourcesProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'extendableSourcesProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$extendableSourcesHash();
+
+  @$internal
+  @override
+  $ProviderElement<List<ExtendableSource>> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  List<ExtendableSource> create(Ref ref) {
+    return extendableSources(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(List<ExtendableSource> value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<List<ExtendableSource>>(value),
+    );
+  }
+}
+
+String _$extendableSourcesHash() => r'8365582f858d6cd6c675e6b4904907643b1d404f';
+
+/// A store search, fanned out over every library that has a store.
+///
+/// Empty query = no request: the field is the whole flow, so typing is what
+/// asks.
+
+@ProviderFor(catalogSearch)
+final catalogSearchProvider = CatalogSearchFamily._();
+
+/// A store search, fanned out over every library that has a store.
+///
+/// Empty query = no request: the field is the whole flow, so typing is what
+/// asks.
+
+final class CatalogSearchProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<CatalogSearch>,
+          CatalogSearch,
+          FutureOr<CatalogSearch>
+        >
+    with $FutureModifier<CatalogSearch>, $FutureProvider<CatalogSearch> {
+  /// A store search, fanned out over every library that has a store.
+  ///
+  /// Empty query = no request: the field is the whole flow, so typing is what
+  /// asks.
+  CatalogSearchProvider._({
+    required CatalogSearchFamily super.from,
+    required String super.argument,
+  }) : super(
+         retry: null,
+         name: r'catalogSearchProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$catalogSearchHash();
+
+  @override
+  String toString() {
+    return r'catalogSearchProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<CatalogSearch> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<CatalogSearch> create(Ref ref) {
+    final argument = this.argument as String;
+    return catalogSearch(ref, argument);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is CatalogSearchProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$catalogSearchHash() => r'db10561df566c163b47630358d3018d0f6ddd4a3';
+
+/// A store search, fanned out over every library that has a store.
+///
+/// Empty query = no request: the field is the whole flow, so typing is what
+/// asks.
+
+final class CatalogSearchFamily extends $Family
+    with $FunctionalFamilyOverride<FutureOr<CatalogSearch>, String> {
+  CatalogSearchFamily._()
+    : super(
+        retry: null,
+        name: r'catalogSearchProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  /// A store search, fanned out over every library that has a store.
+  ///
+  /// Empty query = no request: the field is the whole flow, so typing is what
+  /// asks.
+
+  CatalogSearchProvider call(String query) =>
+      CatalogSearchProvider._(argument: query, from: this);
+
+  @override
+  String toString() => r'catalogSearchProvider';
+}
+
+/// Adds catalog items to the account that owns the store they came from.
+///
+/// A write, and the one place the app changes the user's account: it is only
+/// ever reached from an explicit action, never from a read or a play.
+
+@ProviderFor(LibraryEditor)
+final libraryEditorProvider = LibraryEditorProvider._();
+
+/// Adds catalog items to the account that owns the store they came from.
+///
+/// A write, and the one place the app changes the user's account: it is only
+/// ever reached from an explicit action, never from a read or a play.
+final class LibraryEditorProvider
+    extends $NotifierProvider<LibraryEditor, void> {
+  /// Adds catalog items to the account that owns the store they came from.
+  ///
+  /// A write, and the one place the app changes the user's account: it is only
+  /// ever reached from an explicit action, never from a read or a play.
+  LibraryEditorProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'libraryEditorProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$libraryEditorHash();
+
+  @$internal
+  @override
+  LibraryEditor create() => LibraryEditor();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(void value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<void>(value),
+    );
+  }
+}
+
+String _$libraryEditorHash() => r'79e4326bf5a6ff510cf34c60376ff3c9904f9bbd';
+
+/// Adds catalog items to the account that owns the store they came from.
+///
+/// A write, and the one place the app changes the user's account: it is only
+/// ever reached from an explicit action, never from a read or a play.
+
+abstract class _$LibraryEditor extends $Notifier<void> {
+  void build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<void, void>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<void, void>,
+              void,
               Object?,
               Object?
             >;
@@ -778,7 +999,7 @@ final class SongCopiesProvider
   }
 }
 
-String _$songCopiesHash() => r'c1dd5bfc744a8c2652ae7c2ac190cb2592af4947';
+String _$songCopiesHash() => r'bf49a7e021ab84a615badba5033e44e048db974d';
 
 /// Every connected library's copy of one song, for the "other versions" sheet.
 ///

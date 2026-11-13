@@ -45,6 +45,13 @@ class _FakePlayer extends Fake implements Player {
   Future<void> play() async {}
   @override
   Future<void> pause() async {}
+  bool stopped = false;
+
+  @override
+  Future<void> stop() async {
+    stopped = true;
+  }
+
   @override
   Future<void> seek(Duration position) async {}
   @override
@@ -78,6 +85,10 @@ class _PlatformSource extends Fake
 
   @override
   String platformItemType(LibrarySong song) => 'songs';
+
+  /// No catalog behind this fake: covers come from the item itself.
+  @override
+  Future<String?> artworkTemplate(LibrarySong song) async => null;
 
   @override
   Uri streamUri(LibrarySong song) =>
@@ -132,6 +143,19 @@ class _RecordingKit extends Fake implements MusicKitClient {
   @override
   Stream<AppleQueueEntry> get currentTrack => tracks.stream;
 
+  final skipped = <String>[];
+
+  @override
+  Future<void> skipNext() async => skipped.add('next');
+
+  @override
+  Future<void> skipPrevious() async => skipped.add('previous');
+
+  final playedQueues = StreamController<AppleQueue>.broadcast();
+
+  @override
+  Stream<AppleQueue> get queue => playedQueues.stream;
+
   @override
   Stream<ApplePlayerStatus> get status => const Stream.empty();
 }
@@ -161,6 +185,7 @@ void main() {
     addTearDown(container.dispose);
     addTearDown(kit.queueIndices.close);
     addTearDown(kit.tracks.close);
+    addTearDown(kit.playedQueues.close);
   });
 
   const song = LibrarySong(
@@ -245,6 +270,27 @@ void main() {
     await transport.play();
     expect(kit.calls.where((call) => call == 'play'), hasLength(2));
     expect(player.opened, isEmpty);
+  });
+
+  test('leaving a streamed track for the platform stops media-kit', () async {
+    // A streamed song is loaded first, so there is something sounding.
+    await container.read(playbackProvider.notifier).playQueue([
+      const LibrarySong(
+        sourceId: 'subsonic-1',
+        id: 's.1',
+        title: 'Streamed',
+        duration: Duration(minutes: 2),
+      ),
+    ]);
+    await pumpEventQueue();
+
+    await container.read(playbackProvider.notifier).playQueue([song]);
+    await pumpEventQueue();
+
+    // Two players sounding one after the other is the bug: the streamed track
+    // must be stopped, not left running under the system player.
+    expect(player.stopped, isTrue);
+    expect(kit.queues, hasLength(1));
   });
 
   test('switching version replaces the row and keeps the queue', () async {
@@ -339,6 +385,54 @@ void main() {
       state.queueRow?.radioUrl,
       'https://music.apple.com/cn/station/x/ra.1',
     );
+  });
+
+  test('inside a station, next and previous skip the station itself', () async {
+    final transport = container.read(playbackProvider.notifier);
+    await transport.playQueue([
+      const LibrarySong(
+        sourceId: 'apple-1',
+        id: 'ra.1',
+        title: 'Mirror Mirror Radio',
+        duration: Duration.zero,
+        isRadio: true,
+        radioUrl: 'https://music.apple.com/cn/station/x/ra.1',
+        radioPlayParams: {'id': 'ra.1', 'kind': 'radioStation'},
+      ),
+      const LibrarySong(
+        sourceId: 'apple-1',
+        id: 'i.2',
+        title: 'A track queued after the station',
+        duration: Duration(minutes: 2),
+      ),
+    ]);
+    await pumpEventQueue();
+
+    // The run the platform player generated, as it reports it.
+    kit.playedQueues.add(
+      const AppleQueue(
+        entries: [
+          AppleQueueEntry(id: 'a', title: 'First'),
+          AppleQueueEntry(id: 'b', title: 'Second'),
+        ],
+        currentIndex: 0,
+      ),
+    );
+    await pumpEventQueue();
+    expect(
+      container.read(playbackProvider).stationTracks.map((song) => song.title),
+      ['First', 'Second'],
+    );
+
+    await transport.next();
+    await pumpEventQueue();
+    // Not the row after the station: the station's own next track.
+    expect(kit.skipped, contains('next'));
+    expect(container.read(playbackProvider).currentIndex, 0);
+
+    await transport.previous();
+    await pumpEventQueue();
+    expect(kit.skipped, contains('previous'));
   });
 
   test('a streamed song takes the transport back from the platform', () async {

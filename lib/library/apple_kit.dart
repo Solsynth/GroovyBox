@@ -3,8 +3,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:music_kit/music_kit.dart';
 
-import 'models.dart';
-
 /// What the Apple Music integration needs from the platform, behind one
 /// interface.
 ///
@@ -49,6 +47,18 @@ abstract interface class MusicKitClient {
   /// automatic move to the next track reaches the app.
   Stream<int> get queueIndex;
 
+  /// Moves inside the queue the platform player already holds.
+  ///
+  /// This is what a station needs and an app queue cannot express: a station
+  /// is an endless run the system generates, so "next" there means the next
+  /// track *of the station*, not the next row of the app's queue.
+  Future<void> skipNext();
+
+  Future<void> skipPrevious();
+
+  /// The system player's whole queue, so a station's own run can be drawn.
+  Stream<AppleQueue> get queue;
+
   /// What the system player is playing, as the resource it reports.
   ///
   /// A station has no tracklist — it generates one as it runs — so this is
@@ -64,6 +74,7 @@ abstract interface class MusicKitClient {
 class AppleQueueEntry {
   const AppleQueueEntry({
     required this.id,
+    this.catalogId,
     this.title,
     this.artist,
     this.album,
@@ -73,6 +84,12 @@ class AppleQueueEntry {
 
   /// The resource id, null while the player has not resolved one yet.
   final String? id;
+
+  /// The catalog id behind the entry, when the player resolved the track
+  /// against the store rather than the account's own library. A station's
+  /// tracks only exist in the catalog, and only the catalog can describe
+  /// them — including their artwork.
+  final String? catalogId;
   final String? title;
   final String? artist;
   final String? album;
@@ -82,6 +99,14 @@ class AppleQueueEntry {
   final String? artTemplate;
 
   bool get isTrack => id != null && title != null;
+}
+
+/// The system player's whole queue, flattened.
+class AppleQueue {
+  const AppleQueue({required this.entries, required this.currentIndex});
+
+  final List<AppleQueueEntry> entries;
+  final int currentIndex;
 }
 
 /// The states of the system player the app acts on.
@@ -169,24 +194,59 @@ class PluginMusicKit implements MusicKitClient {
       .distinct();
 
   @override
+  Future<void> skipNext() => _kit.skipToNextEntry();
+
+  @override
+  Future<void> skipPrevious() => _kit.skipToPreviousEntry();
+
+  /// Every entry the system holds, in order, so a station's own run can be
+  /// drawn as the queue it is.
+  @override
+  Stream<AppleQueue> get queue => _kit.onPlayerQueueChanged.map(
+    (queue) => AppleQueue(
+      entries: [for (final entry in queue.entries) _entryOfQueue(queue, entry)],
+      currentIndex: queue.currentEntry == null
+          ? -1
+          : queue.entries.indexWhere(
+              (entry) => entry.id == queue.currentEntry!.id,
+            ),
+    ),
+  );
+
+  @override
   Stream<AppleQueueEntry> get currentTrack => _kit.onPlayerQueueChanged
       .where((queue) => queue.currentEntry != null)
-      .map(_entryOf)
+      .map((queue) => _entryOfQueue(queue, queue.currentEntry))
       // The first report describes the queue being loaded, before the player
       // has resolved a track for a station; it says nothing about what is on.
       .where((entry) => entry.id != null)
       .distinct();
 
-  static AppleQueueEntry _entryOf(MusicPlayerQueue queue) {
-    final current = queue.currentEntry;
+  /// One entry of the system queue, flattened.
+  ///
+  /// Takes the entry rather than the queue: the whole list is drawn as a
+  /// queue as well as the single current one being watched.
+  static AppleQueueEntry _entryOfQueue(
+    MusicPlayerQueue queue,
+    MusicPlayerQueueEntry? current,
+  ) {
     final item = current?.item;
     final attributes = item?['attributes'];
     final attrs = attributes is Map
         ? Map<String, dynamic>.from(attributes)
         : const <String, dynamic>{};
     final artwork = attrs['artwork'];
+    // The artwork a station's generated track reports is a `musicKit://`
+    // handle, not an image URL: the system player reads it from its own
+    // cache and nothing else can. The track's catalog id is what turns it
+    // back into a picture (see `AppleMusicSource.artworkUri`), so it is kept.
+    final href = item?['href'];
+    final catalogId = href is String
+        ? RegExp(r'/songs/(\d+)$').firstMatch(href)?.group(1)
+        : null;
     return AppleQueueEntry(
       id: item?['id'] == null ? null : '${item!['id']}',
+      catalogId: catalogId,
       title: (attrs['name'] as String?) ?? current?.title,
       artist: attrs['artistName'] as String?,
       album: attrs['albumName'] as String?,
@@ -245,6 +305,15 @@ class SilentMusicKit implements MusicKitClient {
 
   @override
   Stream<AppleQueueEntry> get currentTrack => const Stream.empty();
+
+  @override
+  Future<void> skipNext() async {}
+
+  @override
+  Future<void> skipPrevious() async {}
+
+  @override
+  Stream<AppleQueue> get queue => const Stream.empty();
 }
 
 /// Logs and swallows a platform failure the transport cannot recover from.

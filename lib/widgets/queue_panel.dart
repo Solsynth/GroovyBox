@@ -31,6 +31,12 @@ class QueuePanel extends ConsumerWidget {
     final playback = ref.watch(playbackProvider);
     final controller = ref.read(playbackProvider.notifier);
     final theme = Theme.of(context);
+    // A station plays a run the platform player generates, not the app's
+    // queue: listing the queue under it would describe a list that is not
+    // playing and cannot be reached.
+    final station = playback.queueRow?.isRadio ?? false;
+    final rows = station ? playback.stationTracks : playback.queue;
+    final currentRow = station ? playback.stationIndex : playback.currentIndex;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -53,7 +59,7 @@ class QueuePanel extends ConsumerWidget {
                 ),
               ),
               Text(
-                queueSummary(playback.queue.length, playback.shuffle),
+                queueSummary(rows.length, station ? false : playback.shuffle),
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -62,7 +68,7 @@ class QueuePanel extends ConsumerWidget {
           ),
         ),
         Expanded(
-          child: playback.queue.isEmpty
+          child: rows.isEmpty
               ? EmptyState(
                   compact: true,
                   icon: Symbols.queue_music,
@@ -71,27 +77,31 @@ class QueuePanel extends ConsumerWidget {
                 )
               : ListView.builder(
                   padding: EdgeInsets.zero,
-                  itemCount: playback.queue.length,
+                  itemCount: rows.length,
                   itemBuilder: (context, index) {
-                    final song = playback.queue[index];
+                    final song = rows[index];
                     return TrackRow(
                       // A station's row is rewritten with what it is playing,
                       // so the queue says what is on the air, not the name of
                       // the station it started from.
                       title: song.playing.title,
                       subtitle: songRowSubtitle(ref, song.playing),
-                      selected: playback.currentIndex == index,
+                      selected: currentRow == index,
                       trailing: formatDuration(song.duration),
                       artwork: LibraryArtwork(
                         sourceId: song.sourceId,
-                        artId: song.artId,
+                        artId: song.playing.artId,
                         size: 40,
                         radius: SolRadius.xs,
                       ),
-                      onTap: () => controller.playQueue(
-                        playback.queue,
-                        startIndex: index,
-                      ),
+                      // Inside a station, a row is reached by skipping to it;
+                      // the run is the platform player's to advance.
+                      onTap: station
+                          ? null
+                          : () => controller.playQueue(
+                              playback.queue,
+                              startIndex: index,
+                            ),
                     );
                   },
                 ),

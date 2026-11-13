@@ -70,6 +70,15 @@ class _FakeMusicKit implements MusicKitClient {
 
   @override
   Stream<AppleQueueEntry> get currentTrack => const Stream.empty();
+
+  @override
+  Future<void> skipNext() async {}
+
+  @override
+  Future<void> skipPrevious() async {}
+
+  @override
+  Stream<AppleQueue> get queue => const Stream.empty();
 }
 
 /// A minimal Apple Music API: the endpoints the adapter calls, with the field

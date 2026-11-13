@@ -101,7 +101,7 @@ const kAppleMusicApiRoot = 'https://api.music.apple.com';
 /// plain [LibrarySource] reads. A future provider that is played by a platform
 /// player adds itself to exactly the same interfaces.
 class AppleMusicSource extends LibrarySource
-    implements PlatformPlayedSource, CuratedSource {
+    implements PlatformPlayedSource, CuratedSource, ExtendableSource {
   @override
   final SourceConfig config;
   final Dio _dio;
@@ -443,10 +443,123 @@ class AppleMusicSource extends LibrarySource
         'name': song.title,
         'isLive': false,
         'mediaKind': 'audio',
-        if (url != null) 'url': url,
-        if (playParams != null) 'playParams': playParams,
+        'url': ?url,
+        'playParams': ?playParams,
       },
     };
+  }
+
+  /// Searches the store, not just the account.
+  ///
+  /// `/v1/me/library/search` only answers with what is already added; the
+  /// catalog endpoint is the other half, and it is what makes "find something
+  /// new and keep it" possible.
+  @override
+  Future<CatalogSearch> searchCatalog(String query, {int limit = 25}) async {
+    final term = query.trim();
+    if (term.isEmpty) return const CatalogSearch();
+    final storefront = await _storefront();
+    final body = await _get(
+      '/v1/catalog/$storefront/search',
+      query: {'term': term, 'types': 'songs,albums,playlists', 'limit': limit},
+    );
+    final results = body['results'];
+    if (results is! Map) return const CatalogSearch();
+
+    List<Map<String, dynamic>> items(String kind) {
+      final section = results[kind];
+      if (section is! Map) return const [];
+      return _resources(Map<String, dynamic>.from(section));
+    }
+
+    return CatalogSearch(
+      songs: [for (final item in items('songs')) _song(item)],
+      albums: [for (final item in items('albums')) _album(item)],
+      playlists: [
+        for (final item in items('playlists'))
+          LibraryPlaylist(
+            sourceId: id,
+            id: '${item['id']}',
+            name: _attributes(item)['name'] as String? ?? 'Untitled playlist',
+            duration: Duration.zero,
+            artId: _artTemplate(_attributes(item)),
+          ),
+      ],
+    );
+  }
+
+  /// Adds catalog [ids] of one [kind] to the account's library.
+  ///
+  /// The store takes `ids[<kind>]` as a bracketed form parameter and answers
+  /// 202 for an accepted add; it validates the parameter name strictly
+  /// (anything else is "ids parameter is required"), so the brackets are part
+  /// of the request rather than a serialiser's choice.
+  @override
+  Future<int> addToLibrary(CatalogKind kind, List<String> ids) async {
+    if (ids.isEmpty) return 0;
+    final items = kind.name;
+    try {
+      await _dio.post<void>(
+        '/v1/me/library',
+        queryParameters: {'ids[$items]': ids.join(',')},
+      );
+      return ids.length;
+    } on DioException catch (error) {
+      final status = error.response?.statusCode;
+      if (status == 401 || status == 403) {
+        throw LibraryException(
+          'Apple Music refused to add to the library (HTTP $status).',
+          code: status,
+          messageKey: 'libraryAppleMusicSubscription',
+        );
+      }
+      throw describeAppleError(error);
+    }
+  }
+
+  /// Artwork for a track the platform player only described by handle.
+  ///
+  /// A station's tracks exist in the catalog and nowhere else, so one catalog
+  /// read is what turns `musicKit://artwork/transient/...` into a picture.
+  /// The result is cached per track: a station can report the same entry many
+  /// times, and each would otherwise cost a request.
+  final Map<String, String?> _artCache = {};
+
+  @override
+  Future<String?> artworkTemplate(LibrarySong song) async {
+    // Already a loadable template: nothing to resolve.
+    final own = song.artId;
+    if (own != null && own.startsWith('http')) return own;
+    final catalogId = song.catalogId;
+    if (catalogId == null) return null;
+    if (_artCache.containsKey(catalogId)) return _artCache[catalogId];
+
+    try {
+      final storefront = await _storefront();
+      final body = await _get('/v1/catalog/$storefront/songs/$catalogId');
+      final items = _resources(body);
+      final art = items.isEmpty ? null : _artTemplate(_attributes(items.first));
+      _artCache[catalogId] = art;
+      return art;
+    } on LibraryException {
+      // A cover that cannot be resolved is a missing cover, not a failure of
+      // the track: the row draws its tonal fallback.
+      _artCache[catalogId] = null;
+      return null;
+    }
+  }
+
+  /// The store the account reads from. Cached: it changes when the user
+  /// travels, not between two tracks.
+  String? _storefrontId;
+
+  Future<String> _storefront() async {
+    if (_storefrontId != null) return _storefrontId!;
+    final body = await _get('/v1/me/storefront');
+    final items = _resources(body);
+    final id = items.isEmpty ? null : '${items.first['id']}';
+    _storefrontId = id ?? 'us';
+    return _storefrontId!;
   }
 
   /// One queue is all of one kind, and a station is not a song.

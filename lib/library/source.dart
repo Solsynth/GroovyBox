@@ -1,4 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
+import 'package:material_symbols_icons/symbols.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'apple_adapter.dart';
 import 'jellyfin_adapter.dart';
@@ -28,6 +30,21 @@ enum LibraryKind {
 
   /// Shown in the setup picker and settings rows.
   String get label => labelKey.tr();
+
+  /// A small mark for this kind, where the name would be too long: the
+  /// now-playing line names a track, and a whole library name beside it costs
+  /// space the title needs.
+  ///
+  /// Null for a kind with no mark of its own: a self-hosted server is named,
+  /// because two servers called "music" are told apart by their name and not
+  /// by a glyph.
+  IconData? get mark => switch (this) {
+    // The icon set has no Apple mark; the music note is the app's
+    // own mark for an account-backed library.
+    LibraryKind.appleMusic => Symbols.cloud_rounded,
+    LibraryKind.local => Symbols.smartphone_rounded,
+    LibraryKind.subsonic || LibraryKind.jellyfin => null,
+  };
 
   /// Setup field placeholder.
   String get addressHint => addressHintKey.tr();
@@ -104,6 +121,19 @@ abstract class LibrarySource {
   /// nothing to show: an Apple Music account has no server address.
   String get addressLabel => config.baseUrl;
 
+  /// Everything that identifies this library, in one line, for a tooltip:
+  /// the kind, and the host it lives at when it has one.
+  ///
+  /// Two Jellyfin installs are told apart by their address, so the name alone
+  /// is not the identity; a hover is where that fits without costing the row
+  /// its width.
+  String get identityLabel {
+    final address = addressLabel;
+    if (address.isEmpty) return displayName;
+    final host = Uri.tryParse(address)?.host ?? address;
+    return host.isEmpty ? displayName : '${kind.label} · $host';
+  }
+
   Future<List<LibraryAlbum>> recentlyAdded({int limit});
   Future<List<LibraryAlbum>> albums({int limit, int offset});
   Future<LibraryAlbum?> album(String albumId);
@@ -139,6 +169,15 @@ abstract interface class PlatformPlayedSource implements LibrarySource {
   /// model: a library song and a radio station are resolved differently.
   Map<String, dynamic> platformResource(LibrarySong song);
 
+  /// A usable artwork template for [song], when the platform player only
+  /// reported a handle the app cannot load.
+  ///
+  /// A station's generated tracks report `musicKit://artwork/...`, which the
+  /// system player reads from its own cache and nothing else can. This asks
+  /// the source to turn what it knows about the item into a real image URL;
+  /// null means the app has no way to draw it.
+  Future<String?> artworkTemplate(LibrarySong song);
+
   /// The kind the platform player resolves [song] as (`'songs'`,
   /// `'stations'`). A queue is all of one kind, so this is asked of its first
   /// item.
@@ -148,6 +187,54 @@ abstract interface class PlatformPlayedSource implements LibrarySource {
   /// would make it play the wrong collection instead of failing.
   String platformItemType(LibrarySong song);
 }
+
+/// A library backed by a store the user can browse and add from.
+///
+/// Apple Music's account library is a subset of a much larger catalog: the
+/// app could only show what was already added. This capability is the other
+/// half — search what the store has, and put a result into the account's
+/// library so it becomes playable like everything else.
+///
+/// Adding is a *write*: it changes the user's account, so it is never done
+/// implicitly by a read or a play.
+abstract interface class ExtendableSource implements LibrarySource {
+  /// Search the store, not just the account. [limit] is per kind.
+  Future<CatalogSearch> searchCatalog(String query, {int limit});
+
+  /// Adds the catalog items [ids] to the account's library.
+  ///
+  /// Returns how many the store accepted. Throws [LibraryException] when the
+  /// account cannot add (no subscription, or a token that lost its write
+  /// scope).
+  Future<int> addToLibrary(CatalogKind kind, List<String> ids);
+}
+
+/// What a store search found, in the app's own models.
+///
+/// Songs and albums come back as the same shapes the library reads return, so
+/// a result row is the row the rest of the app already knows how to draw.
+class CatalogSearch {
+  final List<LibrarySong> songs;
+  final List<LibraryAlbum> albums;
+  final List<LibraryPlaylist> playlists;
+
+  const CatalogSearch({
+    this.songs = const [],
+    this.albums = const [],
+    this.playlists = const [],
+  });
+
+  bool get isEmpty => songs.isEmpty && albums.isEmpty && playlists.isEmpty;
+
+  CatalogSearch merge(CatalogSearch other) => CatalogSearch(
+    songs: [...songs, ...other.songs],
+    albums: [...albums, ...other.albums],
+    playlists: [...playlists, ...other.playlists],
+  );
+}
+
+/// The kinds a library can hold, as a store search names them.
+enum CatalogKind { songs, albums, playlists }
 
 /// A library that curates its landing page itself.
 ///

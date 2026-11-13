@@ -51,6 +51,11 @@ class LibrarySong {
   final String? radioUrl;
   final Map<String, dynamic>? radioPlayParams;
 
+  /// A catalog id, when the item exists in the store rather than the account's
+  /// own library. A station's tracks only exist there, and the catalog is the
+  /// only thing that can describe them — artwork included.
+  final String? catalogId;
+
   /// The track a station is playing right now.
   ///
   /// A station has no tracklist: it generates one as it runs, and only the
@@ -79,6 +84,7 @@ class LibrarySong {
     this.radioUrl,
     this.radioPlayParams,
     this.radioTrack,
+    this.catalogId,
   });
   String get subtitle => artist ?? album ?? 'Unknown artist';
 
@@ -105,6 +111,7 @@ class LibrarySong {
     if (radioUrl != null) 'radioUrl': radioUrl,
     if (radioPlayParams != null) 'radioPlayParams': radioPlayParams,
     if (radioTrack != null) 'radioTrack': radioTrack!.toJson(),
+    if (catalogId != null) 'catalogId': catalogId,
   };
 
   factory LibrarySong.fromJson(Map<String, dynamic> json) => LibrarySong(
@@ -132,6 +139,7 @@ class LibrarySong {
       final Map params => Map<String, dynamic>.from(params),
       _ => null,
     },
+    catalogId: json['catalogId'] as String?,
     radioTrack: switch (json['radioTrack']) {
       final Map<String, dynamic> track => LibrarySong.fromJson(track),
       final Map track => LibrarySong.fromJson(Map<String, dynamic>.from(track)),
