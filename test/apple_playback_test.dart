@@ -56,7 +56,8 @@ class _FakePlayer extends Fake implements Player {
 }
 
 /// A source the device cannot stream: every item is played by the platform.
-class _PlatformSource extends Fake implements LibrarySource {
+class _PlatformSource extends Fake
+    implements LibrarySource, PlatformPlayedSource {
   @override
   final String id = 'apple-1';
 
@@ -69,7 +70,14 @@ class _PlatformSource extends Fake implements LibrarySource {
   );
 
   @override
-  bool get usesPlatformPlayer => true;
+  Map<String, dynamic> platformResource(LibrarySong song) => {
+    'id': song.id,
+    'type': 'songs',
+    'attributes': {'name': song.title},
+  };
+
+  @override
+  String platformItemType(LibrarySong song) => 'songs';
 
   @override
   Uri streamUri(LibrarySong song) =>
@@ -239,6 +247,60 @@ void main() {
     expect(player.opened, isEmpty);
   });
 
+  test('switching version replaces the row and keeps the queue', () async {
+    final transport = container.read(playbackProvider.notifier);
+    await transport.playQueue([
+      song,
+      const LibrarySong(
+        sourceId: 'apple-1',
+        id: 'i.2',
+        title: 'Second',
+        duration: Duration(minutes: 2),
+      ),
+    ]);
+    await pumpEventQueue();
+    await transport.seek(const Duration(seconds: 30));
+    await pumpEventQueue();
+
+    // Another library's copy of the same recording.
+    final copy = LibrarySong(
+      sourceId: 'apple-1',
+      id: 'i.99',
+      title: 'Daytona Sand',
+      artist: 'Orville Peck',
+      album: 'Bronco',
+      duration: const Duration(minutes: 3),
+    );
+    await transport.switchVersion(copy);
+    await pumpEventQueue();
+
+    final state = container.read(playbackProvider);
+    expect(state.queue, hasLength(2), reason: 'the queue keeps its shape');
+    expect(state.queue.first.id, 'i.99');
+    expect(state.currentIndex, 0);
+    expect(state.position, const Duration(seconds: 30));
+  });
+
+  test('a different song is not a version', () async {
+    final transport = container.read(playbackProvider.notifier);
+    await transport.playQueue([song]);
+    await pumpEventQueue();
+
+    await transport.switchVersion(
+      const LibrarySong(
+        sourceId: 'apple-1',
+        id: 'i.other',
+        title: 'Completely Different',
+        artist: 'Someone Else',
+        duration: Duration(minutes: 3),
+      ),
+    );
+    await pumpEventQueue();
+
+    // A lookup must never quietly replace the track with another one.
+    expect(container.read(playbackProvider).current?.id, 'i.1');
+  });
+
   test('a station names the track it is playing, not itself', () async {
     final station = LibrarySong(
       sourceId: 'apple-1',
@@ -265,14 +327,16 @@ void main() {
     await pumpEventQueue();
 
     final state = container.read(playbackProvider);
-    expect(state.current?.isRadio, isTrue);
-    expect(state.current?.title, 'Mirror Mirror Radio');
-    expect(state.current?.playing.title, 'Mesmerizer');
-    expect(state.current?.playing.artist, 'サツキ, Hatsune Miku & 重音テト');
+    // Everything that describes a track reads the track on the air: artwork,
+    // lyrics and the scrobbler all ask `current`.
+    expect(state.current?.title, 'Mesmerizer');
+    expect(state.current?.artist, 'サツキ, Hatsune Miku & 重音テト');
     expect(state.duration, const Duration(milliseconds: 156000));
-    // Still a station: the queue row keeps what it takes to keep playing.
+    // The queue row is still the station, so it keeps what playing needs.
+    expect(state.queueRow?.isRadio, isTrue);
+    expect(state.queueRow?.title, 'Mirror Mirror Radio');
     expect(
-      state.current?.radioUrl,
+      state.queueRow?.radioUrl,
       'https://music.apple.com/cn/station/x/ra.1',
     );
   });

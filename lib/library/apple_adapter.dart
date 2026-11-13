@@ -94,7 +94,14 @@ class AppleMusicAdapter implements LibraryAdapter {
 const kAppleMusicApiRoot = 'https://api.music.apple.com';
 
 /// One signed-in Apple Music account.
-class AppleMusicSource extends LibrarySource {
+///
+/// It implements three capabilities rather than being special-cased by kind:
+/// [PlatformPlayedSource] because the sound comes from MusicKit's own player,
+/// [CuratedSource] because the account curates its own landing page, and the
+/// plain [LibrarySource] reads. A future provider that is played by a platform
+/// player adds itself to exactly the same interfaces.
+class AppleMusicSource extends LibrarySource
+    implements PlatformPlayedSource, CuratedSource {
   @override
   final SourceConfig config;
   final Dio _dio;
@@ -130,11 +137,6 @@ class AppleMusicSource extends LibrarySource {
     final major = match == null ? 0 : int.parse(match.group(1)!);
     return major >= 14;
   }
-
-  /// Apple Music plays in-process: there is no stream URL, the system's
-  /// player is handed the item instead.
-  @override
-  bool get usesPlatformPlayer => true;
 
   /// The account is the device's, not an address: Settings shows the kind
   /// alone rather than an API endpoint nobody typed.
@@ -412,17 +414,28 @@ class AppleMusicSource extends LibrarySource {
     );
   }
 
-  /// The station resource the system player resolves.
+  /// The resource the system player resolves [song] from.
   ///
-  /// Rebuilt from what [_station] kept rather than the raw JSON: the queue
-  /// round-trips through the saved session, and a station has to survive
-  /// being written and read back.
+  /// A station is rebuilt from what [_station] kept rather than the raw JSON:
+  /// the queue round-trips through the saved session, and a station has to
+  /// survive being written and read back.
   @override
-  Map<String, dynamic>? radioResource(LibrarySong song) {
-    if (!song.isRadio) return null;
+  Map<String, dynamic> platformResource(LibrarySong song) {
+    if (!song.isRadio) {
+      return {
+        'id': song.id,
+        'type': 'songs',
+        'attributes': {
+          'name': song.title,
+          if (song.artist != null) 'artistName': song.artist,
+          if (song.album != null) 'albumName': song.album,
+          'durationInMillis': song.duration.inMilliseconds,
+          'playParams': {'id': song.id, 'kind': 'song', 'isLibrary': true},
+        },
+      };
+    }
     final url = song.radioUrl;
     final playParams = song.radioPlayParams;
-    if (url == null || playParams == null) return null;
     return {
       'id': song.id,
       'type': 'stations',
@@ -430,11 +443,16 @@ class AppleMusicSource extends LibrarySource {
         'name': song.title,
         'isLive': false,
         'mediaKind': 'audio',
-        'url': url,
-        'playParams': playParams,
+        if (url != null) 'url': url,
+        if (playParams != null) 'playParams': playParams,
       },
     };
   }
+
+  /// One queue is all of one kind, and a station is not a song.
+  @override
+  String platformItemType(LibrarySong song) =>
+      song.isRadio ? 'stations' : 'songs';
 
   /// `title` is a string on newer responses and a `{stringForDisplay}` map on
   /// the ones this account gets back.

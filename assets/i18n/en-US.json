@@ -146,6 +146,13 @@
   "libraryKindLocal": "Local files",
 
   "playerNothingPlaying": "Nothing is playing",
+  "versionsTitle": "Other versions",
+  "versionsEmptyTitle": "No other copies",
+  "versionsEmptyMessage": "None of the other connected libraries has this track.",
+  "versionsUnavailable": "unavailable",
+  "versionsUnavailableHint": "A library that is no longer connected still shows what it held. Reconnect it in Settings to play its copy.",
+  "versionsFailedTitle": "Could not look up copies",
+  "playerUnknownArtist": "Unknown artist",
   "playerClose": "Close",
   "playerQueueShow": "Show queue",
   "playerQueueHide": "Hide queue",

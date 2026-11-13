@@ -274,3 +274,55 @@ class LibraryDigest {
 
   bool get isEmpty => subtitle == null && libraryTracks == null;
 }
+
+/// One library's copy of a canonical track.
+///
+/// A lookup answers with these: the same song as each connected library holds
+/// it, so the user can pick the version they want — a streamed one that plays
+/// now, an Apple Music one that carries the account's own licensing, a local
+/// file that needs no network at all.
+class TrackCopy {
+  /// The library this copy lives in.
+  final String sourceId;
+
+  /// The item's id inside that library, which is what playback needs.
+  final String externalId;
+
+  /// What that library's own copy says about itself: its title, artist,
+  /// album, length and cover. Two copies of one song are often not tagged
+  /// identically, and the row should show what it would play.
+  final LibrarySong song;
+
+  /// Whether this copy is the one the app is playing, or can be played at all:
+  /// a copy whose source is no longer connected is still listed (it exists in
+  /// the catalog) but cannot be chosen.
+  final bool playable;
+
+  const TrackCopy({
+    required this.sourceId,
+    required this.externalId,
+    required this.song,
+    this.playable = true,
+  });
+}
+
+/// One song asked about across every library.
+///
+/// The song itself is carried rather than a [LibraryRef]: a lookup needs the
+/// title and artist to ask other libraries, and the caller already has them.
+/// [LibrarySong] is not usable as a riverpod family argument (it has no
+/// value equality), so this wraps it with one.
+class TrackLookup {
+  final LibrarySong song;
+
+  const TrackLookup(this.song);
+
+  @override
+  bool operator ==(Object other) =>
+      other is TrackLookup &&
+      other.song.sourceId == song.sourceId &&
+      other.song.id == song.id;
+
+  @override
+  int get hashCode => Object.hash(song.sourceId, song.id);
+}

@@ -81,10 +81,7 @@ class SourceConfig {
           ? raw['displayName'] as String
           : baseUrl,
       auth: auth is Map
-          ? {
-              for (final entry in auth.entries)
-                '${entry.key}': '${entry.value}',
-            }
+          ? {for (final entry in auth.entries) '${entry.key}': '${entry.value}'}
           : const {},
     );
   }
@@ -118,12 +115,6 @@ abstract class LibrarySource {
   Future<List<LibrarySong>> search(String query, {int limit});
   Future<List<LibrarySong>> randomSongs({int size});
 
-  /// Whether items are played by the platform instead of opened as a URL.
-  ///
-  /// Apple Music has no stream URL: the system's own player is handed the
-  /// item. A source that answers true is never asked for [streamUri].
-  bool get usesPlatformPlayer => false;
-
   /// Lyrics for [song], synced when the server has a timed version.
   ///
   /// Never throws for "this song has none": an empty [Lyrics] is the answer.
@@ -132,26 +123,44 @@ abstract class LibrarySource {
   Future<Lyrics> lyrics(LibrarySong song);
   Uri streamUri(LibrarySong song);
   Uri? artworkUri(String? artId, {int size});
+}
 
-  /// The shelves this source wants on the landing page, in the order they
-  /// should appear. Empty for a source that has no own curation: a server
-  /// library's landing shelves are the merged recently-added and the random
-  /// draw, which the page already shows.
+/// A library whose items cannot be streamed: the platform's own player takes
+/// the item instead.
+///
+/// Apple Music is the case this exists for. Reading it and playing it are
+/// different questions — the API answers with plain HTTP, while the sound
+/// comes from `ApplicationMusicPlayer` — so the split is below [LibrarySource]
+/// and every caller asks the capability, never the kind.
+abstract interface class PlatformPlayedSource implements LibrarySource {
+  /// The resource the platform player starts this item from.
   ///
-  /// Apple Music answers with its own personal mixes, heavy rotation and
-  /// station suggestions, which no other provider has a word for.
-  Future<List<LandingShelf>> landingShelves() async => const [];
+  /// The player needs the item in its own shape, which is not the neutral
+  /// model: a library song and a radio station are resolved differently.
+  Map<String, dynamic> platformResource(LibrarySong song);
 
-  /// Everything the source wants to say about itself on the landing page:
-  /// a greeting line and a few numbers. Null when there is nothing to say.
-  Future<LibraryDigest?> digest() async => null;
-
-  /// The station a song describes, when [LibrarySong.isRadio] is set.
+  /// The kind the platform player resolves [song] as (`'songs'`,
+  /// `'stations'`). A queue is all of one kind, so this is asked of its first
+  /// item.
   ///
-  /// A radio station is queued as a song so every surface that draws a queue
-  /// keeps working, but only the platform player can start one, and it needs
-  /// the resource back in its own shape.
-  Map<String, dynamic>? radioResource(LibrarySong song) => null;
+  /// Part of the contract rather than defaulted: a source that hands the
+  /// platform player items of a new kind must say so, and a silent default
+  /// would make it play the wrong collection instead of failing.
+  String platformItemType(LibrarySong song);
+}
+
+/// A library that curates its landing page itself.
+///
+/// Only an account-backed service has anything to say here: a server's
+/// landing shelves are the app's merged reads, while Apple Music has personal
+/// mixes and station suggestions no other provider has a word for.
+abstract interface class CuratedSource implements LibrarySource {
+  /// The shelves this source wants on the landing page, in display order.
+  Future<List<LandingShelf>> landingShelves();
+
+  /// What the source wants to say about itself on the landing page: a line
+  /// and a few numbers. Null when there is nothing to say.
+  Future<LibraryDigest?> digest();
 }
 
 /// The per-kind entry point: turns credentials into a stored config and turns

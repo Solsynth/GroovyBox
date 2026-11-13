@@ -12,7 +12,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// An Apple Music account: it curates its own shelves and reports its size.
-class _AccountSource extends LibrarySource {
+class _AccountSource extends LibrarySource implements CuratedSource {
   _AccountSource(this.digestValue, this.shelves);
 
   final LibraryDigest? digestValue;
@@ -28,9 +28,6 @@ class _AccountSource extends LibrarySource {
     baseUrl: '',
     displayName: 'Apple Music',
   );
-
-  @override
-  bool get usesPlatformPlayer => true;
 
   @override
   Future<List<LandingShelf>> landingShelves() async => shelves;

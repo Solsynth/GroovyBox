@@ -146,6 +146,13 @@
   "libraryKindLocal": "本地文件",
 
   "playerNothingPlaying": "当前没有正在播放的歌曲",
+  "versionsTitle": "其他版本",
+  "versionsEmptyTitle": "没有其他副本",
+  "versionsEmptyMessage": "其他已连接的音乐库都没有这首歌曲。",
+  "versionsUnavailable": "不可用",
+  "versionsUnavailableHint": "已断开连接的音乐库仍会显示它曾保存的曲目。在设置中重新连接即可播放其副本。",
+  "versionsFailedTitle": "无法查找副本",
+  "playerUnknownArtist": "未知艺术家",
   "playerClose": "关闭",
   "playerQueueShow": "显示队列",
   "playerQueueHide": "隐藏队列",

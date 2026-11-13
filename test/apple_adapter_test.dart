@@ -444,7 +444,7 @@ void main() {
         duration: const Duration(milliseconds: 195160),
       );
 
-      final item = appleQueueItem(song);
+      final item = AppleMusicSource(connected()).platformResource(song);
       expect(item['id'], 'i.1');
       expect(item['type'], 'songs');
       final attributes = item['attributes'] as Map<String, dynamic>;
@@ -470,6 +470,8 @@ void main() {
       onStatus: (_) {},
       onPosition: positions.add,
       onAdvance: (_) {},
+      onTrack: (_) {},
+      sourceFor: (_) => AppleMusicSource(connected()),
     );
 
     // Everything from the current track on, so the system has somewhere to
@@ -495,6 +497,8 @@ void main() {
       onStatus: (_) {},
       onPosition: (_) {},
       onAdvance: (_) {},
+      onTrack: (_) {},
+      sourceFor: (_) => AppleMusicSource(connected()),
     );
     await bridge.open([song], 0);
     expect(kit.playing, isTrue);
@@ -524,7 +528,7 @@ void main() {
       final restored = LibrarySong.fromJson(shelf.songs.single.toJson());
       expect(restored.isRadio, isTrue);
       expect(restored.radioUrl, 'https://music.apple.com/cn/station/x/ra.1');
-      final resource = source.radioResource(restored);
+      final resource = source.platformResource(restored);
       expect(resource?['type'], 'stations');
       expect(
         (resource?['attributes'] as Map)['playParams'],
@@ -555,6 +559,8 @@ void main() {
       onStatus: (_) {},
       onPosition: (_) {},
       onAdvance: (_) {},
+      onTrack: (_) {},
+      sourceFor: (_) => AppleMusicSource(connected()),
     );
     await bridge.open([station], 0);
     expect(kit.queuedAs.single, 'stations');

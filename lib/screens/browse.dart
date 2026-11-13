@@ -12,6 +12,7 @@ import 'package:groovy_box/screens/albums.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/format.dart';
+import 'package:groovy_box/widgets/track_versions.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
@@ -600,6 +601,9 @@ class _SongRow extends ConsumerWidget {
     return TrackRow(
       selected: playback.isCurrentSong(song),
       onTap: onTap,
+      // A long-press asks the question this row cannot: does another library
+      // have a better copy of this?
+      onLongPress: () => TrackVersionsPanel.show(context, song),
       title: song.title,
       // The suffix only appears with several libraries connected, so a
       // single-server user never sees the extra noise.

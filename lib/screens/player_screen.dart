@@ -14,6 +14,7 @@ import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:groovy_box/widgets/lyrics_view.dart';
 import 'package:groovy_box/widgets/queue_panel.dart';
+import 'package:groovy_box/widgets/track_versions.dart';
 import 'package:groovy_box/widgets/transport.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -556,10 +557,28 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                       Positioned(
                         top: _kCornerInset,
                         left: _kCornerInset,
-                        child: IconButton(
-                          tooltip: 'playerClose'.tr(),
-                          onPressed: () => context.router.maybePop(),
-                          icon: const Icon(Symbols.keyboard_arrow_down_rounded),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: 'playerClose'.tr(),
+                              onPressed: () => context.router.maybePop(),
+                              icon: const Icon(
+                                Symbols.keyboard_arrow_down_rounded,
+                              ),
+                            ),
+                            // About this track rather than about the page,
+                            // so it sits with the way out. A station has no
+                            // other versions: its run is generated.
+                            IconButton(
+                              tooltip: 'versionsTitle'.tr(),
+                              onPressed: song.isRadio
+                                  ? null
+                                  : () =>
+                                        TrackVersionsPanel.show(context, song),
+                              icon: const Icon(Symbols.content_copy_rounded),
+                            ),
+                          ],
                         ),
                       ),
                       Positioned(

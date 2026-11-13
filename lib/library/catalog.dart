@@ -57,11 +57,7 @@ class RecentPlay with _PlayableTrack {
   @override
   final TrackLinkRow? link;
 
-  const RecentPlay({
-    required this.track,
-    required this.playedAt,
-    this.link,
-  });
+  const RecentPlay({required this.track, required this.playedAt, this.link});
 }
 
 /// One of the library's most played tracks.
@@ -194,6 +190,53 @@ class LibraryCatalog {
     return _db.linksOf(trackId);
   }
 
+  /// Every connected library's copy of [song]'s canonical track.
+  ///
+  /// This is the "other versions" answer: the same song as each source holds
+  /// it, newest sighting first, so an album's own listing and a playlist's
+  /// duplicate collapse into one entry per library. Copies whose source is
+  /// no longer connected are returned too, marked unplayable, because the
+  /// catalog still knows they exist and hiding them would make a lookup
+  /// silently lie about how many copies there were.
+  Future<List<TrackCopy>> copiesOfSong(
+    LibrarySong song, {
+    Set<String>? connectedSourceIds,
+  }) async {
+    final trackId = await trackIdOf(song);
+    final links = await _db.linksOf(trackId);
+    // One entry per library: an album's listing and a playlist's copy of the
+    // same track are two links to one row, and the user wants one choice per
+    // library, not one per sighting.
+    final seen = <String>{};
+    return [
+      for (final link in links)
+        if (seen.add(link.sourceId))
+          TrackCopy(
+            sourceId: link.sourceId,
+            externalId: link.externalId,
+            song: LibrarySong(
+              sourceId: link.sourceId,
+              id: link.externalId,
+              title: song.title,
+              artist: song.artist,
+              album: song.album,
+              albumId: link.albumExternalId,
+              artistId: link.artistExternalId,
+              artId: link.artId ?? song.artId,
+              duration: song.duration,
+              track: song.track,
+              discNumber: song.discNumber,
+              year: song.year,
+              genre: song.genre,
+              mbid: song.mbid,
+            ),
+            playable:
+                connectedSourceIds == null ||
+                connectedSourceIds.contains(link.sourceId),
+          ),
+    ];
+  }
+
   /// Adopts the song a lyrics lookup is about. The request carries only what
   /// a lookup needs, so a row it creates has a title, maybe an artist, and no
   /// album id — the next full read fills the rest in.
@@ -210,7 +253,8 @@ class LibraryCatalog {
 
   /// The track [song] already is, adopting only what a lyrics request knows.
   Future<int> requestTrackId(LyricsRequest song) async =>
-      await _db.trackIdForLink(song.sourceId, song.id) ?? await adoptRequest(song);
+      await _db.trackIdForLink(song.sourceId, song.id) ??
+      await adoptRequest(song);
 
   /// Records one play of [trackId].
   ///
@@ -224,17 +268,19 @@ class LibraryCatalog {
     Duration listened = Duration.zero,
     Duration position = Duration.zero,
     bool completed = false,
-  }) => _db.into(_db.playEvents).insert(
-    PlayEventsCompanion.insert(
-      trackId: trackId,
-      sourceId: sourceId,
-      startedAt: startedAt,
-      listenedMs: Value(listened.inMilliseconds),
-      positionMs: Value(position.inMilliseconds),
-      completed: Value(completed),
-      touchedAt: Value(DateTime.now()),
-    ),
-  );
+  }) => _db
+      .into(_db.playEvents)
+      .insert(
+        PlayEventsCompanion.insert(
+          trackId: trackId,
+          sourceId: sourceId,
+          startedAt: startedAt,
+          listenedMs: Value(listened.inMilliseconds),
+          positionMs: Value(position.inMilliseconds),
+          completed: Value(completed),
+          touchedAt: Value(DateTime.now()),
+        ),
+      );
 
   /// Updates the play that is still running, so an interrupted session leaves
   /// an honest row instead of the zero it was written with.
@@ -243,16 +289,15 @@ class LibraryCatalog {
     required Duration listened,
     required Duration position,
     required bool completed,
-  }) => (_db.update(
-    _db.playEvents,
-  )..where((event) => event.id.equals(playId))).write(
-    PlayEventsCompanion(
-      listenedMs: Value(listened.inMilliseconds),
-      positionMs: Value(position.inMilliseconds),
-      completed: Value(completed),
-      touchedAt: Value(DateTime.now()),
-    ),
-  );
+  }) => (_db.update(_db.playEvents)..where((event) => event.id.equals(playId)))
+      .write(
+        PlayEventsCompanion(
+          listenedMs: Value(listened.inMilliseconds),
+          positionMs: Value(position.inMilliseconds),
+          completed: Value(completed),
+          touchedAt: Value(DateTime.now()),
+        ),
+      );
 
   Future<PlayStats> statsOf(int trackId) async => PlayStats(
     count: await _db.playCountOf(trackId),
@@ -335,10 +380,8 @@ class LibraryCatalog {
 
   /// How many songs the library knows, and how many of those no connected
   /// source can still play.
-  Future<({int tracks, int orphaned})> libraryCounts() async => (
-    tracks: await _db.trackCount(),
-    orphaned: await _db.orphanCount(),
-  );
+  Future<({int tracks, int orphaned})> libraryCounts() async =>
+      (tracks: await _db.trackCount(), orphaned: await _db.orphanCount());
 
   /// Drops the links of a source that is no longer connected. Its tracks,
   /// lyrics and play history stay, so re-adding the same server — or adding a

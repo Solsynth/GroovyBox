@@ -247,45 +247,6 @@ class SilentMusicKit implements MusicKitClient {
   Stream<AppleQueueEntry> get currentTrack => const Stream.empty();
 }
 
-/// The JSON resource the system player needs to play a library song.
-///
-///
-/// [MusicKit] addresses items by their raw resource, so a song the app read
-/// over REST has to be handed back the way Apple describes it: an id, the
-/// attributes that name it, and the `playParams` that say it is a *library*
-/// item. The library id is what the player resolves; the catalog id of the
-/// original recording is not needed to play a song already in the account's
-/// library.
-/// The same for a radio station: the player resolves it from the URL and play
-/// params the recommendation carried, and generates the station's own run of
-/// tracks itself.
-Map<String, dynamic> appleRadioItem(LibrarySong song) => {
-  'id': song.id,
-  'type': 'stations',
-  'attributes': {
-    'name': song.title,
-    'isLive': false,
-    'mediaKind': 'audio',
-    if (song.radioUrl != null) 'url': song.radioUrl,
-    if (song.radioPlayParams != null) 'playParams': song.radioPlayParams,
-  },
-};
-
-/// The resource for whichever kind [song] is.
-Map<String, dynamic> appleQueueItem(LibrarySong song) => song.isRadio
-    ? appleRadioItem(song)
-    : {
-        'id': song.id,
-        'type': 'songs',
-        'attributes': {
-          'name': song.title,
-          if (song.artist != null) 'artistName': song.artist,
-          if (song.album != null) 'albumName': song.album,
-          'durationInMillis': song.duration.inMilliseconds,
-          'playParams': {'id': song.id, 'kind': 'song', 'isLibrary': true},
-        },
-      };
-
 /// Logs and swallows a platform failure the transport cannot recover from.
 ///
 /// The player has no error surface of its own; a failed Apple Music open is

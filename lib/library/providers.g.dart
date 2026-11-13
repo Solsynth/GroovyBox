@@ -697,12 +697,131 @@ abstract class _$LibraryDigests extends $AsyncNotifier<List<LibraryDigest>> {
   }
 }
 
-/// Songs of one album, read straight from its own source.
+/// Every connected library's copy of one song, for the "other versions" sheet.
+///
+/// Two sources of truth, merged. The catalog knows the copies the app has
+/// already seen — instant, offline, and the only way to find a local file. The
+/// other libraries are *asked*, because a song this library has but another
+/// does not yet show in a browse is exactly the case a lookup is for.
+///
+/// Auto-disposed: the sheet is opened for one track and closed again.
+
+@ProviderFor(songCopies)
+final songCopiesProvider = SongCopiesFamily._();
+
+/// Every connected library's copy of one song, for the "other versions" sheet.
+///
+/// Two sources of truth, merged. The catalog knows the copies the app has
+/// already seen — instant, offline, and the only way to find a local file. The
+/// other libraries are *asked*, because a song this library has but another
+/// does not yet show in a browse is exactly the case a lookup is for.
+///
+/// Auto-disposed: the sheet is opened for one track and closed again.
+
+final class SongCopiesProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<List<TrackCopy>>,
+          List<TrackCopy>,
+          FutureOr<List<TrackCopy>>
+        >
+    with $FutureModifier<List<TrackCopy>>, $FutureProvider<List<TrackCopy>> {
+  /// Every connected library's copy of one song, for the "other versions" sheet.
+  ///
+  /// Two sources of truth, merged. The catalog knows the copies the app has
+  /// already seen — instant, offline, and the only way to find a local file. The
+  /// other libraries are *asked*, because a song this library has but another
+  /// does not yet show in a browse is exactly the case a lookup is for.
+  ///
+  /// Auto-disposed: the sheet is opened for one track and closed again.
+  SongCopiesProvider._({
+    required SongCopiesFamily super.from,
+    required TrackLookup super.argument,
+  }) : super(
+         retry: null,
+         name: r'songCopiesProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$songCopiesHash();
+
+  @override
+  String toString() {
+    return r'songCopiesProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<List<TrackCopy>> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<List<TrackCopy>> create(Ref ref) {
+    final argument = this.argument as TrackLookup;
+    return songCopies(ref, argument);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is SongCopiesProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$songCopiesHash() => r'c1dd5bfc744a8c2652ae7c2ac190cb2592af4947';
+
+/// Every connected library's copy of one song, for the "other versions" sheet.
+///
+/// Two sources of truth, merged. The catalog knows the copies the app has
+/// already seen — instant, offline, and the only way to find a local file. The
+/// other libraries are *asked*, because a song this library has but another
+/// does not yet show in a browse is exactly the case a lookup is for.
+///
+/// Auto-disposed: the sheet is opened for one track and closed again.
+
+final class SongCopiesFamily extends $Family
+    with $FunctionalFamilyOverride<FutureOr<List<TrackCopy>>, TrackLookup> {
+  SongCopiesFamily._()
+    : super(
+        retry: null,
+        name: r'songCopiesProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  /// Every connected library's copy of one song, for the "other versions" sheet.
+  ///
+  /// Two sources of truth, merged. The catalog knows the copies the app has
+  /// already seen — instant, offline, and the only way to find a local file. The
+  /// other libraries are *asked*, because a song this library has but another
+  /// does not yet show in a browse is exactly the case a lookup is for.
+  ///
+  /// Auto-disposed: the sheet is opened for one track and closed again.
+
+  SongCopiesProvider call(TrackLookup lookup) =>
+      SongCopiesProvider._(argument: lookup, from: this);
+
+  @override
+  String toString() => r'songCopiesProvider';
+}
+
+/// Songs of one album, read straight from its own source./// Songs of one album, read straight from its own source.
 
 @ProviderFor(albumSongs)
 final albumSongsProvider = AlbumSongsFamily._();
 
-/// Songs of one album, read straight from its own source.
+/// Songs of one album, read straight from its own source./// Songs of one album, read straight from its own source.
 
 final class AlbumSongsProvider
     extends
@@ -714,7 +833,7 @@ final class AlbumSongsProvider
     with
         $FutureModifier<List<LibrarySong>>,
         $FutureProvider<List<LibrarySong>> {
-  /// Songs of one album, read straight from its own source.
+  /// Songs of one album, read straight from its own source./// Songs of one album, read straight from its own source.
   AlbumSongsProvider._({
     required AlbumSongsFamily super.from,
     required LibraryRef super.argument,
@@ -761,7 +880,7 @@ final class AlbumSongsProvider
 
 String _$albumSongsHash() => r'5cab94c4eb64798bd714ed44349a629670b5b2ba';
 
-/// Songs of one album, read straight from its own source.
+/// Songs of one album, read straight from its own source./// Songs of one album, read straight from its own source.
 
 final class AlbumSongsFamily extends $Family
     with $FunctionalFamilyOverride<FutureOr<List<LibrarySong>>, LibraryRef> {
@@ -774,7 +893,7 @@ final class AlbumSongsFamily extends $Family
         isAutoDispose: true,
       );
 
-  /// Songs of one album, read straight from its own source.
+  /// Songs of one album, read straight from its own source./// Songs of one album, read straight from its own source.
 
   AlbumSongsProvider call(LibraryRef album) =>
       AlbumSongsProvider._(argument: album, from: this);

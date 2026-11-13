@@ -33,6 +33,7 @@ class ApplePlayer {
     required this.onPosition,
     required this.onAdvance,
     this.onTrack,
+    required this.sourceFor,
   });
 
   final MusicKitClient _client;
@@ -47,6 +48,10 @@ class ApplePlayer {
   /// only statement of what is on the air: a station generates its own run
   /// and the app never asked for those tracks.
   final void Function(AppleQueueEntry entry)? onTrack;
+
+  /// Resolves which source owns an item, so the bridge can ask it for the
+  /// resource shape the platform player needs. Null when the source is gone.
+  final PlatformPlayedSource? Function(LibrarySong song)? sourceFor;
 
   StreamSubscription<ApplePlayerStatus>? _statusSub;
   StreamSubscription<int>? _queueSub;
@@ -114,8 +119,8 @@ class ApplePlayer {
 
   /// Replaces the system queue with [queue] from [startingAt] onward.
   ///
-  /// Items are converted per kind: a radio station is not a track and the
-  /// player resolves it from its own resource shape.
+  /// Items are converted by the source that owns them: a radio station is
+  /// not a track, and the platform player resolves it from its own shape.
   Future<void> _pushQueue(List<LibrarySong> queue, int startingAt) async {
     // The app's queue and the system's are the same order from this point:
     // system index 0 is app index [startingAt], and the system reports its
@@ -123,13 +128,20 @@ class ApplePlayer {
     _base = startingAt;
     _systemIndex = 0;
     final songs = queue.sublist(startingAt);
+    // The *source* knows how its items are spelled for the platform player;
+    // this bridge only knows it is talking to one.
+    final source = sourceFor?.call(songs.first);
+    if (source == null) return;
     // A station is queued alone: the system generates the station's own
     // endless run, and handing it a second item would cut that run short.
     final radio = songs.first.isRadio;
     final items = radio
-        ? [appleQueueItem(songs.first)]
-        : [for (final song in songs) appleQueueItem(song)];
-    await _client.setQueue(items, itemType: radio ? 'stations' : 'songs');
+        ? [source.platformResource(songs.first)]
+        : [for (final song in songs) source.platformResource(song)];
+    await _client.setQueue(
+      items,
+      itemType: source.platformItemType(songs.first),
+    );
   }
 
   /// The app-queue index that the system queue's first entry stands for.

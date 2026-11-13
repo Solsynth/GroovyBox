@@ -9,6 +9,7 @@ import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/library/catalog.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
+import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/library/track_identity.dart';
 import 'package:groovy_box/library/apple_kit.dart';
 import 'package:groovy_box/player/apple_player.dart';
@@ -65,7 +66,24 @@ class PlaybackState {
     this.volumeIsSystemControlled = false,
   });
 
-  LibrarySong? get current =>
+  /// The song the app is playing, as everything that *describes* a track
+  /// should read it.
+  ///
+  /// A station row is not a track: it has no length, no album and no lyrics
+  /// of its own. Its [LibrarySong.radioTrack] is what is on the air, so this
+  /// answers with that — artwork, lyrics, the scrobbler and the system's
+  /// media item all get the real track's metadata from one place. The row
+  /// itself stays in [queue], which is what the transport plays from.
+  LibrarySong? get current {
+    final row = queueRow;
+    return row?.playing;
+  }
+
+  /// The queue entry at [currentIndex], station wrapper and all.
+  ///
+  /// This is the thing that is *loaded*, not necessarily the thing that is
+  /// heard: see [current].
+  LibrarySong? get queueRow =>
       currentIndex == null || currentIndex! >= queue.length
       ? null
       : queue[currentIndex!];
@@ -484,7 +502,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
 
   @override
   Future<void> setShuffle(bool shuffle) async {
-    final current = state.current;
+    final current = state.queueRow;
     if (current == null || shuffle == state.shuffle) {
       state = state.copyWith(shuffle: shuffle);
       _publish();
@@ -579,11 +597,62 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     await _player.setVolume(volume);
   }
 
+  /// Plays another library's copy of the song that is already playing.
+  ///
+  /// The queue keeps its shape: the same slot is rewritten to point at the
+  /// other source, so "next" and "previous" still mean what they meant and the
+  /// history reads as one continuous listen. The position is carried over —
+  /// two copies of one recording differ by a second at most — so switching
+  /// mid-track does not start over.
+  ///
+  /// A copy of something *else* is not a switch: only a song whose canonical
+  /// identity matches ([TrackIdentity.matches]) is accepted, so a lookup
+  /// cannot quietly replace the track with a different one.
+  Future<void> switchVersion(LibrarySong copy) async {
+    final row = state.queueRow;
+    final index = state.currentIndex;
+    if (row == null || index == null) return;
+    if (row.sourceId == copy.sourceId && row.id == copy.id) return;
+    if (row.isRadio) return;
+    if (!TrackIdentity.of(row).matches(TrackIdentity.of(copy))) return;
+
+    final position = state.position;
+    final wasPlaying = state.playing;
+    final queue = List.of(state.queue);
+    queue[index] = copy;
+    _order[index] = copy;
+    state = state.copyWith(
+      queue: queue,
+      duration: copy.duration == Duration.zero ? state.duration : copy.duration,
+      position: position,
+    );
+    _hasOpenedCurrent = false;
+    // Not awaited: opening is a network read of the other library's stream,
+    // and the sheet closes as soon as the choice is made.
+    unawaited(_openAndRestore(position: position, playing: wasPlaying));
+  }
+
+  /// Opens the row at the current index and lands it where it should be:
+  /// a switched copy resumes at [position], and stays paused when the track
+  /// it replaced was paused.
+  Future<void> _openAndRestore({
+    required Duration position,
+    required bool playing,
+  }) async {
+    await _openCurrent();
+    if (position > Duration.zero) {
+      await seek(position);
+    }
+    if (!playing) await pause();
+    _publish();
+    _saveSession();
+  }
+
   /// Opens the song at the current index through its library's stream
   /// endpoint, falling back to alternate sources that host the same canonical
   /// track if the primary source is missing or offline.
   Future<void> _openCurrent() async {
-    final song = state.current;
+    final song = state.queueRow;
     if (song == null) return;
     _hasOpenedCurrent = true;
     _appleCompleted = false;
@@ -636,10 +705,10 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
 
     if (source == null) return;
 
-    // A source with a platform player is not opened as a URL: the item is
-    // handed to the system's own player, which brings its playback time and
-    // its pause/interrupt handling with it.
-    if (source.usesPlatformPlayer) {
+    // A source whose items the platform plays is not opened as a URL: the
+    // item is handed to the system's own player, which brings its playback
+    // time and its pause/interrupt handling with it.
+    if (source is PlatformPlayedSource) {
       _appleMode = true;
       state = state.copyWith(volumeIsSystemControlled: true);
       _apple ??= ApplePlayer(
@@ -661,6 +730,11 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
         onPosition: _onPosition,
         onAdvance: _onAppleAdvance,
         onTrack: _onAppleTrack,
+        // The source that owns the item spells it for the platform player;
+        // the bridge never learns which kind it is.
+        sourceFor: (song) =>
+            ref.read(librarySourceByIdProvider)[song.sourceId]
+                as PlatformPlayedSource?,
       );
       try {
         // The system player is handed everything from here on, so a track
