@@ -144,6 +144,19 @@ class PlaybackState {
     stationIndex: stationIndex ?? this.stationIndex,
   );
 }
+/// Whether the transport has anywhere to go next, given the preferences.
+///
+/// The dock and the player page both draw a Next button, and a disagreed pair
+/// reads as a broken control: one offers the button while the other greys it
+/// out for the same queue. One rule, both callers.
+///
+/// [infinite] is the library-keeps-going setting: at the end of the queue the
+/// transport draws more tracks, so the button does something even with nothing
+/// queued behind it.
+bool canAdvance(PlaybackState state, {required bool infinite}) =>
+    state.hasNext ||
+    (state.repeatMode == PlaybackRepeatMode.all && state.queue.isNotEmpty) ||
+    (state.repeatMode == PlaybackRepeatMode.off && infinite);
 
 /// Owns the one [Player] for the app's lifetime and translates its streams
 /// into [PlaybackState].

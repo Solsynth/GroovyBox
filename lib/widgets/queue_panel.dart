@@ -29,16 +29,29 @@ class QueuePanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final playback = ref.watch(playbackProvider);
+    // Only what the list draws: a position tick must not re-sort or repaint
+    // the queue once a second while a song plays.
+    final state = ref.watch(
+      playbackProvider.select(
+        (state) => (
+          queue: state.queue,
+          stationTracks: state.stationTracks,
+          currentIndex: state.currentIndex,
+          stationIndex: state.stationIndex,
+          shuffle: state.shuffle,
+          queueRow: state.queueRow,
+        ),
+      ),
+    );
     final controller = ref.read(playbackProvider.notifier);
     final theme = Theme.of(context);
     // A station plays a run the platform player generates, not the app's
     // queue: listing the queue under it would describe a list that is not
     // playing and cannot be reached.
-    final stationRow = playback.queueRow;
+    final stationRow = state.queueRow;
     final station = stationRow?.isRadio ?? false;
-    final rows = station ? playback.stationTracks : playback.queue;
-    final currentRow = station ? playback.stationIndex : playback.currentIndex;
+    final rows = station ? state.stationTracks : state.queue;
+    final currentRow = station ? state.stationIndex : state.currentIndex;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -73,10 +86,10 @@ class QueuePanel extends ConsumerWidget {
                             ref
                                     .watch(
                                       librarySourceByIdProvider,
-                                    )[playback.queueRow!.sourceId]
+                                    )[stationRow!.sourceId]
                                     ?.displayName ??
                                 '',
-                            playback.queueRow!.title,
+                            stationRow.title,
                           ],
                         ),
                         maxLines: 1,
@@ -89,7 +102,7 @@ class QueuePanel extends ConsumerWidget {
                 ),
               ),
               Text(
-                queueSummary(rows.length, station ? false : playback.shuffle),
+                queueSummary(rows.length, station ? false : state.shuffle),
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -129,7 +142,7 @@ class QueuePanel extends ConsumerWidget {
                       onTap: station
                           ? null
                           : () => controller.playQueue(
-                              playback.queue,
+                              state.queue,
                               startIndex: index,
                             ),
                     );

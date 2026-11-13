@@ -303,7 +303,8 @@ class _SolarpassConfigSheet extends ConsumerStatefulWidget {
   const _SolarpassConfigSheet();
 
   @override
-  ConsumerState<_SolarpassConfigSheet> createState() => _SolarpassConfigSheetState();
+  ConsumerState<_SolarpassConfigSheet> createState() =>
+      _SolarpassConfigSheetState();
 }
 
 class _SolarpassConfigSheetState extends ConsumerState<_SolarpassConfigSheet> {
@@ -380,10 +381,7 @@ class _SolarpassConfigSheetState extends ConsumerState<_SolarpassConfigSheet> {
             ),
           ),
           const SizedBox(height: SolSpace.lg),
-          FilledButton(
-            onPressed: _save,
-            child: Text('commonSave'.tr()),
-          ),
+          FilledButton(onPressed: _save, child: Text('commonSave'.tr())),
         ],
       ),
     );

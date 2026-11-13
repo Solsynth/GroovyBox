@@ -286,8 +286,11 @@ class _TopTracks extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.read(playbackProvider.notifier);
 
-    final current = ref.watch(
-      playbackProvider.select((state) => state.current),
+    final currentKey = ref.watch(
+      playbackProvider.select((state) {
+        final song = state.current;
+        return song == null ? null : (song.sourceId, song.id);
+      }),
     );
 
     return Column(
@@ -309,8 +312,9 @@ class _TopTracks extends ConsumerWidget {
                 '${formatPlayCount(entry.plays)}  ·  '
                 '${formatListeningTime(entry.listened)}',
             selected:
-                current?.sourceId == entry.link?.sourceId &&
-                current?.id == entry.link?.externalId,
+                currentKey != null &&
+                currentKey.$1 == entry.link?.sourceId &&
+                currentKey.$2 == entry.link?.externalId,
             onTap: entry.song == null
                 ? null
                 : () => controller.playQueue([entry.song!]),
@@ -412,8 +416,11 @@ class _RecentPlays extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.read(playbackProvider.notifier);
-    final current = ref.watch(
-      playbackProvider.select((state) => state.current),
+    final currentKey = ref.watch(
+      playbackProvider.select((state) {
+        final song = state.current;
+        return song == null ? null : (song.sourceId, song.id);
+      }),
     );
 
     return Column(
@@ -430,8 +437,9 @@ class _RecentPlays extends ConsumerWidget {
             ),
             trailing: formatRelativeTime(entry.playedAt),
             selected:
-                current?.sourceId == entry.link?.sourceId &&
-                current?.id == entry.link?.externalId,
+                currentKey != null &&
+                currentKey.$1 == entry.link?.sourceId &&
+                currentKey.$2 == entry.link?.externalId,
             onTap: entry.song == null
                 ? null
                 : () => controller.playQueue([entry.song!]),

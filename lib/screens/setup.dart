@@ -2,7 +2,6 @@ import 'package:auto_route/auto_route.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/services.dart';
 import 'package:groovy_box/core/theme.dart';
-import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/library/store.dart';
 import 'package:groovy_box/widgets/common.dart';
@@ -297,7 +296,10 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       final config = await _connectConfig();
       if (config == null || !mounted) return;
       setState(() => _success = 'setupTestSuccess'.tr());
-    } on LibraryException catch (error) {
+    } catch (error) {
+      // Not only [LibraryException]: a timeout, a socket error or a bad
+      // response would otherwise end the test with the spinner stopping and
+      // nothing said, which reads as a button that does not work.
       if (!mounted) return;
       setState(() => _error = describeServerError(error));
     } finally {
@@ -319,7 +321,9 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       // The screen was pushed over the shell, so the shell is always there to
       // return to; a first connection is no different from a fifth.
       if (mounted) _leave();
-    } on LibraryException catch (error) {
+    } catch (error) {
+      // Same reason as [_test]: an unlisted failure must say something
+      // rather than leave the form looking idle after a tap.
       if (!mounted) return;
       setState(() => _error = describeServerError(error));
     } finally {

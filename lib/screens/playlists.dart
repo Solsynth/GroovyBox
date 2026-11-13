@@ -204,8 +204,10 @@ class PlaylistDetailScreen extends ConsumerWidget {
     final songs = ref.watch(
       playlistSongsProvider((sourceId: sourceId, id: playlistId)),
     );
-    final playback = ref.watch(playbackProvider);
-    final hasSong = playback.current != null;
+    // One boolean, not the transport: rows decide their own selection.
+    final hasSong = ref.watch(
+      playbackProvider.select((state) => state.current != null),
+    );
     final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
 
     return Scaffold(
@@ -257,10 +259,9 @@ class PlaylistDetailScreen extends ConsumerWidget {
                         itemCount: list.length,
                         itemBuilder: (context, index) {
                           final song = list[index];
-                          return TrackRow(
-                            title: song.title,
+                          return SongTrackRow(
+                            song: song,
                             subtitle: songRowSubtitle(ref, song),
-                            selected: playback.isCurrentSong(song),
                             trailing: formatDuration(song.duration),
                             artwork: LibraryArtwork(
                               sourceId: song.sourceId,

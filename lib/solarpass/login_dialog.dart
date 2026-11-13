@@ -20,7 +20,8 @@ class SolarpassLoginDialog extends ConsumerStatefulWidget {
   }
 
   @override
-  ConsumerState<SolarpassLoginDialog> createState() => _SolarpassLoginDialogState();
+  ConsumerState<SolarpassLoginDialog> createState() =>
+      _SolarpassLoginDialogState();
 }
 
 class _SolarpassLoginDialogState extends ConsumerState<SolarpassLoginDialog> {
@@ -55,15 +56,17 @@ class _SolarpassLoginDialogState extends ConsumerState<SolarpassLoginDialog> {
     });
 
     try {
-      await ref.read(solarpassSessionProvider.notifier).signInDevice(
-        onDeviceCode: (auth) {
-          if (mounted) {
-            setState(() {
-              _deviceAuth = auth;
-            });
-          }
-        },
-      );
+      await ref
+          .read(solarpassSessionProvider.notifier)
+          .signInDevice(
+            onDeviceCode: (auth) {
+              if (mounted) {
+                setState(() {
+                  _deviceAuth = auth;
+                });
+              }
+            },
+          );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
@@ -130,7 +133,9 @@ class _SolarpassLoginDialogState extends ConsumerState<SolarpassLoginDialog> {
                   ),
                   IconButton(
                     icon: const Icon(Symbols.close_rounded),
-                    onPressed: _loading && _deviceAuth != null ? null : () => Navigator.of(context).pop(),
+                    onPressed: _loading && _deviceAuth != null
+                        ? null
+                        : () => Navigator.of(context).pop(),
                   ),
                 ],
               ),
@@ -145,7 +150,11 @@ class _SolarpassLoginDialogState extends ConsumerState<SolarpassLoginDialog> {
                   ),
                   child: Row(
                     children: [
-                      Icon(Symbols.error_rounded, color: scheme.onErrorContainer, size: 20),
+                      Icon(
+                        Symbols.error_rounded,
+                        color: scheme.onErrorContainer,
+                        size: 20,
+                      ),
                       const SizedBox(width: SolSpace.sm),
                       Expanded(
                         child: Text(
@@ -201,7 +210,11 @@ class _SolarpassLoginDialogState extends ConsumerState<SolarpassLoginDialog> {
     );
   }
 
-  Widget _buildDeviceAuthContent(ThemeData theme, ColorScheme scheme, DeviceAuthorization auth) {
+  Widget _buildDeviceAuthContent(
+    ThemeData theme,
+    ColorScheme scheme,
+    DeviceAuthorization auth,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

@@ -223,8 +223,11 @@ class AlbumDetailScreen extends ConsumerWidget {
     final songs = ref.watch(
       albumSongsProvider((sourceId: sourceId, id: albumId)),
     );
-    final playback = ref.watch(playbackProvider);
-    final hasSong = playback.current != null;
+    // One boolean, not the transport: a position tick must not rebuild an
+    // album of twelve rows. Each row decides its own selection.
+    final hasSong = ref.watch(
+      playbackProvider.select((state) => state.current != null),
+    );
     final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
 
     return Scaffold(
@@ -274,17 +277,27 @@ class AlbumDetailScreen extends ConsumerWidget {
                           }
 
                           final song = list[index - 1];
-                          return TrackRow(
-                            title: song.title,
-                            subtitle: song.artist ?? 'commonUnknownArtist'.tr(),
-                            selected: playback.isCurrentSong(song),
-                            trailing: formatDuration(song.duration),
-                            artwork: LibraryArtwork(
-                              sourceId: song.sourceId,
-                              artId: song.artId,
-                              size: 44,
-                              radius: SolRadius.xs,
+                          return SongTrackRow(
+                            song: song,
+                            // An album is a sequence: the number is the
+                            // position in the record, which the title does
+                            // not carry. The cover would be the same square
+                            // twelve times, so the number takes its place.
+                            leading: Text(
+                              '${song.track ?? index}',
+                              style: Theme.of(context).textTheme.labelMedium
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
+                                  ),
                             ),
+                            subtitle:
+                                song.artist ?? 'commonUnknownArtist'.tr(),
+                            trailing: formatDuration(song.duration),
                             onTap: () => ref
                                 .read(playbackProvider.notifier)
                                 .playQueue(list, startIndex: index - 1),
@@ -328,22 +341,30 @@ class _AlbumHero extends StatelessWidget {
     final wide = isWideScreen(context);
     final coverSize = wide ? 168.0 : 132.0;
 
+    // The page header already names the record and counts its tracks: the
+    // hero would only repeat it in smaller type. It carries what the header
+    // does not — who made it, when, and the way in.
     final details = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          first.album ?? first.title,
-          maxLines: 2,
+          first.artist ?? 'commonUnknownArtist'.tr(),
+          maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.titleLarge?.copyWith(
+          style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w700,
           ),
         ),
         const SizedBox(height: SolSpace.xxs),
         Text(
-          '${first.artist ?? 'commonUnknownArtist'.tr()}'
-          '${first.year == null ? '' : '  ·  ${first.year}'}',
+          [
+            if (first.year != null) '${first.year}',
+            if (first.genre != null) first.genre!,
+            if (first.albumArtist != null &&
+                first.albumArtist != first.artist)
+              first.albumArtist!,
+          ].join('  ·  '),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: theme.textTheme.bodySmall?.copyWith(

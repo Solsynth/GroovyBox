@@ -20,8 +20,7 @@ class OAuthSession {
       expiresAt != null &&
       DateTime.now().isAfter(expiresAt!.subtract(const Duration(seconds: 45)));
 
-  bool get isExpired =>
-      expiresAt != null && DateTime.now().isAfter(expiresAt!);
+  bool get isExpired => expiresAt != null && DateTime.now().isAfter(expiresAt!);
 
   Map<String, dynamic> toJson() => {
     'access_token': accessToken,
@@ -37,7 +36,8 @@ class OAuthSession {
     return OAuthSession(
       accessToken: accessToken,
       refreshToken: json['refresh_token'] as String?,
-      expiresAt: DateTime.tryParse(json['expires_at'] as String? ?? '')?.toLocal(),
+      expiresAt: DateTime.tryParse(json['expires_at'] as String? ?? '')
+          ?.toLocal(),
       tokenType: (json['token_type'] as String?) ?? 'Bearer',
       scope: json['scope'] as String?,
     );
@@ -79,7 +79,8 @@ class SolarpassAccount {
   final String? avatarUrl;
   final String? bio;
 
-  String get displayName => (nick != null && nick!.trim().isNotEmpty) ? nick!.trim() : name;
+  String get displayName =>
+      (nick != null && nick!.trim().isNotEmpty) ? nick!.trim() : name;
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -90,7 +91,10 @@ class SolarpassAccount {
     'bio': bio,
   };
 
-  factory SolarpassAccount.fromJson(Map<String, dynamic> json, {String? baseUrl}) {
+  factory SolarpassAccount.fromJson(
+    Map<String, dynamic> json, {
+    String? baseUrl,
+  }) {
     final profile = json['profile'] as Map<String, dynamic>?;
     final name = json['name'] as String? ?? '';
     String? avatar = profile?['picture']?['url'] as String?;
@@ -148,18 +152,20 @@ class SolarpassConfig {
     'scrobble_enabled': scrobbleEnabled,
   };
 
-  factory SolarpassConfig.fromJson(Map<String, dynamic> json) => SolarpassConfig(
-    serverUrl: (json['server_url'] as String?)?.trim().isNotEmpty == true
-        ? json['server_url'] as String
-        : defaultServerUrl,
-    clientId: (json['client_id'] as String?)?.trim().isNotEmpty == true
-        ? json['client_id'] as String
-        : defaultClientId,
-    callbackScheme: (json['callback_scheme'] as String?)?.trim().isNotEmpty == true
-        ? json['callback_scheme'] as String
-        : defaultCallbackScheme,
-    scrobbleEnabled: json['scrobble_enabled'] as bool? ?? true,
-  );
+  factory SolarpassConfig.fromJson(Map<String, dynamic> json) =>
+      SolarpassConfig(
+        serverUrl: (json['server_url'] as String?)?.trim().isNotEmpty == true
+            ? json['server_url'] as String
+            : defaultServerUrl,
+        clientId: (json['client_id'] as String?)?.trim().isNotEmpty == true
+            ? json['client_id'] as String
+            : defaultClientId,
+        callbackScheme:
+            (json['callback_scheme'] as String?)?.trim().isNotEmpty == true
+            ? json['callback_scheme'] as String
+            : defaultCallbackScheme,
+        scrobbleEnabled: json['scrobble_enabled'] as bool? ?? true,
+      );
 }
 
 class OAuthException implements Exception {
@@ -168,5 +174,7 @@ class OAuthException implements Exception {
   final String? code;
 
   @override
-  String toString() => code != null ? 'OAuthException ($code): $message' : 'OAuthException: $message';
+  String toString() => code != null
+      ? 'OAuthException ($code): $message'
+      : 'OAuthException: $message';
 }

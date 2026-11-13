@@ -1,11 +1,14 @@
 import 'package:easy_localization/easy_localization.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../core/responsive.dart';
-import '../shell/rail_scope.dart';
 import '../core/theme.dart';
 import '../library/models.dart';
+import '../player/player.dart';
+import '../shell/rail_scope.dart';
+import 'format.dart';
 
 /// Centers a page's content in one column on wide windows.
 ///
@@ -356,7 +359,8 @@ class SectionLabel extends StatelessWidget {
   }
 }
 
-/// Album/track list rows share one shape: cover, two lines, trailing text.
+/// Album/track list rows share one shape: an optional leading slot, cover,
+/// two lines, trailing text.
 ///
 /// Rows are separated by space and hover tone, never by a divider: a list of
 /// hairlines reads as a table, and this is a playlist. The hover and selected
@@ -364,6 +368,14 @@ class SectionLabel extends StatelessWidget {
 class TrackRow extends StatelessWidget {
   final String title;
   final String subtitle;
+
+  /// A fixed slot before the artwork: a track number in an album, where the
+  /// position in the record is information the title does not carry.
+  ///
+  /// [wide] is the width reserved, in logical pixels; the leading content is
+  /// right aligned in it so single digits line up with two.
+  final Widget? leading;
+  final double leadingWidth;
   final Widget? artwork;
   final String? trailing;
   final bool selected;
@@ -374,13 +386,14 @@ class TrackRow extends StatelessWidget {
     super.key,
     required this.title,
     required this.subtitle,
+    this.leading,
+    this.leadingWidth = 28,
     this.artwork,
     this.trailing,
     this.selected = false,
     this.onTap,
     this.onLongPress,
   });
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -409,6 +422,19 @@ class TrackRow extends StatelessWidget {
             ),
             child: Row(
               children: [
+                if (leading != null) ...[
+                  SizedBox(
+                    width: leadingWidth,
+                    // Centred against the row's two lines, not their first:
+                    // a number aligned to the box's top read as raised above
+                    // the title it belongs to.
+                    child: Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: leading,
+                    ),
+                  ),
+                  const SizedBox(width: SolSpace.sm),
+                ],
                 if (artwork != null) ...[
                   artwork!,
                   const SizedBox(width: SolSpace.md),
@@ -461,6 +487,65 @@ class TrackRow extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// A [TrackRow] for one library song, selected while that song is playing.
+///
+/// The selection is the only part of a list that changes on a transport tick,
+/// and it is decided by a `select` on the song's identity: a list of fifty
+/// rows no longer repaints because the player's position moved, and a row no
+/// longer has to watch the whole [PlaybackState] to know it is the one on
+/// the air.
+///
+/// Rows that are not songs (an album's rank, a search hit the library cannot
+/// play) still use [TrackRow] directly.
+class SongTrackRow extends ConsumerWidget {
+  final LibrarySong song;
+
+  /// What the row says, when it differs from the track's own title and
+  /// subtitle: a playlist row names the album, an album row names the artist.
+  final String? title;
+  final String? subtitle;
+  final Widget? leading;
+  final double leadingWidth;
+  final Widget? artwork;
+  final String? trailing;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+
+  const SongTrackRow({
+    super.key,
+    required this.song,
+    this.title,
+    this.subtitle,
+    this.leading,
+    this.leadingWidth = 28,
+    this.artwork,
+    this.trailing,
+    this.onTap,
+    this.onLongPress,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // The song's identity, not the transport: `isCurrentSong` also matches a
+    // copy of the same track from another library, which is exactly what a
+    // merged list shows.
+    final selected = ref.watch(
+      playbackProvider.select((state) => state.isCurrentSong(song)),
+    );
+    return TrackRow(
+      title: title ?? song.playing.title,
+      subtitle: subtitle ?? songRowSubtitle(ref, song),
+      leading: leading,
+      leadingWidth: leadingWidth,
+      artwork: artwork,
+      trailing: trailing,
+      selected: selected,
+      onTap: onTap,
+      onLongPress: onLongPress,
     );
   }
 }

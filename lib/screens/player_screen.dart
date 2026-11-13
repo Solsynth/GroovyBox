@@ -37,14 +37,15 @@ const double _kPageMargin = SolSpace.xxxl;
 /// than [_kPageMargin] because a button already carries its own tap padding.
 const double _kCornerInset = SolSpace.lg;
 
-/// Height the column under the slot takes at the default type size: the copy,
-/// the scrubber and the transport, plus the gap between them.
+/// Height the column under the slot takes at the default type size: the
+/// library eyebrow, the copy, the action bar, the scrubber and the transport,
+/// plus the gaps between them.
 ///
 /// Measured rather than assumed from [SolSpace], because the transport is a
-/// row of icon buttons and the copy is two lines of text; the compact body
+/// row of icon buttons and the copy is three lines of text; the compact body
 /// subtracts it (scaled by the reader's text size) from the window to size the
 /// slot, so the tail and the slot cannot both claim the same pixels.
-const double _kBodyTail = 232;
+const double _kBodyTail = 252;
 
 /// Narrowest the copy, scrubber and transport column gets before it spills.
 ///
@@ -316,7 +317,16 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     });
   }
 
-  void _seekBy(Duration position, Duration by, Duration duration) {
+  /// Seeks by [by], kept inside the track by the transport's own length.
+  ///
+  /// Read here rather than taken as an argument: this runs on a key press,
+  /// and the page no longer rebuilds on every position tick just to hand it
+  /// a fresher duration.
+  void _seekBy(Duration position, Duration by) {
+    final playback = ref.read(playbackProvider);
+    final duration = playback.duration == Duration.zero
+        ? playback.current?.duration ?? Duration.zero
+        : playback.duration;
     final target = position + by;
     ref
         .read(playbackProvider.notifier)
@@ -359,17 +369,18 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   /// the page's own focus, which is where the page starts and where a click
   /// on empty space returns. The arrows still set the volume even though the
   /// slider moved to Settings.
-  KeyEventResult _onTransportKey(
-    KeyEvent event,
-    PlaybackState playback,
-    Duration duration,
-  ) {
+  ///
+  /// Reads the transport at key time rather than taking it as an argument:
+  /// the page watches only the song, so a position tick does not rebuild the
+  /// whole window just to hand this handler a fresher number.
+  KeyEventResult _onTransportKey(KeyEvent event) {
     if (!_shortcutFocus.hasPrimaryFocus) return KeyEventResult.ignored;
     // Repeats are wanted for seeking and volume — those are the keys people
     // hold down — and not for the toggles, which would otherwise flap.
     final repeat = event is KeyRepeatEvent;
     if (event is! KeyDownEvent && !repeat) return KeyEventResult.ignored;
 
+    final playback = ref.read(playbackProvider);
     final controller = ref.read(playbackProvider.notifier);
     final shift = HardwareKeyboard.instance.isShiftPressed;
     switch (event.logicalKey) {
@@ -379,13 +390,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
         if (shift) {
           if (!repeat) controller.previous();
         } else {
-          _seekBy(playback.position, const Duration(seconds: -5), duration);
+          _seekBy(playback.position, const Duration(seconds: -5));
         }
       case LogicalKeyboardKey.arrowRight:
         if (shift) {
           if (!repeat) controller.next();
         } else {
-          _seekBy(playback.position, const Duration(seconds: 5), duration);
+          _seekBy(playback.position, const Duration(seconds: 5));
         }
       case LogicalKeyboardKey.arrowUp:
         _nudgeVolume(playback.volume, 5);
@@ -403,9 +414,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
   @override
   Widget build(BuildContext context) {
-    final playback = ref.watch(playbackProvider);
-    final controller = ref.read(playbackProvider.notifier);
-    final song = playback.current;
+    // The song, not the transport: a position tick arrives once a second and
+    // the cover, the panes and the corner controls have nothing to say about
+    // it. The scrubber and the transport watch the state themselves, so a
+    // tick repaints two small rows instead of the whole window.
+    final song = ref.watch(playbackProvider.select((state) => state.current));
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
@@ -422,29 +435,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       );
     }
 
-    final duration = playback.duration == Duration.zero
-        ? song.duration
-        : playback.duration;
-    final maxMs = duration.inMilliseconds.toDouble();
-    final positionMs = playback.position.inMilliseconds
-        .clamp(0, duration.inMilliseconds)
-        .toDouble();
-    final wide = isWideScreen(context);
-
     // A station has no length and no end, so a scrubber over it would be a
     // control with nothing to move.
-    final scrubber = song.isRadio
+    final Widget bottom = song.isRadio
         ? const _LiveBadge()
-        : _Scrubber(
-            positionMs: positionMs,
-            maxMs: maxMs,
-            position: playback.position,
-            duration: duration,
-            onSeek: (value) =>
-                controller.seek(Duration(milliseconds: value.round())),
-          );
-
-    final transport = _Transport(playback: playback, controller: controller);
+        : const _Scrubber();
     // Built once per page build, not per animation frame: whichever pane is
     // on show keeps its scroll position while the morph runs.
     final alternate = _paneWidget(_pane);
@@ -452,11 +447,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     // the same builder so the hand-off is between identical subtrees, and
     // only while it is needed, so a closed player holds one panel not two.
     final leaving = _swapFrom == null ? null : _paneWidget(_swapFrom!);
-    final body = wide
+    final body = isWideScreen(context)
         ? _WidePlayerBody(
             song: song,
-            scrubber: scrubber,
-            transport: transport,
+            scrubber: bottom,
             alternate: alternate,
             leaving: leaving,
             swap: _swapT,
@@ -464,8 +458,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           )
         : _CompactPlayerBody(
             song: song,
-            scrubber: scrubber,
-            transport: transport,
+            scrubber: bottom,
             alternate: alternate,
             leaving: leaving,
             swap: _swapT,
@@ -490,20 +483,22 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
             // the surface above it is, so content that covers the field still
             // hands the keys back.
             Positioned.fill(
-              child: ClipRect(
-                child: ImageFiltered(
-                  imageFilter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
-                  child: Opacity(
-                    opacity: 0.4,
-                    child: LibraryArtwork(
-                      sourceId: song.sourceId,
-                      artId: song.artId,
-                      radius: 0,
-                      // Blurred past recognition: detail here would be
-                      // decoded and thrown away, so ask for a thumbnail,
-                      // not the cover.
-                      pixelSize: 256,
-                      fallbackIcon: Symbols.music_note_rounded,
+              child: RepaintBoundary(
+                child: ClipRect(
+                  child: ImageFiltered(
+                    imageFilter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
+                    child: Opacity(
+                      opacity: 0.4,
+                      child: LibraryArtwork(
+                        sourceId: song.sourceId,
+                        artId: song.artId,
+                        radius: 0,
+                        // Blurred past recognition: detail here would be
+                        // decoded and thrown away, so ask for a thumbnail,
+                        // not the cover.
+                        pixelSize: 256,
+                        fallbackIcon: Symbols.music_note_rounded,
+                      ),
                     ),
                   ),
                 ),
@@ -542,8 +537,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                   focusNode: _shortcutFocus,
                   autofocus: true,
                   includeSemantics: false,
-                  onKeyEvent: (_, event) =>
-                      _onTransportKey(event, playback, duration),
+                  onKeyEvent: (_, event) => _onTransportKey(event),
                   // The body owns the whole page: the close and view
                   // controls float over it rather than sitting in a bar above
                   // it, so the artwork is not charged a row it does not need
@@ -630,7 +624,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 class _CompactPlayerBody extends StatelessWidget {
   final LibrarySong song;
   final Widget scrubber;
-  final Widget transport;
   final Widget alternate;
   final Widget? leaving;
   final Animation<double> swap;
@@ -640,7 +633,6 @@ class _CompactPlayerBody extends StatelessWidget {
   const _CompactPlayerBody({
     required this.song,
     required this.scrubber,
-    required this.transport,
     required this.alternate,
     required this.leaving,
     required this.swap,
@@ -723,7 +715,7 @@ class _CompactPlayerBody extends StatelessWidget {
                   width: controlsWidth,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
-                    children: [scrubber, transport],
+                    children: [scrubber, const _Transport()],
                   ),
                 ),
               ),
@@ -911,7 +903,6 @@ class _PaneSwap extends StatelessWidget {
 class _WidePlayerBody extends StatelessWidget {
   final LibrarySong song;
   final Widget scrubber;
-  final Widget transport;
   final Widget alternate;
   final Widget? leaving;
   final Animation<double> swap;
@@ -920,13 +911,11 @@ class _WidePlayerBody extends StatelessWidget {
   const _WidePlayerBody({
     required this.song,
     required this.scrubber,
-    required this.transport,
     required this.alternate,
     required this.leaving,
     required this.swap,
     required this.morph,
   });
-
   @override
   Widget build(BuildContext context) {
     // Built once per page build, not per animation frame: the animated
@@ -950,7 +939,7 @@ class _WidePlayerBody extends StatelessWidget {
         const SizedBox(height: SolSpace.sm),
         scrubber,
         const SizedBox(height: SolSpace.sm),
-        transport,
+        const _Transport(),
       ],
     );
 
@@ -1160,6 +1149,14 @@ class _Cover extends StatelessWidget {
   }
 }
 
+/// The sleeve credits under the artwork: what is playing, by whom, from
+/// which record, out of which library.
+///
+/// Set like the back of a sleeve rather than like a card caption: a small
+/// tracked eyebrow names the library, the title carries the weight, and the
+/// credits sit on one quiet line under it. The library moved out of that line
+/// because it is the answer to "whose copy is this?", which is a different
+/// question from "what is this?" and had been sharing its row.
 class _TrackCopy extends ConsumerWidget {
   final LibrarySong song;
   final bool centered;
@@ -1168,54 +1165,76 @@ class _TrackCopy extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // The library the track plays from, under the artist: the page answers
-    // "what is this, and where from?" without a settings trip. A kind with
-    // its own mark is drawn as that mark; only a named server is spelled out.
+    // The library the track plays from. A kind with its own mark is drawn as
+    // that mark; only a named server is spelled out.
     final source = playingSourceLabel(ref, song);
     final mark = playingSourceMark(ref, song);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final playing = song.playing;
+    final credits = [
+      playing.subtitle,
+      if (playing.album != null) playing.album!,
+    ].join('  ·  ');
+    final eyebrow = source;
+
     return Column(
       crossAxisAlignment: centered
           ? CrossAxisAlignment.center
           : CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
+        // The library, where a sleeve puts the label: above the title, small
+        // and tracked, so the title is the first thing read. Its mark stands
+        // in for the name where the kind has one.
+        if (eyebrow != null || mark != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: SolSpace.xs),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (mark != null) ...[
+                  Icon(mark, size: 13, color: colorScheme.onSurfaceVariant),
+                  if (eyebrow != null) const SizedBox(width: 5),
+                ],
+                if (eyebrow != null)
+                  Flexible(
+                    child: Text(
+                      eyebrow.toUpperCase(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         Text(
           // A station's row carries what it is playing, so the page names the
           // track rather than the station it was started from.
-          song.playing.title,
+          playing.title,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           textAlign: centered ? TextAlign.center : TextAlign.start,
           style: theme.textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.w700,
+            letterSpacing: -0.4,
+            height: 1.15,
           ),
         ),
-        const SizedBox(height: 2),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (mark != null) ...[
-              Icon(mark, size: 13, color: colorScheme.onSurfaceVariant),
-              const SizedBox(width: 5),
-            ],
-            Flexible(
-              child: Text(
-                [
-                  song.playing.subtitle,
-                  if (song.playing.album != null) song.playing.album!,
-                  ?source,
-                ].join('  ·  '),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: centered ? TextAlign.center : TextAlign.start,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-          ],
+        const SizedBox(height: 4),
+        Text(
+          credits,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: centered ? TextAlign.center : TextAlign.start,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+          ),
         ),
       ],
     );
@@ -1251,41 +1270,85 @@ class _LiveBadge extends StatelessWidget {
   }
 }
 
-class _Scrubber extends StatelessWidget {
-  final double positionMs;
-  final double maxMs;
-  final Duration position;
-  final Duration duration;
-  final ValueChanged<double> onSeek;
+/// The seek bar and its two clocks.
+///
+/// Watches the transport itself: position arrives once a second, and only
+/// this row has anything to say about it.
+///
+/// Dragging is previewed here and committed once: the thumb follows the
+/// finger, the left clock names the point being scrubbed to, and the
+/// transport is asked to seek only when the drag ends. Seeking on every pixel
+/// would issue a stream request per frame and leave the label chasing the
+/// player.
+class _Scrubber extends ConsumerStatefulWidget {
+  const _Scrubber();
 
-  const _Scrubber({
-    required this.positionMs,
-    required this.maxMs,
-    required this.position,
-    required this.duration,
-    required this.onSeek,
-  });
+  @override
+  ConsumerState<_Scrubber> createState() => _ScrubberState();
+}
+
+class _ScrubberState extends ConsumerState<_Scrubber> {
+  /// Where the finger is, in milliseconds. Null when not dragging.
+  double? _drag;
 
   @override
   Widget build(BuildContext context) {
+    final playback = ref.watch(
+      playbackProvider.select(
+        (state) => (state.position, state.duration, state.current?.duration),
+      ),
+    );
+    final (position, reported, songLength) = playback;
+    final duration = reported == Duration.zero
+        ? songLength ?? Duration.zero
+        : reported;
+    final maxMs = duration.inMilliseconds.toDouble();
+    final liveMs = position.inMilliseconds
+        .clamp(0, duration.inMilliseconds)
+        .toDouble();
     final theme = Theme.of(context);
     final labelStyle = theme.textTheme.labelSmall?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
+      fontFeatures: const [FontFeature.tabularFigures()],
     );
+    // While dragging, the clocks describe the scrub rather than the player:
+    // the left one is where the release will land.
+    final shownMs = _drag ?? liveMs;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Slider(
-          value: positionMs,
-          max: maxMs <= 0 ? 1 : maxMs,
-          onChanged: maxMs <= 0 ? null : onSeek,
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackHeight: 3,
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+            overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
+            activeTickMarkColor: Colors.transparent,
+            inactiveTickMarkColor: Colors.transparent,
+          ),
+          child: Slider(
+            value: shownMs,
+            max: maxMs <= 0 ? 1 : maxMs,
+            onChanged: maxMs <= 0
+                ? null
+                : (value) => setState(() => _drag = value),
+            onChangeEnd: (value) {
+              setState(() => _drag = null);
+              ref
+                  .read(playbackProvider.notifier)
+                  .seek(Duration(milliseconds: value.round()));
+            },
+          ),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: SolSpace.sm),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(formatDuration(position), style: labelStyle),
+              Text(
+                formatDuration(Duration(milliseconds: shownMs.round())),
+                style: labelStyle,
+              ),
               Text(formatDuration(duration), style: labelStyle),
             ],
           ),
@@ -1295,21 +1358,39 @@ class _Scrubber extends StatelessWidget {
   }
 }
 
-class _Transport extends StatelessWidget {
-  final PlaybackState playback;
-  final Playback controller;
-
-  const _Transport({required this.playback, required this.controller});
+/// Shuffle, previous, play/pause, next, repeat.
+///
+/// Watches only what the buttons draw, so a position tick does not repaint
+/// five buttons and their ink.
+class _Transport extends ConsumerWidget {
+  const _Transport();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // The button is enabled whenever pressing it would move: the next row,
+    // the top of the queue under repeat-all, or a fresh draw of tracks when
+    // the library is allowed to keep going. A disabled Next said the queue
+    // was over while the transport was about to play on anyway.
+    final infinite = ref.watch(infinitePlaybackEnabledProvider);
+    final state = ref.watch(
+      playbackProvider.select(
+        (state) => (
+          playing: state.playing,
+          shuffle: state.shuffle,
+          repeatMode: state.repeatMode,
+          advances: canAdvance(state, infinite: infinite),
+        ),
+      ),
+    );
+    final controller = ref.read(playbackProvider.notifier);
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         IconButton(
           tooltip: 'playerShuffle'.tr(),
-          isSelected: playback.shuffle,
-          onPressed: () => controller.setShuffle(!playback.shuffle),
+          isSelected: state.shuffle,
+          onPressed: () => controller.setShuffle(!state.shuffle),
           icon: const Icon(Symbols.shuffle_rounded),
         ),
         const SizedBox(width: SolSpace.xs),
@@ -1321,28 +1402,28 @@ class _Transport extends StatelessWidget {
         ),
         const SizedBox(width: SolSpace.xs),
         IconButton.filled(
-          tooltip: playback.playing ? 'playerPause'.tr() : 'playerPlay'.tr(),
+          tooltip: state.playing ? 'playerPause'.tr() : 'playerPlay'.tr(),
           onPressed: controller.togglePlayPause,
           iconSize: 36,
           padding: const EdgeInsets.all(SolSpace.lg),
-          icon: PlayPauseIcon(playing: playback.playing, size: 36),
+          icon: PlayPauseIcon(playing: state.playing, size: 36),
         ),
         const SizedBox(width: SolSpace.xs),
         IconButton(
           tooltip: 'playerNext'.tr(),
-          onPressed: playback.hasNext ? controller.next : null,
+          onPressed: state.advances ? controller.next : null,
           iconSize: 32,
           icon: const Icon(Symbols.skip_next_rounded),
         ),
         const SizedBox(width: SolSpace.xs),
         IconButton(
-          tooltip: playback.repeatMode == PlaybackRepeatMode.single
+          tooltip: state.repeatMode == PlaybackRepeatMode.single
               ? 'playerRepeatSong'.tr()
               : 'playerRepeat'.tr(),
-          isSelected: playback.repeatMode != PlaybackRepeatMode.off,
+          isSelected: state.repeatMode != PlaybackRepeatMode.off,
           onPressed: controller.cycleRepeatMode,
           icon: Icon(
-            playback.repeatMode == PlaybackRepeatMode.single
+            state.repeatMode == PlaybackRepeatMode.single
                 ? Symbols.repeat_one_rounded
                 : Symbols.repeat_rounded,
           ),

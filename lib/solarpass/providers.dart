@@ -181,7 +181,9 @@ class SolarpassAccountNotifier extends AsyncNotifier<SolarpassAccount?> {
   }
 
   Future<void> refresh() async {
-    final session = await ref.read(solarpassSessionProvider.notifier).validSession();
+    final session = await ref
+        .read(solarpassSessionProvider.notifier)
+        .validSession();
     if (session == null) {
       state = const AsyncData(null);
       return;
@@ -195,7 +197,10 @@ class SolarpassAccountNotifier extends AsyncNotifier<SolarpassAccount?> {
       final client = ref.read(solarpassClientProvider);
       final account = await client.fetchCurrentAccount(session);
       final prefs = ref.read(sharedPreferencesProvider);
-      await prefs.setString(_kSolarpassAccountKey, jsonEncode(account.toJson()));
+      await prefs.setString(
+        _kSolarpassAccountKey,
+        jsonEncode(account.toJson()),
+      );
       state = AsyncData(account);
       return account;
     } catch (e, stack) {
@@ -230,7 +235,11 @@ class SolarpassScrobbleStatusNotifier extends Notifier<ScrobbleStatus> {
   @override
   ScrobbleStatus build() => const ScrobbleStatus(isScrobbling: false);
 
-  void update({required bool isScrobbling, String? currentTrack, String? lastError}) {
+  void update({
+    required bool isScrobbling,
+    String? currentTrack,
+    String? lastError,
+  }) {
     state = ScrobbleStatus(
       isScrobbling: isScrobbling,
       currentTrack: currentTrack,
@@ -347,7 +356,8 @@ class SolarpassScrobbler {
     // Check Last.fm standard rule: listened >= 30s or >= 50% track duration
     final songSec = song.duration.inSeconds;
     final listenedSec = listened.inSeconds;
-    final isEligible = listenedSec >= 30 || (songSec > 0 && listenedSec >= (songSec / 2));
+    final isEligible =
+        listenedSec >= 30 || (songSec > 0 && listenedSec >= (songSec / 2));
 
     if (isEligible) {
       _submitPermanentScrobble(song, listened, playedAt);
@@ -363,7 +373,9 @@ class SolarpassScrobbler {
     Duration listened,
     DateTime playedAt,
   ) async {
-    final session = await _ref.read(solarpassSessionProvider.notifier).validSession();
+    final session = await _ref
+        .read(solarpassSessionProvider.notifier)
+        .validSession();
     if (session == null) return;
 
     final client = _ref.read(solarpassClientProvider);
@@ -399,12 +411,13 @@ class SolarpassScrobbler {
   }
 
   Future<void> _scrobbleTrack(LibrarySong song, Duration position) async {
-    final session = await _ref.read(solarpassSessionProvider.notifier).validSession();
+    final session = await _ref
+        .read(solarpassSessionProvider.notifier)
+        .validSession();
     if (session == null) {
-      _ref.read(solarpassScrobbleStatusProvider.notifier).update(
-        isScrobbling: false,
-        currentTrack: null,
-      );
+      _ref
+          .read(solarpassScrobbleStatusProvider.notifier)
+          .update(isScrobbling: false, currentTrack: null);
       return;
     }
 
@@ -423,20 +436,28 @@ class SolarpassScrobbler {
         artworkUrl: artUri?.toString(),
         trackId: song.id,
       );
-      final displayTrack = song.artist != null ? '${song.title} · ${song.artist}' : song.title;
-      _ref.read(solarpassScrobbleStatusProvider.notifier).update(
-        isScrobbling: true,
-        currentTrack: displayTrack,
-        lastError: null,
-      );
+      final displayTrack = song.artist != null
+          ? '${song.title} · ${song.artist}'
+          : song.title;
+      _ref
+          .read(solarpassScrobbleStatusProvider.notifier)
+          .update(
+            isScrobbling: true,
+            currentTrack: displayTrack,
+            lastError: null,
+          );
     } catch (e) {
       debugPrint('[Solarpass] Scrobble error: $e');
-      final displayTrack = song.artist != null ? '${song.title} · ${song.artist}' : song.title;
-      _ref.read(solarpassScrobbleStatusProvider.notifier).update(
-        isScrobbling: false,
-        currentTrack: displayTrack,
-        lastError: e.toString(),
-      );
+      final displayTrack = song.artist != null
+          ? '${song.title} · ${song.artist}'
+          : song.title;
+      _ref
+          .read(solarpassScrobbleStatusProvider.notifier)
+          .update(
+            isScrobbling: false,
+            currentTrack: displayTrack,
+            lastError: e.toString(),
+          );
     }
   }
 
@@ -447,7 +468,9 @@ class SolarpassScrobbler {
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
 
-    final session = await _ref.read(solarpassSessionProvider.notifier).validSession();
+    final session = await _ref
+        .read(solarpassSessionProvider.notifier)
+        .validSession();
     if (session == null) return;
 
     final client = _ref.read(solarpassClientProvider);
@@ -455,10 +478,9 @@ class SolarpassScrobbler {
       await client.clearPresenceActivity(session: session);
     } catch (_) {}
 
-    _ref.read(solarpassScrobbleStatusProvider.notifier).update(
-      isScrobbling: false,
-      currentTrack: null,
-    );
+    _ref
+        .read(solarpassScrobbleStatusProvider.notifier)
+        .update(isScrobbling: false, currentTrack: null);
   }
 
   void dispose() {

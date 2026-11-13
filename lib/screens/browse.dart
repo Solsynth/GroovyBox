@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:auto_route/auto_route.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:groovy_box/core/responsive.dart';
@@ -37,12 +39,51 @@ class BrowseScreen extends ConsumerStatefulWidget {
 
 class _BrowseScreenState extends ConsumerState<BrowseScreen> {
   final _searchController = TextEditingController();
+
+  /// What the field holds now, and what the page has actually asked for.
+  ///
+  /// Typing updates [_draft] on every keystroke so the field never lags, and
+  /// [_query] follows once the typist pauses: every keystroke is a
+  /// `searchSongsProvider` key, and an unguarded `setState` per character
+  /// issued one server search per character, then threw all but the last away.
+  String _draft = '';
   String _query = '';
+  Timer? _searchDebounce;
+
+  /// How long the field waits before it searches. Long enough to swallow the
+  /// gaps inside a typed word, short enough that a paste or a finished word
+  /// feels immediate.
+  static const _searchDelay = Duration(milliseconds: 260);
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onQueryChanged(String value) {
+    final trimmed = value.trim();
+    // Clearing the field is immediate: it is a single decisive act, and the
+    // results underneath should leave with it.
+    if (trimmed.isEmpty) {
+      _searchDebounce?.cancel();
+      if (_query.isEmpty) {
+        setState(() => _draft = value);
+        return;
+      }
+      setState(() {
+        _draft = value;
+        _query = '';
+      });
+      return;
+    }
+    setState(() => _draft = value);
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(_searchDelay, () {
+      if (!mounted || _query == trimmed) return;
+      setState(() => _query = trimmed);
+    });
   }
 
   @override
@@ -120,12 +161,12 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen> {
                     hintText: 'browseSearchPlaceholder'.tr(),
                     leading: const Icon(Symbols.search_rounded),
                     trailing: [
-                      if (_query.isNotEmpty)
+                      if (_draft.isNotEmpty)
                         IconButton(
                           tooltip: 'commonClear'.tr(),
                           onPressed: () {
                             _searchController.clear();
-                            setState(() => _query = '');
+                            _onQueryChanged('');
                           },
                           icon: const Icon(Symbols.close_rounded),
                         ),
@@ -142,13 +183,13 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen> {
                           icon: const Icon(Symbols.travel_explore_rounded),
                         ),
                     ],
-                    onChanged: (value) => setState(() => _query = value),
+                    onChanged: _onQueryChanged,
                   ),
                 ),
               ),
               if (servers.isEmpty)
                 const SliverToBoxAdapter(child: _AddSourceCard()),
-              if (_query.trim().isNotEmpty)
+              if (_query.isNotEmpty)
                 // Every branch returns a list of slivers, so `when` is typed
                 // to that and the whole thing spreads into the outer list.
                 ...search.when<List<Widget>>(
@@ -613,14 +654,12 @@ class _SongRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final playback = ref.watch(playbackProvider);
-    return TrackRow(
-      selected: playback.isCurrentSong(song),
+    return SongTrackRow(
+      song: song,
       onTap: onTap,
       // A long-press asks the question this row cannot: does another library
       // have a better copy of this?
       onLongPress: () => TrackVersionsPanel.show(context, song),
-      title: song.title,
       // The suffix only appears with several libraries connected, so a
       // single-server user never sees the extra noise.
       subtitle: songRowSubtitle(ref, song),

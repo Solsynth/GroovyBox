@@ -1,5 +1,6 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/core/glass.dart';
 import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/router.gr.dart';
@@ -264,6 +265,12 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
     });
 
     final controller = ref.read(playbackProvider.notifier);
+    // The same rule the player page's transport uses, so the two Next buttons
+    // never disagree about whether the queue has anywhere to go.
+    final advances = canAdvance(
+      playback,
+      infinite: ref.watch(infinitePlaybackEnabledProvider),
+    );
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final wide = isWideScreen(context);
@@ -523,7 +530,7 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
                                       IconButton(
                                         tooltip: 'playerNext'.tr(),
                                         visualDensity: VisualDensity.compact,
-                                        onPressed: playback.hasNext
+                                        onPressed: advances
                                             ? controller.next
                                             : null,
                                         icon: const Icon(
