@@ -87,6 +87,7 @@ class _RecordingKit extends Fake implements MusicKitClient {
   Future<void> setQueue(
     List<Map<String, dynamic>> items, {
     int startingAt = 0,
+    String itemType = 'songs',
   }) async {
     queues.add(items);
     calls.add('queue');
@@ -108,6 +109,13 @@ class _RecordingKit extends Fake implements MusicKitClient {
 
   @override
   Future<Duration> playbackTime() async => position;
+
+  /// What the system player reports it is on. Driven by a test to stand for
+  /// the system advancing by itself when a track ends.
+  final queueIndices = StreamController<int>.broadcast();
+
+  @override
+  Stream<int> get queueIndex => queueIndices.stream;
 
   @override
   Stream<ApplePlayerStatus> get status => const Stream.empty();
@@ -136,6 +144,7 @@ void main() {
       ],
     );
     addTearDown(container.dispose);
+    addTearDown(kit.queueIndices.close);
   });
 
   const song = LibrarySong(
@@ -154,6 +163,56 @@ void main() {
     expect(kit.queues, hasLength(1));
     expect(kit.queues.single.single['id'], 'i.1');
     expect(kit.calls, contains('play'));
+  });
+
+  test(
+    'the whole run is handed over, so the system can advance on its own',
+    () async {
+      await container.read(playbackProvider.notifier).playQueue([
+        song,
+        const LibrarySong(
+          sourceId: 'apple-1',
+          id: 'i.2',
+          title: 'Second',
+          duration: Duration(minutes: 2),
+        ),
+      ]);
+
+      // One item at a time would leave the system player stopped at the end of
+      // that item: it has nowhere to advance to.
+      expect(kit.queues.single.map((item) => item['id']), ['i.1', 'i.2']);
+    },
+  );
+
+  test('when the system advances, the app follows it', () async {
+    await container.read(playbackProvider.notifier).playQueue([
+      song,
+      const LibrarySong(
+        sourceId: 'apple-1',
+        id: 'i.2',
+        title: 'Second',
+        duration: Duration(minutes: 2),
+      ),
+    ]);
+    await pumpEventQueue();
+    expect(container.read(playbackProvider).current?.id, 'i.1');
+
+    // The system reports the second entry, which is what reaching the end of
+    // the first track looks like from here.
+    kit.queueIndices.add(1);
+    await pumpEventQueue();
+
+    expect(container.read(playbackProvider).current?.id, 'i.2');
+    expect(container.read(playbackProvider).currentIndex, 1);
+    // The new track's own length and a clock back at zero: the app is on the
+    // second track, not on the first one's timings.
+    expect(
+      container.read(playbackProvider).duration,
+      const Duration(minutes: 2),
+    );
+    expect(container.read(playbackProvider).position, Duration.zero);
+    // Following the system must not re-push the queue and restart the track.
+    expect(kit.queues, hasLength(1));
   });
 
   test('pause, seek and play go to the platform player', () async {

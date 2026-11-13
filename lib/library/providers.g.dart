@@ -575,6 +575,128 @@ abstract class _$Playlists extends $AsyncNotifier<List<LibraryPlaylist>> {
   }
 }
 
+/// The shelves the connected libraries curate themselves, in source order.
+///
+/// Only a source that owns a cloud account has anything here (Apple Music's
+/// personal mixes, heavy rotation and station suggestions); a server library
+/// contributes nothing, and the page's own shelves carry it.
+
+@ProviderFor(LandingShelves)
+final landingShelvesProvider = LandingShelvesProvider._();
+
+/// The shelves the connected libraries curate themselves, in source order.
+///
+/// Only a source that owns a cloud account has anything here (Apple Music's
+/// personal mixes, heavy rotation and station suggestions); a server library
+/// contributes nothing, and the page's own shelves carry it.
+final class LandingShelvesProvider
+    extends $AsyncNotifierProvider<LandingShelves, List<LandingShelf>> {
+  /// The shelves the connected libraries curate themselves, in source order.
+  ///
+  /// Only a source that owns a cloud account has anything here (Apple Music's
+  /// personal mixes, heavy rotation and station suggestions); a server library
+  /// contributes nothing, and the page's own shelves carry it.
+  LandingShelvesProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'landingShelvesProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$landingShelvesHash();
+
+  @$internal
+  @override
+  LandingShelves create() => LandingShelves();
+}
+
+String _$landingShelvesHash() => r'1b8bca16dcd98b6470b929f84f99bccf01bb308f';
+
+/// The shelves the connected libraries curate themselves, in source order.
+///
+/// Only a source that owns a cloud account has anything here (Apple Music's
+/// personal mixes, heavy rotation and station suggestions); a server library
+/// contributes nothing, and the page's own shelves carry it.
+
+abstract class _$LandingShelves extends $AsyncNotifier<List<LandingShelf>> {
+  FutureOr<List<LandingShelf>> build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref =
+        this.ref as $Ref<AsyncValue<List<LandingShelf>>, List<LandingShelf>>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<AsyncValue<List<LandingShelf>>, List<LandingShelf>>,
+              AsyncValue<List<LandingShelf>>,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
+/// What each connected account says about itself, for the landing page's
+/// header card. Empty when no source has anything of its own to report.
+
+@ProviderFor(LibraryDigests)
+final libraryDigestsProvider = LibraryDigestsProvider._();
+
+/// What each connected account says about itself, for the landing page's
+/// header card. Empty when no source has anything of its own to report.
+final class LibraryDigestsProvider
+    extends $AsyncNotifierProvider<LibraryDigests, List<LibraryDigest>> {
+  /// What each connected account says about itself, for the landing page's
+  /// header card. Empty when no source has anything of its own to report.
+  LibraryDigestsProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'libraryDigestsProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$libraryDigestsHash();
+
+  @$internal
+  @override
+  LibraryDigests create() => LibraryDigests();
+}
+
+String _$libraryDigestsHash() => r'698c52f2dae8e11498c94e33e115fbf7cf284eb6';
+
+/// What each connected account says about itself, for the landing page's
+/// header card. Empty when no source has anything of its own to report.
+
+abstract class _$LibraryDigests extends $AsyncNotifier<List<LibraryDigest>> {
+  FutureOr<List<LibraryDigest>> build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref =
+        this.ref as $Ref<AsyncValue<List<LibraryDigest>>, List<LibraryDigest>>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<AsyncValue<List<LibraryDigest>>, List<LibraryDigest>>,
+              AsyncValue<List<LibraryDigest>>,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
 /// Songs of one album, read straight from its own source.
 
 @ProviderFor(albumSongs)
@@ -903,17 +1025,26 @@ final class LibraryDatabaseProvider
 String _$libraryDatabaseHash() => r'f5bf2d6304e0234366ad3d24af380df86624a09a';
 
 /// The app's view of the local library.
+///
+/// Its deletion callbacks queue the matching tombstones for Library Sync, so a
+/// forgotten source or a dropped lyric propagates to the other devices.
 
 @ProviderFor(libraryCatalog)
 final libraryCatalogProvider = LibraryCatalogProvider._();
 
 /// The app's view of the local library.
+///
+/// Its deletion callbacks queue the matching tombstones for Library Sync, so a
+/// forgotten source or a dropped lyric propagates to the other devices.
 
 final class LibraryCatalogProvider
     extends
         $FunctionalProvider<LibraryCatalog?, LibraryCatalog?, LibraryCatalog?>
     with $Provider<LibraryCatalog?> {
   /// The app's view of the local library.
+  ///
+  /// Its deletion callbacks queue the matching tombstones for Library Sync, so a
+  /// forgotten source or a dropped lyric propagates to the other devices.
   LibraryCatalogProvider._()
     : super(
         from: null,
@@ -947,7 +1078,7 @@ final class LibraryCatalogProvider
   }
 }
 
-String _$libraryCatalogHash() => r'9ea566c633a47122b91f77e01c1ff890a6281fbc';
+String _$libraryCatalogHash() => r'a0d23b31c1d2dac421656fccd138e5703c65ff40';
 
 /// The stored lyrics of each track.
 
@@ -993,7 +1124,7 @@ final class LyricsStoreProvider
   }
 }
 
-String _$lyricsStoreHash() => r'0cc441b33f05c83ddebf28c9688374e25773db25';
+String _$lyricsStoreHash() => r'e3ca18d1b54d16998bfade223ae93e351ac4a700';
 
 /// The LRCLIB client, shared so its rate-limit state is too.
 

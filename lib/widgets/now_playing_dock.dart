@@ -371,19 +371,31 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
                                               playback.queue.length,
                                               playback.shuffle,
                                             ),
-                                            _DockSheet.none => wide
-                                                ? song.subtitle
-                                                : 'formatPositionOfDuration'
-                                                      .tr(
-                                                        args: [
-                                                          formatDuration(
-                                                            playback.position,
-                                                          ),
-                                                          formatDuration(
-                                                            duration,
-                                                          ),
-                                                        ],
-                                                      ),
+                                            // The library is named while a
+                                            // track plays: with a streamed
+                                            // one and an Apple Music one on the
+                                            // same shelf, "which of them is
+                                            // this?" is a real question. A
+                                            // narrow window has no scrubber,
+                                            // so the position keeps its place
+                                            // after it.
+                                            _DockSheet.none => [
+                                              ?playingSourceLabel(ref, song),
+                                              if (wide)
+                                                song.isRadio
+                                                    ? (song.artist ??
+                                                          song.title)
+                                                    : song.subtitle
+                                              else
+                                                'formatPositionOfDuration'.tr(
+                                                  args: [
+                                                    formatDuration(
+                                                      playback.position,
+                                                    ),
+                                                    formatDuration(duration),
+                                                  ],
+                                                ),
+                                            ].join(' · '),
                                           },
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,

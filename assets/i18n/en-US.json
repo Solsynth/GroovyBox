@@ -322,5 +322,14 @@
   "settingsLibrarySyncProgress": "Syncing…",
   "settingsLibrarySyncFailed": "Sync failed. Check the connection and try again.",
   "settingsLibrarySyncLastSync": {"one": "Synced {} minute ago", "other": "Synced {} minutes ago"},
-  "settingsLibrarySyncDevices": {"one": "{} device", "other": "{} devices"}
+  "settingsLibrarySyncDevices": {"one": "{} device", "other": "{} devices"},
+  "settingsVolumeSystemHint": "The current track plays in the system player, which owns its own level. Use the volume keys or Control Centre.",
+  "formatRadioFrom": "Radio  ·  {}",
+  "playerRadio": "Radio",
+  "browseAppleMusicDashboard": "Apple Music",
+  "browseDigestTracks": "{} tracks",
+  "browseDigestMixes": "{} mixes",
+  "browseDigestStations": "{} stations",
+  "browseAppleMusicAccount": "Signed in on this device",
+  "browseRadio": "Stations for you"
 }

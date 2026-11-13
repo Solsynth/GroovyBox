@@ -88,10 +88,23 @@ String formatRelativeTime(DateTime at, {DateTime? now}) {
 ///
 /// With one library the name is noise; with several it is the only way to tell
 /// two identically-titled tracks apart.
-String songRowSubtitle(WidgetRef ref, LibrarySong song) =>
-    song.album == null
+String songRowSubtitle(WidgetRef ref, LibrarySong song) => song.album == null
     ? '${song.subtitle}${sourceSuffix(ref, song.sourceId) ?? ''}'
     : song.subtitle;
+
+/// Which library a now-playing track came from, for the places that name it
+/// while it plays: the dock and the player page.
+///
+/// Unlike [sourceSuffix], this is not conditional on how many libraries are
+/// connected: the question "where is this playing from?" is worth one word
+/// even with a single library, and it is the only line that says a track is
+/// Apple Music's rather than the device's own.
+String? playingSourceLabel(WidgetRef ref, LibrarySong song) {
+  final source = ref.watch(librarySourceByIdProvider)[song.sourceId];
+  if (source == null) return null;
+  if (song.isRadio) return 'formatRadioFrom'.tr(args: [source.displayName]);
+  return source.displayName;
+}
 
 /// `' · <library name>'`, or null when the name would be noise.
 ///

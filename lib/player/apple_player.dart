@@ -17,31 +17,48 @@ MusicKitClient musicKitClient(Ref ref) => MusicKitClient();
 
 /// Drives the system's Apple Music player on behalf of the transport.
 ///
-/// The app's own queue stays authoritative: the system queue is replaced with
-/// the one song about to play, so skip, repeat and shuffle keep behaving the
-/// way they do for a streamed track, and the media session keeps drawing its
-/// own queue. What the system adds on top is playback itself, its position
-/// clock and its own pause/interrupt handling.
+/// The app's queue and the system's are kept equal: the system player is
+/// handed the run of tracks from the current one onward, so when a track ends
+/// it advances *itself* — the app then follows the index it reports. Handing
+/// it a single item instead (the obvious reading of "the app owns the queue")
+/// makes it stop dead at the end of that item, because it has nothing to
+/// advance to.
+///
+/// What the system adds on top is playback itself, its position clock, its
+/// pause/interrupt handling and its own end-of-track behaviour.
 class ApplePlayer {
-  ApplePlayer(this._client, {required this.onStatus, required this.onPosition});
+  ApplePlayer(
+    this._client, {
+    required this.onStatus,
+    required this.onPosition,
+    required this.onAdvance,
+  });
 
   final MusicKitClient _client;
   final void Function(ApplePlayerStatus status) onStatus;
   final void Function(Duration position) onPosition;
 
+  /// Called with the index in the *app's* queue when the system player moved
+  /// there by itself.
+  final void Function(int index) onAdvance;
+
   StreamSubscription<ApplePlayerStatus>? _statusSub;
+  StreamSubscription<int>? _queueSub;
   Timer? _clock;
   bool _started = false;
 
   /// Whether a song is loaded in the system player.
   bool get isLoaded => _started;
 
-  /// Loads [song] and starts it. The system player requires the item's own
-  /// resource shape, so the app's neutral model is converted here.
-  Future<void> open(LibrarySong song) async {
+  /// Loads [queue] starting at [startingAt] and plays it.
+  ///
+  /// The queue is the app's own order, so the two stay in step; [startingAt]
+  /// is the position in it to begin at.
+  Future<void> open(List<LibrarySong> queue, int startingAt) async {
+    if (queue.isEmpty || startingAt < 0 || startingAt >= queue.length) return;
     _listen();
     _started = true;
-    await _client.setQueue([appleQueueItem(song)]);
+    await _pushQueue(queue, startingAt);
     await _client.play();
     _startClock();
   }
@@ -63,21 +80,77 @@ class ApplePlayer {
     await _client.stop();
   }
 
+  /// Seeks inside the current track.
+  ///
+  /// Seeking is one of the operations that *pauses* the system player, so a
+  /// player that was running is started again afterwards; otherwise the first
+  /// drag of the scrubber would silently stop the music.
   Future<void> seek(Duration position) async {
     if (!_started) return;
+    final wasPlaying = _wasPlaying;
     await _client.seek(position);
     onPosition(position);
+    if (wasPlaying) await _client.play();
   }
+
+  /// The system player is on a different index of the app's queue than the
+  /// one the app loaded, because a track ended and it advanced.
+  ///
+  /// [queue] is the app's current order; the system's index and the app's
+  /// agree because they were pushed together, so only tracks that are still
+  /// where they were can be followed this way.
+  Future<void> resync(List<LibrarySong> queue, int startingAt) async {
+    if (!_started) return;
+    if (queue.isEmpty || startingAt < 0 || startingAt >= queue.length) return;
+    await _pushQueue(queue, startingAt);
+  }
+
+  /// Replaces the system queue with [queue] from [startingAt] onward.
+  ///
+  /// Items are converted per kind: a radio station is not a track and the
+  /// player resolves it from its own resource shape.
+  Future<void> _pushQueue(List<LibrarySong> queue, int startingAt) async {
+    // The app's queue and the system's are the same order from this point:
+    // system index 0 is app index [startingAt], and the system reports its
+    // index, so an automatic advance is one addition.
+    _base = startingAt;
+    _systemIndex = 0;
+    final songs = queue.sublist(startingAt);
+    // A station is queued alone: the system generates the station's own
+    // endless run, and handing it a second item would cut that run short.
+    final radio = songs.first.isRadio;
+    final items = radio
+        ? [appleQueueItem(songs.first)]
+        : [for (final song in songs) appleQueueItem(song)];
+    await _client.setQueue(items, itemType: radio ? 'stations' : 'songs');
+  }
+
+  /// The app-queue index that the system queue's first entry stands for.
+  int get base => _base;
+  int _base = 0;
+
+  /// Where the system says it is, counted from its own first entry.
+  int _systemIndex = 0;
+
+  /// The last reported play state, so a seek knows whether to resume.
+  bool _wasPlaying = false;
 
   void dispose() {
     _stopClock();
     _statusSub?.cancel();
     _statusSub = null;
+    _queueSub?.cancel();
+    _queueSub = null;
+    _wasPlaying = false;
+    _started = false;
   }
 
   void _listen() {
     _statusSub ??= _client.status.listen(
       (status) {
+        _wasPlaying =
+            status == ApplePlayerStatus.playing ||
+            status == ApplePlayerStatus.seeking;
         onStatus(status);
         if (status == ApplePlayerStatus.playing) {
           _startClock();
@@ -90,6 +163,13 @@ class ApplePlayer {
       // with it: playback simply stays where the app put it.
       onError: (Object error) => logAppleFailure(error),
     );
+    _queueSub ??= _client.queueIndex.listen((index) {
+      // The first notification describes the queue just pushed, so it says
+      // nothing new; anything later is the system having advanced.
+      if (index == _systemIndex) return;
+      _systemIndex = index;
+      onAdvance(_base + index);
+    }, onError: (Object error) => logAppleFailure(error));
   }
 
   /// The system player reports no position stream, so the clock is polled

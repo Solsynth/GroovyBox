@@ -5,7 +5,6 @@
 /// unique within one source, which is why every item carries [sourceId].
 library;
 
-
 /// Identifies an item across sources; used as a riverpod family argument and
 /// as two route path segments.
 typedef LibraryRef = ({String sourceId, String id});
@@ -40,6 +39,17 @@ class LibrarySong {
   /// Optional MusicBrainz Recording ID or Track ID.
   final String? mbid;
 
+  /// A live station rather than a track: it has no stream, no length and no
+  /// end, and its source plays it by id. Apple Music's radio is the one
+  /// source with these; a station travels through the queue as a song so the
+  /// dock, the queue panel and the scrobbler need no special case.
+  final bool isRadio;
+
+  /// For a radio station, the resource's own `attributes.url` and
+  /// `attributes.playParams`. Both are sent back to the platform player,
+  /// which resolves a station by them instead of by a track id.
+  final String? radioUrl;
+  final Map<String, dynamic>? radioPlayParams;
   const LibrarySong({
     required this.sourceId,
     required this.id,
@@ -56,8 +66,10 @@ class LibrarySong {
     this.year,
     this.genre,
     this.mbid,
+    this.isRadio = false,
+    this.radioUrl,
+    this.radioPlayParams,
   });
-
   String get subtitle => artist ?? album ?? 'Unknown artist';
 
   Map<String, dynamic> toJson() => {
@@ -75,6 +87,9 @@ class LibrarySong {
     if (year != null) 'year': year,
     if (genre != null) 'genre': genre,
     if (mbid != null) 'mbid': mbid,
+    if (isRadio) 'isRadio': true,
+    if (radioUrl != null) 'radioUrl': radioUrl,
+    if (radioPlayParams != null) 'radioPlayParams': radioPlayParams,
   };
 
   factory LibrarySong.fromJson(Map<String, dynamic> json) => LibrarySong(
@@ -87,12 +102,21 @@ class LibrarySong {
     albumArtist: json['albumArtist'] as String?,
     albumId: json['albumId'] as String?,
     artId: json['artId'] as String?,
-    duration: Duration(milliseconds: (json['durationMs'] as num?)?.toInt() ?? 0),
+    duration: Duration(
+      milliseconds: (json['durationMs'] as num?)?.toInt() ?? 0,
+    ),
     track: (json['track'] as num?)?.toInt(),
     discNumber: (json['discNumber'] as num?)?.toInt(),
     year: (json['year'] as num?)?.toInt(),
     genre: json['genre'] as String?,
     mbid: json['mbid'] as String?,
+    isRadio: json['isRadio'] == true,
+    radioUrl: json['radioUrl'] as String?,
+    radioPlayParams: switch (json['radioPlayParams']) {
+      final Map<String, dynamic> params => params,
+      final Map params => Map<String, dynamic>.from(params),
+      _ => null,
+    },
   );
 }
 
@@ -181,4 +205,52 @@ class LibraryException implements Exception {
 
   @override
   String toString() => code == null ? message : 'Library error $code: $message';
+}
+
+/// One shelf a source curates for the landing page.
+///
+/// The page renders a shelf as a horizontal run of cards; [songs] are what it
+/// shows and plays, and [title] is the source's own name for the run ("专属推荐
+/// 歌单", "Heavy Rotation"). It is deliberately the same card shape as the
+/// merged shelves, so Apple Music's curation does not look like a second app.
+class LandingShelf {
+  final String title;
+  final String sourceId;
+
+  /// Filled when the shelf is a mix or a list rather than a plain set of
+  /// tracks: the same run is then also reachable as a queue.
+  final List<LibrarySong> songs;
+
+  const LandingShelf({
+    required this.title,
+    required this.sourceId,
+    required this.songs,
+  });
+
+  bool get isEmpty => songs.isEmpty;
+}
+
+/// What a source says about itself on the landing page.
+///
+/// Only a source that owns a whole cloud account has anything of its own to
+/// report; a server library's numbers are the app's, not the server's.
+class LibraryDigest {
+  final String sourceId;
+
+  /// The account's own line, e.g. the Apple Music name, or null when the API
+  /// does not expose one.
+  final String? subtitle;
+
+  /// How many tracks the account holds. The account's *curation* is not
+  /// counted here: those numbers are the shelves the page actually renders,
+  /// and counting them twice would let the two disagree.
+  final int? libraryTracks;
+
+  const LibraryDigest({
+    required this.sourceId,
+    this.subtitle,
+    this.libraryTracks,
+  });
+
+  bool get isEmpty => subtitle == null && libraryTracks == null;
 }

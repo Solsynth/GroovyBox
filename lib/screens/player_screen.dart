@@ -429,13 +429,18 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
         .toDouble();
     final wide = isWideScreen(context);
 
-    final scrubber = _Scrubber(
-      positionMs: positionMs,
-      maxMs: maxMs,
-      position: playback.position,
-      duration: duration,
-      onSeek: (value) => controller.seek(Duration(milliseconds: value.round())),
-    );
+    // A station has no length and no end, so a scrubber over it would be a
+    // control with nothing to move.
+    final scrubber = song.isRadio
+        ? const _LiveBadge()
+        : _Scrubber(
+            positionMs: positionMs,
+            maxMs: maxMs,
+            position: playback.position,
+            duration: duration,
+            onSeek: (value) =>
+                controller.seek(Duration(milliseconds: value.round())),
+          );
 
     final transport = _Transport(playback: playback, controller: controller);
     // Built once per page build, not per animation frame: whichever pane is
@@ -1009,40 +1014,43 @@ class _WidePlayerBody extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                        // The square is the measurement, not a leftover: its
-                        // side is exactly the column's width, so the scrubber
-                        // under it can never be wider than the art it rules.
-                        // Sizing it from the row height instead left a gap
-                        // whenever the words made the row taller than the
-                        // square.
-                        SizedBox.square(
-                          dimension: coverSize,
-                          child: Center(
-                            child: AspectRatio(aspectRatio: 1, child: cover),
-                          ),
-                        ),
-                        if (leftControls > 0)
-                          ClipRect(
-                            child: Align(
-                              alignment: Alignment.topCenter,
-                              heightFactor: leftControls,
-                              child: Opacity(
-                                opacity: leftControls,
-                                child: Padding(
-                                  padding: const EdgeInsets.only(
-                                    top: SolSpace.lg,
-                                  ),
-                                  child: controls,
+                            // The square is the measurement, not a leftover: its
+                            // side is exactly the column's width, so the scrubber
+                            // under it can never be wider than the art it rules.
+                            // Sizing it from the row height instead left a gap
+                            // whenever the words made the row taller than the
+                            // square.
+                            SizedBox.square(
+                              dimension: coverSize,
+                              child: Center(
+                                child: AspectRatio(
+                                  aspectRatio: 1,
+                                  child: cover,
                                 ),
                               ),
                             ),
-                          ),
-                      ],
+                            if (leftControls > 0)
+                              ClipRect(
+                                child: Align(
+                                  alignment: Alignment.topCenter,
+                                  heightFactor: leftControls,
+                                  child: Opacity(
+                                    opacity: leftControls,
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(
+                                        top: SolSpace.lg,
+                                      ),
+                                      child: controls,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(width: SolSpace.xxxl),
+                  const SizedBox(width: SolSpace.xxxl),
                   Expanded(
                     child: SizedBox(
                       height: wordsHeight,
@@ -1130,14 +1138,18 @@ class _Cover extends StatelessWidget {
   }
 }
 
-class _TrackCopy extends StatelessWidget {
+class _TrackCopy extends ConsumerWidget {
   final LibrarySong song;
   final bool centered;
 
   const _TrackCopy({required this.song, required this.centered});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // The library the track plays from, under the artist: the page answers
+    // "what is this, and where from?" without a settings trip, and a station
+    // is labelled as radio rather than as a nameless track.
+    final source = playingSourceLabel(ref, song);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     return Column(
@@ -1157,14 +1169,48 @@ class _TrackCopy extends StatelessWidget {
         ),
         const SizedBox(height: 2),
         Text(
-          song.album == null
-              ? song.subtitle
-              : '${song.subtitle}  ·  ${song.album}',
+          [
+            if (song.isRadio)
+              song.artist ?? 'playerRadio'.tr()
+            else
+              song.subtitle,
+            if (song.album != null) song.album!,
+            ?source,
+          ].join('  ·  '),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           textAlign: centered ? TextAlign.center : TextAlign.start,
           style: theme.textTheme.bodyMedium?.copyWith(
             color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Stands where the scrubber would be for a station: there is no position to
+/// drag, only the fact that the run has no end.
+class _LiveBadge extends StatelessWidget {
+  const _LiveBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          Symbols.podcasts_rounded,
+          size: 16,
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(width: SolSpace.sm),
+        Text(
+          'playerRadio'.tr(),
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            letterSpacing: 0.8,
           ),
         ),
       ],

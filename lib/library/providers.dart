@@ -168,6 +168,72 @@ class Playlists extends AsyncNotifier<List<LibraryPlaylist>> {
   }
 }
 
+/// The shelves the connected libraries curate themselves, in source order.
+///
+/// Only a source that owns a cloud account has anything here (Apple Music's
+/// personal mixes, heavy rotation and station suggestions); a server library
+/// contributes nothing, and the page's own shelves carry it.
+@Riverpod(keepAlive: true)
+class LandingShelves extends AsyncNotifier<List<LandingShelf>> {
+  @override
+  Future<List<LandingShelf>> build() => _fetch();
+
+  Future<List<LandingShelf>> _fetch() async {
+    final sources = [
+      for (final source in ref.watch(librarySourcesWithLocalProvider))
+        if (source.usesPlatformPlayer) source,
+    ];
+    if (sources.isEmpty) return const [];
+
+    final results = await Future.wait([
+      for (final source in sources)
+        source.landingShelves().catchError((Object error) {
+          debugPrint('[Library] ${source.displayName} shelves: $error');
+          return const <LandingShelf>[];
+        }),
+    ]);
+    return [for (final shelves in results) ...shelves];
+  }
+
+  Future<void> refresh() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(_fetch);
+  }
+}
+
+/// What each connected account says about itself, for the landing page's
+/// header card. Empty when no source has anything of its own to report.
+@Riverpod(keepAlive: true)
+class LibraryDigests extends AsyncNotifier<List<LibraryDigest>> {
+  @override
+  Future<List<LibraryDigest>> build() => _fetch();
+
+  Future<List<LibraryDigest>> _fetch() async {
+    final sources = [
+      for (final source in ref.watch(librarySourcesWithLocalProvider))
+        if (source.usesPlatformPlayer) source,
+    ];
+    if (sources.isEmpty) return const [];
+
+    final digests = await Future.wait([
+      for (final source in sources)
+        source.digest().catchError((Object error) {
+          debugPrint('[Library] ${source.displayName} digest: $error');
+          return null;
+        }),
+    ]);
+    return [
+      for (final digest in digests)
+        if (digest != null && !digest.isEmpty) digest,
+    ];
+  }
+
+  Future<void> refresh() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(_fetch);
+  }
+}
+
 /// Songs of one album, read straight from its own source.
 @riverpod
 Future<List<LibrarySong>> albumSongs(Ref ref, LibraryRef album) async {
@@ -308,9 +374,7 @@ class LyricsMaintenance extends Notifier<void> {
   Future<void> refresh(LyricsRequest song, {String? languageCode}) async {
     final resolver = await ref.read(lyricsResolverProvider.future);
     await resolver.forget(song);
-    ref.invalidate(
-      songLyricsProvider(song, languageCode: languageCode),
-    );
+    ref.invalidate(songLyricsProvider(song, languageCode: languageCode));
     ref.invalidate(storedLyricsProvider);
   }
 
@@ -318,6 +382,8 @@ class LyricsMaintenance extends Notifier<void> {
   /// The tracks themselves stay: re-adding the same server, or adding another
   /// one with the same songs, adopts them again by fingerprint.
   Future<void> forgetSource(String sourceId) async {
+    // forgetSource itself queues the link tombstones; a sync picks them up on
+    // the next push.
     await ref.read(libraryCatalogProvider)?.forgetSource(sourceId);
     ref.invalidate(storedLyricsProvider);
     ref.invalidate(libraryStatsProvider);

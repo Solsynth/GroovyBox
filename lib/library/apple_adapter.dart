@@ -303,6 +303,152 @@ class AppleMusicSource extends LibrarySource {
     ];
   }
 
+  /// The account's own curation, as shelves for the landing page.
+  ///
+  /// Apple answers recommendations as *containers*: each one names the kinds
+  /// its contents will be (`resourceTypes`) and holds them behind a separate
+  /// `contents` href. Only containers whose contents are playable tracks or
+  /// albums are worth a shelf; a station suggestion and a record-label mix
+  /// look the same in the list and are told apart by that types field.
+  @override
+  Future<List<LandingShelf>> landingShelves() async {
+    final containers = await _data(
+      '/v1/me/recommendations',
+      query: {'limit': 10},
+    );
+    final shelves = await Future.wait([
+      for (final container in containers) _shelfFor(container),
+    ]);
+    return [
+      for (final shelf in shelves)
+        if (shelf != null && !shelf.isEmpty) shelf,
+    ];
+  }
+
+  /// One recommendation container, or null when it holds nothing the app can
+  /// play.
+  ///
+  /// A container listing `stations` gets the stations it suggests, which play
+  /// the same way a song does here ([_station]); one listing albums or
+  /// playlists reads them out of the catalog. Both are only attempted for the
+  /// kinds [LandingShelf] can hold, so a "recently played" container mixing
+  /// all three still yields something.
+  Future<LandingShelf?> _shelfFor(Map<String, dynamic> container) async {
+    final attributes = _attributes(container);
+    final title = _displayTitle(attributes['title']);
+    final types = attributes['resourceTypes'];
+    if (title == null || types is! List) return null;
+
+    final relationships = container['relationships'];
+    final contents = relationships is Map ? relationships['contents'] : null;
+    final href = contents is Map ? contents['href'] : null;
+    if (href is! String) return null;
+
+    try {
+      final items = await _data(href, query: {'limit': 12});
+      final songs = <LibrarySong>[];
+      for (final item in items) {
+        switch (item['type']) {
+          case 'stations':
+            songs.add(_station(item));
+          case 'songs' || 'library-songs':
+            songs.add(_song(item));
+          case 'albums' || 'library-albums':
+            // An album in a mix is not a track; its own page is the useful
+            // thing, so the shelf stays to what plays in one tap.
+            continue;
+        }
+      }
+      if (songs.isEmpty) return null;
+      return LandingShelf(title: title, sourceId: id, songs: songs);
+    } on LibraryException {
+      // One unreadable recommendation must not blank the rest of the page.
+      return null;
+    }
+  }
+
+  /// What the account has, for the landing page's header card.
+  @override
+  Future<LibraryDigest?> digest() async {
+    final tracks = await _count('/v1/me/library/songs');
+    return LibraryDigest(
+      sourceId: id,
+      // The API has no account-name endpoint an app token can reach; the kind
+      // is the honest label, and the size is the point of the card.
+      subtitle: displayName,
+      libraryTracks: tracks,
+    );
+  }
+
+  /// A collection's size. Apple pages a library and reports its total, so one
+  /// row is enough. A collection without a total (recommendations never carry
+  /// one) answers null rather than a wrong number.
+  Future<int?> _count(String path, {Map<String, dynamic>? query}) async {
+    try {
+      final body = await _get(path, query: {...?query, 'limit': 1});
+      final meta = body['meta'];
+      return meta is Map ? (meta['total'] as num?)?.toInt() : null;
+    } on LibraryException {
+      return null;
+    }
+  }
+
+  /// A station as the transport knows it: a song with no length that the
+  /// platform player starts from [radioResource].
+  LibrarySong _station(Map<String, dynamic> json) {
+    final attributes = _attributes(json);
+    final playParams = attributes['playParams'];
+    return LibrarySong(
+      sourceId: id,
+      id: '${json['id']}',
+      title: attributes['name'] as String? ?? 'Radio',
+      artId: _artTemplate(attributes),
+      duration: Duration.zero,
+      isRadio: true,
+      radioUrl: attributes['url'] as String?,
+      radioPlayParams: playParams is Map
+          ? Map<String, dynamic>.from(playParams)
+          : null,
+    );
+  }
+
+  /// The station resource the system player resolves.
+  ///
+  /// Rebuilt from what [_station] kept rather than the raw JSON: the queue
+  /// round-trips through the saved session, and a station has to survive
+  /// being written and read back.
+  @override
+  Map<String, dynamic>? radioResource(LibrarySong song) {
+    if (!song.isRadio) return null;
+    final url = song.radioUrl;
+    final playParams = song.radioPlayParams;
+    if (url == null || playParams == null) return null;
+    return {
+      'id': song.id,
+      'type': 'stations',
+      'attributes': {
+        'name': song.title,
+        'isLive': false,
+        'mediaKind': 'audio',
+        'url': url,
+        'playParams': playParams,
+      },
+    };
+  }
+
+  /// `title` is a string on newer responses and a `{stringForDisplay}` map on
+  /// the ones this account gets back.
+  static String? _displayTitle(Object? title) {
+    if (title is String) return title.isEmpty ? null : title;
+    if (title is Map) {
+      final display = title['stringForDisplay'];
+      if (display is String && display.isNotEmpty) return display;
+      final list = title['contentTitle'];
+      if (list is String && list.isNotEmpty) return list;
+    }
+    return null;
+  }
+
   /// There is no random endpoint, so a page from a random offset is shuffled.
   ///
   /// The offset is bounded by the library's own `meta.total`: picking blind

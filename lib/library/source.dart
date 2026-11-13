@@ -132,6 +132,26 @@ abstract class LibrarySource {
   Future<Lyrics> lyrics(LibrarySong song);
   Uri streamUri(LibrarySong song);
   Uri? artworkUri(String? artId, {int size});
+
+  /// The shelves this source wants on the landing page, in the order they
+  /// should appear. Empty for a source that has no own curation: a server
+  /// library's landing shelves are the merged recently-added and the random
+  /// draw, which the page already shows.
+  ///
+  /// Apple Music answers with its own personal mixes, heavy rotation and
+  /// station suggestions, which no other provider has a word for.
+  Future<List<LandingShelf>> landingShelves() async => const [];
+
+  /// Everything the source wants to say about itself on the landing page:
+  /// a greeting line and a few numbers. Null when there is nothing to say.
+  Future<LibraryDigest?> digest() async => null;
+
+  /// The station a song describes, when [LibrarySong.isRadio] is set.
+  ///
+  /// A radio station is queued as a song so every surface that draws a queue
+  /// keeps working, but only the platform player can start one, and it needs
+  /// the resource back in its own shape.
+  Map<String, dynamic>? radioResource(LibrarySong song) => null;
 }
 
 /// The per-kind entry point: turns credentials into a stored config and turns

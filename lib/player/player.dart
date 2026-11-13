@@ -48,6 +48,10 @@ class PlaybackState {
   final PlaybackRepeatMode repeatMode;
   final double volume;
 
+  /// Whether the platform player owns the output level for the current track.
+  /// MusicKit has no volume API, so the settings slider cannot move it.
+  final bool volumeIsSystemControlled;
+
   const PlaybackState({
     this.queue = const [],
     this.currentIndex,
@@ -58,6 +62,7 @@ class PlaybackState {
     this.shuffle = false,
     this.repeatMode = PlaybackRepeatMode.off,
     this.volume = 100,
+    this.volumeIsSystemControlled = false,
   });
 
   LibrarySong? get current =>
@@ -90,6 +95,7 @@ class PlaybackState {
     bool? shuffle,
     PlaybackRepeatMode? repeatMode,
     double? volume,
+    bool? volumeIsSystemControlled,
     bool clearIndex = false,
   }) => PlaybackState(
     queue: queue ?? this.queue,
@@ -101,6 +107,8 @@ class PlaybackState {
     shuffle: shuffle ?? this.shuffle,
     repeatMode: repeatMode ?? this.repeatMode,
     volume: volume ?? this.volume,
+    volumeIsSystemControlled:
+        volumeIsSystemControlled ?? this.volumeIsSystemControlled,
   );
 }
 
@@ -236,12 +244,25 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
 
   /// One position update, whichever player produced it: the state, the play
   /// history and the saved session all follow the same rules.
+  /// Whether the system player has another entry to move to by itself: the
+  /// run it was given was not cut short by the end of the queue.
+  bool get _appleHasNext {
+    final apple = _apple;
+    if (apple == null || !apple.isLoaded) return false;
+    final index = state.currentIndex;
+    if (index == null) return false;
+    final base = apple.base;
+    final played = index - base;
+    return base + played < state.queue.length - 1;
+  }
+
   void _onPosition(Duration position) {
     state = state.copyWith(position: position);
     // The system player has no "completed" event the plugin forwards, so the
-    // end of the track is read off the clock: one trigger per track, and only
-    // when a real duration is known.
-    if (_appleMode && state.duration > Duration.zero) {
+    // end of the last *reachable* track is read off the clock: one trigger per
+    // track, only when a real duration is known, and never while the system
+    // has another entry to advance to on its own.
+    if (_appleMode && state.duration > Duration.zero && !_appleHasNext) {
       if (position >= state.duration - const Duration(milliseconds: 300)) {
         if (!_appleCompleted) {
           _appleCompleted = true;
@@ -336,7 +357,9 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     if (songs.isEmpty || startIndex < 0 || startIndex >= songs.length) return;
 
     unawaited(_ensureNotificationPermission());
-    await _activateAudioSession();
+    if (!_appleMode && !songs[startIndex].isRadio) {
+      await _activateAudioSession();
+    }
 
     _order = List.of(songs);
     _sourceOrder = List.of(songs);
@@ -356,7 +379,10 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
   @override
   Future<void> play() async {
     unawaited(_ensureNotificationPermission());
-    await _activateAudioSession();
+    // The system player runs its own audio session; activating the app's on
+    // top of it is the duplicate session that made Apple playback fight
+    // itself. Everything streamed still needs it.
+    if (!_appleMode) await _activateAudioSession();
 
     if (_appleMode) {
       final apple = _apple;
@@ -538,7 +564,20 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     _publish();
   }
 
-  Future<void> setVolume(double volume) => _player.setVolume(volume);
+  /// Sets the app's own output level.
+  ///
+  /// The state follows the slider either way, so the control never snaps back
+  /// under the user's finger; only a streamed track is actually attenuated.
+  /// MusicKit exposes no volume — the system player's level belongs to the
+  /// OS, and there is no API to reach it from here.
+  Future<void> setVolume(double volume) async {
+    state = state.copyWith(
+      volume: volume,
+      volumeIsSystemControlled: _appleMode,
+    );
+    if (_appleMode) return;
+    await _player.setVolume(volume);
+  }
 
   /// Opens the song at the current index through its library's stream
   /// endpoint, falling back to alternate sources that host the same canonical
@@ -561,6 +600,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     // playback.
     if (_appleMode) {
       _appleMode = false;
+      state = state.copyWith(volumeIsSystemControlled: false);
       unawaited(_apple?.stop());
     }
 
@@ -601,6 +641,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     // its pause/interrupt handling with it.
     if (source.usesPlatformPlayer) {
       _appleMode = true;
+      state = state.copyWith(volumeIsSystemControlled: true);
       _apple ??= ApplePlayer(
         ref.read(musicKitClientProvider),
         onStatus: (status) {
@@ -618,9 +659,18 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
           _publish();
         },
         onPosition: _onPosition,
+        onAdvance: _onAppleAdvance,
       );
       try {
-        await _apple!.open(toPlay);
+        // The system player is handed everything from here on, so a track
+        // ending advances *it* instead of leaving it stopped at a queue of
+        // one. The app follows the index it reports.
+        final index = state.currentIndex ?? 0;
+        if (identical(state.queue[index], toPlay)) {
+          await _apple!.open(state.queue, index);
+        } else {
+          await _apple!.open([toPlay], 0);
+        }
       } catch (error) {
         logAppleFailure(error);
       }
@@ -710,6 +760,29 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
         shuffle: state.shuffle,
       ),
     );
+  }
+
+  /// The system player moved to another entry of the run it was given: a
+  /// track ended and it advanced on its own.
+  ///
+  /// The app's queue is the same run, so this is the app following along.
+  /// The play history is closed and restarted here rather than through
+  /// [next], which would push the queue again and start the track twice.
+  Future<void> _onAppleAdvance(int index) async {
+    if (index < 0 || index >= state.queue.length) return;
+    if (index == state.currentIndex) return;
+    if (_appleCompleted) return;
+    _appleCompleted = true;
+    _tracker.finish();
+    state = state.copyWith(
+      currentIndex: index,
+      position: Duration.zero,
+      duration: state.queue[index].duration,
+    );
+    await _tracker.start(state.queue[index]);
+    _appleCompleted = false;
+    _publish();
+    _saveSession();
   }
 
   Future<void> _onTrackCompleted() async {

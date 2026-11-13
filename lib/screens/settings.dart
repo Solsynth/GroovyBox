@@ -42,6 +42,12 @@ class SettingsScreen extends ConsumerWidget {
     // Read once, live: the slider must reflect a nudge from the player's
     // arrow keys, and the player page no longer shows a level of its own.
     final volume = ref.watch(playbackProvider.select((state) => state.volume));
+    // MusicKit has no volume API: while a platform-played track is on, the
+    // slider would move without changing anything, so it says whose the level
+    // is instead of lying.
+    final volumeIsSystem = ref.watch(
+      playbackProvider.select((state) => state.volumeIsSystemControlled),
+    );
     final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
 
     return Scaffold(
@@ -137,16 +143,22 @@ class SettingsScreen extends ConsumerWidget {
                         child: Slider(
                           value: volume.clamp(0, 100),
                           max: 100,
-                          onChanged: (value) => ref
-                              .read(playbackProvider.notifier)
-                              .setVolume(value),
-                          onChangeEnd: (value) => saveVolume(ref, value),
+                          onChanged: volumeIsSystem
+                              ? null
+                              : (value) => ref
+                                    .read(playbackProvider.notifier)
+                                    .setVolume(value),
+                          onChangeEnd: volumeIsSystem
+                              ? null
+                              : (value) => saveVolume(ref, value),
                         ),
                       ),
                     ],
                   ),
                   Text(
-                    'settingsVolumeHint'.tr(),
+                    volumeIsSystem
+                        ? 'settingsVolumeSystemHint'.tr()
+                        : 'settingsVolumeHint'.tr(),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                       height: 1.5,
@@ -443,6 +455,7 @@ class SettingsScreen extends ConsumerWidget {
     await ref.read(lyricsMaintenanceProvider.notifier).clear();
   }
 }
+
 /// The language picker: a row with a dropdown of the app's locales.
 ///
 /// `savedLocale` is null until the user picks one, and null means "follow the

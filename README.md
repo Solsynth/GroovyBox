@@ -29,7 +29,13 @@ than block you behind a form.
   imports the plugin, `lib/player/apple_player.dart` drives it, and the
   transport routes to it through `LibrarySource.usesPlatformPlayer`. Covers
   are Apple's own `{w}x{h}` art templates, resized per painted box in
-  `artworkUri`. The plugin is vendored under `packages/music_kit` (MIT) so
+  `artworkUri`. The landing page opens with the account's own dashboard card
+  (library size) and its curated shelves — personal mixes, recently played,
+  station suggestions — which no other provider has a word for; a station is
+  queued as a `LibrarySong` with `isRadio`, so the dock, the queue panel and
+  the scrobbler need no special case, and the transport hands the system
+  player the whole run from the current track onward so a finished track
+  advances instead of stopping dead. The plugin is vendored under `packages/music_kit` (MIT) so
   the darwin player can expose seek and stay inert on macOS 12/13, where
   `ApplicationMusicPlayer` does not exist.
 - **Playback** — one `media_kit` player for the app's lifetime

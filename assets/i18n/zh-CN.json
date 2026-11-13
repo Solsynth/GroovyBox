@@ -322,5 +322,14 @@
   "settingsLibrarySyncProgress": "正在同步…",
   "settingsLibrarySyncFailed": "同步失败，请检查网络后重试。",
   "settingsLibrarySyncLastSync": {"one": "{} 分钟前已同步", "other": "{} 分钟前已同步"},
-  "settingsLibrarySyncDevices": {"one": "{} 台设备", "other": "{} 台设备"}
+  "settingsLibrarySyncDevices": {"one": "{} 台设备", "other": "{} 台设备"},
+  "settingsVolumeSystemHint": "当前曲目由系统播放器播放，音量由系统控制。请使用音量键或控制中心。",
+  "formatRadioFrom": "电台 · {}",
+  "playerRadio": "电台",
+  "browseAppleMusicDashboard": "Apple Music",
+  "browseDigestTracks": "{} 首歌曲",
+  "browseDigestMixes": "{} 个专属电台",
+  "browseDigestStations": "{} 个电台",
+  "browseAppleMusicAccount": "已在此设备登录",
+  "browseRadio": "为你推荐的电台"
 }

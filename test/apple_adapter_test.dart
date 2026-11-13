@@ -14,8 +14,10 @@ class _FakeMusicKit implements MusicKitClient {
   String token = 'dev-token';
   String userTokenValue = 'user-token';
   final queued = <List<Map<String, dynamic>>>[];
+  final queuedAs = <String>[];
   final sought = <Duration>[];
   Duration clock = Duration.zero;
+  bool playing = false;
 
   @override
   Future<bool> requestAuthorization() async => authorized;
@@ -30,18 +32,26 @@ class _FakeMusicKit implements MusicKitClient {
   Future<void> setQueue(
     List<Map<String, dynamic>> items, {
     int startingAt = 0,
+    String itemType = 'songs',
   }) async {
     queued.add(items);
+    queuedAs.add(itemType);
   }
 
   @override
-  Future<void> play() async {}
+  Future<void> play() async {
+    playing = true;
+  }
 
   @override
-  Future<void> pause() async {}
+  Future<void> pause() async {
+    playing = false;
+  }
 
   @override
-  Future<void> stop() async {}
+  Future<void> stop() async {
+    playing = false;
+  }
 
   @override
   Future<void> seek(Duration position) async {
@@ -54,6 +64,9 @@ class _FakeMusicKit implements MusicKitClient {
 
   @override
   Stream<ApplePlayerStatus> get status => const Stream.empty();
+
+  @override
+  Stream<int> get queueIndex => const Stream.empty();
 }
 
 /// A minimal Apple Music API: the endpoints the adapter calls, with the field
@@ -102,6 +115,9 @@ class _FakeApple {
       '/v1/me/library/songs' => _songs(),
       '/v1/me/library/search' => _search(),
       '/v1/me/library/playlists' => _playlists(),
+      '/v1/me/recommendations' => _recommendations(),
+      '/v1/me/recommendations/mix-1/contents' => _mixContents(),
+      '/v1/me/history/heavy-rotation' => _heavyRotation(),
       _ => null,
     };
     if (body == null) {
@@ -153,6 +169,78 @@ class _FakeApple {
 
   Map<String, dynamic> _songs() => {
     'data': [_songResource('i.1', 'Daytona Sand')],
+    // Apple pages every collection and reports its size: the digest reads
+    // that instead of paging the library to count it.
+    'meta': {'total': 842},
+  };
+
+  /// One container whose contents are stations, and one whose title is a
+  /// `{stringForDisplay}` map — both shapes this account actually gets.
+  Map<String, dynamic> _recommendations() => {
+    'data': [
+      {
+        'id': 'mix-1',
+        'type': 'personal-recommendation',
+        'attributes': {
+          'title': {'stringForDisplay': 'Stations for you'},
+          'resourceTypes': ['stations'],
+        },
+        'relationships': {
+          'contents': {'href': '/v1/me/recommendations/mix-1/contents'},
+        },
+      },
+      {
+        'id': 'mix-2',
+        'type': 'personal-recommendation',
+        'attributes': {
+          'title': 'Recent',
+          'resourceTypes': ['albums'],
+        },
+        'relationships': {
+          'contents': {'href': '/v1/me/recommendations/mix-2/contents'},
+        },
+      },
+    ],
+    'meta': {'total': 2},
+  };
+
+  Map<String, dynamic> _mixContents() => {
+    'data': [
+      {
+        'id': 'ra.1',
+        'type': 'stations',
+        'attributes': {
+          'name': 'Mirror Mirror Radio',
+          'isLive': false,
+          'mediaKind': 'audio',
+          'url': 'https://music.apple.com/cn/station/x/ra.1',
+          'playParams': {
+            'format': 'tracks',
+            'id': 'ra.1',
+            'kind': 'radioStation',
+          },
+        },
+      },
+    ],
+  };
+
+  Map<String, dynamic> _heavyRotation() => {
+    'data': [
+      {
+        'id': 'l.album-1',
+        'type': 'library-albums',
+        'attributes': {'name': 'An album'},
+      },
+      {
+        'id': 'ra.2',
+        'type': 'stations',
+        'attributes': {
+          'name': 'A station',
+          'url': 'https://music.apple.com/cn/station/y/ra.2',
+          'playParams': {'id': 'ra.2', 'kind': 'radioStation'},
+        },
+      },
+    ],
   };
 
   Map<String, dynamic> _search() => {
@@ -363,26 +451,111 @@ void main() {
     },
   );
 
-  test('the player bridge hands one song at a time and seeks', () async {
+  test('the player bridge hands the run to the system player', () async {
+    final songs = [
+      for (var i = 0; i < 3; i++)
+        LibrarySong(
+          sourceId: 'apple-1',
+          id: 'i.$i',
+          title: 'Daytona Sand $i',
+          duration: const Duration(minutes: 3),
+        ),
+    ];
+    var positions = <Duration>[];
+    final bridge = ApplePlayer(
+      kit,
+      onStatus: (_) {},
+      onPosition: positions.add,
+      onAdvance: (_) {},
+    );
+
+    // Everything from the current track on, so the system has somewhere to
+    // advance to instead of stopping at the end of a one-item queue.
+    await bridge.open(songs, 1);
+    expect(kit.queued.single.map((item) => item['id']), ['i.1', 'i.2']);
+
+    await bridge.seek(const Duration(seconds: 42));
+    expect(kit.sought.single, const Duration(seconds: 42));
+    expect(positions.last, const Duration(seconds: 42));
+    bridge.dispose();
+  });
+
+  test('a seek keeps a running track playing', () async {
     final song = LibrarySong(
       sourceId: 'apple-1',
       id: 'i.1',
       title: 'Daytona Sand',
       duration: const Duration(minutes: 3),
     );
-    var positions = <Duration>[];
     final bridge = ApplePlayer(
       kit,
       onStatus: (_) {},
-      onPosition: positions.add,
+      onPosition: (_) {},
+      onAdvance: (_) {},
     );
+    await bridge.open([song], 0);
+    expect(kit.playing, isTrue);
 
-    await bridge.open(song);
-    expect(kit.queued.single.single['id'], 'i.1');
+    // Seeking pauses the system player; a drag of the scrubber must not stop
+    // the music.
+    await bridge.seek(const Duration(seconds: 30));
+    expect(kit.playing, isTrue);
+    bridge.dispose();
+  });
 
-    await bridge.seek(const Duration(seconds: 42));
-    expect(kit.sought.single, const Duration(seconds: 42));
-    expect(positions.last, const Duration(seconds: 42));
+  test(
+    'recommendations become shelves, and stations survive a round trip',
+    () async {
+      final source = AppleMusicSource(connected());
+      final shelves = await source.landingShelves();
+
+      // Only the container whose contents are stations yields a shelf; the
+      // album one points at an endpoint this fake does not serve.
+      expect(shelves, hasLength(1));
+      final shelf = shelves.single;
+      expect(shelf.title, 'Stations for you');
+      expect(shelf.songs.single.isRadio, isTrue);
+
+      // A station is written to the saved session and read back, so everything
+      // the platform player needs has to survive JSON.
+      final restored = LibrarySong.fromJson(shelf.songs.single.toJson());
+      expect(restored.isRadio, isTrue);
+      expect(restored.radioUrl, 'https://music.apple.com/cn/station/x/ra.1');
+      final resource = source.radioResource(restored);
+      expect(resource?['type'], 'stations');
+      expect(
+        (resource?['attributes'] as Map)['playParams'],
+        containsPair('kind', 'radioStation'),
+      );
+    },
+  );
+
+  test('the digest reports the library size', () async {
+    final digest = await AppleMusicSource(connected()).digest();
+
+    expect(digest?.libraryTracks, 842);
+    expect(digest?.subtitle, 'Apple Music');
+  });
+
+  test('a station is queued as a station, alone', () async {
+    final station = LibrarySong(
+      sourceId: 'apple-1',
+      id: 'ra.1',
+      title: 'Mirror Mirror Radio',
+      duration: Duration.zero,
+      isRadio: true,
+      radioUrl: 'https://music.apple.com/cn/station/x/ra.1',
+      radioPlayParams: const {'kind': 'radioStation', 'id': 'ra.1'},
+    );
+    final bridge = ApplePlayer(
+      kit,
+      onStatus: (_) {},
+      onPosition: (_) {},
+      onAdvance: (_) {},
+    );
+    await bridge.open([station], 0);
+    expect(kit.queuedAs.single, 'stations');
+    expect(kit.queued.single.single['id'], 'ra.1');
     bridge.dispose();
   });
 }
