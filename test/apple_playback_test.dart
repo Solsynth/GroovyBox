@@ -164,11 +164,12 @@ void main() {
   late _RecordingKit kit;
   late _FakePlayer player;
   late ProviderContainer container;
+  late LibraryDatabase db;
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({'app_infinite_playback': false});
     final prefs = await SharedPreferences.getInstance();
-    final db = LibraryDatabase(NativeDatabase.memory());
+    db = LibraryDatabase(NativeDatabase.memory());
     addTearDown(db.close);
 
     kit = _RecordingKit();
@@ -434,6 +435,44 @@ void main() {
     await pumpEventQueue();
     expect(kit.skipped, contains('previous'));
   });
+
+  test(
+    'a station records its tracks in the play history, not itself',
+    () async {
+      await container.read(playbackProvider.notifier).playQueue([
+        const LibrarySong(
+          sourceId: 'apple-1',
+          id: 'ra.1',
+          title: 'Mirror Mirror Radio',
+          duration: Duration.zero,
+          isRadio: true,
+          radioUrl: 'https://music.apple.com/cn/station/x/ra.1',
+          radioPlayParams: {'id': 'ra.1', 'kind': 'radioStation'},
+        ),
+      ]);
+      await pumpEventQueue();
+
+      kit.tracks.add(
+        const AppleQueueEntry(
+          id: '1745015575',
+          title: 'Mesmerizer',
+          artist: 'サツキ, Hatsune Miku & 重音テト',
+          duration: Duration(milliseconds: 156000),
+        ),
+      );
+      await pumpEventQueue();
+      await pumpEventQueue();
+
+      // The station row has no length and no title worth counting; the row a
+      // listener would see in their history is the track that played.
+      final tracks = await db.select(db.tracks).get();
+      expect(
+        tracks.map((row) => row.title),
+        isNot(contains('Mirror Mirror Radio')),
+      );
+      expect(tracks.map((row) => row.title), contains('Mesmerizer'));
+    },
+  );
 
   test('a streamed song takes the transport back from the platform', () async {
     final transport = container.read(playbackProvider.notifier);

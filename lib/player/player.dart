@@ -689,8 +689,11 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     _hasOpenedCurrent = true;
     _appleCompleted = false;
     // The play is recorded before the stream opens, so a source that has been
-    // removed still leaves the row that says the user tried to play it.
-    await _tracker.start(song);
+    // removed still leaves the row that says the user tried to play it. A
+    // station is not a track — it has no length and no title of its own, and
+    // the row that matters is the one the platform player reports for the
+    // track it generates — so it opens no play of its own.
+    if (!song.isRadio) await _tracker.start(song);
     final sources = ref.read(librarySourceByIdProvider);
     var source = sources[song.sourceId];
     var toPlay = song;
@@ -889,6 +892,9 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
   Future<void> _onAppleAdvance(int index) async {
     if (index < 0 || index >= state.queue.length) return;
     if (index == state.currentIndex) return;
+    // Inside a station the system advances through its *own* run, which the
+    // app's queue knows nothing about: `_onAppleTrack` records those plays.
+    if (state.queueRow?.isRadio ?? false) return;
     if (_appleCompleted) return;
     _appleCompleted = true;
     _tracker.finish();
@@ -932,6 +938,10 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       catalogId: entry.catalogId,
       duration: entry.duration,
     );
+    // A station's track is the thing that played, so the history row is for
+    // the track: the station row has no length and no title worth counting.
+    // Closing first keeps the previous track's play honest.
+    unawaited(_tracker.finish().then((_) => _tracker.start(track)));
     // The player reports a `musicKit://` handle for a station's track, which
     // nothing but the system player can load; the source turns the catalog id
     // into a real cover. Resolved off the position tick, then folded in, so a
