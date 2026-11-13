@@ -31,6 +31,16 @@ class AudioSnapshot {
   final AudioServiceRepeatMode repeatMode;
   final bool shuffle;
 
+  /// Whether the platform's own player is making the sound.
+  ///
+  /// `audio_service` publishes the app's media item to the system's
+  /// now-playing centre, and on macOS MusicKit publishes its own entry for
+  /// the same track. Two publishes for one sound is what shows up as two
+  /// now-playing items, so while the platform player owns playback the app
+  /// stands down ([GroovyBoxAudioHandler.publish] sends `idle` and no item)
+  /// and lets MusicKit be the one entry the system reports.
+  final bool platformOwned;
+
   const AudioSnapshot({
     required this.items,
     required this.index,
@@ -39,6 +49,7 @@ class AudioSnapshot {
     required this.position,
     required this.repeatMode,
     required this.shuffle,
+    this.platformOwned = false,
   });
 
   /// The id the system uses for [song]. A song id is only unique inside its
@@ -46,14 +57,19 @@ class AudioSnapshot {
   static String idOf(LibrarySong song) => '${song.sourceId}:${song.id}';
 
   /// One queue row, as the notification and the lock screen draw it.
-  static MediaItem itemOf(LibrarySong song, {Uri? artUri}) => MediaItem(
-    id: idOf(song),
-    title: song.title,
-    artist: song.artist,
-    album: song.album,
-    duration: song.duration,
-    artUri: artUri,
-  );
+  static MediaItem itemOf(LibrarySong song, {Uri? artUri}) {
+    final playing = song.playing;
+    return MediaItem(
+      id: idOf(song),
+      title: playing.title,
+      artist: playing.artist,
+      album: playing.album,
+      duration: playing.duration == Duration.zero
+          ? song.duration
+          : playing.duration,
+      artUri: artUri,
+    );
+  }
 }
 
 /// The app's [AudioHandler]: one object for the whole session, translating
@@ -73,6 +89,23 @@ class GroovyBoxAudioHandler extends BaseAudioHandler with SeekHandler {
   /// not on the position tick: the system advances the clock itself while
   /// playing, and a notification rebuild per tick would be pure cost.
   void publish(AudioSnapshot snapshot) {
+    if (snapshot.platformOwned) {
+      // Stand down rather than describe playback somebody else is
+      // publishing: an idle state retires the app's now-playing entry, and
+      // the item is dropped so the system has nothing of the app's to show
+      // next to MusicKit's own.
+      queue.add(const []);
+      mediaItem.add(null);
+      playbackState.add(
+        PlaybackState(
+          processingState: AudioProcessingState.idle,
+          playing: snapshot.playing,
+          controls: const <MediaControl>[],
+        ),
+      );
+      return;
+    }
+
     queue.add(snapshot.items);
 
     final index = snapshot.index;

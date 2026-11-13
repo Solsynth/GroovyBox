@@ -660,6 +660,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
         },
         onPosition: _onPosition,
         onAdvance: _onAppleAdvance,
+        onTrack: _onAppleTrack,
       );
       try {
         // The system player is handed everything from here on, so a track
@@ -758,6 +759,9 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
           PlaybackRepeatMode.single => AudioServiceRepeatMode.one,
         },
         shuffle: state.shuffle,
+        // The system player publishes its own now-playing entry; sending ours
+        // as well is the duplicate the user sees in the system's media panel.
+        platformOwned: _appleMode,
       ),
     );
   }
@@ -783,6 +787,54 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     _appleCompleted = false;
     _publish();
     _saveSession();
+  }
+
+  /// The system player named the track it is on.
+  ///
+  /// For a streamed track that is the song the app already loaded. For a
+  /// station it is news: the station generates its own run, so this is the
+  /// first and only description of what is actually playing, and the queue
+  /// row is rewritten to carry it.
+  void _onAppleTrack(AppleQueueEntry entry) {
+    final index = state.currentIndex;
+    if (index == null || index >= state.queue.length) return;
+    final station = state.queue[index];
+    if (!station.isRadio) return;
+    if (!entry.isTrack) return;
+    final title = entry.title;
+    if (title == null) return;
+    if (station.radioTrack?.id == entry.id &&
+        station.radioTrack?.title == title) {
+      return;
+    }
+
+    final track = LibrarySong(
+      sourceId: station.sourceId,
+      id: entry.id!,
+      title: title,
+      artist: entry.artist,
+      album: entry.album,
+      artId: entry.artTemplate,
+      duration: entry.duration,
+    );
+    final queue = List.of(state.queue);
+    queue[index] = LibrarySong(
+      sourceId: station.sourceId,
+      id: station.id,
+      title: station.title,
+      duration: Duration.zero,
+      artId: station.artId,
+      isRadio: true,
+      radioUrl: station.radioUrl,
+      radioPlayParams: station.radioPlayParams,
+      radioTrack: track,
+    );
+    state = state.copyWith(
+      queue: queue,
+      duration: entry.duration,
+      position: state.position,
+    );
+    _publish();
   }
 
   Future<void> _onTrackCompleted() async {

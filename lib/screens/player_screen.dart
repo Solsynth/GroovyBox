@@ -1159,7 +1159,9 @@ class _TrackCopy extends ConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          song.title,
+          // A station's row carries what it is playing, so the page names the
+          // track rather than the station it was started from.
+          song.playing.title,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           textAlign: centered ? TextAlign.center : TextAlign.start,
@@ -1170,11 +1172,8 @@ class _TrackCopy extends ConsumerWidget {
         const SizedBox(height: 2),
         Text(
           [
-            if (song.isRadio)
-              song.artist ?? 'playerRadio'.tr()
-            else
-              song.subtitle,
-            if (song.album != null) song.album!,
+            song.playing.subtitle,
+            if (song.playing.album != null) song.playing.album!,
             ?source,
           ].join('  ·  '),
           maxLines: 1,

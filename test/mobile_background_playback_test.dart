@@ -80,6 +80,31 @@ void main() {
       expect(handler.playbackState.value.processingState, equals(AudioProcessingState.ready));
     });
 
+    test('the handler stands down while the platform player owns playback', () {
+      final handler = GroovyBoxAudioHandler();
+
+      // The system player publishes its own now-playing entry; publishing the
+      // app's as well is the duplicate the system shows.
+      handler.publish(AudioSnapshot(
+        items: [AudioSnapshot.itemOf(testSong)],
+        index: 0,
+        playing: true,
+        position: const Duration(seconds: 10),
+        repeatMode: AudioServiceRepeatMode.none,
+        shuffle: false,
+        platformOwned: true,
+      ));
+
+      expect(
+        handler.playbackState.value.processingState,
+        AudioProcessingState.idle,
+        reason: 'idle retires the app entry so only MusicKit reports',
+      );
+      expect(handler.mediaItem.value, isNull);
+      expect(handler.queue.value, isEmpty);
+      expect(handler.playbackState.value.playing, isTrue);
+    });
+
     test('GroovyBoxAudioHandler sets idle when no song is selected', () {
       final handler = GroovyBoxAudioHandler();
 

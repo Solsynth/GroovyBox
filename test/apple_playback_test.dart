@@ -117,6 +117,13 @@ class _RecordingKit extends Fake implements MusicKitClient {
   @override
   Stream<int> get queueIndex => queueIndices.stream;
 
+  /// The track the system reports, which is how a station's own generated run
+  /// reaches the app.
+  final tracks = StreamController<AppleQueueEntry>.broadcast();
+
+  @override
+  Stream<AppleQueueEntry> get currentTrack => tracks.stream;
+
   @override
   Stream<ApplePlayerStatus> get status => const Stream.empty();
 }
@@ -145,6 +152,7 @@ void main() {
     );
     addTearDown(container.dispose);
     addTearDown(kit.queueIndices.close);
+    addTearDown(kit.tracks.close);
   });
 
   const song = LibrarySong(
@@ -229,6 +237,44 @@ void main() {
     await transport.play();
     expect(kit.calls.where((call) => call == 'play'), hasLength(2));
     expect(player.opened, isEmpty);
+  });
+
+  test('a station names the track it is playing, not itself', () async {
+    final station = LibrarySong(
+      sourceId: 'apple-1',
+      id: 'ra.1',
+      title: 'Mirror Mirror Radio',
+      duration: Duration.zero,
+      isRadio: true,
+      radioUrl: 'https://music.apple.com/cn/station/x/ra.1',
+      radioPlayParams: const {'id': 'ra.1', 'kind': 'radioStation'},
+    );
+    await container.read(playbackProvider.notifier).playQueue([station]);
+    await pumpEventQueue();
+
+    // A station generates its own run: the system player is the only thing
+    // that knows a track started.
+    kit.tracks.add(
+      const AppleQueueEntry(
+        id: '1745015575',
+        title: 'Mesmerizer',
+        artist: 'サツキ, Hatsune Miku & 重音テト',
+        duration: Duration(milliseconds: 156000),
+      ),
+    );
+    await pumpEventQueue();
+
+    final state = container.read(playbackProvider);
+    expect(state.current?.isRadio, isTrue);
+    expect(state.current?.title, 'Mirror Mirror Radio');
+    expect(state.current?.playing.title, 'Mesmerizer');
+    expect(state.current?.playing.artist, 'サツキ, Hatsune Miku & 重音テト');
+    expect(state.duration, const Duration(milliseconds: 156000));
+    // Still a station: the queue row keeps what it takes to keep playing.
+    expect(
+      state.current?.radioUrl,
+      'https://music.apple.com/cn/station/x/ra.1',
+    );
   });
 
   test('a streamed song takes the transport back from the platform', () async {

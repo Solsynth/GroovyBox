@@ -50,6 +50,15 @@ class LibrarySong {
   /// which resolves a station by them instead of by a track id.
   final String? radioUrl;
   final Map<String, dynamic>? radioPlayParams;
+
+  /// The track a station is playing right now.
+  ///
+  /// A station has no tracklist: it generates one as it runs, and only the
+  /// system player knows which track that is. The queue entry it reports is
+  /// folded back into this song, so everything that draws "what is playing"
+  /// — the dock, the player page, the scrobbler — names the track instead of
+  /// the station. Null while the station is still starting up.
+  final LibrarySong? radioTrack;
   const LibrarySong({
     required this.sourceId,
     required this.id,
@@ -69,8 +78,13 @@ class LibrarySong {
     this.isRadio = false,
     this.radioUrl,
     this.radioPlayParams,
+    this.radioTrack,
   });
   String get subtitle => artist ?? album ?? 'Unknown artist';
+
+  /// What is actually playing: the station's current track, or the song
+  /// itself for everything that is a track in its own right.
+  LibrarySong get playing => radioTrack ?? this;
 
   Map<String, dynamic> toJson() => {
     'sourceId': sourceId,
@@ -90,6 +104,7 @@ class LibrarySong {
     if (isRadio) 'isRadio': true,
     if (radioUrl != null) 'radioUrl': radioUrl,
     if (radioPlayParams != null) 'radioPlayParams': radioPlayParams,
+    if (radioTrack != null) 'radioTrack': radioTrack!.toJson(),
   };
 
   factory LibrarySong.fromJson(Map<String, dynamic> json) => LibrarySong(
@@ -115,6 +130,11 @@ class LibrarySong {
     radioPlayParams: switch (json['radioPlayParams']) {
       final Map<String, dynamic> params => params,
       final Map params => Map<String, dynamic>.from(params),
+      _ => null,
+    },
+    radioTrack: switch (json['radioTrack']) {
+      final Map<String, dynamic> track => LibrarySong.fromJson(track),
+      final Map track => LibrarySong.fromJson(Map<String, dynamic>.from(track)),
       _ => null,
     },
   );

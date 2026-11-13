@@ -32,6 +32,7 @@ class ApplePlayer {
     required this.onStatus,
     required this.onPosition,
     required this.onAdvance,
+    this.onTrack,
   });
 
   final MusicKitClient _client;
@@ -42,8 +43,14 @@ class ApplePlayer {
   /// there by itself.
   final void Function(int index) onAdvance;
 
+  /// Called with the track the system reports, which for a station is the
+  /// only statement of what is on the air: a station generates its own run
+  /// and the app never asked for those tracks.
+  final void Function(AppleQueueEntry entry)? onTrack;
+
   StreamSubscription<ApplePlayerStatus>? _statusSub;
   StreamSubscription<int>? _queueSub;
+  StreamSubscription<AppleQueueEntry>? _trackSub;
   Timer? _clock;
   bool _started = false;
 
@@ -141,6 +148,8 @@ class ApplePlayer {
     _statusSub = null;
     _queueSub?.cancel();
     _queueSub = null;
+    _trackSub?.cancel();
+    _trackSub = null;
     _wasPlaying = false;
     _started = false;
   }
@@ -163,6 +172,10 @@ class ApplePlayer {
       // with it: playback simply stays where the app put it.
       onError: (Object error) => logAppleFailure(error),
     );
+    _trackSub ??= _client.currentTrack.listen((entry) {
+      if (!_started) return;
+      onTrack?.call(entry);
+    }, onError: (Object error) => logAppleFailure(error));
     _queueSub ??= _client.queueIndex.listen((index) {
       // The first notification describes the queue just pushed, so it says
       // nothing new; anything later is the system having advanced.

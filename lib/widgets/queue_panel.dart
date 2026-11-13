@@ -75,8 +75,11 @@ class QueuePanel extends ConsumerWidget {
                   itemBuilder: (context, index) {
                     final song = playback.queue[index];
                     return TrackRow(
-                      title: song.title,
-                      subtitle: songRowSubtitle(ref, song),
+                      // A station's row is rewritten with what it is playing,
+                      // so the queue says what is on the air, not the name of
+                      // the station it started from.
+                      title: song.playing.title,
+                      subtitle: songRowSubtitle(ref, song.playing),
                       selected: playback.currentIndex == index,
                       trailing: formatDuration(song.duration),
                       artwork: LibraryArtwork(

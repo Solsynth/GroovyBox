@@ -337,7 +337,7 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
                               children: [
                                 LibraryArtwork(
                                   sourceId: song.sourceId,
-                                  artId: song.artId,
+                                  artId: song.playing.artId,
                                   size: 44,
                                   radius: SolRadius.pill,
                                 ),
@@ -355,7 +355,10 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Text(
-                                          song.title,
+                                          // A station's row is rewritten
+                                          // with what it is playing, so this
+                                          // names the track, not the station.
+                                          song.playing.title,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: theme.textTheme.bodyMedium
@@ -365,8 +368,8 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
                                         ),
                                         Text(
                                           switch (_shownSheet) {
-                                            _DockSheet.lyrics => 'lyricsTitle'
-                                                .tr(),
+                                            _DockSheet.lyrics =>
+                                              'lyricsTitle'.tr(),
                                             _DockSheet.queue => queueSummary(
                                               playback.queue.length,
                                               playback.shuffle,
@@ -382,10 +385,7 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
                                             _DockSheet.none => [
                                               ?playingSourceLabel(ref, song),
                                               if (wide)
-                                                song.isRadio
-                                                    ? (song.artist ??
-                                                          song.title)
-                                                    : song.subtitle
+                                                song.playing.subtitle
                                               else
                                                 'formatPositionOfDuration'.tr(
                                                   args: [
