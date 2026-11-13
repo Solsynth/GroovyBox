@@ -962,7 +962,13 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     state = state.copyWith(
       queue: queue,
       duration: entry.duration,
-      position: state.position,
+      // The clock belongs to the track, not to the station: carrying the
+      // previous track's position over left the new one starting mid-way,
+      // which a presence report then read as a progress past its own length.
+      // The clock belongs to the track, not to the station: carrying the
+      // previous track's position over left the new one starting mid-way,
+      // which a presence report then read as a progress past its own length.
+      position: Duration.zero,
     );
     _publish();
   }

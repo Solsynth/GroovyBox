@@ -14,6 +14,7 @@ import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:groovy_box/widgets/lyrics_view.dart';
 import 'package:groovy_box/widgets/queue_panel.dart';
+import 'package:groovy_box/widgets/song_actions.dart';
 import 'package:groovy_box/widgets/track_versions.dart';
 import 'package:groovy_box/widgets/transport.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -713,7 +714,8 @@ class _CompactPlayerBody extends StatelessWidget {
                 ),
               ),
               _TrackCopy(song: song, centered: true),
-              const SizedBox(height: SolSpace.lg),
+              SongActionBar(song: song),
+              const SizedBox(height: SolSpace.sm),
               // As wide as the artwork, so the column reads as one object:
               // the square the cover paints is the square the controls span.
               Center(
@@ -944,7 +946,8 @@ class _WidePlayerBody extends StatelessWidget {
         // left-aligned title sat under the artwork's left edge and read as a
         // caption for it rather than as the page's headline.
         _TrackCopy(song: song, centered: true),
-        const SizedBox(height: SolSpace.lg),
+        SongActionBar(song: song),
+        const SizedBox(height: SolSpace.sm),
         scrubber,
         const SizedBox(height: SolSpace.sm),
         transport,

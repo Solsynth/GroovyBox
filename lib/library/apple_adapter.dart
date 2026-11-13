@@ -517,6 +517,167 @@ class AppleMusicSource extends LibrarySource
     }
   }
 
+  /// Whether the account favourited [song].
+  ///
+  /// Ratings are keyed by *catalog* id: the library id is refused with
+  /// "Ratings not allowed for resource type 'songs'", so a track that only
+  /// exists in the account's library cannot be rated at all, and the answer
+  /// is false rather than an error the UI would have to explain.
+  @override
+  Future<bool> isFavourite(LibrarySong song) async {
+    final catalogId = await _catalogIdOf(song);
+    if (catalogId == null) return false;
+    try {
+      final body = await _get('/v1/me/ratings/songs/${_path(catalogId)}');
+      final items = _resources(body);
+      if (items.isEmpty) return false;
+      final attributes = _attributes(items.first);
+      // 1 is a like; -1 is a dislike, which is not a favourite.
+      return (attributes['value'] as num?)?.toInt() == 1;
+    } on LibraryException catch (error) {
+      // 404 is the API's way of saying "not rated", which is an answer.
+      if (error.code == 404) return false;
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> setFavourite(LibrarySong song, {required bool value}) async {
+    final catalogId = await _catalogIdOf(song);
+    if (catalogId == null) {
+      throw const LibraryException(
+        'Only a track in the store can be favourited.',
+        messageKey: 'libraryAppleMusicNoCatalogId',
+      );
+    }
+    final path = '/v1/me/ratings/songs/${_path(catalogId)}';
+    if (!value) {
+      // Clearing is its own verb: PUT with value 0 leaves the rating row.
+      await _write('delete', path);
+      return;
+    }
+    await _write(
+      'put',
+      path,
+      body: {
+        'type': 'ratings',
+        'attributes': {'value': 1},
+      },
+    );
+  }
+
+  /// The account's playlists it can still add to.
+  ///
+  /// `canEdit` is the service's own answer and the only reliable one: the
+  /// favourites mix ("喜爱歌曲", "Favourite Songs") is listed among the
+  /// account's playlists but answers 204 to an add and silently drops it,
+  /// because it is a view of every like rather than a list you edit.
+  @override
+  Future<List<LibraryPlaylist>> editablePlaylists() async {
+    final items = await _data(
+      '/v1/me/library/playlists',
+      query: {'limit': 100},
+    );
+    return [
+      for (final item in items)
+        if (_attributes(item)['canEdit'] == true)
+          LibraryPlaylist(
+            sourceId: id,
+            id: '${item['id']}',
+            name: _attributes(item)['name'] as String? ?? 'Untitled playlist',
+            duration: Duration.zero,
+            songCount: (_attributes(item)['trackCount'] as num?)?.toInt(),
+            artId: _artTemplate(_attributes(item)),
+          ),
+    ];
+  }
+
+  @override
+  Future<void> addToPlaylist(LibraryPlaylist playlist, LibrarySong song) async {
+    final partnerId = await _catalogIdOf(song);
+    if (partnerId == null) {
+      throw const LibraryException(
+        'Only a track in the store can be added to a playlist.',
+        messageKey: 'libraryAppleMusicNoCatalogId',
+      );
+    }
+    await _write(
+      'post',
+      '/v1/me/library/playlists/${_path(playlist.id)}/tracks',
+      body: {
+        'data': [
+          {'id': partnerId, 'type': 'songs'},
+        ],
+      },
+    );
+  }
+
+  /// The catalog id behind [song].
+  ///
+  /// A library song carries only its library id, and every write — rating,
+  /// playlist membership — is keyed by the catalog's. The relationship is the
+  /// only place the API states the correspondence, so it is read once per
+  /// song and kept: the mapping never changes.
+  final Map<String, String?> _partnerIds = {};
+
+  Future<String?> _catalogIdOf(LibrarySong song) async {
+    final known = song.catalogId;
+    if (known != null) return known;
+    if (_partnerIds.containsKey(song.id)) return _partnerIds[song.id];
+    try {
+      final body = await _get(
+        '/v1/me/library/songs/${_path(song.id)}',
+        query: {'include': 'catalog'},
+      );
+      final items = _resources(body);
+      final relationships = items.isEmpty ? null : items.first['relationships'];
+      final catalog = relationships is Map ? relationships['catalog'] : null;
+      final data = catalog is Map ? catalog['data'] : null;
+      final partner = data is List && data.isNotEmpty
+          ? '${(data.first as Map)['id']}'
+          : null;
+      _partnerIds[song.id] = partner;
+      return partner;
+    } on LibraryException {
+      _partnerIds[song.id] = null;
+      return null;
+    }
+  }
+
+  /// One call that changes the account.
+  ///
+  /// Every write in this class goes through here so the failure modes are
+  /// spelled once: a refused write is a subscription or a scope problem, and
+  /// a 4xx carries the store's own words for anything else.
+  Future<void> _write(
+    String verb,
+    String path, {
+    Map<String, dynamic>? body,
+  }) async {
+    try {
+      switch (verb) {
+        case 'put':
+          await _dio.put<void>(path, data: body);
+        case 'post':
+          await _dio.post<void>(path, data: body);
+        case 'delete':
+          await _dio.delete<void>(path);
+        default:
+          throw ArgumentError.value(verb, 'verb');
+      }
+    } on DioException catch (error) {
+      final status = error.response?.statusCode;
+      if (status == 401 || status == 403) {
+        throw LibraryException(
+          'Apple Music refused the change (HTTP $status).',
+          code: status,
+          messageKey: 'libraryAppleMusicSubscription',
+        );
+      }
+      throw describeAppleError(error);
+    }
+  }
+
   /// Artwork for a track the platform player only described by handle.
   ///
   /// A station's tracks exist in the catalog and nowhere else, so one catalog

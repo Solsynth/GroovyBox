@@ -207,6 +207,30 @@ abstract interface class ExtendableSource implements LibrarySource {
   /// account cannot add (no subscription, or a token that lost its write
   /// scope).
   Future<int> addToLibrary(CatalogKind kind, List<String> ids);
+
+  /// Whether the account has favourited [song].
+  ///
+  /// A favourite is the account's own opinion, not the library's: it is the
+  /// same value the stock Music app shows, and it syncs everywhere the account
+  /// is signed in. [song] must name a catalog item — a track that exists only
+  /// in the account's library has no rating.
+  Future<bool> isFavourite(LibrarySong song);
+
+  /// Sets or clears [song]'s favourite. A write, so it is never done by a
+  /// read or a play.
+  Future<void> setFavourite(LibrarySong song, {required bool value});
+
+  /// Puts [song] into one of the account's own [playlist]s.
+  ///
+  /// Only a playlist the account owns can be edited, so the picker offers the
+  /// ones [editablePlaylists] returns. Throws [LibraryException] when the
+  /// store refuses the write.
+  Future<void> addToPlaylist(LibraryPlaylist playlist, LibrarySong song);
+
+  /// The account's playlists it can still add to, in the order the account
+  /// lists them. The favourites mix is excluded by the service itself, so
+  /// this filter is the only thing that keeps the picker honest.
+  Future<List<LibraryPlaylist>> editablePlaylists();
 }
 
 /// What a store search found, in the app's own models.

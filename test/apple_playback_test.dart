@@ -474,6 +474,45 @@ void main() {
     },
   );
 
+  test('a station track starts its own clock at zero', () async {
+    await container.read(playbackProvider.notifier).playQueue([
+      const LibrarySong(
+        sourceId: 'apple-1',
+        id: 'ra.1',
+        title: 'Mirror Mirror Radio',
+        duration: Duration.zero,
+        isRadio: true,
+        radioUrl: 'https://music.apple.com/cn/station/x/ra.1',
+        radioPlayParams: {'id': 'ra.1', 'kind': 'radioStation'},
+      ),
+    ]);
+    await pumpEventQueue();
+
+    // The platform clock is polled once a second, so the position the app
+    // sees before the station moves on is whatever the system reports then.
+    kit.position = const Duration(seconds: 5);
+    for (var i = 0; i < 30; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      if (container.read(playbackProvider).position.inSeconds == 5) break;
+    }
+    expect(container.read(playbackProvider).position.inSeconds, 5);
+    kit.tracks.add(
+      const AppleQueueEntry(
+        id: '1745015575',
+        title: 'Mesmerizer',
+        duration: Duration(milliseconds: 156000),
+      ),
+    );
+    await pumpEventQueue();
+
+    // The new track's clock starts where the track does. Carrying the old
+    // position over reported progress against a track that had not played,
+    // and a presence session cannot be described by that.
+    final playback = container.read(playbackProvider);
+    expect(playback.position, Duration.zero);
+    expect(playback.duration, const Duration(milliseconds: 156000));
+  });
+
   test('a streamed song takes the transport back from the platform', () async {
     final transport = container.read(playbackProvider.notifier);
     await transport.playQueue([song]);
