@@ -1417,48 +1417,50 @@ class _TrackCopy extends ConsumerWidget {
       if (playing.album != null) playing.album!,
     ].join('  ·  ');
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    // The button overlays the trailing edge rather than sitting in the row:
+    // in the row it would take real width and pull the centered title off
+    // the copy's optical middle. Stacked, the title centers across the whole
+    // width and the button hangs in the corner where the eye expects it.
+    return Stack(
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: centered
-                ? CrossAxisAlignment.center
-                : CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                // A station's row carries what it is playing, so the page
-                // names the track rather than the station it was started
-                // from.
-                playing.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: centered ? TextAlign.center : TextAlign.start,
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.4,
-                  height: 1.15,
-                ),
+        Column(
+          crossAxisAlignment: centered
+              ? CrossAxisAlignment.center
+              : CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              // A station's row carries what it is playing, so the page names
+              // the track rather than the station it was started from.
+              playing.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: centered ? TextAlign.center : TextAlign.start,
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.4,
+                height: 1.15,
               ),
-              const SizedBox(height: 4),
-              Text(
-                credits,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: centered ? TextAlign.center : TextAlign.start,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              credits,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: centered ? TextAlign.center : TextAlign.start,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
         // The track's everything-else: favourite, playlist, share, playback
-        // info, other versions. One button on the copy's trailing edge rather
-        // than a row of actions under the transport — the menu holds the same
-        // writes without spending the column's height on three icons.
-        const _TrackMoreMenu(),
+        // info, other versions.
+        PositionedDirectional(
+          top: -SolSpace.xs,
+          end: -SolSpace.sm,
+          child: const _TrackMoreMenu(),
+        ),
       ],
     );
   }
@@ -1485,6 +1487,11 @@ class _TrackMoreMenu extends ConsumerWidget {
     return MenuAnchor(
       builder: (context, controller, child) => IconButton(
         tooltip: 'playerMore'.tr(),
+        // Smaller than a toolbar button: it rides beside the title rather
+        // than standing in a row of its own, and its tap target keeps the
+        // standard 48 box while the glyph and the hover ink stay compact.
+        visualDensity: VisualDensity.compact,
+        iconSize: 20,
         onPressed: () =>
             controller.isOpen ? controller.close() : controller.open(),
         icon: const Icon(Symbols.more_horiz_rounded),
