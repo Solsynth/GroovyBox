@@ -151,23 +151,17 @@ class _LyricsViewState extends State<LyricsView> {
           ),
         );
 
-        // The scrollbar is a response to a gesture, not furniture: it fades in
-        // while the column is being dragged and is gone otherwise. The platform
-        // scrollbar is switched off underneath so the column never shows two.
+        // No thumb over the column: the fade at the ends already says "more
+        // to come", and a scrollbar over Apple-Music-style lyrics reads as
+        // furniture. The platform scrollbar is switched off underneath so the
+        // column never shows one; drags still work, the physics carry them.
         return NotificationListener<ScrollNotification>(
           onNotification: _onScroll,
           child: ScrollConfiguration(
             behavior: ScrollConfiguration.of(
               context,
             ).copyWith(scrollbars: false),
-            child: RawScrollbar(
-              controller: _controller,
-              thumbVisibility: false,
-              thickness: 3,
-              radius: const Radius.circular(SolRadius.pill),
-              fadeDuration: const Duration(milliseconds: 400),
-              child: widget.fade ? _faded(column) : column,
-            ),
+            child: widget.fade ? _faded(column) : column,
           ),
         );
       },

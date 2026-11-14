@@ -208,4 +208,66 @@ void main() {
     await tester.pumpAndSettle();
     expect(page.pixels, before, reason: 'the page must not move');
   });
+
+  testWidgets('artwork flies like a hero between cover and compact header', (
+    tester,
+  ) async {
+    await _pump(tester, const Size(420, 860));
+
+    final foregroundArt = find
+        .descendant(
+          of: find.byType(SingleChildScrollView),
+          matching: find.byType(LibraryArtwork),
+        )
+        .last;
+
+    // Cover end: one foreground artwork, large and centered.
+    expect(
+      find.descendant(
+        of: find.byType(SingleChildScrollView),
+        matching: find.byType(LibraryArtwork),
+      ),
+      findsOneWidget,
+    );
+    final startRect = tester.getRect(foregroundArt);
+    expect(startRect.width, greaterThan(150));
+    expect(startRect.center.dx, moreOrLessEquals(210, epsilon: 0.5));
+
+    // Mid-transition to lyrics: same single artwork, mid-flight between
+    // the centered cover and the 56x56 header sleeve.
+    await tester.tap(find.byTooltip('Show lyrics'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 240));
+
+    expect(
+      find.descendant(
+        of: find.byType(SingleChildScrollView),
+        matching: find.byType(LibraryArtwork),
+      ),
+      findsOneWidget,
+    );
+    final midRect = tester.getRect(foregroundArt);
+    expect(midRect.width, lessThan(startRect.width));
+    expect(midRect.width, greaterThan(56));
+    expect(midRect.top, lessThan(startRect.top));
+    expect(midRect.left, lessThan(startRect.left));
+
+    // Settled lyrics end: landed at 56x56 in the compact header.
+    await tester.pumpAndSettle();
+    final endRect = tester.getRect(foregroundArt);
+    expect(endRect.width, moreOrLessEquals(56, epsilon: 0.5));
+    expect(endRect.height, moreOrLessEquals(56, epsilon: 0.5));
+    expect(endRect.left, moreOrLessEquals(SolSpace.xl, epsilon: 0.5));
+
+    // Switching to queue keeps the landed hero sleeve in place.
+    await tester.tap(find.byTooltip('Show queue'));
+    await tester.pumpAndSettle();
+    expect(tester.getRect(foregroundArt), equals(endRect));
+
+    // Closing queue flies the hero back to the centered cover.
+    await tester.tap(find.byTooltip('Hide queue'));
+    await tester.pumpAndSettle();
+    expect(tester.getRect(foregroundArt), equals(startRect));
+    expect(tester.takeException(), isNull);
+  });
 }
