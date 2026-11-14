@@ -1,10 +1,16 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:groovy_box/core/theme.dart';
+import 'package:groovy_box/library/lyrics.dart';
+import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
+import 'package:groovy_box/library/source.dart';
+import 'package:groovy_box/pulsar/providers.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/format.dart';
+import 'package:groovy_box/widgets/song_actions.dart';
+import 'package:groovy_box/widgets/track_versions.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
@@ -39,6 +45,7 @@ class QueuePanel extends ConsumerWidget {
           currentIndex: state.currentIndex,
           stationIndex: state.stationIndex,
           shuffle: state.shuffle,
+          repeatMode: state.repeatMode,
           queueRow: state.queueRow,
         ),
       ),
@@ -60,7 +67,7 @@ class QueuePanel extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(
             SolSpace.sm,
             SolSpace.xs,
-            SolSpace.lg,
+            SolSpace.sm,
             SolSpace.sm,
           ),
           child: Row(
@@ -110,6 +117,32 @@ class QueuePanel extends ConsumerWidget {
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
+              // Shuffle and repeat live here rather than on the transport:
+              // they are statements about this list, and the header is the
+              // list's own row. Off in the transport they were reachable only
+              // from the player page, while this pane opens from the dock too.
+              if (!station) ...[
+                IconButton(
+                  tooltip: 'playerShuffle'.tr(),
+                  isSelected: state.shuffle,
+                  onPressed: () =>
+                      controller.setShuffle(!state.shuffle),
+                  icon: const Icon(Symbols.shuffle_rounded),
+                ),
+                IconButton(
+                  tooltip: state.repeatMode == PlaybackRepeatMode.single
+                      ? 'playerRepeatSong'.tr()
+                      : 'playerRepeat'.tr(),
+                  isSelected: state.repeatMode != PlaybackRepeatMode.off,
+                  onPressed: controller.cycleRepeatMode,
+                  icon: Icon(
+                    state.repeatMode == PlaybackRepeatMode.single
+                        ? Symbols.repeat_one_rounded
+                        : Symbols.repeat_rounded,
+                  ),
+                ),
+              ],
+              const _QueueHeaderMenu(),
             ],
           ),
         ),
@@ -152,6 +185,345 @@ class QueuePanel extends ConsumerWidget {
                             ),
                     );
                   },
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The more menu at the queue header's trailing edge.
+///
+/// A [MenuAnchor] rather than a sheet: the actions are few and read as a
+/// continuation of the header's own controls, so the menu opens from the
+/// button that named them. The sheet items — playback info, other versions —
+/// anchor to the same button, so on iPad they land beside what was tapped
+/// rather than at the window edge.
+class _QueueHeaderMenu extends ConsumerWidget {
+  const _QueueHeaderMenu();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final song = ref.watch(
+      playbackProvider.select((state) => state.current),
+    );
+    if (song == null) return const SizedBox.shrink();
+
+    return MenuAnchor(
+      builder: (context, controller, child) => IconButton(
+        tooltip: 'playerMore'.tr(),
+        onPressed: () => controller.isOpen ? controller.close() : controller.open(),
+        icon: const Icon(Symbols.more_horiz_rounded),
+      ),
+      menuChildren: [
+        MenuItemButton(
+          leadingIcon: const Icon(Symbols.info_rounded),
+          onPressed: () => _PlaybackInfoSheet.show(context, song),
+          child: Text('playerPlaybackInfo'.tr()),
+        ),
+        MenuItemButton(
+          leadingIcon: const Icon(Symbols.content_copy_rounded),
+          onPressed: song.isRadio
+              ? null
+              : () => TrackVersionsPanel.show(context, song),
+          child: Text('versionsTitle'.tr()),
+        ),
+        const Divider(height: 1),
+        const _SongActionsMenuItems(),
+      ],
+    );
+  }
+}
+
+/// The track's own writes — favourite, playlist, share — as menu items.
+///
+/// The same capabilities the player page's action bar draws, asked again here
+/// so the menu offers only what the playing source can actually do.
+class _SongActionsMenuItems extends ConsumerWidget {
+  const _SongActionsMenuItems();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final song = ref.watch(
+      playbackProvider.select((state) => state.current),
+    );
+    if (song == null) return const SizedBox.shrink();
+    final source = ref.watch(
+      librarySourceByIdProvider.select(
+        (sources) => sources[song.sourceId],
+      ),
+    );
+    final actions = SongActions(
+      source is RatedSource ? source : null,
+      source is ExtendableSource ? source : null,
+      song,
+    );
+    if (!actions.canFavourite &&
+        !actions.canAddToPlaylist &&
+        !ref.watch(pulsarSessionProvider.select((s) => s.value != null))) {
+      return const SizedBox.shrink();
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (actions.canFavourite)
+          MenuItemButton(
+            leadingIcon: const Icon(Symbols.favorite_border_rounded),
+            child: Text('playerFavourite'.tr()),
+            onPressed: () => SongActionsRunner.toggleFavourite(context, ref, actions),
+          ),
+        if (actions.canAddToPlaylist)
+          MenuItemButton(
+            leadingIcon: const Icon(Symbols.playlist_add_rounded),
+            child: Text('playerAddToPlaylist'.tr()),
+            onPressed: () => SongActionsRunner.pickPlaylist(context, ref, actions),
+          ),
+        if (ref.watch(pulsarSessionProvider.select((s) => s.value != null)))
+          MenuItemButton(
+            leadingIcon: const Icon(Symbols.ios_share_rounded),
+            child: Text('playerShare'.tr()),
+            onPressed: () => SongActionsRunner.share(context, ref, song),
+          ),
+      ],
+    );
+  }
+}
+
+/// What "Playback info" says, as a sheet: the track's metadata and, when the
+/// source can name it, the library it plays from.
+///
+/// The player page dropped the library eyebrow from its copy — the track is
+/// the headline, and the library is not — but the question "where is this
+/// playing from?" still deserves one answer somewhere. This sheet is it, and
+/// lyrics ride along because they are the other thing a track owns that the
+/// full-width copy has no room for.
+class _PlaybackInfoSheet extends ConsumerWidget {
+  final LibrarySong song;
+
+  const _PlaybackInfoSheet({required this.song});
+
+  /// Opens the sheet anchored to [anchor], when one is known.
+  ///
+  /// The rect is the iPad popover's origin; elsewhere the sheet is modal.
+  static Future<void> show(BuildContext context, LibrarySong song) =>
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        builder: (_) => _PlaybackInfoSheet(song: song),
+      );
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final playing = song.playing;
+    final source = ref.watch(
+      librarySourceByIdProvider.select(
+        (sources) => sources[song.sourceId],
+      ),
+    );
+
+    final rows = <(IconData, String, String)>[
+      (
+        Symbols.music_note_rounded,
+        'playbackInfoTitle'.tr(),
+        playing.title,
+      ),
+      (
+        Symbols.person_rounded,
+        'playbackInfoArtist'.tr(),
+        playing.subtitle,
+      ),
+      if (playing.album != null)
+        (
+          Symbols.album_rounded,
+          'playbackInfoAlbum'.tr(),
+          playing.album!,
+        ),
+      if (source != null)
+        (
+          source.kind.mark ?? Symbols.cloud_rounded,
+          'playbackInfoSource'.tr(),
+          source.identityLabel,
+        ),
+      (
+        Symbols.schedule_rounded,
+        'playbackInfoDuration'.tr(),
+        formatDuration(song.duration),
+      ),
+      if (playing.year != null)
+        (
+          Symbols.calendar_month_rounded,
+          'playbackInfoYear'.tr(),
+          '${playing.year}',
+        ),
+      if (playing.genre != null)
+        (
+          Symbols.category_rounded,
+          'playbackInfoGenre'.tr(),
+          playing.genre!,
+        ),
+    ];
+
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(
+          SolSpace.xl,
+          SolSpace.sm,
+          SolSpace.xl,
+          SolSpace.lg,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'playerPlaybackInfo'.tr(),
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: SolSpace.md),
+            for (final (icon, label, value) in rows)
+              Padding(
+                padding: const EdgeInsets.only(bottom: SolSpace.sm),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Icon(
+                        icon,
+                        size: 18,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(width: SolSpace.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            label,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            value,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            _PlaybackInfoLyrics(song: song),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The lyrics block at the foot of the playback-info sheet.
+///
+/// The words, plain: no position line to follow, because a sheet is read at
+/// leisure rather than sung along with. Loading and missing states are one
+/// quiet line each, so a track without words ends the sheet cleanly.
+class _PlaybackInfoLyrics extends ConsumerWidget {
+  final LibrarySong song;
+
+  const _PlaybackInfoLyrics({required this.song});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final lyrics = ref.watch(
+      songLyricsProvider(
+        LyricsRequest.of(song),
+        languageCode: Localizations.localeOf(context).languageCode,
+      ),
+    );
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: SolSpace.sm),
+          child: Row(
+            children: [
+              Icon(
+                Symbols.lyrics_rounded,
+                size: 18,
+                color: colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: SolSpace.md),
+              Text(
+                'lyricsTitle'.tr(),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: SolSpace.xs),
+        lyrics.when(
+          skipLoadingOnRefresh: false,
+          loading: () => Padding(
+            padding: const EdgeInsets.only(left: SolSpace.xl),
+            child: Text(
+              'lyricsLoading'.tr(),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          error: (_, _) => Padding(
+            padding: const EdgeInsets.only(left: SolSpace.xl),
+            child: Text(
+              'lyricsUnavailable'.tr(),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          data: (lyrics) => lyrics.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.only(left: SolSpace.xl),
+                  child: Text(
+                    'lyricsEmpty'.tr(),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                )
+              : Padding(
+                  padding: const EdgeInsets.only(left: SolSpace.xl),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final line in lyrics.lines)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 2),
+                          child: Text(
+                            line.text,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
         ),
       ],

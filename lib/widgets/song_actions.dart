@@ -40,6 +40,10 @@ class SongActions {
 
   const SongActions(this._rated, this._extendable, this._song);
 
+  /// The track these actions act on, for callers outside the bar that only
+  /// hold the actions object.
+  LibrarySong get song => _song;
+
   /// Whether this track can be favourited at all.
   ///
   /// A station is a standing request, not a track: a favourite of one would
@@ -340,6 +344,111 @@ class _SongActionBarState extends ConsumerState<SongActionBar> {
         ],
       ),
     );
+  }
+}
+
+/// The track's actions, run from outside the action bar: the queue header's
+/// more menu offers the same writes, and it must not re-implement them.
+///
+/// Each method reports its result the way the bar does — a snackbar for the
+/// server's own words, or the account's failure — so the two surfaces answer
+/// a tap identically.
+abstract final class SongActionsRunner {
+  /// Writes the track's favourite, flipping the account's record.
+  ///
+  /// Reads first: the menu does not carry the bar's cached answer, and a
+  /// read is cheaper than a wrong write.
+  static Future<void> toggleFavourite(
+    BuildContext context,
+    WidgetRef ref,
+    SongActions actions,
+  ) async {
+    if (!actions.canFavourite) return;
+    final value = await ref.read(favouritesProvider).read(actions.song);
+    final error = await ref
+        .read(favouritesProvider)
+        .set(actions.song, value: !(value ?? false));
+    if (error != null && context.mounted) _report(context, error);
+  }
+
+  /// Opens the playlist picker and puts the track where it was chosen.
+  static Future<void> pickPlaylist(
+    BuildContext context,
+    WidgetRef ref,
+    SongActions actions,
+  ) async {
+    if (!actions.canAddToPlaylist) return;
+    final choice = await showModalBottomSheet<_PlaylistChoice>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (_) => _PlaylistPicker(actions: actions),
+    );
+    if (choice == null || !context.mounted) return;
+    try {
+      final String name;
+      switch (choice) {
+        case _OwnedChoice(:final playlist):
+          await ref
+              .read(ownedPlaylistsProvider.notifier)
+              .add(playlist.id, [actions.song]);
+          name = playlist.name;
+        case _SourceChoice(:final playlist):
+          await actions.addToPlaylist(playlist);
+          name = playlist.name;
+      }
+      if (context.mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(content: Text('playerPlaylistAdded'.tr(args: [name]))),
+        );
+      }
+    } catch (error) {
+      if (context.mounted) _report(context, error);
+    }
+  }
+
+  /// Hands a public Pulsar link for the track to the OS share sheet, with
+  /// [anchor] as the popover origin where the platform wants one.
+  static Future<void> share(
+    BuildContext context,
+    WidgetRef ref,
+    LibrarySong song,
+  ) async {
+    try {
+      final session = await ref.read(pulsarSessionProvider.future);
+      if (session == null) {
+        if (context.mounted) {
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+            SnackBar(content: Text('playerShareNeedsAccount'.tr())),
+          );
+        }
+        return;
+      }
+      final sources = ref.read(librarySourceByIdProvider);
+      final artUri = sources[song.sourceId]?.artworkUri(song.artId);
+      final share = await ref
+          .read(pulsarClientProvider)
+          .shareTrack(
+            session,
+            title: song.title,
+            artist: song.artist,
+            album: song.album,
+            artworkUrl: artUri?.toString(),
+            durationSeconds: song.duration.inSeconds,
+            trackId: song.id,
+          );
+      if (!context.mounted) return;
+      await SharePlus.instance.share(
+        ShareParams(text: share.shareUrl, subject: song.title),
+      );
+    } catch (error) {
+      if (context.mounted) _report(context, error);
+    }
+  }
+
+  static void _report(BuildContext context, Object error) {
+    ScaffoldMessenger.maybeOf(context)
+        ?.showSnackBar(SnackBar(content: Text(describeServerError(error))));
   }
 }
 

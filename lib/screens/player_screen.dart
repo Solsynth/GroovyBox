@@ -1422,13 +1422,14 @@ class _Cover extends StatelessWidget {
 }
 
 /// The sleeve credits under the artwork: what is playing, by whom, from
-/// which record, out of which library.
+/// which record.
 ///
-/// Set like the back of a sleeve rather than like a card caption: a small
-/// tracked eyebrow names the library, the title carries the weight, and the
-/// credits sit on one quiet line under it. The library moved out of that line
-/// because it is the answer to "whose copy is this?", which is a different
-/// question from "what is this?" and had been sharing its row.
+/// Set like the back of a sleeve rather than like a card caption: the title
+/// carries the weight, and the credits sit on one quiet line under it. The
+/// library the track plays from is not drawn here — the question "where is
+/// this playing from?" is answered by the playback-info sheet behind the
+/// queue header's more menu, and a cloud mark beside every title cost the
+/// title its room for an answer this page never needed to give.
 class _TrackCopy extends ConsumerWidget {
   final LibrarySong song;
   final bool centered;
@@ -1437,10 +1438,6 @@ class _TrackCopy extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // The library the track plays from. A kind with its own mark is drawn as
-    // that mark; only a named server is spelled out.
-    final source = playingSourceLabel(ref, song);
-    final mark = playingSourceMark(ref, song);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final playing = song.playing;
@@ -1448,7 +1445,6 @@ class _TrackCopy extends ConsumerWidget {
       playing.subtitle,
       if (playing.album != null) playing.album!,
     ].join('  ·  ');
-    final eyebrow = source;
 
     return Column(
       crossAxisAlignment: centered
@@ -1456,35 +1452,6 @@ class _TrackCopy extends ConsumerWidget {
           : CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        // The library, where a sleeve puts the label: above the title, small
-        // and tracked, so the title is the first thing read. Its mark stands
-        // in for the name where the kind has one.
-        if (eyebrow != null || mark != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: SolSpace.xs),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (mark != null) ...[
-                  Icon(mark, size: 13, color: colorScheme.onSurfaceVariant),
-                  if (eyebrow != null) const SizedBox(width: 5),
-                ],
-                if (eyebrow != null)
-                  Flexible(
-                    child: Text(
-                      eyebrow.toUpperCase(),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
         Text(
           // A station's row carries what it is playing, so the page names the
           // track rather than the station it was started from.
@@ -1630,10 +1597,14 @@ class _ScrubberState extends ConsumerState<_Scrubber> {
   }
 }
 
-/// Shuffle, previous, play/pause, next, repeat.
+/// Previous, play/pause, next.
+///
+/// Shuffle and repeat live in the queue pane's header, where they belong to
+/// the list they shape; this row is the only place the page still draws the
+/// playback's own moment.
 ///
 /// Watches only what the buttons draw, so a position tick does not repaint
-/// five buttons and their ink.
+/// three buttons and their ink.
 class _Transport extends ConsumerWidget {
   const _Transport();
 
@@ -1648,8 +1619,6 @@ class _Transport extends ConsumerWidget {
       playbackProvider.select(
         (state) => (
           playing: state.playing,
-          shuffle: state.shuffle,
-          repeatMode: state.repeatMode,
           advances: canAdvance(state, infinite: infinite),
         ),
       ),
@@ -1660,19 +1629,12 @@ class _Transport extends ConsumerWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         IconButton(
-          tooltip: 'playerShuffle'.tr(),
-          isSelected: state.shuffle,
-          onPressed: () => controller.setShuffle(!state.shuffle),
-          icon: const Icon(Symbols.shuffle_rounded),
-        ),
-        const SizedBox(width: SolSpace.xs),
-        IconButton(
           tooltip: 'playerPrevious'.tr(),
           onPressed: controller.previous,
           iconSize: 32,
           icon: const Icon(Symbols.skip_previous_rounded),
         ),
-        const SizedBox(width: SolSpace.xs),
+        const SizedBox(width: SolSpace.md),
         IconButton.filled(
           tooltip: state.playing ? 'playerPause'.tr() : 'playerPlay'.tr(),
           onPressed: controller.togglePlayPause,
@@ -1680,25 +1642,12 @@ class _Transport extends ConsumerWidget {
           padding: const EdgeInsets.all(SolSpace.lg),
           icon: PlayPauseIcon(playing: state.playing, size: 36),
         ),
-        const SizedBox(width: SolSpace.xs),
+        const SizedBox(width: SolSpace.md),
         IconButton(
           tooltip: 'playerNext'.tr(),
           onPressed: state.advances ? controller.next : null,
           iconSize: 32,
           icon: const Icon(Symbols.skip_next_rounded),
-        ),
-        const SizedBox(width: SolSpace.xs),
-        IconButton(
-          tooltip: state.repeatMode == PlaybackRepeatMode.single
-              ? 'playerRepeatSong'.tr()
-              : 'playerRepeat'.tr(),
-          isSelected: state.repeatMode != PlaybackRepeatMode.off,
-          onPressed: controller.cycleRepeatMode,
-          icon: Icon(
-            state.repeatMode == PlaybackRepeatMode.single
-                ? Symbols.repeat_one_rounded
-                : Symbols.repeat_rounded,
-          ),
         ),
       ],
     );
