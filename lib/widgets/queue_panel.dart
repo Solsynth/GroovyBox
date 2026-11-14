@@ -3,14 +3,10 @@ import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/lyrics.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
-import 'package:groovy_box/library/source.dart';
-import 'package:groovy_box/pulsar/providers.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/format.dart';
-import 'package:groovy_box/widgets/song_actions.dart';
-import 'package:groovy_box/widgets/track_versions.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
@@ -142,152 +138,73 @@ class QueuePanel extends ConsumerWidget {
                   ),
                 ),
               ],
-              const _QueueHeaderMenu(),
             ],
           ),
         ),
+        // The fade lives on the list, not the whole pane: the header's own
+        // words — the title, the summary, the toggles — are never on their way
+        // out, so masking them would dim them for no reason. A row cut off at
+        // the slot's edge still reads as "more".
         Expanded(
-          child: rows.isEmpty
-              ? EmptyState(
-                  compact: true,
-                  icon: Symbols.queue_music,
-                  title: 'queueEmptyTitle'.tr(),
-                  message: 'queueEmptyMessage'.tr(),
-                )
-              : ListView.builder(
-                  // Room under the last row, so a short pane does not end
-                  // with a row flush against its bottom edge.
-                  padding: const EdgeInsets.only(bottom: SolSpace.sm),
-                  itemCount: rows.length,
-                  itemBuilder: (context, index) {
-                    final song = rows[index];
-                    return TrackRow(
-                      // A station's row is rewritten with what it is playing,
-                      // so the queue says what is on the air, not the name of
-                      // the station it started from.
-                      title: song.playing.title,
-                      subtitle: songRowSubtitle(ref, song.playing),
-                      selected: currentRow == index,
-                      trailing: formatDuration(song.duration),
-                      artwork: LibraryArtwork(
-                        sourceId: song.sourceId,
-                        artId: song.playing.artId,
-                        size: 40,
-                        radius: SolRadius.xs,
-                      ),
-                      // Inside a station, a row is reached by skipping to it;
-                      // the run is the platform player's to advance.
-                      onTap: station
-                          ? null
-                          : () => controller.playQueue(
-                              state.queue,
-                              startIndex: index,
-                            ),
-                    );
-                  },
-                ),
+          child: ShaderMask(
+            shaderCallback: (rect) => const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.transparent,
+                Colors.black,
+                Colors.black,
+                Colors.transparent,
+              ],
+              stops: [0, 0.06, 0.94, 1],
+            ).createShader(rect),
+            blendMode: BlendMode.dstIn,
+            child: rows.isEmpty
+                ? EmptyState(
+                    compact: true,
+                    icon: Symbols.queue_music,
+                    title: 'queueEmptyTitle'.tr(),
+                    message: 'queueEmptyMessage'.tr(),
+                  )
+                : ListView.builder(
+                    // Room under the last row, so a short pane does not end
+                    // with a row flush against its bottom edge.
+                    padding: const EdgeInsets.only(bottom: SolSpace.sm),
+                    itemCount: rows.length,
+                    itemBuilder: (context, index) {
+                      final song = rows[index];
+                      return TrackRow(
+                        // A station's row is rewritten with what it is
+                        // playing, so the queue says what is on the air, not
+                        // the name of the station it started from.
+                        title: song.playing.title,
+                        subtitle: songRowSubtitle(ref, song.playing),
+                        selected: currentRow == index,
+                        trailing: formatDuration(song.duration),
+                        artwork: LibraryArtwork(
+                          sourceId: song.sourceId,
+                          artId: song.playing.artId,
+                          size: 40,
+                          radius: SolRadius.xs,
+                        ),
+                        // Inside a station, a row is reached by skipping to
+                        // it; the run is the platform player's to advance.
+                        onTap: station
+                            ? null
+                            : () => controller.playQueue(
+                                state.queue,
+                                startIndex: index,
+                              ),
+                      );
+                    },
+                  ),
+          ),
         ),
       ],
     );
   }
 }
 
-/// The more menu at the queue header's trailing edge.
-///
-/// A [MenuAnchor] rather than a sheet: the actions are few and read as a
-/// continuation of the header's own controls, so the menu opens from the
-/// button that named them. The sheet items — playback info, other versions —
-/// anchor to the same button, so on iPad they land beside what was tapped
-/// rather than at the window edge.
-class _QueueHeaderMenu extends ConsumerWidget {
-  const _QueueHeaderMenu();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final song = ref.watch(
-      playbackProvider.select((state) => state.current),
-    );
-    if (song == null) return const SizedBox.shrink();
-
-    return MenuAnchor(
-      builder: (context, controller, child) => IconButton(
-        tooltip: 'playerMore'.tr(),
-        onPressed: () => controller.isOpen ? controller.close() : controller.open(),
-        icon: const Icon(Symbols.more_horiz_rounded),
-      ),
-      menuChildren: [
-        MenuItemButton(
-          leadingIcon: const Icon(Symbols.info_rounded),
-          onPressed: () => _PlaybackInfoSheet.show(context, song),
-          child: Text('playerPlaybackInfo'.tr()),
-        ),
-        MenuItemButton(
-          leadingIcon: const Icon(Symbols.content_copy_rounded),
-          onPressed: song.isRadio
-              ? null
-              : () => TrackVersionsPanel.show(context, song),
-          child: Text('versionsTitle'.tr()),
-        ),
-        const Divider(height: 1),
-        const _SongActionsMenuItems(),
-      ],
-    );
-  }
-}
-
-/// The track's own writes — favourite, playlist, share — as menu items.
-///
-/// The same capabilities the player page's action bar draws, asked again here
-/// so the menu offers only what the playing source can actually do.
-class _SongActionsMenuItems extends ConsumerWidget {
-  const _SongActionsMenuItems();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final song = ref.watch(
-      playbackProvider.select((state) => state.current),
-    );
-    if (song == null) return const SizedBox.shrink();
-    final source = ref.watch(
-      librarySourceByIdProvider.select(
-        (sources) => sources[song.sourceId],
-      ),
-    );
-    final actions = SongActions(
-      source is RatedSource ? source : null,
-      source is ExtendableSource ? source : null,
-      song,
-    );
-    if (!actions.canFavourite &&
-        !actions.canAddToPlaylist &&
-        !ref.watch(pulsarSessionProvider.select((s) => s.value != null))) {
-      return const SizedBox.shrink();
-    }
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (actions.canFavourite)
-          MenuItemButton(
-            leadingIcon: const Icon(Symbols.favorite_border_rounded),
-            child: Text('playerFavourite'.tr()),
-            onPressed: () => SongActionsRunner.toggleFavourite(context, ref, actions),
-          ),
-        if (actions.canAddToPlaylist)
-          MenuItemButton(
-            leadingIcon: const Icon(Symbols.playlist_add_rounded),
-            child: Text('playerAddToPlaylist'.tr()),
-            onPressed: () => SongActionsRunner.pickPlaylist(context, ref, actions),
-          ),
-        if (ref.watch(pulsarSessionProvider.select((s) => s.value != null)))
-          MenuItemButton(
-            leadingIcon: const Icon(Symbols.ios_share_rounded),
-            child: Text('playerShare'.tr()),
-            onPressed: () => SongActionsRunner.share(context, ref, song),
-          ),
-      ],
-    );
-  }
-}
 
 /// What "Playback info" says, as a sheet: the track's metadata and, when the
 /// source can name it, the library it plays from.
@@ -297,10 +214,10 @@ class _SongActionsMenuItems extends ConsumerWidget {
 /// playing from?" still deserves one answer somewhere. This sheet is it, and
 /// lyrics ride along because they are the other thing a track owns that the
 /// full-width copy has no room for.
-class _PlaybackInfoSheet extends ConsumerWidget {
+class PlaybackInfoSheet extends ConsumerWidget {
   final LibrarySong song;
 
-  const _PlaybackInfoSheet({required this.song});
+  const PlaybackInfoSheet({super.key, required this.song});
 
   /// Opens the sheet anchored to [anchor], when one is known.
   ///
@@ -311,7 +228,7 @@ class _PlaybackInfoSheet extends ConsumerWidget {
         isScrollControlled: true,
         showDragHandle: true,
         backgroundColor: Theme.of(context).colorScheme.surface,
-        builder: (_) => _PlaybackInfoSheet(song: song),
+        builder: (_) => PlaybackInfoSheet(song: song),
       );
 
   @override

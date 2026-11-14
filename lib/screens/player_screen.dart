@@ -9,11 +9,14 @@ import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/models.dart';
+import 'package:groovy_box/library/source.dart';
+import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:groovy_box/widgets/lyrics_view.dart';
 import 'package:groovy_box/widgets/queue_panel.dart';
+import 'package:groovy_box/pulsar/providers.dart';
 import 'package:groovy_box/widgets/song_actions.dart';
 import 'package:groovy_box/widgets/track_versions.dart';
 import 'package:groovy_box/widgets/transport.dart';
@@ -323,30 +326,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     // Inset inside the slot, not just inside the pane: the words and the queue
     // take the cover's footprint, and the cover is an object with air around
     // it. Flush, the first lyric line sat under the corner controls and the
-    // last on the track title, and the queue's hover tone ran to the edge.
-    //
-    // The queue gets the same edge fade as the words, so the two panes read
-    // as one material: a row cut off at the slot's edge means "more", in both.
-    return Padding(
-      padding: _kPanePadding,
-      child: view == _PlayerView.queue
-          ? ShaderMask(
-              shaderCallback: (rect) => const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.transparent,
-                  Colors.black,
-                  Colors.black,
-                  Colors.transparent,
-                ],
-                stops: [0, 0.08, 0.92, 1],
-              ).createShader(rect),
-              blendMode: BlendMode.dstIn,
-              child: pane,
-            )
-          : pane,
-    );
+    // last on the track title.
+    return Padding(padding: _kPanePadding, child: pane);
   }
 
   void _nudgeVolume(double volume, double delta) {
@@ -906,9 +887,8 @@ class _CompactPlayerBody extends StatelessWidget {
                       ),
                       const SizedBox(height: SolSpace.sm),
                       // As wide as the artwork, so the column reads as one
-                      // object: the square the cover paints is the square the
-                      // controls span. The action bar has already travelled up
-                      // into the header row by the time the words arrive.
+                      // object: the square the cover paints is the square
+                      // the controls span.
                       Center(
                         child: SizedBox(
                           width: controlsWidth,
@@ -917,30 +897,26 @@ class _CompactPlayerBody extends StatelessWidget {
                             children: [
                               scrubber,
                               const _Transport(),
-                              if (copyOut > 0)
-                                Opacity(
-                                  opacity: copyOut,
-                                  child: SongActionBar(song: song),
-                                ),
                             ],
                           ),
                         ),
                       ),
+                      // Single persistent artwork widget that flies like a
+                      // hero between the centered slot and the compact
+                      // header's sleeve.
+                      Positioned.fromRect(
+                        rect: artRect,
+                        child: _Cover(
+                          song: song,
+                          size: artRect.width,
+                          radius: artRadius,
+                          pixelSize: coverPixelSize,
+                          shadowOpacity: lerpDouble(0.20, 0.06, t)!,
+                          shadowBlur: lerpDouble(40, 10, t)!,
+                          shadowOffsetY: lerpDouble(10, 3, t)!,
+                        ),
+                      ),
                     ],
-                  ),
-                  // Single persistent artwork widget that flies like a hero
-                  // between the centered slot and the compact header's sleeve.
-                  Positioned.fromRect(
-                    rect: artRect,
-                    child: _Cover(
-                      song: song,
-                      size: artRect.width,
-                      radius: artRadius,
-                      pixelSize: coverPixelSize,
-                      shadowOpacity: lerpDouble(0.20, 0.06, t)!,
-                      shadowBlur: lerpDouble(40, 10, t)!,
-                      shadowOffsetY: lerpDouble(10, 3, t)!,
-                    ),
                   ),
                 ],
               ),
@@ -1131,11 +1107,6 @@ class _WidePlayerBody extends StatelessWidget {
         scrubber,
         const SizedBox(height: SolSpace.sm),
         const _Transport(),
-        // Under the transport, where the other controls for the same track
-        // are: the heart and the playlist button act on what is playing. The
-        // row may render nothing at all (a station, or a source that cannot
-        // act), so it is never given a minimum height of its own.
-        SongActionBar(song: song),
       ],
     );
 
@@ -1364,10 +1335,10 @@ class _CompactHeader extends StatelessWidget {
             ],
           ),
         ),
-        // The track's own writes — heart and playlist — ride the header's
-        // trailing edge, where a media row keeps its actions: the transport
-        // stays the row that plays, and the pane keeps its column clear.
-        SongActionBar(song: song),
+        // The track's everything-else rides the header's trailing edge, where
+        // a media row keeps its menu: the transport stays the row that plays,
+        // and the pane keeps its column clear.
+        const _TrackMoreMenu(),
       ],
     );
   }
@@ -1422,14 +1393,14 @@ class _Cover extends StatelessWidget {
 }
 
 /// The sleeve credits under the artwork: what is playing, by whom, from
-/// which record.
+/// which record — with the more button on the trailing edge.
 ///
 /// Set like the back of a sleeve rather than like a card caption: the title
 /// carries the weight, and the credits sit on one quiet line under it. The
 /// library the track plays from is not drawn here — the question "where is
 /// this playing from?" is answered by the playback-info sheet behind the
-/// queue header's more menu, and a cloud mark beside every title cost the
-/// title its room for an answer this page never needed to give.
+/// more button, and a cloud mark beside every title cost the title its room
+/// for an answer this page never needed to give.
 class _TrackCopy extends ConsumerWidget {
   final LibrarySong song;
   final bool centered;
@@ -1446,35 +1417,149 @@ class _TrackCopy extends ConsumerWidget {
       if (playing.album != null) playing.album!,
     ].join('  ·  ');
 
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: centered
+                ? CrossAxisAlignment.center
+                : CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                // A station's row carries what it is playing, so the page
+                // names the track rather than the station it was started
+                // from.
+                playing.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: centered ? TextAlign.center : TextAlign.start,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.4,
+                  height: 1.15,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                credits,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: centered ? TextAlign.center : TextAlign.start,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+        // The track's everything-else: favourite, playlist, share, playback
+        // info, other versions. One button on the copy's trailing edge rather
+        // than a row of actions under the transport — the menu holds the same
+        // writes without spending the column's height on three icons.
+        const _TrackMoreMenu(),
+      ],
+    );
+  }
+}
+
+/// The more button at the track copy's trailing edge, and its menu.
+///
+/// A [MenuAnchor] rather than a sheet: the actions are few and read as a
+/// continuation of the copy they act on, so the menu opens from the button
+/// that named them. The sheet items — playback info, other versions — anchor
+/// to the same button, so on iPad they land beside what was tapped rather
+/// than at the window edge.
+class _TrackMoreMenu extends ConsumerWidget {
+  const _TrackMoreMenu();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final song = ref.watch(
+      playbackProvider.select((state) => state.current),
+    );
+    if (song == null) return const SizedBox.shrink();
+
+
+    return MenuAnchor(
+      builder: (context, controller, child) => IconButton(
+        tooltip: 'playerMore'.tr(),
+        onPressed: () =>
+            controller.isOpen ? controller.close() : controller.open(),
+        icon: const Icon(Symbols.more_horiz_rounded),
+      ),
+      menuChildren: [
+        MenuItemButton(
+          leadingIcon: const Icon(Symbols.info_rounded),
+          onPressed: () => PlaybackInfoSheet.show(context, song),
+          child: Text('playerPlaybackInfo'.tr()),
+        ),
+        MenuItemButton(
+          leadingIcon: const Icon(Symbols.content_copy_rounded),
+          onPressed: song.isRadio
+              ? null
+              : () => TrackVersionsPanel.show(context, song),
+          child: Text('versionsTitle'.tr()),
+        ),
+        const Divider(height: 1),
+        const _SongActionsMenuItems(),
+      ],
+    );
+  }
+}
+
+/// The track's own writes — favourite, playlist, share — as menu items.
+///
+/// The same capabilities the action bar drew, asked again here so the menu
+/// offers only what the playing source can actually do.
+class _SongActionsMenuItems extends ConsumerWidget {
+  const _SongActionsMenuItems();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final song = ref.watch(
+      playbackProvider.select((state) => state.current),
+    );
+    if (song == null) return const SizedBox.shrink();
+    final source = ref.watch(
+      librarySourceByIdProvider.select(
+        (sources) => sources[song.sourceId],
+      ),
+    );
+    final actions = SongActions(
+      source is RatedSource ? source : null,
+      source is ExtendableSource ? source : null,
+      song,
+    );
+    if (!actions.canFavourite &&
+        !actions.canAddToPlaylist &&
+        !ref.watch(pulsarSessionProvider.select((s) => s.value != null))) {
+      return const SizedBox.shrink();
+    }
     return Column(
-      crossAxisAlignment: centered
-          ? CrossAxisAlignment.center
-          : CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          // A station's row carries what it is playing, so the page names the
-          // track rather than the station it was started from.
-          playing.title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          textAlign: centered ? TextAlign.center : TextAlign.start,
-          style: theme.textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.4,
-            height: 1.15,
+        if (actions.canFavourite)
+          MenuItemButton(
+            leadingIcon: const Icon(Symbols.favorite_border_rounded),
+            onPressed: () =>
+                SongActionsRunner.toggleFavourite(context, ref, actions),
+            child: Text('playerFavourite'.tr()),
           ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          credits,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: centered ? TextAlign.center : TextAlign.start,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: colorScheme.onSurfaceVariant,
+        if (actions.canAddToPlaylist)
+          MenuItemButton(
+            leadingIcon: const Icon(Symbols.playlist_add_rounded),
+            onPressed: () =>
+                SongActionsRunner.pickPlaylist(context, ref, actions),
+            child: Text('playerAddToPlaylist'.tr()),
           ),
-        ),
+        if (ref.watch(pulsarSessionProvider.select((s) => s.value != null)))
+          MenuItemButton(
+            leadingIcon: const Icon(Symbols.ios_share_rounded),
+            onPressed: () => SongActionsRunner.share(context, ref, song),
+            child: Text('playerShare'.tr()),
+          ),
       ],
     );
   }
