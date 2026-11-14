@@ -33,12 +33,20 @@ PulsarClient pulsarClient(Ref ref) {
 }
 
 /// The signed-in session or null, unwrapped once for every Pulsar call.
+///
+/// Watches the session's state, not its notifier: the notifier's own `build`
+/// is a future, so a first read of it is `AsyncLoading` and [validSession]
+/// answers null from that. Watched that way the answer was captured once by
+/// this `keepAlive` provider and stayed "signed out" for the rest of the
+/// process — including right after a successful login — which is why a
+/// logged-in user was still told to log in.
 @Riverpod(keepAlive: true)
 Future<OAuthSession?> pulsarSession(Ref ref) async {
-  final session = await ref
-      .watch(solarpassSessionProvider.notifier)
-      .validSession();
-  return session;
+  final session = await ref.watch(solarpassSessionProvider.future);
+  if (session == null || !session.needsRefresh) return session;
+  // Expiring: the notifier trades the refresh token for a new access token
+  // and saves it, which rebuilds this provider with the fresh session.
+  return ref.read(solarpassSessionProvider.notifier).validSession();
 }
 
 /// The account's playlists, as Pulsar holds them. Empty without a session:

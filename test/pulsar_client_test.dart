@@ -73,6 +73,21 @@ void main() {
       expect(share.shareUrl, 'https://fleet.example/m/cat-1');
     });
 
+    test('the share page lives on the public site, not the API host', () async {
+      final dio = Dio();
+      dio.httpClientAdapter = _MockDioAdapter(
+        (options) async => _MockDioAdapter.json('{"id":"cat-1"}', 201),
+      );
+      // The fleet API and the share page are different hosts: the API is
+      // `api.solian.app`, the public page `mu.solian.app`. Only the share
+      // link moves; every API call stays on the API host.
+      final client = PulsarClient(dio: dio, baseUrl: 'https://api.solian.app');
+
+      final share = await client.shareTrack(_session, title: 'Brave Song');
+
+      expect(share.shareUrl, 'https://mu.solian.app/m/cat-1');
+    });
+
     test('addTrack carries the provider key the server now honors', () async {
       RequestOptions? recorded;
       final dio = Dio();

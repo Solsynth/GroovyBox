@@ -22,18 +22,31 @@ import 'models.dart';
 /// merge.
 String pulsarTrackKey(LibrarySong song) => '${song.sourceId}:${song.id}';
 
-/// Pushes playlists, friends' listening and share targets over the fleet.
 class PulsarClient {
   PulsarClient({required this.dio, required String baseUrl})
     : _basePath = '${baseUrl.replaceAll(RegExp(r'/+$'), '')}/pulsar',
-      _siteBase = baseUrl.replaceAll(RegExp(r'/+$'), '');
+      _siteBase = baseUrl.replaceAll(RegExp(r'/+$'), ''),
+      _shareBase = _shareBaseOf(baseUrl);
 
   final Dio dio;
   final String _basePath;
 
-  /// Public share pages live at the site root, not under `/pulsar`: Blade
-  /// routes `/m/:id` straight through to Pulsar with no auth.
+  /// The API root everything but the share page hangs off — Pulsar's routes
+  /// and the Stargate endpoints this client reads.
   final String _siteBase;
+
+  /// The public site the share page lives on, derived by [_shareBaseOf]:
+  /// `mu.solian.app` where the API says `api.solian.app`. Blade routes
+  /// `/m/:id` straight through to Pulsar with no auth.
+  final String _shareBase;
+
+  /// Rewrites an `api.`-prefixed API host into the public share host; any
+  /// other base passes through unchanged.
+  static String _shareBaseOf(String apiBase) {
+    final base = apiBase.replaceAll(RegExp(r'/+$'), '');
+    final match = RegExp(r'^(https?://)api\.(.+)').firstMatch(base);
+    return match == null ? base : '${match.group(1)}mu.${match.group(2)}';
+  }
 
   Map<String, String> _headers(OAuthSession session) => {
     'Accept': 'application/json',
@@ -303,7 +316,7 @@ class PulsarClient {
     // The catalog record's id is the public page's id: GET /m/:id resolves
     // UUID, URN and slug alike.
     final item = CatalogItem.fromJson(data ?? const {});
-    return MusicShare(item: item, shareUrl: '$_siteBase/m/${item.id}');
+    return MusicShare(item: item, shareUrl: '$_shareBase/m/${item.id}');
   }
 
   // ── Transport ──────────────────────────────────────────────────────────

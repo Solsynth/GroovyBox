@@ -129,8 +129,15 @@ class SolarpassSessionNotifier extends AsyncNotifier<OAuthSession?> {
   }
 
   /// Ensures a valid access token, refreshing if needed.
+  ///
+  /// A caller can arrive before [build] has finished — a first frame that
+  /// asks for a share link, the sync panel opening on launch — and this
+  /// notifier's state is still `AsyncLoading` then. That is "not loaded yet",
+  /// not "signed out", so the build is awaited rather than answered with the
+  /// null it has not filled in.
   Future<OAuthSession?> validSession() async {
-    final current = state.value;
+    var current = state.value;
+    if (current == null && state.isLoading) current = await future;
     if (current == null) return null;
     if (!current.needsRefresh) return current;
 
