@@ -410,6 +410,12 @@ void main() {
 
     expect(uri.toString(), contains('/480x480bb.jpg'));
     expect(uri.toString(), isNot(contains('{w}')));
+    expect(
+      // A station's track reports this handle; it parses, but only the
+      // system player can load it, so no fetchable cover may come of it.
+      source.artworkUri('musickit://artwork/transient/600x600?id=abc'),
+      isNull,
+    );
   });
 
   test('search reads the library search endpoint', () async {

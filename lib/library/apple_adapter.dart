@@ -777,6 +777,12 @@ class AppleMusicSource extends LibrarySource
   @override
   Uri? artworkUri(String? artId, {int size = 600}) {
     if (artId == null || artId.isEmpty) return null;
+    // A station's track reports a `musicKit://artwork/transient/...` handle
+    // that only the system player can load (see [artworkTemplate]); handing
+    // it to a fetcher — the media session's cache, a share target — is the
+    // unsupported-scheme error they answer with. Only a real image URL is a
+    // cover this source can promise.
+    if (!artId.startsWith('http')) return null;
     return Uri.tryParse(
       artId
           .replaceAll('{w}', '$size')
