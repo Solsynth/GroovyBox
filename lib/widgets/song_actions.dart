@@ -372,12 +372,19 @@ class _SongActionBarState extends ConsumerState<SongActionBar> {
   }
 }
 
-/// The track's actions, run from outside the action bar: the queue header's
-/// more menu offers the same writes, and it must not re-implement them.
+/// The track's actions, run from outside the action bar: the more menu offers
+/// the same writes, and it must not re-implement them.
 ///
 /// Each method reports its result the way the bar does — a snackbar for the
 /// server's own words, or the account's failure — so the two surfaces answer
 /// a tap identically.
+///
+/// [context] must be the menu anchor's, never a menu item's: material_ui
+/// closes the menu before running [MenuItemButton.onPressed] post-frame, and
+/// the item's own element is deactivated by then — its [WidgetRef] throws the
+/// moment it is read. The anchor stays mounted across the close, and the
+/// container is captured from it once before any await, so the writes survive
+/// the caller being torn down mid-flight.
 abstract final class SongActionsRunner {
   /// Writes the track's favourite, flipping the account's record.
   ///
@@ -385,21 +392,21 @@ abstract final class SongActionsRunner {
   /// read is cheaper than a wrong write.
   static Future<void> toggleFavourite(
     BuildContext context,
-    WidgetRef ref,
     SongActions actions,
   ) async {
-    if (!actions.canFavourite) return;
-    final favourites = ref.read(favouritesProvider);
+    if (!actions.canFavourite || !context.mounted) return;
+    final container = ProviderScope.containerOf(context, listen: false);
+    final favourites = container.read(favouritesProvider);
     final value = await favourites.read(actions.song);
     final next = !(value ?? false);
     final error = await favourites.set(actions.song, value: next);
     // The fleet copy, same as the bar's: the two surfaces answer a tap
     // identically, so neither may be the one that forgets the account.
     Object? fleetError;
-    if (ref.read(pulsarSessionProvider).value != null &&
+    if (container.read(pulsarSessionProvider).value != null &&
         !actions.song.isRadio) {
       try {
-        await ref
+        await container
             .read(pulsarFavouritesProvider.notifier)
             .set(actions.song, value: next);
       } catch (error) {
@@ -409,7 +416,7 @@ abstract final class SongActionsRunner {
     if (!context.mounted) return;
     // The state is the provider, not any widget's field: dropping the family
     // entry is what turns the prefix heart and the menu item together.
-    ref.invalidate(favouriteStateProvider(actions.song));
+    container.invalidate(favouriteStateProvider(actions.song));
     if (error != null) _report(context, error);
     if (fleetError != null) _report(context, fleetError);
   }
@@ -417,10 +424,10 @@ abstract final class SongActionsRunner {
   /// Opens the playlist picker and puts the track where it was chosen.
   static Future<void> pickPlaylist(
     BuildContext context,
-    WidgetRef ref,
     SongActions actions,
   ) async {
-    if (!actions.canAddToPlaylist) return;
+    if (!actions.canAddToPlaylist || !context.mounted) return;
+    final container = ProviderScope.containerOf(context, listen: false);
     final choice = await showModalBottomSheet<_PlaylistChoice>(
       context: context,
       showDragHandle: true,
@@ -432,12 +439,13 @@ abstract final class SongActionsRunner {
       final String name;
       switch (choice) {
         case _OwnedChoice(:final playlist):
-          await ref.read(ownedPlaylistsProvider.notifier).add(playlist.id, [
-            actions.song,
-          ]);
+          await container.read(ownedPlaylistsProvider.notifier).add(
+            playlist.id,
+            [actions.song],
+          );
           name = playlist.name;
         case _CloudChoice(:final playlist):
-          await ref
+          await container
               .read(pulsarPlaylistsProvider.notifier)
               .addSong(playlist, actions.song);
           name = playlist.name;
@@ -459,13 +467,14 @@ abstract final class SongActionsRunner {
   /// [anchor] as the popover origin where the platform wants one.
   static Future<void> share(
     BuildContext context,
-    WidgetRef ref,
     LibrarySong song,
   ) async {
+    if (!context.mounted) return;
+    final container = ProviderScope.containerOf(context, listen: false);
     try {
-      final sources = ref.read(librarySourceByIdProvider);
-      final pulsarClient = ref.read(pulsarClientProvider);
-      final session = await ref.read(pulsarSessionProvider.future);
+      final sources = container.read(librarySourceByIdProvider);
+      final pulsarClient = container.read(pulsarClientProvider);
+      final session = await container.read(pulsarSessionProvider.future);
       if (session == null) {
         if (context.mounted) {
           ScaffoldMessenger.maybeOf(context)?.showSnackBar(

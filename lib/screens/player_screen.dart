@@ -17,7 +17,6 @@ import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:groovy_box/widgets/lyrics_view.dart';
 import 'package:groovy_box/widgets/queue_panel.dart';
-import 'package:groovy_box/pulsar/providers.dart';
 import 'package:groovy_box/widgets/song_actions.dart';
 import 'package:groovy_box/widgets/track_versions.dart';
 import 'package:groovy_box/widgets/transport.dart';
@@ -70,9 +69,9 @@ const double _kTrackCopyHeight = 92;
 /// the queue.
 const double _kHeaderHeight = 56;
 
-/// Vertical room the compact pane's header claims above the slot: the header
-/// itself, plus the gap between it and the pane. The page's top margin already
-/// clears the artwork's top, so the header needs no extra runway above it.
+/// Vertical room the compact pane's header claims under the slot: the header
+/// itself, plus the gap between it and the controls. The page's bottom margin
+/// already clears the transport, so the header needs no extra runway under it.
 const double _kPaneHeaderBand = _kHeaderHeight + SolSpace.md;
 
 /// [Curve.transform] solves its cubic numerically and stops at a tolerance, so
@@ -476,6 +475,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
             leaving: leaving,
             swap: _swapT,
             morph: _morphT,
+            alternateAlive: _view != _PlayerView.cover,
           )
         : _CompactPlayerBody(
             song: song,
@@ -629,7 +629,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                         Positioned(
                           left: SolSpace.xl,
                           right: SolSpace.xl,
-                          bottom: 48,
+                          top: _kCornerInset,
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -697,7 +697,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   }
 }
 
-/// Compact: cover, copy, and the controls pinned to the bottom of the page.
+/// Compact: the artwork on top, the copy under it, and the page's corner
+/// controls floated at the top edge.
 ///
 /// Nothing here is a card. The page's own field — the blown-up cover under a
 /// scrim — is the surface, so the controls sit straight on it; a tonal panel
@@ -732,15 +733,10 @@ class _CompactPlayerBody extends StatelessWidget {
         // give way, so the slot is sized from what is left over instead of
         // the tail competing with the artwork for the column. The reserve is
         // taken at the current type size, so a large one makes the tail
-        // taller rather than letting it run past the window edge. Under the
-        // words and the queue the centered copy and the action bar ride the
-        // morph into the header row above the pane, so the column never
-        // jumps between the two arrangements.
-        // `textScaleFactor` directly rather than `textScaler.scale`: the
+        // taller rather than letting it run past the window edge.
         // engine's `scaleFontSize` asserts when the platform's scaling
         // configuration goes stale (a macOS debug failure that has been seen
         // mid-layout), and these constants are plain layout arithmetic —
-        // the linear factor is what they wanted all along.
         // ignore: deprecated_member_use
         final textScale = MediaQuery.textScalerOf(context).textScaleFactor;
         final available = math.max(
@@ -770,17 +766,27 @@ class _CompactPlayerBody extends StatelessWidget {
           coverSize,
           math.min(320.0, contentWidth),
         );
-        final headerBand0 = math.max(textScale * _kTrackCopyHeight, 0.0);
         final isRtl = Directionality.of(context) == TextDirection.rtl;
+        // Biased down its slot: the corner controls own the air at the top,
+        // so the artwork sits nearer the copy that follows the slot than a
+        // centered square would.
         final startRect = Rect.fromLTWH(
           (contentWidth - coverSize) / 2,
-          headerBand0 + (slotHeight0 - coverSize) / 2,
+          (slotHeight0 - coverSize) * 0.6,
           coverSize,
           coverSize,
         );
+        // The sleeve lands at the top of the header band, which follows the
+        // slot: measure it from the pane-state slot, not this one.
+        final paneSlot = math.max(
+          available -
+              reserve0 -
+              textScale * (_kPaneHeaderBand - _kTrackCopyHeight),
+          textScale * 180.0,
+        );
         final endRect = Rect.fromLTWH(
           isRtl ? contentWidth - _kHeaderHeight : 0.0,
-          _kPaneHeaderBand - _kHeaderHeight,
+          paneSlot,
           _kHeaderHeight,
           _kHeaderHeight,
         );
@@ -789,19 +795,17 @@ class _CompactPlayerBody extends StatelessWidget {
         return AnimatedBuilder(
           animation: morph,
           builder: (context, _) {
-            // One t drives every branch of the hand-over: the cover flies
-            // like a hero from the slot's center into the compact header, the
-            // copy folds out, and the header's title and actions settle beside
-            // the landed sleeve.
+            // the artwork's flight and its shadow read the morph.
             final t = morph.value;
             final reserve =
                 reserve0 +
-                textScale * t * (_kPaneHeaderBand - _kTrackCopyHeight);
+                (alternateAlive
+                    ? textScale * (_kPaneHeaderBand - _kTrackCopyHeight)
+                    : 0.0);
             final slotHeight = math.max(available - reserve, textScale * 180.0);
-            final headerBandHeight = math.max(
-              lerpDouble(headerBand0, _kPaneHeaderBand, t)!,
-              0.0,
-            );
+            final headerBandHeight = alternateAlive
+                ? _kPaneHeaderBand
+                : textScale * _kTrackCopyHeight;
             final artRect = Rect.lerp(startRect, endRect, t)!;
             final artRadius = lerpDouble(SolRadius.xl, SolRadius.md, t)!;
             // The header is interactive only once it has arrived; mid-flight
@@ -827,11 +831,31 @@ class _CompactPlayerBody extends StatelessWidget {
                 children: [
                   Column(
                     children: [
-                      // The pane's header rises into the copy's old band: same
-                      // slot, same curve, so the two read as one element
-                      // trading shapes rather than two rows trading places.
-                      SizedBox(
+                      // The slot — cover or alternate pane — opens the
+                      // column, above the copy band: two scrolling bodies in
+                      // one column leaves neither enough room to read. Its
+                      // height animates like the header band under it.
+                      AnimatedContainer(
+                        height: slotHeight,
+                        duration: const Duration(milliseconds: 240),
+                        curve: Curves.easeOutCubic,
+                        child: _MorphSlot(
+                          t: morph,
+                          alternate: alternate,
+                          leaving: leaving,
+                          swap: swap,
+                          alternateAlive: alternateAlive,
+                        ),
+                      ),
+                      // The copy and the pane's header trade this band under
+                      // the slot: same band, same curve, so the two read as
+                      // one element trading shapes rather than two rows
+                      // trading places. The height animates itself, so the
+                      // builder does not have to lerp the frame.
+                      AnimatedContainer(
                         height: headerBandHeight,
+                        duration: const Duration(milliseconds: 240),
+                        curve: Curves.easeOutCubic,
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
@@ -856,7 +880,7 @@ class _CompactPlayerBody extends StatelessWidget {
                             ),
                             // The compact header — sleeve placeholder, one-line
                             // title, the actions — left aligned, settling in
-                            // beside the hero artwork as it lands.
+                            // under the hero artwork as it lands.
                             IgnorePointer(
                               ignoring: headerIn < 1,
                               child: Opacity(
@@ -864,26 +888,13 @@ class _CompactPlayerBody extends StatelessWidget {
                                 child: Transform.translate(
                                   offset: Offset(0, 10 * (1 - headerIn)),
                                   child: Align(
-                                    alignment: Alignment.bottomCenter,
+                                    alignment: Alignment.topCenter,
                                     child: _CompactHeader(song: song),
                                   ),
                                 ),
                               ),
                             ),
                           ],
-                        ),
-                      ),
-                      SizedBox(
-                        height: slotHeight,
-                        // The alternate takes the cover's place rather than
-                        // stacking above the controls: two scrolling bodies in
-                        // one column leaves neither enough room to read.
-                        child: _MorphSlot(
-                          t: morph,
-                          alternate: alternate,
-                          leaving: leaving,
-                          swap: swap,
-                          alternateAlive: alternateAlive,
                         ),
                       ),
                       const SizedBox(height: SolSpace.sm),
@@ -1059,10 +1070,11 @@ class _PaneSwap extends StatelessWidget {
 /// object, and a card over it would only add a tonal rectangle on top of the
 /// artwork it is meant to show.
 ///
-/// The two arrangements are one shape with two ends. The frame's width, its
-/// height, the split between the columns and the cover's side all come from
-/// [morph], and the controls travel from the right column to under the cover
-/// as it moves, so nothing is laid out twice at a moment in time.
+/// The frame's width, its height and the cover's size are plain measurements
+/// of the current arrangement; the containers below animate the change
+/// between them. The controls still hand off with the page's morph: they are
+/// on the right for the cover and under the artwork for the words, and each
+/// copy fades on its own ramp so there is no frame with no transport.
 class _WidePlayerBody extends StatelessWidget {
   final LibrarySong song;
   final Widget scrubber;
@@ -1071,6 +1083,11 @@ class _WidePlayerBody extends StatelessWidget {
   final Animation<double> swap;
   final Animation<double> morph;
 
+  /// Whether the alternate is wanted at all. The frame sizes for the words
+  /// when it is and for the cover when it is not, and the containers below
+  /// animate the change.
+  final bool alternateAlive;
+
   const _WidePlayerBody({
     required this.song,
     required this.scrubber,
@@ -1078,6 +1095,7 @@ class _WidePlayerBody extends StatelessWidget {
     required this.leaving,
     required this.swap,
     required this.morph,
+    required this.alternateAlive,
   });
   @override
   Widget build(BuildContext context) {
@@ -1111,22 +1129,15 @@ class _WidePlayerBody extends StatelessWidget {
         final t = morph.value;
         final screen = MediaQuery.sizeOf(context);
 
-        // Both ends of every measurement, so no frame has to choose between
-        // them: the cover end is a square that sizes itself from its column,
-        // the alternate end is a pane that fits the viewport.
-        //
-        // The column is exactly one cover wide at both ends. Sizing it as a
-        // fraction of the frame instead let the scrubber outgrow the square
-        // above it once the frame grew for the words, and a progress bar
-        // wider than the artwork reads as a separate control rather than as
-        // the artwork's own ruler.
+        // The column is exactly one cover wide at both arrangements. Sizing
+        // it as a fraction of the frame instead let the scrubber outgrow the
+        // square above it, and a progress bar wider than the artwork reads
+        // as a separate control rather than as the artwork's own ruler.
         final viewport = math.max(screen.width - SolSpace.xxl * 2, 320.0);
-        final width = math.min(lerpDouble(1000, 1120, t)!, viewport);
+        final width = math.min(alternateAlive ? 1120.0 : 1000.0, viewport);
         final inner = math.max(width - SolSpace.xxxl, 0.0);
         // The window's own margin, and the height the right column's copy
-        // and controls need at the reader's type size. The cover end used to
-        // size the row to the square alone, so on a short window the column
-        // beside it was taller than the square and spilled out of the row.
+        // and controls need at the reader's type size.
         // Same linear factor as the compact body: the engine's
         // `scaleFontSize` asserts when the platform's configuration goes
         // stale mid-layout.
@@ -1141,35 +1152,30 @@ class _WidePlayerBody extends StatelessWidget {
         // clip the transport's outer buttons.
         final coverSize = math.max(
           math.min(
-            inner * lerpDouble(0.44, 0.40, t)!,
+            inner * (alternateAlive ? 0.40 : 0.44),
             math.min(screen.height * 0.58, bodyHeight),
           ),
           math.min(_kControlsMinWidth, inner),
         );
         // The controls hand off rather than cross-fade in place: they are on
-        // the right for the cover and under the artwork for the words, and the
-        // second copy unfolds from beneath the cover as the first lets go. The
-        // two ranges overlap, so there is no value of t at which the page has
-        // no transport at all.
+        // the right for the cover and under the artwork for the words, and
+        // the second copy fades in as the first lets go on the morph, so
+        // there is no value of t at which the page has no transport at all.
         final rightControls = (1 - t / 0.52).clamp(0.0, 1.0);
         final leftControls = ((t - 0.26) / 0.74).clamp(0.0, 1.0);
         final words = ((t - 0.40) / 0.60).clamp(0.0, 1.0);
 
-        // The pane grows with the morph instead of starting at the words'
-        // full height: at the cover end it is the cover's square, so the row
-        // is as tall as the artwork and the column stays centred — unless the
-        // square is shorter than the controls beside it, and then the row is
-        // theirs instead, because they cannot shrink.
-        final leftColumnNeeded =
-            coverSize + (SolSpace.lg + controlsHeight) * leftControls;
+        // At the cover end the row is as tall as the artwork (or the controls
+        // beside it, because they cannot shrink); under the words it is the
+        // pane's height.
+        final leftColumnNeeded = coverSize + (SolSpace.lg + controlsHeight);
         final wordsHeight = math.max(
-          lerpDouble(
-            math.max(coverSize, controlsHeight),
-            (bodyHeight * 0.9).clamp(400.0, 780.0),
-            t,
-          )!,
+          alternateAlive
+              ? (bodyHeight * 0.9).clamp(400.0, 780.0)
+              : math.max(coverSize, controlsHeight),
           math.max(controlsHeight, leftColumnNeeded),
         );
+
 
         return Center(
           child: SingleChildScrollView(
@@ -1177,60 +1183,65 @@ class _WidePlayerBody extends StatelessWidget {
               horizontal: SolSpace.xxl,
               vertical: _kPageMargin,
             ),
-            child: SizedBox(
+            child: AnimatedContainer(
               width: width,
+              duration: const Duration(milliseconds: 240),
+              curve: Curves.easeOutCubic,
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  SizedBox(
+                  AnimatedContainer(
                     width: coverSize,
-                    child: SizedBox(
-                      height: wordsHeight,
-                      child: Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            // The square is the measurement, not a leftover: its
-                            // side is exactly the column's width, so the scrubber
-                            // under it can never be wider than the art it rules.
-                            // Sizing it from the row height instead left a gap
-                            // whenever the words made the row taller than the
-                            // square.
-                            SizedBox.square(
-                              dimension: coverSize,
-                              child: Center(
-                                child: AspectRatio(
-                                  aspectRatio: 1,
-                                  child: cover,
+                    height: wordsHeight,
+                    duration: const Duration(milliseconds: 240),
+                    curve: Curves.easeOutCubic,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // The square is the measurement, not a leftover: its
+                        // side is exactly the column's width, so the scrubber
+                        // under it can never be wider than the art it rules.
+                        // Sizing it from the row height instead left a gap
+                        // whenever the words made the row taller than the
+                        // square.
+                        AnimatedContainer(
+                          width: coverSize,
+                          height: coverSize,
+                          duration: const Duration(milliseconds: 240),
+                          curve: Curves.easeOutCubic,
+                          child: Center(
+                            child: AspectRatio(
+                              aspectRatio: 1,
+                              child: cover,
+                            ),
+                          ),
+                        ),
+                        if (leftControls > 0)
+                          ClipRect(
+                            child: Align(
+                              alignment: Alignment.topCenter,
+                              heightFactor: leftControls,
+                              child: Opacity(
+                                opacity: leftControls,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(
+                                    top: SolSpace.lg,
+                                  ),
+                                  child: controls,
                                 ),
                               ),
                             ),
-                            if (leftControls > 0)
-                              ClipRect(
-                                child: Align(
-                                  alignment: Alignment.topCenter,
-                                  heightFactor: leftControls,
-                                  child: Opacity(
-                                    opacity: leftControls,
-                                    child: Padding(
-                                      padding: const EdgeInsets.only(
-                                        top: SolSpace.lg,
-                                      ),
-                                      child: controls,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
+                          ),
+                      ],
                     ),
                   ),
                   const SizedBox(width: SolSpace.xxxl),
                   Expanded(
-                    child: SizedBox(
+                    child: AnimatedContainer(
                       height: wordsHeight,
+                      duration: const Duration(milliseconds: 240),
+                      curve: Curves.easeOutCubic,
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
@@ -1361,13 +1372,19 @@ class _Cover extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final artwork = LibraryArtwork(
-      sourceId: song.sourceId,
-      artId: song.artId,
-      radius: radius,
-      size: size,
-      pixelSize: pixelSize,
-      fallbackIcon: Symbols.album,
+    // One Hero flight for the route transition: the tag is the track itself,
+    // so the same artwork flies from wherever it was showing (the dock's
+    // thumbnail) into the page.
+    final artwork = Hero(
+      tag: 'player-artwork-${song.sourceId}-${song.playing.id}',
+      child: LibraryArtwork(
+        sourceId: song.sourceId,
+        artId: song.artId,
+        radius: radius,
+        size: size,
+        pixelSize: pixelSize,
+        fallbackIcon: Symbols.album,
+      ),
     );
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -1574,7 +1591,7 @@ class _TrackMoreMenu extends ConsumerWidget {
           child: Text('versionsTitle'.tr()),
         ),
         const Divider(height: 1),
-        const _SongActionsMenuItems(),
+        _SongActionsMenuItems(hostContext: context),
       ],
     );
   }
@@ -1584,9 +1601,16 @@ class _TrackMoreMenu extends ConsumerWidget {
 ///
 /// The same capabilities the action bar drew, asked again here so the menu
 /// offers only what the playing source can actually do.
+///
+/// Watches come through [ref] while the menu is open; the writes go through
+/// the host context instead, because the item's own element is deactivated
+/// the frame the menu closes and its ref is dead before the handler runs.
 class _SongActionsMenuItems extends ConsumerWidget {
-  const _SongActionsMenuItems();
+  /// The context of the widget hosting the menu — the more button, which
+  /// stays mounted across the close — not a menu item's.
+  final BuildContext hostContext;
 
+  const _SongActionsMenuItems({required this.hostContext});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final song = ref.watch(playbackProvider.select((state) => state.current));
@@ -1604,9 +1628,7 @@ class _SongActionsMenuItems extends ConsumerWidget {
       source is ExtendableSource ? source : null,
       song,
     );
-    if (!actions.canFavourite &&
-        !actions.canAddToPlaylist &&
-        !ref.watch(pulsarSessionProvider.select((s) => s.value != null))) {
+    if (!actions.canFavourite && !actions.canAddToPlaylist) {
       return const SizedBox.shrink();
     }
     return Column(
@@ -1620,7 +1642,7 @@ class _SongActionsMenuItems extends ConsumerWidget {
                   : Symbols.favorite_border_rounded,
             ),
             onPressed: () =>
-                SongActionsRunner.toggleFavourite(context, ref, actions),
+                SongActionsRunner.toggleFavourite(hostContext, actions),
             child: Text(
               favourited ? 'playerFavourited'.tr() : 'playerFavourite'.tr(),
             ),
@@ -1629,15 +1651,18 @@ class _SongActionsMenuItems extends ConsumerWidget {
           MenuItemButton(
             leadingIcon: const Icon(Symbols.playlist_add_rounded),
             onPressed: () =>
-                SongActionsRunner.pickPlaylist(context, ref, actions),
+                SongActionsRunner.pickPlaylist(hostContext, actions),
             child: Text('playerAddToPlaylist'.tr()),
           ),
-        if (ref.watch(pulsarSessionProvider.select((s) => s.value != null)))
-          MenuItemButton(
-            leadingIcon: const Icon(Symbols.ios_share_rounded),
-            onPressed: () => SongActionsRunner.share(context, ref, song),
-            child: Text('playerShare'.tr()),
-          ),
+        // Always offered, session or not: without an account the runner says
+        // so in a snackbar rather than the item vanishing from the menu — a
+        // reader looking for Share should find the entry, not guess why the
+        // menu is shorter today.
+        MenuItemButton(
+          leadingIcon: const Icon(Symbols.ios_share_rounded),
+          onPressed: () => SongActionsRunner.share(hostContext, song),
+          child: Text('playerShare'.tr()),
+        ),
       ],
     );
   }
