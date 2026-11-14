@@ -129,7 +129,10 @@ class _FakeApple {
       '/v1/me/library/playlists' => _playlists(),
       '/v1/me/recommendations' => _recommendations(),
       '/v1/me/recommendations/mix-1/contents' => _mixContents(),
+      '/v1/me/storefront' => _storefront(),
       '/v1/me/history/heavy-rotation' => _heavyRotation(),
+      final p when p.startsWith('/v1/catalog/') && p.endsWith('/search') =>
+        _catalogSearch(),
       _ => null,
     };
     if (body == null) {
@@ -299,6 +302,7 @@ class _FakeApple {
     },
   };
 
+
   static Map<String, dynamic> _songResource(String id, String name) => {
     'id': id,
     'type': 'library-songs',
@@ -324,7 +328,35 @@ class _FakeApple {
       },
     },
   };
+
+  Map<String, dynamic> _storefront() => {
+    'data': [
+      {'id': 'us', 'type': 'storefronts'},
+    ],
+  };
+
+  /// A catalog search: resources typed `songs`, whose ids are store ids.
+  Map<String, dynamic> _catalogSearch() => {
+    'results': {
+      'songs': {
+        'data': [
+          {
+            'id': 'c.1',
+            'type': 'songs',
+            'attributes': {
+              'name': 'Daytona Sand',
+              'artistName': 'Orville Peck',
+              'albumName': 'Bronco',
+              'durationInMillis': 195160,
+              'playParams': {'id': 'c.1', 'kind': 'song'},
+            },
+          },
+        ],
+      },
+    },
+  };
 }
+
 
 void main() {
   late _FakeApple server;
@@ -468,6 +500,24 @@ void main() {
       expect((attributes['playParams'] as Map)['isLibrary'], isTrue);
     },
   );
+  test(
+    'a catalog search result is not queued as a library item',
+    () async {
+      final source = AppleMusicSource(connected());
+      final catalog = await source.searchCatalog('Daytona');
+      final song = catalog.songs.single;
+
+      // The store's id is not in the account's library; playParams claiming
+      // isLibrary on it makes the system player fail with
+      // MPMusicPlayerControllerErrorDomain 6.
+      expect(song.catalogId, 'c.1');
+      final playParams =
+          (source.platformResource(song)['attributes']
+              as Map)['playParams'] as Map;
+      expect(playParams['isLibrary'], isNull);
+    },
+  );
+
 
   test('the player bridge hands the run to the system player', () async {
     final songs = [

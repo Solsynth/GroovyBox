@@ -344,11 +344,18 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
                             height: kNowPlayingDockHeight,
                             child: Row(
                               children: [
-                                LibraryArtwork(
-                                  sourceId: song.sourceId,
-                                  artId: song.playing.artId,
-                                  size: 44,
-                                  radius: SolRadius.pill,
+                                // The flight's take-off end: the same tag as
+                                // the player page's cover, so opening the
+                                // player flies the artwork up from here.
+                                Hero(
+                                  tag:
+                                      'player-artwork-${song.sourceId}-${song.playing.id}',
+                                  child: LibraryArtwork(
+                                    sourceId: song.sourceId,
+                                    artId: song.playing.artId,
+                                    size: 44,
+                                    radius: SolRadius.pill,
+                                  ),
                                 ),
                                 const SizedBox(width: SolSpace.md),
                                 Expanded(

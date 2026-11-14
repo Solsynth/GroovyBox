@@ -430,7 +430,15 @@ class AppleMusicSource extends LibrarySource
           if (song.artist != null) 'artistName': song.artist,
           if (song.album != null) 'albumName': song.album,
           'durationInMillis': song.duration.inMilliseconds,
-          'playParams': {'id': song.id, 'kind': 'song', 'isLibrary': true},
+          // A catalog track (catalogId set) is resolved in the store;
+          // claiming `isLibrary` on a catalog id makes the system player look
+          // the track up in the account's library and fail with
+          // MPMusicPlayerControllerErrorDomain 6.
+          'playParams': {
+            'id': song.id,
+            'kind': 'song',
+            if (song.catalogId == null) 'isLibrary': true,
+          },
         },
       };
     }
@@ -833,6 +841,11 @@ class AppleMusicSource extends LibrarySource
 
   LibrarySong _song(Map<String, dynamic> json, {String? albumId}) {
     final attributes = _attributes(json);
+    // A catalog resource (`songs`) carries the store's id; the account's own
+    // resources (`library-songs`) carry the library id. The platform player
+    // resolves a track through that distinction: a store track must not be
+    // queued as a library item.
+    final isCatalog = json['type'] == 'songs';
     return LibrarySong(
       sourceId: id,
       id: '${json['id']}',
@@ -846,6 +859,7 @@ class AppleMusicSource extends LibrarySource
       discNumber: (attributes['discNumber'] as num?)?.toInt(),
       year: _year(attributes),
       genre: _genre(attributes),
+      catalogId: isCatalog ? '${json['id']}' : null,
     );
   }
 
