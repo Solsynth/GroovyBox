@@ -197,8 +197,43 @@ void main() {
   test('a confirmed miss is stored; an unanswered one is not', () async {
     await resolve(_FakeLrclib(LrclibLookup.missing));
     expect((await cache.read(await _trackOf(catalog)))!.origin, LyricsOrigin.none);
+  });
 
-    await cache.clear();
+
+  test('a manual adopt is stored as manual and survives an automatic refresh',
+      () async {
+    final lrclib = _FakeLrclib(_found(_remoteTimed));
+    final resolver = LyricsResolver(
+      catalog: catalog,
+      store: cache,
+      lrclib: lrclib,
+      sourceFor: (_) => library,
+    );
+
+    // The user picks different words by hand than the automatic chain chose.
+    final manual = await resolver.adopt(
+      _song,
+      const Lyrics(
+        lines: [LyricLine(Duration(seconds: 4), 'chosen words')],
+        synced: true,
+      ),
+    );
+    expect(manual.lines.single.text, 'chosen words');
+    final trackId = await _trackOf(catalog);
+    expect((await cache.read(trackId))!.origin, LyricsOrigin.manual);
+
+    // The next play, and even a refresh, keeps the deliberate choice: the
+    // stored answer is read before any network is touched.
+    expect(lrclib.calls, 0);
+    final replay = await resolver.resolve(_song);
+    expect(replay.lines.single.text, 'chosen words');
+    final reasked = await resolver.resolve(_song, refresh: true);
+    expect(reasked.lines.single.text, 'remote line',
+        reason: 'refresh is the explicit "these are wrong" path and must ask');
+    expect((await cache.read(trackId))!.origin, LyricsOrigin.lrclib);
+  });
+
+  test('an unanswered miss is not stored', () async {
     await resolve(_FakeLrclib(LrclibLookup.unknown));
     expect(
       await cache.read(await _trackOf(catalog)),

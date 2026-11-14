@@ -7,9 +7,11 @@ import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/lyrics.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
+import 'package:groovy_box/widgets/lyrics_picker.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:skeletonizer/skeletonizer.dart';
 
 /// Timed lyrics, drawn the way Apple Music draws them.
 ///
@@ -357,74 +359,128 @@ class SongLyricsPane extends ConsumerWidget {
     );
     final theme = Theme.of(context);
 
+    /// One full-slot state: the loading skeleton, or a centered fallback
+    /// with the ways out of it.
+    ///
+    /// The player gives this pane the slot the cover had, and on a short
+    /// window that slot is shorter than the icon, the lines and the actions
+    /// together — so the content scrolls rather than clips, and sits in a
+    /// centered column when it fits.
     Widget status(
       IconData? icon,
       String title, {
       String? detail,
       bool retry = false,
+      bool rescue = false,
+      bool skeleton = false,
     }) {
-      // Scrollable, not just centred: the player gives this pane the slot the
-      // cover had, and on a short window that slot is shorter than the icon,
-      // the line and the retry button together. Centring alone would clip the
-      // way out of the state.
+      Widget core;
+      if (skeleton) {
+        // A mock of the words themselves rather than a spinner: several
+        // ghosted lyric lines, dimmed the way unsung lines are. Reads as
+        // "this space is the lyrics, they are on their way", and matches
+        // the column the real content takes.
+        core = Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var i = 0; i < 8; i++)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: SolSpace.xs),
+                child: Bone.text(
+                  fontSize: 24,
+                  width: i.isEven ? double.infinity : 160 + 40.0 * (i % 3),
+                ),
+              ),
+          ],
+        );
+      } else {
+        core = Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 26,
+              color: theme.colorScheme.onSurfaceVariant.withValues(
+                alpha: 0.65,
+              ),
+            ),
+            const SizedBox(height: SolSpace.sm),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            if (detail != null) ...[
+              const SizedBox(height: SolSpace.xxs),
+              Text(
+                detail,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant.withValues(
+                    alpha: 0.7,
+                  ),
+                ),
+              ),
+            ],
+            if (retry || rescue) ...[
+              const SizedBox(height: SolSpace.md),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (retry)
+                    TextButton.icon(
+                      onPressed: () => ref
+                          .read(lyricsMaintenanceProvider.notifier)
+                          .refresh(
+                            LyricsRequest.of(song!),
+                            languageCode: Localizations.localeOf(
+                              context,
+                            ).languageCode,
+                          ),
+                      icon: const Icon(Symbols.refresh_rounded, size: 18),
+                      label: Text('lyricsAskAgain'.tr()),
+                    ),
+                  if (rescue) ...[
+                    if (retry) const SizedBox(width: SolSpace.sm),
+                    FilledButton.tonalIcon(
+                      onPressed: song == null
+                          ? null
+                          : () => LyricsPickerSheet.show(context, song),
+                      icon: const Icon(Symbols.edit_note_rounded, size: 18),
+                      label: Text('lyricsRescue'.tr()),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ],
+        );
+      }
       return SizedBox(
         height: height,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(SolSpace.xl),
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (icon == null)
-                  const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                else
-                  Icon(
-                    icon,
-                    size: 26,
-                    color: theme.colorScheme.onSurfaceVariant.withValues(
-                      alpha: 0.65,
-                    ),
-                  ),
-                const SizedBox(height: SolSpace.sm),
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                if (detail != null) ...[
-                  const SizedBox(height: SolSpace.xxs),
-                  Text(
-                    detail,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant.withValues(
-                        alpha: 0.7,
-                      ),
-                    ),
-                  ),
-                ],
-                if (retry) ...[
-                  const SizedBox(height: SolSpace.md),
-                  TextButton.icon(
-                    onPressed: () => ref
-                        .read(lyricsMaintenanceProvider.notifier)
-                        .refresh(
-                          LyricsRequest.of(song!),
-                          languageCode: Localizations.localeOf(
-                            context,
-                          ).languageCode,
+          // A centered column of a known height does not actually scroll;
+          // this only keeps a fallback that outgrows a short slot reachable.
+          child: SizedBox(
+            height: height,
+            child: Center(
+              child: skeleton
+                  ? Skeletonizer.zone(
+                      enabled: true,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: SolSpace.xl,
                         ),
-                    icon: const Icon(Symbols.refresh_rounded, size: 18),
-                    label: Text('lyricsAskAgain'.tr()),
-                  ),
-                ],
-              ],
+                        child: core,
+                      ),
+                    )
+                  : Padding(
+                      padding: const EdgeInsets.all(SolSpace.xl),
+                      child: core,
+                    ),
             ),
           ),
         ),
@@ -450,12 +506,13 @@ class SongLyricsPane extends ConsumerWidget {
 
     return lyrics.when(
       skipLoadingOnRefresh: true,
-      loading: () => status(null, 'lyricsLoading'.tr()),
+      loading: () => status(null, 'lyricsLoading'.tr(), skeleton: true),
       error: (_, _) => status(
         Symbols.cloud_off_rounded,
         'lyricsUnavailable'.tr(),
         detail: 'lyricsUnavailableDetail'.tr(),
         retry: true,
+        rescue: true,
       ),
       data: (lyrics) {
         if (lyrics.isEmpty) {
@@ -464,6 +521,7 @@ class SongLyricsPane extends ConsumerWidget {
             'lyricsEmpty'.tr(),
             detail: 'lyricsEmptyDetail'.tr(),
             retry: true,
+            rescue: true,
           );
         }
         return SizedBox(

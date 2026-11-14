@@ -167,4 +167,29 @@ class LyricsResolver {
     final trackId = await _trackId(song);
     if (trackId != null) await store?.remove(trackId);
   }
+
+  /// Stores the lyrics the user chose by hand for [song], displacing whatever
+  /// was there: an automatic fetch must never overwrite a deliberate choice.
+  ///
+  /// [languageCode] feeds the translation pass, so picking a lyric writes the
+  /// same enriched rows a play-time fetch would have.
+  Future<Lyrics> adopt(
+    LyricsRequest song,
+    Lyrics lyrics, {
+    String? languageCode,
+  }) async {
+    final trackId = await _trackId(song);
+    final targetLang = languageCode == null
+        ? null
+        : LyricsEnricher.targetLanguageFor(languageCode);
+    final enriched = await enricher.enrich(
+      lyrics,
+      targetLanguage: targetLang,
+    );
+    if (trackId != null) {
+      await store?.write(trackId, enriched, origin: LyricsOrigin.manual);
+    }
+    return enriched;
+  }
+
 }

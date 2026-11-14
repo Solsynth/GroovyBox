@@ -39,6 +39,29 @@ class LrclibLookup {
   static const unknown = LrclibLookup(result: null, settled: false);
   static const missing = LrclibLookup(result: null, settled: true);
 }
+/// One row of a manual search, as the lyrics picker shows it.
+///
+/// The words are already parsed, so picking a row is writing it, not asking
+/// for it a second time.
+class LrclibCandidate {
+  final int id;
+  final String title;
+  final String? artistName;
+  final String? albumName;
+
+  /// The row's own runtime, which may disagree with the playing track's.
+  final Duration? duration;
+  final Lyrics lyrics;
+
+  const LrclibCandidate({
+    required this.id,
+    required this.title,
+    required this.lyrics,
+    this.artistName,
+    this.albumName,
+    this.duration,
+  });
+}
 
 /// Client for `https://lrclib.net`.
 class Lrclib {
@@ -105,6 +128,42 @@ class Lrclib {
         return LrclibLookup(result: null, settled: exact.settled && search.settled);
       }
       return LrclibLookup(result: _toResult(best), settled: true);
+    });
+  }
+
+  /// Free-text search for the manual lyrics picker: everything the service
+  /// ranks for [query], each row with its words already parsed.
+  ///
+  /// Null when the answer could not be had — a rate limit or a dead network —
+  /// so the picker can offer a retry instead of claiming there is nothing.
+  /// Instrumental rows are dropped: they have no words to adopt.
+  Future<List<LrclibCandidate>?> search(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return const [];
+    return _serialized(null, () async {
+      final response = await _send('/api/search', {'q': trimmed});
+      if (response == null || response.statusCode == 429) return null;
+      if (response.statusCode != 200) return const [];
+      final body = response.data;
+      if (body is! List) return null;
+      final candidates = <LrclibCandidate>[];
+      for (final entry in body) {
+        if (entry is! Map || entry['instrumental'] == true) continue;
+        final result = _toResult(entry);
+        if (result == null) continue;
+        final seconds = (entry['duration'] as num?)?.toDouble();
+        candidates.add(LrclibCandidate(
+          id: result.id,
+          title: _text(entry['trackName']) ?? trimmed,
+          artistName: _text(entry['artistName']),
+          albumName: _text(entry['albumName']),
+          duration: seconds == null
+              ? null
+              : Duration(milliseconds: (seconds * 1000).round()),
+          lyrics: result.lyrics,
+        ));
+      }
+      return candidates;
     });
   }
 

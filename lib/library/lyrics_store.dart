@@ -19,6 +19,10 @@ enum LyricsOrigin {
   /// Downloaded from LRCLIB.
   lrclib,
 
+  /// Chosen by hand: picked from LRCLIB in the lyrics picker, or imported
+  /// from a file. Never re-asked and never displaced by an automatic fetch.
+  manual,
+
   /// Both asked, neither had it. Kept so a replay does not ask again.
   none,
 }

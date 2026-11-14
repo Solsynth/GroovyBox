@@ -544,9 +544,9 @@ void main() {
       expect(restored.isRadio, isTrue);
       expect(restored.radioUrl, 'https://music.apple.com/cn/station/x/ra.1');
       final resource = source.platformResource(restored);
-      expect(resource?['type'], 'stations');
+      expect(resource['type'], 'stations');
       expect(
-        (resource?['attributes'] as Map)['playParams'],
+        (resource['attributes'] as Map)['playParams'],
         containsPair('kind', 'radioStation'),
       );
     },
