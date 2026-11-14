@@ -39,7 +39,7 @@ class LibraryScreen extends ConsumerStatefulWidget {
 }
 
 /// Which half of the collection is on screen.
-enum LibraryView { albums, playlists }
+enum LibraryView { albums, artists, playlists }
 
 class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   LibraryView _view = LibraryView.albums;
@@ -47,6 +47,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   @override
   Widget build(BuildContext context) {
     final albums = ref.watch(recentAlbumsProvider);
+    final artists = ref.watch(libraryArtistsProvider);
     final playlists = ref.watch(playlistsProvider);
     final hasSong = ref.watch(
       playbackProvider.select((state) => state.current != null),
@@ -54,6 +55,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
 
     final albumList = albums.value ?? const <LibraryAlbum>[];
+    final artistList = artists.value ?? const <LibraryArtist>[];
     final playlistList = playlists.value ?? const <LibraryPlaylist>[];
     final ownedList = ref.watch(ownedPlaylistsProvider).value ?? const [];
     // The count belongs to the half that is showing: a heading that counted
@@ -61,6 +63,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     final count = switch (_view) {
       LibraryView.albums =>
         albumList.isEmpty ? null : 'albumsCount'.plural(albumList.length),
+      LibraryView.artists =>
+        artistList.isEmpty ? null : 'artistsCount'.plural(artistList.length),
       LibraryView.playlists =>
         (playlistList.isEmpty && ownedList.isEmpty)
             ? null
@@ -109,6 +113,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                         value: LibraryView.albums,
                         icon: const Icon(Symbols.album_rounded, size: 18),
                         label: Text('libraryAlbums'.tr()),
+                      ),
+                      ButtonSegment(
+                        value: LibraryView.artists,
+                        icon: const Icon(Symbols.artist, size: 18),
+                        label: Text('libraryArtists'.tr()),
                       ),
                       ButtonSegment(
                         value: LibraryView.playlists,
@@ -161,6 +170,44 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                       error: error,
                       onRetry: () =>
                           ref.read(recentAlbumsProvider.notifier).refresh(),
+                    ),
+                  ],
+                ),
+                LibraryView.artists => artists.when(
+                  data: (list) => list.isEmpty
+                      ? const [_EmptyArtists()]
+                      : [
+                          SliverPadding(
+                            padding: const EdgeInsets.fromLTRB(
+                              SolSpace.xl,
+                              0,
+                              SolSpace.xl,
+                              0,
+                            ),
+                            sliver: SliverGrid.builder(
+                              gridDelegate:
+                                  const SliverGridDelegateWithMaxCrossAxisExtent(
+                                    maxCrossAxisExtent: 200,
+                                    mainAxisSpacing: SolSpace.md,
+                                    crossAxisSpacing: SolSpace.md,
+                                    childAspectRatio: 0.72,
+                                  ),
+                              itemCount: list.length,
+                              itemBuilder: (context, index) => ArtistCard(
+                                artist: list[index],
+                                onTap: () => _openArtist(context, list[index]),
+                              ),
+                            ),
+                          ),
+                        ],
+                  loading: () => const [_LoadingSliver()],
+                  error: (error, _) => [
+                    _ErrorSliver(
+                      icon: Symbols.artist,
+                      title: 'artistsLoadError'.tr(),
+                      error: error,
+                      onRetry: () =>
+                          ref.read(libraryArtistsProvider.notifier).refresh(),
                     ),
                   ],
                 ),
@@ -225,9 +272,145 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       ),
     );
   }
+
+  void _openArtist(BuildContext context, LibraryArtist artist) {
+    context.router.push(
+      ArtistDetailRoute(
+        sourceId: artist.sourceId,
+        artistId: artist.id,
+        artistName: artist.name,
+      ),
+    );
+  }
+}
+
+/// An artist as a card: the source's art when it has one, a person-shaped
+/// fallback when it does not, and the name under it.
+///
+/// The grid card the album half uses, at the same size: three halves of one
+/// collection should not read as three designs.
+class ArtistCard extends StatefulWidget {
+  final LibraryArtist artist;
+  final VoidCallback onTap;
+
+  const ArtistCard({super.key, required this.artist, required this.onTap});
+
+  @override
+  State<ArtistCard> createState() => _ArtistCardState();
+}
+
+class _ArtistCardState extends State<ArtistCard> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: InkWell(
+        onTap: widget.onTap,
+        borderRadius: SolRadius.cardRadius,
+        child: Padding(
+          padding: const EdgeInsets.all(SolSpace.xs),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: AnimatedScale(
+                    scale: _hovered ? 1.02 : 1,
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOutCubic,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(SolRadius.md),
+                        boxShadow: _hovered
+                            ? [
+                                BoxShadow(
+                                  color: theme.colorScheme.shadow.withValues(
+                                    alpha: 0.18,
+                                  ),
+                                  blurRadius: 18,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(SolRadius.md),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            // Person-shaped placeholder, always painted: the
+                            // artwork covers it when the source has one, so a
+                            // missing cover reads as a portrait, not a hole.
+                            ColoredBox(
+                              color: theme.colorScheme.surfaceContainerHighest,
+                              child: Icon(
+                                Symbols.person_rounded,
+                                size: 48,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            LibraryArtwork(
+                              sourceId: widget.artist.sourceId,
+                              artId: widget.artist.artId,
+                              radius: 0,
+                              fallbackIcon: Symbols.person_rounded,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: SolSpace.sm),
+              Text(
+                widget.artist.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (widget.artist.albumCount != null)
+                Text(
+                  'artistsAlbums'.plural(widget.artist.albumCount!),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// An empty half is an invitation, not a blank: it says which half is empty
+/// and what would fill it.
+class _EmptyArtists extends StatelessWidget {
+  const _EmptyArtists();
+
+  @override
+  Widget build(BuildContext context) {
+    return SliverToBoxAdapter(
+      child: EmptyState(
+        compact: true,
+        icon: Symbols.artist,
+        title: 'artistsEmptyTitle'.tr(),
+        message: 'artistsEmptyMessage'.tr(),
+      ),
+    );
+  }
+}
+
 /// and what would fill it.
 class _EmptyAlbums extends StatelessWidget {
   const _EmptyAlbums();

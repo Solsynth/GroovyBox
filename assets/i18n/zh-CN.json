@@ -5,7 +5,6 @@
   "tabStats": "统计",
   "tabProfile": "个人",
   "tabSettings": "设置",
-
   "commonBack": "返回",
   "commonCancel": "取消",
   "commonRemove": "移除",
@@ -18,11 +17,23 @@
   "commonTryAgain": "重试",
   "commonPlay": "播放",
   "commonUnknownArtist": "未知艺术家",
+  "libraryArtists": "艺术家",
+  "artistsCount": "{'other': '{} 位艺术家'}",
+  "artistsEyebrow": "艺术家",
+  "artistsTopTracks": "热门歌曲",
+  "artistsAlbums": "{'other': '{} 张专辑'}",
+  "artistsPlayTop": "播放热门歌曲",
+  "artistsEmptyTitle": "还没有艺术家",
+  "artistsEmptyMessage": "你连接的媒体库列出的艺术家会显示在这里。",
+  "artistsLoadError": "无法加载艺术家",
+  "artistsDetailTitleFallback": "艺术家",
+  "artistsDetailLoadError": "无法加载该艺术家",
+  "artistsDetailEmptyTitle": "这里还没有内容",
+  "artistsDetailEmptyMessage": "该媒体库列出了这位艺术家，但没有他们的专辑。",
   "commonNavCollapse": "收起导航",
   "commonNavExpand": "展开导航",
   "commonLibraryUnreachable": "曲库没有响应。请检查连接后重试。",
   "commonClose": "关闭",
-
   "settingsSectionAppearance": "外观",
   "settingsThemeLabel": "主题",
   "settingsThemeSystem": "跟随系统",
@@ -97,12 +108,20 @@
   "localImportUnavailable": "导入需要本地曲库，而本设备无法打开它。",
   "localImportFailed": "无法导入：{}",
   "localImportFailedFile": "{}：{}",
-  "localImportDone": {"one": "已导入 {} 首歌曲。", "other": "已导入 {} 首歌曲。"},
-  "localImportPartial": {"one": "已导入 {} 首歌曲；{} 首已存在。", "other": "已导入 {} 首歌曲；{} 首已存在。"},
-  "localImportNothingNew": {"one": "这首歌曲已在曲库中。", "other": "这 {} 首歌曲已在曲库中。"},
+  "localImportDone": {
+    "one": "已导入 {} 首歌曲。",
+    "other": "已导入 {} 首歌曲。"
+  },
+  "localImportPartial": {
+    "one": "已导入 {} 首歌曲；{} 首已存在。",
+    "other": "已导入 {} 首歌曲；{} 首已存在。"
+  },
+  "localImportNothingNew": {
+    "one": "这首歌曲已在曲库中。",
+    "other": "这 {} 首歌曲已在曲库中。"
+  },
   "localImportShowErrors": "详情",
   "localImportFailuresTitle": "无法导入的文件",
-
   "setupTitle": "连接曲库",
   "setupSubtitle": "连接音乐服务器进行串流。也可以在设置中导入本设备上已有的文件。",
   "setupServerAddress": "服务器地址",
@@ -116,7 +135,6 @@
   "setupTestConnection": "测试连接",
   "setupSecurityNote": "你的密码不会被存储：只保存一个令牌，这是各 API 期望客户端进行身份验证的方式。",
   "setupTestSuccess": "服务器已响应，现在可以连接了。",
-
   "statsTitle": "统计",
   "statsSubtitle": "保存在本设备的收听记录",
   "statsErrorTitle": "无法读取你的历史记录",
@@ -150,7 +168,6 @@
   "libraryAddressJellyfin": "https://jellyfin.example.com:8096",
   "statsOrphaned": "其中 {} 首已不再由已连接的曲库提供",
   "libraryKindLocal": "本地文件",
-
   "playerNothingPlaying": "当前没有正在播放的歌曲",
   "searchStoreSection": "来自 {}",
   "searchPlay": "立即播放",
@@ -177,7 +194,6 @@
   "playerNext": "下一首",
   "playerRepeat": "循环播放",
   "playerRepeatSong": "单曲循环",
-
   "libraryAlbums": "专辑",
   "libraryPlaylists": "歌单",
   "exploreTitle": "探索",
@@ -303,7 +319,6 @@
   "lyricsOriginLrclib": "来自 LRCLIB",
   "lyricsOriginManual": "由你选择",
   "lyricsOriginNone": "暂无歌词",
-
   "queueTitle": "队列",
   "queueRadioFrom": "来自 {} 的电台 · {}",
   "queueTrackCount": {
@@ -316,7 +331,6 @@
   },
   "queueEmptyTitle": "队列为空",
   "queueEmptyMessage": "播放一首歌曲或一张专辑，它就会出现在这里。",
-
   "lyricsTitle": "歌词",
   "lyricsAskAgain": "重新获取",
   "lyricsNothingPlaying": "当前没有正在播放的歌曲",
@@ -325,7 +339,6 @@
   "lyricsUnavailableDetail": "曲库和 LRCLIB 都没有响应。",
   "lyricsEmpty": "这首歌没有歌词",
   "lyricsEmptyDetail": "曲库和 LRCLIB 都没有这首歌的歌词。",
-
   "lyricsRescue": "查找歌词…",
   "lyricsPickerTitle": "查找歌词",
   "lyricsPickerSearchHint": "搜索 LRCLIB",
@@ -365,9 +378,7 @@
   "formatYearsAgo": "{} 年前",
   "formatSourceSuffix": "  ·  {}",
   "formatPositionOfDuration": "{} / {}",
-
   "notificationChannelName": "播放",
-
   "libraryWrongCredentials": "用户名或密码错误。",
   "libraryNotJellyfin": "该地址看起来不像一个 Jellyfin 服务器。",
   "librarySignedOut": "此曲库尚未登录。请从「设置」中重新连接。",
@@ -390,7 +401,6 @@
   "libraryAppleMusicSubscription": "此 Apple Music 账户无法播放资料库内容。请检查订阅状态后重试。",
   "libraryAppleMusicNoStream": "Apple Music 曲目由系统播放器播放，不走流式地址。",
   "setupAppleMusicNote": "使用此设备登录的 Apple Music 账户，无需地址或密码。",
-
   "commonSave": "保存",
   "settingsSectionSolarNetwork": "Solar Network",
   "solarpassCardTitle": "Solar Network 状态广播",
@@ -425,8 +435,14 @@
   "settingsLibrarySyncNeedsSignIn": "登录 Solarpass 后即可同步曲库。",
   "settingsLibrarySyncProgress": "正在同步…",
   "settingsLibrarySyncFailed": "同步失败，请检查网络后重试。",
-  "settingsLibrarySyncLastSync": {"one": "{} 分钟前已同步", "other": "{} 分钟前已同步"},
-  "settingsLibrarySyncDevices": {"one": "{} 台设备", "other": "{} 台设备"},
+  "settingsLibrarySyncLastSync": {
+    "one": "{} 分钟前已同步",
+    "other": "{} 分钟前已同步"
+  },
+  "settingsLibrarySyncDevices": {
+    "one": "{} 台设备",
+    "other": "{} 台设备"
+  },
   "settingsVolumeSystemHint": "当前曲目由系统播放器播放，音量由系统控制。请使用音量键或控制中心。",
   "formatRadioFrom": "电台 · {}",
   "playerRadio": "电台",

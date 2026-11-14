@@ -5,7 +5,6 @@
   "tabStats": "Stats",
   "tabProfile": "Profile",
   "tabSettings": "Settings",
-
   "commonBack": "Back",
   "commonCancel": "Cancel",
   "commonRemove": "Remove",
@@ -18,11 +17,23 @@
   "commonTryAgain": "Try again",
   "commonPlay": "Play",
   "commonUnknownArtist": "Unknown artist",
+  "libraryArtists": "Artists",
+  "artistsCount": "{'one': '{} artist', 'other': '{} artists'}",
+  "artistsEyebrow": "Artist",
+  "artistsTopTracks": "Top tracks",
+  "artistsAlbums": "{'one': '{} album', 'other': '{} albums'}",
+  "artistsPlayTop": "Play top tracks",
+  "artistsEmptyTitle": "No artists yet",
+  "artistsEmptyMessage": "Artists your libraries list show up here.",
+  "artistsLoadError": "Could not load artists",
+  "artistsDetailTitleFallback": "Artist",
+  "artistsDetailLoadError": "Could not load this artist",
+  "artistsDetailEmptyTitle": "Nothing here yet",
+  "artistsDetailEmptyMessage": "This source lists the artist but no albums for them.",
   "commonNavCollapse": "Collapse navigation",
   "commonNavExpand": "Expand navigation",
   "commonLibraryUnreachable": "The library did not answer. Check the connection and try again.",
   "commonClose": "Close",
-
   "settingsSectionAppearance": "Appearance",
   "settingsThemeLabel": "Theme",
   "settingsThemeSystem": "System",
@@ -97,12 +108,20 @@
   "localImportUnavailable": "Importing needs the local library, which this device could not open.",
   "localImportFailed": "Could not import: {}",
   "localImportFailedFile": "{}: {}",
-  "localImportDone": {"one": "Imported {} song.", "other": "Imported {} songs."},
-  "localImportPartial": {"one": "Imported {} song; {} already present.", "other": "Imported {} songs; {} already present."},
-  "localImportNothingNew": {"one": "That song is already in the library.", "other": "These {} songs are already in the library."},
+  "localImportDone": {
+    "one": "Imported {} song.",
+    "other": "Imported {} songs."
+  },
+  "localImportPartial": {
+    "one": "Imported {} song; {} already present.",
+    "other": "Imported {} songs; {} already present."
+  },
+  "localImportNothingNew": {
+    "one": "That song is already in the library.",
+    "other": "These {} songs are already in the library."
+  },
   "localImportShowErrors": "Details",
   "localImportFailuresTitle": "Files that could not be imported",
-
   "setupTitle": "Connect a library",
   "setupSubtitle": "Connect a music server to stream from it. You can also import files already on this device from Settings.",
   "setupServerAddress": "Server address",
@@ -116,7 +135,6 @@
   "setupTestConnection": "Test connection",
   "setupSecurityNote": "Your password is never stored: only a token, the way each API expects clients to authenticate.",
   "setupTestSuccess": "Server responded. You can connect now.",
-
   "statsTitle": "Stats",
   "statsSubtitle": "Listening kept on this device",
   "statsErrorTitle": "Could not read your history",
@@ -150,7 +168,6 @@
   "libraryAddressJellyfin": "https://jellyfin.example.com:8096",
   "statsOrphaned": "{} no longer served by a connected library",
   "libraryKindLocal": "Local files",
-
   "playerNothingPlaying": "Nothing is playing",
   "searchStoreSection": "From {}",
   "searchPlay": "Play now",
@@ -177,7 +194,6 @@
   "playerNext": "Next",
   "playerRepeat": "Repeat",
   "playerRepeatSong": "Repeat song",
-
   "libraryAlbums": "Albums",
   "libraryPlaylists": "Playlists",
   "exploreTitle": "Explore",
@@ -303,7 +319,6 @@
   "lyricsOriginLrclib": "From LRCLIB",
   "lyricsOriginManual": "Chosen by you",
   "lyricsOriginNone": "None yet",
-
   "queueTitle": "Queue",
   "queueRadioFrom": "radio from {} · {}",
   "queueTrackCount": {
@@ -316,7 +331,6 @@
   },
   "queueEmptyTitle": "Nothing queued",
   "queueEmptyMessage": "Play a song or an album and it lands here.",
-
   "lyricsTitle": "Lyrics",
   "lyricsAskAgain": "Ask again",
   "lyricsNothingPlaying": "Nothing is playing",
@@ -340,7 +354,6 @@
   "lyricsPickerDrift": "length differs",
   "lyricsPickFile": "Import a lyrics file",
   "lyricsPickFileEmpty": "That file has no readable words.",
-
   "formatNothingYet": "Nothing yet",
   "formatUnderAMinute": "Under a minute",
   "formatMinutes": "{} min",
@@ -365,9 +378,7 @@
   "formatYearsAgo": "{} years ago",
   "formatSourceSuffix": "  ·  {}",
   "formatPositionOfDuration": "{} / {}",
-
   "notificationChannelName": "Playback",
-
   "libraryWrongCredentials": "Wrong username or password.",
   "libraryNotJellyfin": "That address does not look like a Jellyfin server.",
   "librarySignedOut": "This library is not signed in. Connect it again from Settings.",
@@ -390,7 +401,6 @@
   "libraryAppleMusicSubscription": "This Apple Music account cannot play library content. Check the subscription, then try again.",
   "libraryAppleMusicNoStream": "Apple Music tracks are played by the system player, not streamed.",
   "setupAppleMusicNote": "Uses the Apple Music account this device is signed in to. No address or password is needed.",
-
   "commonSave": "Save",
   "settingsSectionSolarNetwork": "Solar Network",
   "solarpassCardTitle": "Solar Network Presence",
@@ -425,8 +435,14 @@
   "settingsLibrarySyncNeedsSignIn": "Sign in with Solarpass to sync your library.",
   "settingsLibrarySyncProgress": "Syncing…",
   "settingsLibrarySyncFailed": "Sync failed. Check the connection and try again.",
-  "settingsLibrarySyncLastSync": {"one": "Synced {} minute ago", "other": "Synced {} minutes ago"},
-  "settingsLibrarySyncDevices": {"one": "{} device", "other": "{} devices"},
+  "settingsLibrarySyncLastSync": {
+    "one": "Synced {} minute ago",
+    "other": "Synced {} minutes ago"
+  },
+  "settingsLibrarySyncDevices": {
+    "one": "{} device",
+    "other": "{} devices"
+  },
   "settingsVolumeSystemHint": "The current track plays in the system player, which owns its own level. Use the volume keys or Control Centre.",
   "formatRadioFrom": "Radio  ·  {}",
   "playerRadio": "Radio",

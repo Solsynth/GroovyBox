@@ -226,7 +226,7 @@ class JellyfinSource extends LibrarySource implements RatedSource {
       'SortBy': 'DateCreated',
       'SortOrder': 'Descending',
       'Limit': limit,
-      'Fields': 'Genres',
+      'Fields': 'Genres,AlbumArtists,ArtistItems',
     });
     return [for (final item in items) _album(item)];
   }
@@ -239,7 +239,7 @@ class JellyfinSource extends LibrarySource implements RatedSource {
       'SortBy': 'SortName',
       'StartIndex': offset,
       'Limit': limit,
-      'Fields': 'Genres',
+      'Fields': 'Genres,AlbumArtists,ArtistItems',
     });
     return [for (final item in items) _album(item)];
   }
@@ -257,7 +257,7 @@ class JellyfinSource extends LibrarySource implements RatedSource {
       'IncludeItemTypes': 'Audio',
       'Recursive': true,
       'SortBy': 'ParentIndexNumber,IndexNumber',
-      'Fields': 'Genres',
+      'Fields': 'Genres,AlbumArtists,ArtistItems',
     });
     return [for (final item in items) _song(item)];
   }
@@ -287,7 +287,7 @@ class JellyfinSource extends LibrarySource implements RatedSource {
       'IncludeItemTypes': 'MusicAlbum',
       'Recursive': true,
       'SortBy': 'ProductionYear',
-      'Fields': 'Genres',
+      'Fields': 'Genres,AlbumArtists,ArtistItems',
     });
     return [for (final item in items) _album(item)];
   }
@@ -316,7 +316,7 @@ class JellyfinSource extends LibrarySource implements RatedSource {
   Future<List<LibrarySong>> playlistSongs(String playlistId) async {
     final body = await _request(
       '/Playlists/$playlistId/Items',
-      query: {'userId': _userId, 'Fields': 'Genres'},
+      query: {'userId': _userId, 'Fields': 'Genres,AlbumArtists,ArtistItems'},
     );
     final items = body['Items'];
     if (items is! List) return const [];
@@ -333,7 +333,7 @@ class JellyfinSource extends LibrarySource implements RatedSource {
       'IncludeItemTypes': 'Audio',
       'Recursive': true,
       'Limit': limit,
-      'Fields': 'Genres',
+      'Fields': 'Genres,AlbumArtists,ArtistItems',
     });
     return [for (final item in items) _song(item)];
   }
@@ -451,6 +451,7 @@ class JellyfinSource extends LibrarySource implements RatedSource {
     id: '${json['Id']}',
     title: json['Name'] as String? ?? 'Untitled',
     artist: _artist(json),
+    artistId: _artistId(json),
     album: json['Album'] as String?,
     albumId: json['AlbumId'] as String?,
     artId: json['AlbumId'] as String? ?? '${json['Id']}',
@@ -467,6 +468,7 @@ class JellyfinSource extends LibrarySource implements RatedSource {
     id: '${json['Id']}',
     name: json['Name'] as String? ?? 'Untitled',
     artist: _artist(json),
+    artistId: _artistId(json),
     artId: _primaryImage(json),
     songCount: (json['ChildCount'] as num?)?.toInt(),
     duration: _duration(json),
@@ -489,6 +491,23 @@ class JellyfinSource extends LibrarySource implements RatedSource {
     if (albumArtist is String && albumArtist.isNotEmpty) return albumArtist;
     final artists = json['Artists'];
     if (artists is List && artists.isNotEmpty) return '${artists.first}';
+    return null;
+  }
+
+  /// The artist item's id, from the same field the display name comes from.
+  /// The song queries do not ask for `AlbumArtists` unless a song carries it
+  /// inline, so null is common and the credit line stays plain text then.
+  static String? _artistId(Map<String, dynamic> json) {
+    final albumArtists = json['AlbumArtists'];
+    if (albumArtists is List && albumArtists.isNotEmpty) {
+      final first = albumArtists.first;
+      if (first is Map && first['Id'] != null) return '${first['Id']}';
+    }
+    final artistItems = json['ArtistItems'];
+    if (artistItems is List && artistItems.isNotEmpty) {
+      final first = artistItems.first;
+      if (first is Map && first['Id'] != null) return '${first['Id']}';
+    }
     return null;
   }
 

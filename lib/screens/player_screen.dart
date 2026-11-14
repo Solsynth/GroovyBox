@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/theme.dart';
+import 'package:groovy_box/core/router.gr.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/library/providers.dart';
@@ -459,9 +460,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
     // A station has no length and no end, so a scrubber over it would be a
     // control with nothing to move.
-    final Widget bottom = song.isRadio
-        ? const _LiveBadge()
-        : const _Scrubber();
+    final Widget bottom = song.isRadio ? const _LiveBadge() : const _Scrubber();
     // Built once per page build, not per animation frame: whichever pane is
     // on show keeps its scroll position while the morph runs.
     final alternate = _paneWidget(_pane);
@@ -592,8 +591,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                                 tooltip: 'versionsTitle'.tr(),
                                 onPressed: song.isRadio
                                     ? null
-                                    : () =>
-                                          TrackVersionsPanel.show(context, song),
+                                    : () => TrackVersionsPanel.show(
+                                        context,
+                                        song,
+                                      ),
                                 icon: const Icon(Symbols.content_copy_rounded),
                               ),
                             ],
@@ -894,10 +895,7 @@ class _CompactPlayerBody extends StatelessWidget {
                           width: controlsWidth,
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
-                            children: [
-                              scrubber,
-                              const _Transport(),
-                            ],
+                            children: [scrubber, const _Transport()],
                           ),
                         ),
                       ),
@@ -983,10 +981,7 @@ class _MorphSlot extends StatelessWidget {
             opacity: into,
             child: Transform.translate(
               offset: Offset(0, 24 * (1 - into)),
-              child: Transform.scale(
-                scale: 0.97 + 0.03 * into,
-                child: pane,
-              ),
+              child: Transform.scale(scale: 0.97 + 0.03 * into, child: pane),
             ),
           ),
         );
@@ -1412,10 +1407,15 @@ class _TrackCopy extends ConsumerWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final playing = song.playing;
-    final credits = [
-      playing.subtitle,
-      if (playing.album != null) playing.album!,
-    ].join('  ·  ');
+    // The artist is the one credit that leads somewhere: a track that
+    // carries its source's artist id opens the artist page from the credit
+    // line. No id — a radio track, an unmapped server — stays plain text;
+    // guessing an artist by name would forge a page the source never
+    // described.
+    final artistRef = (playing.artistId == null || playing.isRadio)
+        ? null
+        : (sourceId: playing.sourceId, id: playing.artistId!);
+    final albumCredit = playing.album;
 
     // The button is the title's suffix, not a corner control: the title line
     // is [mark title ···] as one row, and the credits center under it. The
@@ -1450,16 +1450,83 @@ class _TrackCopy extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 4),
-        Text(
-          credits,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: centered ? TextAlign.center : TextAlign.start,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-          ),
+        // The credit line, with the artist tappable when the track knows its
+        // artist id. Centered copy centers it; a left-aligned one keeps the
+        Wrap(
+          alignment: centered ? WrapAlignment.center : WrapAlignment.start,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            if (artistRef != null)
+              _ArtistCreditLink(
+                artist: artistRef,
+                name: playing.artist ?? playing.subtitle,
+              )
+            else
+              Text(
+                playing.subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: centered ? TextAlign.center : TextAlign.start,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            if (albumCredit != null)
+              Text(
+                '  ·  $albumCredit',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: centered ? TextAlign.center : TextAlign.start,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+          ],
         ),
       ],
+    );
+  }
+}
+
+/// The artist's name on the credit line, as a way into their page.
+///
+/// A quiet link: the name keeps the credit line's own colour and only the
+/// cursor says it is tappable, because on this page nine words out of ten
+/// are not links and one that shouts would be noise.
+class _ArtistCreditLink extends ConsumerWidget {
+  final LibraryRef artist;
+  final String name;
+
+  const _ArtistCreditLink({required this.artist, required this.name});
+
+  @override
+  Widget build(BuildContext context, WidgetRef widgetRef) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(SolRadius.sm),
+        onTap: () => context.router.push(
+          ArtistDetailRoute(
+            sourceId: artist.sourceId,
+            artistId: artist.id,
+            artistName: name,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: SolSpace.xs,
+            vertical: 2,
+          ),
+          child: Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodyMedium
+                ?.copyWith(color: colorScheme.onSurfaceVariant),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1474,9 +1541,7 @@ class _TrackCopy extends ConsumerWidget {
 class _TrackMoreMenu extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final song = ref.watch(
-      playbackProvider.select((state) => state.current),
-    );
+    final song = ref.watch(playbackProvider.select((state) => state.current));
     if (song == null) return const SizedBox.shrink();
 
     return MenuAnchor(
@@ -1522,9 +1587,7 @@ class _SongActionsMenuItems extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final song = ref.watch(
-      playbackProvider.select((state) => state.current),
-    );
+    final song = ref.watch(playbackProvider.select((state) => state.current));
     if (song == null) return const SizedBox.shrink();
     // The menu item and the prefix heart both read the same provider, so a
     // write through either one turns both surfaces together.
@@ -1532,9 +1595,7 @@ class _SongActionsMenuItems extends ConsumerWidget {
       favouriteStateProvider(song).select((value) => value.value ?? false),
     );
     final source = ref.watch(
-      librarySourceByIdProvider.select(
-        (sources) => sources[song.sourceId],
-      ),
+      librarySourceByIdProvider.select((sources) => sources[song.sourceId]),
     );
     final actions = SongActions(
       source is RatedSource ? source : null,
@@ -1559,9 +1620,7 @@ class _SongActionsMenuItems extends ConsumerWidget {
             onPressed: () =>
                 SongActionsRunner.toggleFavourite(context, ref, actions),
             child: Text(
-              favourited
-                  ? 'playerFavourited'.tr()
-                  : 'playerFavourite'.tr(),
+              favourited ? 'playerFavourited'.tr() : 'playerFavourite'.tr(),
             ),
           ),
         if (actions.canAddToPlaylist)
@@ -1591,15 +1650,12 @@ class _FavouriteMark extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final song = ref.watch(
-      playbackProvider.select((state) => state.current),
-    );
+    final song = ref.watch(playbackProvider.select((state) => state.current));
     final favourited = song == null
         ? false
         : ref.watch(
-            favouriteStateProvider(
-              song,
-            ).select((value) => value.value ?? false),
+            favouriteStateProvider(song)
+                .select((value) => value.value ?? false),
           );
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -1607,11 +1663,7 @@ class _FavouriteMark extends ConsumerWidget {
       width: 40,
       height: 40,
       child: favourited
-          ? Icon(
-              Symbols.favorite_rounded,
-              size: 20,
-              color: colorScheme.error,
-            )
+          ? Icon(Symbols.favorite_rounded, size: 20, color: colorScheme.error)
           : null,
     );
   }

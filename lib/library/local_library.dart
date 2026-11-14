@@ -52,6 +52,9 @@ class LocalLibrarySource extends LibrarySource {
     id: row.path,
     title: row.title,
     artist: row.artist,
+    // The local source groups artists by their lowercase name, and the
+    // artist page addresses that group with it — the name *is* the id here.
+    artistId: row.artist?.trim().toLowerCase(),
     album: row.album,
     albumId: row.albumKey,
     artId: row.artPath,

@@ -16,6 +16,10 @@ List<AutoRoute> _tabChildren(AutoRoute root) => [
     path: 'playlists/:sourceId/:playlistId',
   ),
   AutoRoute(
+    page: ArtistDetailRoute.page,
+    path: 'artists/:sourceId/:artistId',
+  ),
+  AutoRoute(
     page: PulsarPlaylistDetailRoute.page,
     path: 'cloud-playlists/:playlistId',
   ),
