@@ -1,7 +1,9 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'dynamic_color.dart';
 import 'theme.dart';
 
 part 'app.g.dart';
@@ -24,6 +26,7 @@ const _kGlassEffectsKey = 'app_glass_effects';
 const _kLyricsPronunciationKey = 'app_lyrics_pronunciation';
 const _kLyricsTranslationKey = 'app_lyrics_translation';
 const _kInfinitePlaybackKey = 'app_infinite_playback';
+const _kDynamicColorKey = 'app_dynamic_color';
 
 @Riverpod(keepAlive: true)
 class ThemeModeNotifier extends Notifier<AppThemeMode> {
@@ -46,8 +49,24 @@ class ThemeModeNotifier extends Notifier<AppThemeMode> {
   }
 }
 
+/// The app's palette: the user's own seed, or the playing cover's, when
+/// dynamic colour is on and the track has a cover worth reading.
+///
+/// Theme sets are cached per seed: [createAppThemeSet] builds the whole
+/// Material scheme twice, and this provider rebuilds on every track change.
 @Riverpod(keepAlive: true)
-ThemeSet appTheme(Ref ref) => createAppThemeSet();
+ThemeSet appTheme(Ref ref) {
+  final cover = ref.watch(dynamicColorEnabledProvider)
+      ? ref.watch(coverSeedProvider).value
+      : null;
+  final seed = cover ?? kDefaultSeedColor;
+  return _themeSets.putIfAbsent(
+    seed,
+    () => createAppThemeSet(seedColor: seed),
+  );
+}
+
+final _themeSets = <Color, ThemeSet>{};
 
 /// Last volume, restored so the window does not startle the user.
 @Riverpod(keepAlive: true)
@@ -121,5 +140,23 @@ class InfinitePlaybackEnabled extends Notifier<bool> {
     await ref
         .read(sharedPreferencesProvider)
         .setBool(_kInfinitePlaybackKey, enabled);
+  }
+}
+
+/// Whether the playing track's cover colours the window.
+///
+/// On by default: it is what makes the player feel like it belongs to the
+/// album. Off restores the app's own violet seed everywhere.
+@Riverpod(keepAlive: true)
+class DynamicColorEnabled extends Notifier<bool> {
+  @override
+  bool build() =>
+      ref.watch(sharedPreferencesProvider).getBool(_kDynamicColorKey) ?? true;
+
+  Future<void> set(bool enabled) async {
+    state = enabled;
+    await ref
+        .read(sharedPreferencesProvider)
+        .setBool(_kDynamicColorKey, enabled);
   }
 }

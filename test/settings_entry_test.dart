@@ -134,6 +134,10 @@ void main() {
 
     final addLibraryButton = find.text('Add library');
     expect(addLibraryButton, findsOneWidget);
+    // The appearance card grew with the dynamic-color switch, so the library
+    // row can sit below the fold on a 900 px window.
+    await tester.ensureVisible(addLibraryButton);
+    await tester.pumpAndSettle();
 
     await tester.tap(addLibraryButton);
     await tester.pumpAndSettle();

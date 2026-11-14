@@ -73,7 +73,7 @@ class LibrarySyncEngine {
   /// not adopted: its credentials live with the source, not with the link.
   final List<String> Function() connectedSourceIds;
 
-  /// The six settings values this device currently holds.
+  /// The settings values this device currently holds.
   final Map<String, dynamic> Function() readSettings;
 
   /// Writes a settings document that a remote device owns.

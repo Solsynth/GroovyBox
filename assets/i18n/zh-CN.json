@@ -29,6 +29,8 @@
   "settingsThemeLight": "浅色",
   "settingsThemeDark": "深色",
   "settingsLanguageLabel": "语言",
+  "settingsDynamicColor": "动态取色",
+  "settingsDynamicColorSubtitle": "取正在播放的封面中最主要的颜色，并据此重新生成整套主题。关闭后沿用应用自带的紫色。",
   "settingsLanguageSystem": "跟随系统",
   "settingsLanguageSubtitle": "界面语言。选择“跟随系统”时使用设备的语言设置。",
   "settingsInfinitePlayback": "无限播放",

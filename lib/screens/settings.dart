@@ -97,8 +97,17 @@ class SettingsScreen extends ConsumerWidget {
                         .set(selection.first),
                   ),
                   const SizedBox(height: SolSpace.lg),
-                  _LanguageTile(),
-                  const SizedBox(height: SolSpace.lg),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: ref.watch(dynamicColorEnabledProvider),
+                    onChanged: (value) => ref
+                        .read(dynamicColorEnabledProvider.notifier)
+                        .set(value),
+                    secondary: const Icon(Symbols.palette_rounded),
+                    title: Text('settingsDynamicColor'.tr()),
+                    subtitle: Text('settingsDynamicColorSubtitle'.tr()),
+                  ),
+                  const SizedBox(height: SolSpace.sm),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     value: glass,
@@ -109,6 +118,8 @@ class SettingsScreen extends ConsumerWidget {
                     title: Text('settingsLiquidGlass'.tr()),
                     subtitle: Text('settingsLiquidGlassSubtitle'.tr()),
                   ),
+                  const SizedBox(height: SolSpace.lg),
+                  _LanguageTile(),
                 ],
               ),
             ),

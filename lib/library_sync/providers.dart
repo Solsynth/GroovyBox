@@ -233,13 +233,15 @@ class LibrarySyncAuto {
   }
 }
 
-/// The six settings this app keeps, read straight from prefs and the notifiers.
+/// The seven settings this app keeps, read straight from prefs and the
+/// notifiers.
 Map<String, dynamic> _readSettings(Ref ref) {
   final prefs = ref.read(sharedPreferencesProvider);
   return {
     'themeMode': ref.read(themeModeProvider).name,
     'volume': prefs.getDouble(_kVolumeKey) ?? 65,
     'glassEffects': ref.read(glassEffectsEnabledProvider),
+    'dynamicColor': ref.read(dynamicColorEnabledProvider),
     'lyricsPronunciation': ref.read(lyricsPronunciationEnabledProvider),
     'lyricsTranslation': ref.read(lyricsTranslationEnabledProvider),
     'infinitePlayback': ref.read(infinitePlaybackEnabledProvider),
@@ -264,6 +266,10 @@ Future<void> _applySettings(Ref ref, Map<String, dynamic> values) async {
   final glass = values['glassEffects'];
   if (glass is bool) {
     await ref.read(glassEffectsEnabledProvider.notifier).set(glass);
+  }
+  final dynamicColor = values['dynamicColor'];
+  if (dynamicColor is bool) {
+    await ref.read(dynamicColorEnabledProvider.notifier).set(dynamicColor);
   }
   final pronunciation = values['lyricsPronunciation'];
   if (pronunciation is bool) {

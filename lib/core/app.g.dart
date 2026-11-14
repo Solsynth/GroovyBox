@@ -124,12 +124,29 @@ abstract class _$ThemeModeNotifier extends $Notifier<AppThemeMode> {
   }
 }
 
+/// The app's palette: the user's own seed, or the playing cover's, when
+/// dynamic colour is on and the track has a cover worth reading.
+///
+/// Theme sets are cached per seed: [createAppThemeSet] builds the whole
+/// Material scheme twice, and this provider rebuilds on every track change.
+
 @ProviderFor(appTheme)
 final appThemeProvider = AppThemeProvider._();
+
+/// The app's palette: the user's own seed, or the playing cover's, when
+/// dynamic colour is on and the track has a cover worth reading.
+///
+/// Theme sets are cached per seed: [createAppThemeSet] builds the whole
+/// Material scheme twice, and this provider rebuilds on every track change.
 
 final class AppThemeProvider
     extends $FunctionalProvider<ThemeSet, ThemeSet, ThemeSet>
     with $Provider<ThemeSet> {
+  /// The app's palette: the user's own seed, or the playing cover's, when
+  /// dynamic colour is on and the track has a cover worth reading.
+  ///
+  /// Theme sets are cached per seed: [createAppThemeSet] builds the whole
+  /// Material scheme twice, and this provider rebuilds on every track change.
   AppThemeProvider._()
     : super(
         from: null,
@@ -163,7 +180,7 @@ final class AppThemeProvider
   }
 }
 
-String _$appThemeHash() => r'919629fe3e460d470280dc4ed7d873aa9d087ada';
+String _$appThemeHash() => r'eb4df4166e505e496ec76baecd2e8d6ae070fbcc';
 
 /// Last volume, restored so the window does not startle the user.
 
@@ -447,6 +464,77 @@ String _$infinitePlaybackEnabledHash() =>
 /// the queue reaches the end. On by default.
 
 abstract class _$InfinitePlaybackEnabled extends $Notifier<bool> {
+  bool build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<bool, bool>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<bool, bool>,
+              bool,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
+/// Whether the playing track's cover colours the window.
+///
+/// On by default: it is what makes the player feel like it belongs to the
+/// album. Off restores the app's own violet seed everywhere.
+
+@ProviderFor(DynamicColorEnabled)
+final dynamicColorEnabledProvider = DynamicColorEnabledProvider._();
+
+/// Whether the playing track's cover colours the window.
+///
+/// On by default: it is what makes the player feel like it belongs to the
+/// album. Off restores the app's own violet seed everywhere.
+final class DynamicColorEnabledProvider
+    extends $NotifierProvider<DynamicColorEnabled, bool> {
+  /// Whether the playing track's cover colours the window.
+  ///
+  /// On by default: it is what makes the player feel like it belongs to the
+  /// album. Off restores the app's own violet seed everywhere.
+  DynamicColorEnabledProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'dynamicColorEnabledProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$dynamicColorEnabledHash();
+
+  @$internal
+  @override
+  DynamicColorEnabled create() => DynamicColorEnabled();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(bool value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<bool>(value),
+    );
+  }
+}
+
+String _$dynamicColorEnabledHash() =>
+    r'64e76459b0c044738957c33b7345415dca9dce01';
+
+/// Whether the playing track's cover colours the window.
+///
+/// On by default: it is what makes the player feel like it belongs to the
+/// album. Off restores the app's own violet seed everywhere.
+
+abstract class _$DynamicColorEnabled extends $Notifier<bool> {
   bool build();
   @$mustCallSuper
   @override

@@ -64,7 +64,7 @@ class BackupService {
 
   /// Creates a complete JSON-encodable backup map containing:
   /// - Sources (connected libraries and auth)
-  /// - Settings (theme, glass, lyrics settings, infinite playback)
+  /// - Settings (theme, dynamic color, glass, lyrics, infinite playback)
   /// - Local database (tracks metadata, links, cached lyrics, and play events)
   Future<Map<String, dynamic>> createBackupData() async {
     final sources = _ref.read(sourceStoreProvider);
@@ -74,6 +74,7 @@ class BackupService {
       'themeMode': _ref.read(themeModeProvider).name,
       'volume': prefs.getDouble('app_volume') ?? 65.0,
       'glassEffects': _ref.read(glassEffectsEnabledProvider),
+      'dynamicColor': _ref.read(dynamicColorEnabledProvider),
       'lyricsPronunciation': _ref.read(lyricsPronunciationEnabledProvider),
       'lyricsTranslation': _ref.read(lyricsTranslationEnabledProvider),
       'infinitePlayback': _ref.read(infinitePlaybackEnabledProvider),
@@ -152,6 +153,11 @@ class BackupService {
         await _ref
             .read(glassEffectsEnabledProvider.notifier)
             .set(settings['glassEffects'] as bool);
+      }
+      if (settings['dynamicColor'] is bool) {
+        await _ref
+            .read(dynamicColorEnabledProvider.notifier)
+            .set(settings['dynamicColor'] as bool);
       }
       if (settings['lyricsPronunciation'] is bool) {
         await _ref

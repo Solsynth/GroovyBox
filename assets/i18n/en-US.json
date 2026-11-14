@@ -29,6 +29,8 @@
   "settingsThemeLight": "Light",
   "settingsThemeDark": "Dark",
   "settingsLanguageLabel": "Language",
+  "settingsDynamicColor": "Dynamic color",
+  "settingsDynamicColorSubtitle": "Take the playing cover's dominant color and build the whole theme around it. Off keeps the app's own violet.",
   "settingsLanguageSystem": "System",
   "settingsLanguageSubtitle": "Language of the interface. System follows your device.",
   "settingsInfinitePlayback": "Infinite playback",
