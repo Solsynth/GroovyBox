@@ -1417,48 +1417,50 @@ class _TrackCopy extends ConsumerWidget {
       if (playing.album != null) playing.album!,
     ].join('  ·  ');
 
-    // The button overlays the trailing edge rather than sitting in the row:
-    // in the row it would take real width and pull the centered title off
-    // the copy's optical middle. Stacked, the title centers across the whole
-    // width and the button hangs in the corner where the eye expects it.
-    return Stack(
+    // The copy is a row of [title, credits] and the button rides beside
+    // them, aligned to the copy's own middle: one [title] [btn] line, both
+    // vertically centered, no corner overlay and no off-center title.
+    return Row(
       children: [
-        Column(
-          crossAxisAlignment: centered
-              ? CrossAxisAlignment.center
-              : CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              // A station's row carries what it is playing, so the page names
-              // the track rather than the station it was started from.
-              playing.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              textAlign: centered ? TextAlign.center : TextAlign.start,
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.4,
-                height: 1.15,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: centered
+                ? CrossAxisAlignment.center
+                : CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                // A station's row carries what it is playing, so the page
+                // names the track rather than the station it was started
+                // from.
+                playing.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: centered ? TextAlign.center : TextAlign.start,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.4,
+                  height: 1.15,
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              credits,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: centered ? TextAlign.center : TextAlign.start,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
+              const SizedBox(height: 4),
+              Text(
+                credits,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: centered ? TextAlign.center : TextAlign.start,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         // The track's everything-else: favourite, playlist, share, playback
-        // info, other versions.
-        PositionedDirectional(
-          top: -SolSpace.xs,
-          end: -SolSpace.sm,
+        // info, other versions. Aligned to the copy's middle, not its top.
+        Align(
+          alignment: AlignmentDirectional.center,
+          widthFactor: 1,
           child: const _TrackMoreMenu(),
         ),
       ],
