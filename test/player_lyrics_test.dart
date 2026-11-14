@@ -209,62 +209,55 @@ void main() {
     expect(page.pixels, before, reason: 'the page must not move');
   });
 
-  testWidgets('artwork flies like a hero between cover and compact header', (
+  testWidgets('artwork flies like a hero between cover and the docked bar', (
     tester,
   ) async {
     await _pump(tester, const Size(420, 860));
 
-    final foregroundArt = find
-        .descendant(
-          of: find.byType(SingleChildScrollView),
-          matching: find.byType(LibraryArtwork),
-        )
-        .last;
-
-    // Cover end: one foreground artwork, large and centered.
-    expect(
-      find.descendant(
-        of: find.byType(SingleChildScrollView),
-        matching: find.byType(LibraryArtwork),
-      ),
-      findsOneWidget,
+    // The flight is the one widget with the track's hero tag: the bar paints
+    // its own thumbnail, so counting artworks would count the destination as
+    // well as the traveller.
+    final hero = find.descendant(
+      of: find.byType(SingleChildScrollView),
+      matching: find.byType(Hero),
     );
+    expect(hero, findsOneWidget);
+    final foregroundArt = find.descendant(
+      of: hero,
+      matching: find.byType(LibraryArtwork),
+    );
+
+    // Cover end: the hero is the large, centered square above the bar.
     final startRect = tester.getRect(foregroundArt);
     expect(startRect.width, greaterThan(150));
     expect(startRect.center.dx, moreOrLessEquals(210, epsilon: 0.5));
 
-    // Mid-transition to lyrics: same single artwork, mid-flight between
-    // the centered cover and the 56x56 header sleeve.
+    // Mid-transition to lyrics: the same artwork, mid-flight towards the
+    // bar's sleeve.
     await tester.tap(find.byTooltip('Show lyrics'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 240));
 
-    expect(
-      find.descendant(
-        of: find.byType(SingleChildScrollView),
-        matching: find.byType(LibraryArtwork),
-      ),
-      findsOneWidget,
-    );
     final midRect = tester.getRect(foregroundArt);
     expect(midRect.width, lessThan(startRect.width));
-    expect(midRect.width, greaterThan(56));
-    expect(midRect.top, lessThan(startRect.top));
-    expect(midRect.left, lessThan(startRect.left));
+    expect(midRect.width, greaterThan(SolSpace.huge));
+    expect(midRect.top, greaterThan(startRect.top));
 
-    // Settled lyrics end: landed at 56x56 in the compact header.
+    // Settled lyrics end: landed on the bar's sleeve, which is the box the
+    // bar reserves for it.
     await tester.pumpAndSettle();
     final endRect = tester.getRect(foregroundArt);
-    expect(endRect.width, moreOrLessEquals(56, epsilon: 0.5));
-    expect(endRect.height, moreOrLessEquals(56, epsilon: 0.5));
-    expect(endRect.left, moreOrLessEquals(SolSpace.xl, epsilon: 0.5));
+    expect(endRect.width, moreOrLessEquals(44, epsilon: 0.5));
+    expect(endRect.height, moreOrLessEquals(44, epsilon: 0.5));
+    expect(endRect.left, moreOrLessEquals(SolSpace.xl + SolSpace.md, epsilon: 0.5));
 
-    // Switching to queue keeps the landed hero sleeve in place.
+    // Switching to queue leaves the hero where it landed: the bar is docked
+    // and does not move between the panes.
     await tester.tap(find.byTooltip('Show queue'));
     await tester.pumpAndSettle();
     expect(tester.getRect(foregroundArt), equals(endRect));
 
-    // Closing queue flies the hero back to the centered cover.
+    // Closing queue flies the hero back to the slot's cover.
     await tester.tap(find.byTooltip('Hide queue'));
     await tester.pumpAndSettle();
     expect(tester.getRect(foregroundArt), equals(startRect));
