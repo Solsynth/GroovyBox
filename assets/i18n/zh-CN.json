@@ -297,6 +297,12 @@
   "playbackInfoDuration": "时长",
   "playbackInfoYear": "年份",
   "playbackInfoGenre": "流派",
+  "playbackInfoLyrics": "歌词",
+  "lyricsOriginLibrary": "来自你的曲库",
+  "lyricsOriginFile": "来自音频文件",
+  "lyricsOriginLrclib": "来自 LRCLIB",
+  "lyricsOriginManual": "由你选择",
+  "lyricsOriginNone": "暂无歌词",
 
   "queueTitle": "队列",
   "queueRadioFrom": "来自 {} 的电台 · {}",

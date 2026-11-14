@@ -380,8 +380,41 @@ Future<List<LibrarySong>> playlistSongs(Ref ref, LibraryRef playlist) async {
   if (source == null) return const [];
   return source.playlistSongs(playlist.id);
 }
+/// Every artist the connected libraries list, merged in source order.
+///
+/// An artist is a native id plus a name, and ids are only unique within one
+/// source — so the artist page is addressed by [LibraryRef], and the same
+/// name on two servers stays two rows rather than collapsing into one the
+/// way a merged album list would want it to.
+@Riverpod(keepAlive: true)
+class LibraryArtists extends AsyncNotifier<List<LibraryArtist>> {
+  @override
+  Future<List<LibraryArtist>> build() => _fetch();
 
-/// Search results for the browse page's field. Empty query = no request.
+  Future<List<LibraryArtist>> _fetch() async {
+    if (ref.watch(librarySourcesWithLocalProvider).isEmpty) return const [];
+    return ref.watch(libraryAggregatorProvider).artists();
+  }
+
+  Future<void> refresh() async {
+    ref.read(sourceFailuresProvider.notifier).clear();
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(_fetch);
+  }
+}
+
+/// The albums one source says an artist recorded.
+///
+/// Asked of the artist's own library, not fanned out: an artist id is only
+/// meaningful there, and another source's answer would describe a different
+/// person who happens to share the name.
+@riverpod
+Future<List<LibraryAlbum>> artistAlbums(Ref ref, LibraryRef artist) async {
+  final source = ref.watch(librarySourceByIdProvider)[artist.sourceId];
+  if (source == null) return const [];
+  return source.artistAlbums(artist.id);
+}
+
 @riverpod
 Future<List<LibrarySong>> searchSongs(Ref ref, String query) async {
   final trimmed = query.trim();
@@ -677,4 +710,35 @@ Future<List<OwnedPlaylistEntry>> ownedPlaylistEntries(
     for (final (index, entry) in rows.indexed)
       OwnedPlaylistEntry(entryId: entry.$1, song: entry.$2, position: index),
   ];
+}
+
+/// Where the playing track's words come from, as a translation key resolved
+/// by the caller.
+///
+/// Reads the stored answer directly — no fetch — so a sheet showing it opens
+/// instantly and describes only what the track already has. Whether LRCLIB
+/// *could* answer is a question for the lyrics pane, which asks on demand.
+@riverpod
+Future<LyricsOrigin> lyricsOrigin(Ref ref, LibrarySong song) async {
+  final catalog = ref.watch(libraryCatalogProvider);
+  final store = ref.watch(lyricsStoreProvider);
+  if (catalog == null || store == null) return LyricsOrigin.none;
+  try {
+    final trackId = await catalog.requestTrackId(LyricsRequest.of(song));
+    final stored = await store.read(trackId);
+    return stored?.origin ?? LyricsOrigin.none;
+  } catch (_) {
+    return LyricsOrigin.none;
+  }
+}
+
+/// Whether the device remembers [song] as a favourite.
+///
+/// A FutureProvider, not a Notifier: the database is the record and writes
+/// invalidate this family, so every surface showing the answer rebuilds from
+/// the same source of truth instead of each caching its own.
+@riverpod
+Future<bool> favouriteState(Ref ref, LibrarySong song) async {
+  final answer = await ref.watch(favouritesProvider).read(song);
+  return answer ?? false;
 }

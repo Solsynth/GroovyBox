@@ -1,6 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:groovy_box/core/theme.dart';
-import 'package:groovy_box/library/lyrics.dart';
+import 'package:groovy_box/library/lyrics_store.dart' show LyricsOrigin;
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
@@ -241,7 +241,18 @@ class PlaybackInfoSheet extends ConsumerWidget {
         (sources) => sources[song.sourceId],
       ),
     );
-
+    // Where the words come from, asked of the stored answer rather than by
+    // fetching: the sheet describes what the track has, it does not go get
+    // anything. An unstored track reads as having no lyrics yet — which is
+    // the same thing the lyrics pane would go check on demand.
+    final lyricsOrigin = ref.watch(lyricsOriginProvider(song)).value;
+    final lyricsOriginLabel = switch (lyricsOrigin) {
+      LyricsOrigin.library => 'lyricsOriginLibrary'.tr(),
+      LyricsOrigin.file => 'lyricsOriginFile'.tr(),
+      LyricsOrigin.lrclib => 'lyricsOriginLrclib'.tr(),
+      LyricsOrigin.manual => 'lyricsOriginManual'.tr(),
+      _ => 'lyricsOriginNone'.tr(),
+    };
     final rows = <(IconData, String, String)>[
       (
         Symbols.music_note_rounded,
@@ -282,6 +293,14 @@ class PlaybackInfoSheet extends ConsumerWidget {
           'playbackInfoGenre'.tr(),
           playing.genre!,
         ),
+      // Lyrics as metadata, not text: where the words come from, or that
+      // there are none. The words themselves are the lyrics pane's job; this
+      // sheet only describes the track.
+      (
+        Symbols.lyrics_rounded,
+        'playbackInfoLyrics'.tr(),
+        lyricsOriginLabel,
+      ),
     ];
 
     return SafeArea(
@@ -341,7 +360,6 @@ class PlaybackInfoSheet extends ConsumerWidget {
                   ],
                 ),
               ),
-            _PlaybackInfoLyrics(song: song),
           ],
         ),
       ),
@@ -349,101 +367,3 @@ class PlaybackInfoSheet extends ConsumerWidget {
   }
 }
 
-/// The lyrics block at the foot of the playback-info sheet.
-///
-/// The words, plain: no position line to follow, because a sheet is read at
-/// leisure rather than sung along with. Loading and missing states are one
-/// quiet line each, so a track without words ends the sheet cleanly.
-class _PlaybackInfoLyrics extends ConsumerWidget {
-  final LibrarySong song;
-
-  const _PlaybackInfoLyrics({required this.song});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final lyrics = ref.watch(
-      songLyricsProvider(
-        LyricsRequest.of(song),
-        languageCode: Localizations.localeOf(context).languageCode,
-      ),
-    );
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: SolSpace.sm),
-          child: Row(
-            children: [
-              Icon(
-                Symbols.lyrics_rounded,
-                size: 18,
-                color: colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(width: SolSpace.md),
-              Text(
-                'lyricsTitle'.tr(),
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: SolSpace.xs),
-        lyrics.when(
-          skipLoadingOnRefresh: false,
-          loading: () => Padding(
-            padding: const EdgeInsets.only(left: SolSpace.xl),
-            child: Text(
-              'lyricsLoading'.tr(),
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-          error: (_, _) => Padding(
-            padding: const EdgeInsets.only(left: SolSpace.xl),
-            child: Text(
-              'lyricsUnavailable'.tr(),
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-          data: (lyrics) => lyrics.isEmpty
-              ? Padding(
-                  padding: const EdgeInsets.only(left: SolSpace.xl),
-                  child: Text(
-                    'lyricsEmpty'.tr(),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                )
-              : Padding(
-                  padding: const EdgeInsets.only(left: SolSpace.xl),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      for (final line in lyrics.lines)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 2),
-                          child: Text(
-                            line.text,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              height: 1.4,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-        ),
-      ],
-    );
-  }
-}

@@ -1338,7 +1338,7 @@ class _CompactHeader extends StatelessWidget {
         // The track's everything-else rides the header's trailing edge, where
         // a media row keeps its menu: the transport stays the row that plays,
         // and the pane keeps its column clear.
-        const _TrackMoreMenu(),
+        _TrackMoreMenu(),
       ],
     );
   }
@@ -1417,19 +1417,19 @@ class _TrackCopy extends ConsumerWidget {
       if (playing.album != null) playing.album!,
     ].join('  ·  ');
 
-    // The copy is a row of [title, credits] and the button rides beside
-    // them, aligned to the copy's own middle: one [title] [btn] line, both
-    // vertically centered, no corner overlay and no off-center title.
-    return Row(
+    // The button is the title's suffix, not a corner control: the title line
+    // is [mark title ···] as one row, and the credits center under it. The
+    // prefix slot cancels the suffix's width, so the title keeps its visual
+    // center — and the slot earns its keep as the favourite mark: a filled
+    // heart when the device remembers the track, nothing when it does not.
+    return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: centered
-                ? CrossAxisAlignment.center
-                : CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
+        Row(
+          children: [
+            const _FavouriteMark(),
+            Flexible(
+              child: Text(
                 // A station's row carries what it is playing, so the page
                 // names the track rather than the station it was started
                 // from.
@@ -1443,25 +1443,21 @@ class _TrackCopy extends ConsumerWidget {
                   height: 1.15,
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                credits,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: centered ? TextAlign.center : TextAlign.start,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
+            ),
+            // The track's everything-else: favourite, playlist, share,
+            // playback info, other versions.
+            _TrackMoreMenu(),
+          ],
         ),
-        // The track's everything-else: favourite, playlist, share, playback
-        // info, other versions. Aligned to the copy's middle, not its top.
-        Align(
-          alignment: AlignmentDirectional.center,
-          widthFactor: 1,
-          child: const _TrackMoreMenu(),
+        const SizedBox(height: 4),
+        Text(
+          credits,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: centered ? TextAlign.center : TextAlign.start,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+          ),
         ),
       ],
     );
@@ -1476,15 +1472,12 @@ class _TrackCopy extends ConsumerWidget {
 /// to the same button, so on iPad they land beside what was tapped rather
 /// than at the window edge.
 class _TrackMoreMenu extends ConsumerWidget {
-  const _TrackMoreMenu();
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final song = ref.watch(
       playbackProvider.select((state) => state.current),
     );
     if (song == null) return const SizedBox.shrink();
-
 
     return MenuAnchor(
       builder: (context, controller, child) => IconButton(
@@ -1494,6 +1487,8 @@ class _TrackMoreMenu extends ConsumerWidget {
         // standard 48 box while the glyph and the hover ink stay compact.
         visualDensity: VisualDensity.compact,
         iconSize: 20,
+        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+        padding: EdgeInsets.zero,
         onPressed: () =>
             controller.isOpen ? controller.close() : controller.open(),
         icon: const Icon(Symbols.more_horiz_rounded),
@@ -1531,6 +1526,11 @@ class _SongActionsMenuItems extends ConsumerWidget {
       playbackProvider.select((state) => state.current),
     );
     if (song == null) return const SizedBox.shrink();
+    // The menu item and the prefix heart both read the same provider, so a
+    // write through either one turns both surfaces together.
+    final favourited = ref.watch(
+      favouriteStateProvider(song).select((value) => value.value ?? false),
+    );
     final source = ref.watch(
       librarySourceByIdProvider.select(
         (sources) => sources[song.sourceId],
@@ -1551,10 +1551,18 @@ class _SongActionsMenuItems extends ConsumerWidget {
       children: [
         if (actions.canFavourite)
           MenuItemButton(
-            leadingIcon: const Icon(Symbols.favorite_border_rounded),
+            leadingIcon: Icon(
+              favourited
+                  ? Symbols.favorite_rounded
+                  : Symbols.favorite_border_rounded,
+            ),
             onPressed: () =>
                 SongActionsRunner.toggleFavourite(context, ref, actions),
-            child: Text('playerFavourite'.tr()),
+            child: Text(
+              favourited
+                  ? 'playerFavourited'.tr()
+                  : 'playerFavourite'.tr(),
+            ),
           ),
         if (actions.canAddToPlaylist)
           MenuItemButton(
@@ -1570,6 +1578,41 @@ class _SongActionsMenuItems extends ConsumerWidget {
             child: Text('playerShare'.tr()),
           ),
       ],
+    );
+  }
+}
+
+/// The prefix slot before the title: a filled heart when the device remembers
+/// the track as a favourite, an empty box of the button's size when it does
+/// not. The slot's width is fixed either way, so the title between it and the
+/// more button keeps its visual center whether or not the heart is lit.
+class _FavouriteMark extends ConsumerWidget {
+  const _FavouriteMark();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final song = ref.watch(
+      playbackProvider.select((state) => state.current),
+    );
+    final favourited = song == null
+        ? false
+        : ref.watch(
+            favouriteStateProvider(
+              song,
+            ).select((value) => value.value ?? false),
+          );
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: favourited
+          ? Icon(
+              Symbols.favorite_rounded,
+              size: 20,
+              color: colorScheme.error,
+            )
+          : null,
     );
   }
 }

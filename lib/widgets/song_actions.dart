@@ -368,6 +368,9 @@ abstract final class SongActionsRunner {
     final error = await ref
         .read(favouritesProvider)
         .set(actions.song, value: !(value ?? false));
+    // The state is the provider, not any widget's field: dropping the family
+    // entry is what turns the prefix heart and the menu item together.
+    ref.invalidate(favouriteStateProvider(actions.song));
     if (error != null && context.mounted) _report(context, error);
   }
 

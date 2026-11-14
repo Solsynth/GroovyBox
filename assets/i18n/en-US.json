@@ -297,6 +297,12 @@
   "playbackInfoDuration": "Duration",
   "playbackInfoYear": "Year",
   "playbackInfoGenre": "Genre",
+  "playbackInfoLyrics": "Lyrics",
+  "lyricsOriginLibrary": "From your library",
+  "lyricsOriginFile": "From the audio file",
+  "lyricsOriginLrclib": "From LRCLIB",
+  "lyricsOriginManual": "Chosen by you",
+  "lyricsOriginNone": "None yet",
 
   "queueTitle": "Queue",
   "queueRadioFrom": "radio from {} · {}",

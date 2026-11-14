@@ -1209,12 +1209,185 @@ final class PlaylistSongsFamily extends $Family
   String toString() => r'playlistSongsProvider';
 }
 
-/// Search results for the browse page's field. Empty query = no request.
+/// Every artist the connected libraries list, merged in source order.
+///
+/// An artist is a native id plus a name, and ids are only unique within one
+/// source — so the artist page is addressed by [LibraryRef], and the same
+/// name on two servers stays two rows rather than collapsing into one the
+/// way a merged album list would want it to.
+
+@ProviderFor(LibraryArtists)
+final libraryArtistsProvider = LibraryArtistsProvider._();
+
+/// Every artist the connected libraries list, merged in source order.
+///
+/// An artist is a native id plus a name, and ids are only unique within one
+/// source — so the artist page is addressed by [LibraryRef], and the same
+/// name on two servers stays two rows rather than collapsing into one the
+/// way a merged album list would want it to.
+final class LibraryArtistsProvider
+    extends $AsyncNotifierProvider<LibraryArtists, List<LibraryArtist>> {
+  /// Every artist the connected libraries list, merged in source order.
+  ///
+  /// An artist is a native id plus a name, and ids are only unique within one
+  /// source — so the artist page is addressed by [LibraryRef], and the same
+  /// name on two servers stays two rows rather than collapsing into one the
+  /// way a merged album list would want it to.
+  LibraryArtistsProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'libraryArtistsProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$libraryArtistsHash();
+
+  @$internal
+  @override
+  LibraryArtists create() => LibraryArtists();
+}
+
+String _$libraryArtistsHash() => r'cc9fe10a5895be98cb905f8b7bf204d6ccf7c7eb';
+
+/// Every artist the connected libraries list, merged in source order.
+///
+/// An artist is a native id plus a name, and ids are only unique within one
+/// source — so the artist page is addressed by [LibraryRef], and the same
+/// name on two servers stays two rows rather than collapsing into one the
+/// way a merged album list would want it to.
+
+abstract class _$LibraryArtists extends $AsyncNotifier<List<LibraryArtist>> {
+  FutureOr<List<LibraryArtist>> build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref =
+        this.ref as $Ref<AsyncValue<List<LibraryArtist>>, List<LibraryArtist>>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<AsyncValue<List<LibraryArtist>>, List<LibraryArtist>>,
+              AsyncValue<List<LibraryArtist>>,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
+/// The albums one source says an artist recorded.
+///
+/// Asked of the artist's own library, not fanned out: an artist id is only
+/// meaningful there, and another source's answer would describe a different
+/// person who happens to share the name.
+
+@ProviderFor(artistAlbums)
+final artistAlbumsProvider = ArtistAlbumsFamily._();
+
+/// The albums one source says an artist recorded.
+///
+/// Asked of the artist's own library, not fanned out: an artist id is only
+/// meaningful there, and another source's answer would describe a different
+/// person who happens to share the name.
+
+final class ArtistAlbumsProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<List<LibraryAlbum>>,
+          List<LibraryAlbum>,
+          FutureOr<List<LibraryAlbum>>
+        >
+    with
+        $FutureModifier<List<LibraryAlbum>>,
+        $FutureProvider<List<LibraryAlbum>> {
+  /// The albums one source says an artist recorded.
+  ///
+  /// Asked of the artist's own library, not fanned out: an artist id is only
+  /// meaningful there, and another source's answer would describe a different
+  /// person who happens to share the name.
+  ArtistAlbumsProvider._({
+    required ArtistAlbumsFamily super.from,
+    required LibraryRef super.argument,
+  }) : super(
+         retry: null,
+         name: r'artistAlbumsProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$artistAlbumsHash();
+
+  @override
+  String toString() {
+    return r'artistAlbumsProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<List<LibraryAlbum>> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<List<LibraryAlbum>> create(Ref ref) {
+    final argument = this.argument as LibraryRef;
+    return artistAlbums(ref, argument);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is ArtistAlbumsProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$artistAlbumsHash() => r'7e9a00ecdb285d7fbca9cdd34f96d46805441b46';
+
+/// The albums one source says an artist recorded.
+///
+/// Asked of the artist's own library, not fanned out: an artist id is only
+/// meaningful there, and another source's answer would describe a different
+/// person who happens to share the name.
+
+final class ArtistAlbumsFamily extends $Family
+    with $FunctionalFamilyOverride<FutureOr<List<LibraryAlbum>>, LibraryRef> {
+  ArtistAlbumsFamily._()
+    : super(
+        retry: null,
+        name: r'artistAlbumsProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  /// The albums one source says an artist recorded.
+  ///
+  /// Asked of the artist's own library, not fanned out: an artist id is only
+  /// meaningful there, and another source's answer would describe a different
+  /// person who happens to share the name.
+
+  ArtistAlbumsProvider call(LibraryRef artist) =>
+      ArtistAlbumsProvider._(argument: artist, from: this);
+
+  @override
+  String toString() => r'artistAlbumsProvider';
+}
 
 @ProviderFor(searchSongs)
 final searchSongsProvider = SearchSongsFamily._();
-
-/// Search results for the browse page's field. Empty query = no request.
 
 final class SearchSongsProvider
     extends
@@ -1226,7 +1399,6 @@ final class SearchSongsProvider
     with
         $FutureModifier<List<LibrarySong>>,
         $FutureProvider<List<LibrarySong>> {
-  /// Search results for the browse page's field. Empty query = no request.
   SearchSongsProvider._({
     required SearchSongsFamily super.from,
     required String super.argument,
@@ -1273,8 +1445,6 @@ final class SearchSongsProvider
 
 String _$searchSongsHash() => r'411dfe1f6850fe1c019b0ac2c47d2dfc330b3ac3';
 
-/// Search results for the browse page's field. Empty query = no request.
-
 final class SearchSongsFamily extends $Family
     with $FunctionalFamilyOverride<FutureOr<List<LibrarySong>>, String> {
   SearchSongsFamily._()
@@ -1285,8 +1455,6 @@ final class SearchSongsFamily extends $Family
         $allTransitiveDependencies: null,
         isAutoDispose: true,
       );
-
-  /// Search results for the browse page's field. Empty query = no request.
 
   SearchSongsProvider call(String query) =>
       SearchSongsProvider._(argument: query, from: this);
@@ -2086,4 +2254,211 @@ final class OwnedPlaylistEntriesFamily extends $Family
 
   @override
   String toString() => r'ownedPlaylistEntriesProvider';
+}
+
+/// Where the playing track's words come from, as a translation key resolved
+/// by the caller.
+///
+/// Reads the stored answer directly — no fetch — so a sheet showing it opens
+/// instantly and describes only what the track already has. Whether LRCLIB
+/// *could* answer is a question for the lyrics pane, which asks on demand.
+
+@ProviderFor(lyricsOrigin)
+final lyricsOriginProvider = LyricsOriginFamily._();
+
+/// Where the playing track's words come from, as a translation key resolved
+/// by the caller.
+///
+/// Reads the stored answer directly — no fetch — so a sheet showing it opens
+/// instantly and describes only what the track already has. Whether LRCLIB
+/// *could* answer is a question for the lyrics pane, which asks on demand.
+
+final class LyricsOriginProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<LyricsOrigin>,
+          LyricsOrigin,
+          FutureOr<LyricsOrigin>
+        >
+    with $FutureModifier<LyricsOrigin>, $FutureProvider<LyricsOrigin> {
+  /// Where the playing track's words come from, as a translation key resolved
+  /// by the caller.
+  ///
+  /// Reads the stored answer directly — no fetch — so a sheet showing it opens
+  /// instantly and describes only what the track already has. Whether LRCLIB
+  /// *could* answer is a question for the lyrics pane, which asks on demand.
+  LyricsOriginProvider._({
+    required LyricsOriginFamily super.from,
+    required LibrarySong super.argument,
+  }) : super(
+         retry: null,
+         name: r'lyricsOriginProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$lyricsOriginHash();
+
+  @override
+  String toString() {
+    return r'lyricsOriginProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<LyricsOrigin> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<LyricsOrigin> create(Ref ref) {
+    final argument = this.argument as LibrarySong;
+    return lyricsOrigin(ref, argument);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is LyricsOriginProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$lyricsOriginHash() => r'132ed1503e51ffca943715acfe84c205cc5d9788';
+
+/// Where the playing track's words come from, as a translation key resolved
+/// by the caller.
+///
+/// Reads the stored answer directly — no fetch — so a sheet showing it opens
+/// instantly and describes only what the track already has. Whether LRCLIB
+/// *could* answer is a question for the lyrics pane, which asks on demand.
+
+final class LyricsOriginFamily extends $Family
+    with $FunctionalFamilyOverride<FutureOr<LyricsOrigin>, LibrarySong> {
+  LyricsOriginFamily._()
+    : super(
+        retry: null,
+        name: r'lyricsOriginProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  /// Where the playing track's words come from, as a translation key resolved
+  /// by the caller.
+  ///
+  /// Reads the stored answer directly — no fetch — so a sheet showing it opens
+  /// instantly and describes only what the track already has. Whether LRCLIB
+  /// *could* answer is a question for the lyrics pane, which asks on demand.
+
+  LyricsOriginProvider call(LibrarySong song) =>
+      LyricsOriginProvider._(argument: song, from: this);
+
+  @override
+  String toString() => r'lyricsOriginProvider';
+}
+
+/// Whether the device remembers [song] as a favourite.
+///
+/// A FutureProvider, not a Notifier: the database is the record and writes
+/// invalidate this family, so every surface showing the answer rebuilds from
+/// the same source of truth instead of each caching its own.
+
+@ProviderFor(favouriteState)
+final favouriteStateProvider = FavouriteStateFamily._();
+
+/// Whether the device remembers [song] as a favourite.
+///
+/// A FutureProvider, not a Notifier: the database is the record and writes
+/// invalidate this family, so every surface showing the answer rebuilds from
+/// the same source of truth instead of each caching its own.
+
+final class FavouriteStateProvider
+    extends $FunctionalProvider<AsyncValue<bool>, bool, FutureOr<bool>>
+    with $FutureModifier<bool>, $FutureProvider<bool> {
+  /// Whether the device remembers [song] as a favourite.
+  ///
+  /// A FutureProvider, not a Notifier: the database is the record and writes
+  /// invalidate this family, so every surface showing the answer rebuilds from
+  /// the same source of truth instead of each caching its own.
+  FavouriteStateProvider._({
+    required FavouriteStateFamily super.from,
+    required LibrarySong super.argument,
+  }) : super(
+         retry: null,
+         name: r'favouriteStateProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$favouriteStateHash();
+
+  @override
+  String toString() {
+    return r'favouriteStateProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<bool> $createElement($ProviderPointer pointer) =>
+      $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<bool> create(Ref ref) {
+    final argument = this.argument as LibrarySong;
+    return favouriteState(ref, argument);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is FavouriteStateProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$favouriteStateHash() => r'b8db3c043ba60412043e86a29ff60455b8ce29b4';
+
+/// Whether the device remembers [song] as a favourite.
+///
+/// A FutureProvider, not a Notifier: the database is the record and writes
+/// invalidate this family, so every surface showing the answer rebuilds from
+/// the same source of truth instead of each caching its own.
+
+final class FavouriteStateFamily extends $Family
+    with $FunctionalFamilyOverride<FutureOr<bool>, LibrarySong> {
+  FavouriteStateFamily._()
+    : super(
+        retry: null,
+        name: r'favouriteStateProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  /// Whether the device remembers [song] as a favourite.
+  ///
+  /// A FutureProvider, not a Notifier: the database is the record and writes
+  /// invalidate this family, so every surface showing the answer rebuilds from
+  /// the same source of truth instead of each caching its own.
+
+  FavouriteStateProvider call(LibrarySong song) =>
+      FavouriteStateProvider._(argument: song, from: this);
+
+  @override
+  String toString() => r'favouriteStateProvider';
 }
