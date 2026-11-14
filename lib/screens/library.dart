@@ -56,23 +56,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     );
     final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
 
-    final albumList = albums.value ?? const <LibraryAlbum>[];
-    final artistList = artists.value ?? const <LibraryArtist>[];
-    final playlistList = playlists.value ?? const <LibraryPlaylist>[];
-    final ownedList = ref.watch(ownedPlaylistsProvider).value ?? const [];
-    // The count belongs to the half that is showing: a heading that counted
-    // both would describe a list the user cannot see.
-    final count = switch (_view) {
-      LibraryView.albums =>
-        albumList.isEmpty ? null : 'albumsCount'.plural(albumList.length),
-      LibraryView.artists =>
-        artistList.isEmpty ? null : 'artistsCount'.plural(artistList.length),
-      LibraryView.playlists =>
-        (playlistList.isEmpty && ownedList.isEmpty)
-            ? null
-            : 'playlistsCount'.plural(playlistList.length + ownedList.length),
-    };
-
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: RefreshIndicator(
@@ -85,7 +68,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             slivers: [
               SliverPillHeader(
                 title: 'libraryTitle'.tr(),
-                subtitle: count ?? 'librarySubtitle'.tr(),
                 actions: [
                   IconButton(
                     tooltip: 'commonRefresh'.tr(),

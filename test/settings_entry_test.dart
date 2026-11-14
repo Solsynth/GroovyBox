@@ -103,10 +103,7 @@ void main() {
 
     // The row reads the real database rather than a placeholder: one song,
     // still reachable through the source it came from.
-    expect(
-      find.textContaining('1 song known on this device'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('1 song known on this device'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -121,13 +118,20 @@ void main() {
     expect(slider, findsOneWidget);
     expect(find.text('Volume'), findsOneWidget);
 
+    // The pill header floats with a gap under it, so on a phone the slider
+    // can start below the fold; scroll it into reach before dragging, which
+    // is what a user does. The contract is the drag, not the first frame.
+    await tester.ensureVisible(slider);
+    await tester.pumpAndSettle();
     await tester.drag(slider, const Offset(-200, 0));
     await tester.pumpAndSettle();
     expect(_playback.volumes, isNotEmpty);
     expect(_playback.volumes.last, lessThan(100));
   });
 
-  testWidgets('adding a library from settings allows navigating back', (tester) async {
+  testWidgets('adding a library from settings allows navigating back', (
+    tester,
+  ) async {
     await _pumpShell(tester, const Size(900, 900));
     await tester.tap(find.byIcon(Symbols.settings));
     await tester.pumpAndSettle();

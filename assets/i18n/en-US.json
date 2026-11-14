@@ -18,7 +18,6 @@
   "commonPlay": "Play",
   "commonUnknownArtist": "Unknown artist",
   "libraryArtists": "Artists",
-  "artistsCount": "{'one': '{} artist', 'other': '{} artists'}",
   "artistsEyebrow": "Artist",
   "artistsTopTracks": "Top tracks",
   "artistsAlbums": "{'one': '{} album', 'other': '{} albums'}",
@@ -197,8 +196,6 @@
   "libraryAlbums": "Albums",
   "libraryPlaylists": "Playlists",
   "exploreTitle": "Explore",
-  "exploreStreamingFrom": "Streaming from {}",
-  "exploreStreamingFromLibraries": "Streaming from {} libraries",
   "exploreMadeForYou": "Made for you",
   "exploreShuffle": "Shuffle",
   "exploreRecentlyAdded": "Recently added",
@@ -209,11 +206,6 @@
   "exploreAddSource": "Connect a library",
   "exploreImportFiles": "Import files",
   "libraryTitle": "Library",
-  "librarySubtitle": "Every album and playlist from every connected library",
-  "albumsCount": {
-    "one": "{} album",
-    "other": "{} albums"
-  },
   "albumsEmptyTitle": "No albums yet",
   "albumsEmptyMessage": "Anything with an album tag in your libraries shows up here.",
   "albumsLoadError": "Could not load albums",
@@ -227,7 +219,6 @@
   "albumsDetailLoadError": "Could not load this album",
   "albumsPlayAlbum": "Play album",
   "searchTitle": "Search",
-  "searchSubtitle": "Songs, albums and playlists — in your libraries and from their stores",
   "searchPlaceholder": "Search your libraries and the stores",
   "searchInLibraries": "In your libraries",
   "searchInStores": "Available in the stores",
@@ -245,10 +236,6 @@
   "libraryNoSourceMessage": "Connect a Subsonic or Jellyfin server to stream from it, or import audio files already on this device. Imported files are copied into GroovyBox and play without a server.",
   "libraryAddSource": "Connect a library",
   "libraryImportFiles": "Import files",
-  "playlistsCount": {
-    "one": "{} playlist",
-    "other": "{} playlists"
-  },
   "playlistsEmptyTitle": "No playlists yet",
   "playlistsEmptyMessage": "Playlists you make in Navidrome or Jellyfin appear here automatically.",
   "playlistsTrackCount": {
@@ -279,7 +266,6 @@
   "ownedPlaylistRemoved": "Removed {}",
   "ownedPlaylistEdited": "edited {}",
   "profileTitle": "Profile",
-  "profileSubtitle": "You, across the fleet and this device",
   "profileAccountError": "Could not load your account right now.",
   "profileTasteTitle": "Your taste",
   "profileTasteEmpty": "Nothing scrobbled in this window yet. Play something and it counts.",

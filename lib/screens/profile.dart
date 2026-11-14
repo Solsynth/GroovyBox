@@ -57,7 +57,6 @@ class ProfileScreen extends ConsumerWidget {
             children: [
               PillHeader(
                 title: 'profileTitle'.tr(),
-                subtitle: 'profileSubtitle'.tr(),
                 actions: [
                   IconButton(
                     tooltip: 'commonRefresh'.tr(),

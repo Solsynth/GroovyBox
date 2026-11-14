@@ -18,7 +18,6 @@
   "commonPlay": "播放",
   "commonUnknownArtist": "未知艺术家",
   "libraryArtists": "艺术家",
-  "artistsCount": "{'other': '{} 位艺术家'}",
   "artistsEyebrow": "艺术家",
   "artistsTopTracks": "热门歌曲",
   "artistsAlbums": "{'other': '{} 张专辑'}",
@@ -197,8 +196,6 @@
   "libraryAlbums": "专辑",
   "libraryPlaylists": "歌单",
   "exploreTitle": "探索",
-  "exploreStreamingFrom": "正在从 {} 串流",
-  "exploreStreamingFromLibraries": "正在从 {} 个曲库串流",
   "exploreMadeForYou": "为你准备",
   "exploreShuffle": "换一批",
   "exploreRecentlyAdded": "最近添加",
@@ -209,11 +206,6 @@
   "exploreAddSource": "连接曲库",
   "exploreImportFiles": "导入文件",
   "libraryTitle": "曲库",
-  "librarySubtitle": "来自所有已连接曲库的专辑与歌单",
-  "albumsCount": {
-    "one": "{} 张专辑",
-    "other": "{} 张专辑"
-  },
   "albumsEmptyTitle": "还没有专辑",
   "albumsEmptyMessage": "曲库中带有专辑标签的内容都会显示在这里。",
   "albumsLoadError": "无法加载专辑",
@@ -227,7 +219,6 @@
   "albumsDetailLoadError": "无法加载这张专辑",
   "albumsPlayAlbum": "播放专辑",
   "searchTitle": "搜索",
-  "searchSubtitle": "歌曲、专辑与歌单：你的曲库中有的，以及商店里可以加入的",
   "searchPlaceholder": "搜索你的曲库和音乐商店",
   "searchInLibraries": "在你的曲库中",
   "searchInStores": "商店中可以加入",
@@ -245,10 +236,6 @@
   "libraryNoSourceMessage": "连接 Subsonic 或 Jellyfin 服务器进行串流，或导入本设备上已有的音频文件。导入的文件会复制进 GroovyBox，无需服务器即可播放。",
   "libraryAddSource": "连接曲库",
   "libraryImportFiles": "导入文件",
-  "playlistsCount": {
-    "one": "{} 个歌单",
-    "other": "{} 个歌单"
-  },
   "playlistsEmptyTitle": "还没有歌单",
   "playlistsEmptyMessage": "你在 Navidrome 或 Jellyfin 中创建的歌单会自动显示在这里。",
   "playlistsTrackCount": {
@@ -279,7 +266,6 @@
   "ownedPlaylistRemoved": "已移除 {}",
   "ownedPlaylistEdited": "{} 编辑",
   "profileTitle": "个人",
-  "profileSubtitle": "跨越整个网络与这台设备的你",
   "profileAccountError": "暂时无法加载你的账户信息。",
   "profileTasteTitle": "你的口味",
   "profileTasteEmpty": "这段时间还没有听歌记录。放一首歌，就会有计数。",

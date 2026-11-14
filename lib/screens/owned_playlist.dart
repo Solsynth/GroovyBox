@@ -102,23 +102,7 @@ class OwnedPlaylistDetailScreen extends ConsumerWidget {
               leading: HeaderBackButton(
                 onPressed: () => context.router.maybePop(),
               ),
-              subtitle: entries.maybeWhen(
-                data: (list) => list.isEmpty
-                    ? 'ownedPlaylistEmptyHeader'.tr()
-                    : 'playlistsDetailTrackCount'.plural(
-                        list.length,
-                        args: [
-                          '${list.length}',
-                          formatDuration(
-                            list.fold(
-                              Duration.zero,
-                              (sum, e) => sum + e.song.duration,
-                            ),
-                          ),
-                        ],
-                      ),
-                orElse: () => null,
-              ),
+
               actions: [
                 PulsarUploadButton(
                   localKey: PulsarPlaylistLinks.deviceKey(playlistId),

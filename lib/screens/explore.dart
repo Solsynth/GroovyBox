@@ -74,15 +74,6 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
             slivers: [
               SliverPillHeader(
                 title: 'exploreTitle'.tr(),
-                subtitle: servers.isEmpty
-                    ? null
-                    : servers.length == 1
-                    ? 'exploreStreamingFrom'.tr(
-                        args: [servers.single.displayName],
-                      )
-                    : 'exploreStreamingFromLibraries'.tr(
-                        args: ['${servers.length}'],
-                      ),
                 actions: [
                   IconButton(
                     tooltip: 'commonRefresh'.tr(),

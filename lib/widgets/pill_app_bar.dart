@@ -18,13 +18,20 @@ const double kPillBarContentHeight = SolSpace.control + SolSpace.md;
 /// its container so the end caps clear it.
 const double kPillSideGutter = SolSpace.md;
 
+/// Gap between a pill capsule and the content under it.
+///
+/// The capsule floats, so without this the first row of a page reads as if it
+/// were the bar's own second line.
+const double kPillContentGap = SolSpace.lg;
+
 /// Total height of a pill bar, excluding the status-bar inset.
 ///
-/// A bar reserves `statusTop + kPillAppBarHeight`: the capsule's top margin
-/// plus [kPillBarContentHeight]. Anything that has to clear a pill header — a
-/// body gap, a scaffold slot, a test assertion — should be computed from this
-/// so every pill lands on the same band.
-const double kPillAppBarHeight = kPillBarContentHeight + SolSpace.md;
+/// A bar reserves `statusTop + kPillAppBarHeight`: the capsule's top margin,
+/// the capsule itself, and [kPillContentGap] under it. Anything that has to
+/// clear a pill header — a body gap, a scaffold slot, a test assertion —
+/// should be computed from this so every pill lands on the same band.
+const double kPillAppBarHeight =
+    kPillBarContentHeight + SolSpace.md + kPillContentGap;
 
 /// Feeds a pill's fade ramp (0..1) from a scroll notification.
 ///
@@ -76,8 +83,11 @@ Widget _buildWithFade({
 /// the bar either: the feed slides underneath it while only the fill animates.
 ///
 /// [leading] sits inside the capsule at its start — the back affordance on a
-/// pushed page, nothing on a tab root. The page's title and trailing actions
-/// fill the rest of the capsule's row.
+/// pushed page, nothing on a tab root. The title and trailing actions fill the
+/// rest of the capsule's row.
+///
+/// A pill carries a title only: a page that wants to say more says it in the
+/// content, where there is room for a sentence.
 class PillSliverAppBar extends StatelessWidget {
   /// Fade position listenable, 0..1. Null keeps the capsule surfaced: a page
   /// whose content never slides under it has no fade to track, and hiding its
@@ -91,14 +101,16 @@ class PillSliverAppBar extends StatelessWidget {
   /// the row's start.
   final Widget? leading;
 
-  /// The page title, drawn inside the capsule.
+  /// The page title, drawn inside the capsule. Ignored when [child] is set.
   final String title;
-
-  /// Optional one-line detail under the title; the capsule grows to fit.
-  final String? subtitle;
 
   /// Actions at the capsule's trailing edge.
   final List<Widget> actions;
+
+  /// A control that replaces the title inside the capsule — the search
+  /// field on a page whose header is the search itself. Actions still land
+  /// at the capsule's trailing edge.
+  final Widget? child;
 
   const PillSliverAppBar({
     super.key,
@@ -106,8 +118,8 @@ class PillSliverAppBar extends StatelessWidget {
     required this.statusTop,
     this.leading,
     required this.title,
-    this.subtitle,
     this.actions = const [],
+    this.child,
   });
 
   @override
@@ -125,9 +137,9 @@ class PillSliverAppBar extends StatelessWidget {
         fade: fade,
         child: _PillContent(
           title: title,
-          subtitle: subtitle,
           actions: actions,
           leading: leading,
+          child: child,
         ),
         builder: (context, t, content) =>
             _PillBarSurface(t: t, statusTop: statusTop, child: content),
@@ -136,27 +148,26 @@ class PillSliverAppBar extends StatelessWidget {
   }
 }
 
-/// The capsule's control row: leading, title with an optional one-line
-/// subtitle under it, and trailing actions.
+/// The capsule's control row: leading, title and trailing actions.
 class _PillContent extends StatelessWidget {
   final String title;
-  final String? subtitle;
   final List<Widget> actions;
   final Widget? leading;
 
+  /// A control that replaces the title inside the capsule.
+  final Widget? child;
+
   const _PillContent({
     required this.title,
-    this.subtitle,
-    this.actions = const [],
+    required this.actions,
     this.leading,
+    this.child,
   });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final style = theme.textTheme.titleMedium?.copyWith(
-      fontWeight: FontWeight.w700,
-    );
+    final style = Theme.of(context).textTheme.titleMedium
+        ?.copyWith(fontWeight: FontWeight.w700);
     final titleText = Text(
       title,
       maxLines: 1,
@@ -167,23 +178,8 @@ class _PillContent extends StatelessWidget {
       children: [
         if (leading != null) ...[leading!, const SizedBox(width: SolSpace.xs)],
         Expanded(
-          child: subtitle == null
-              ? Align(alignment: Alignment.centerLeft, child: titleText)
-              : Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    titleText,
-                    Text(
-                      subtitle!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
+          child: child ??
+              Align(alignment: Alignment.centerLeft, child: titleText),
         ),
         ...actions,
       ],
@@ -213,7 +209,7 @@ class _PillBarSurface extends StatelessWidget {
         kPillSideGutter,
         statusTop + kPillSideGutter,
         kPillSideGutter,
-        0,
+        kPillContentGap,
       ),
       child: PillSurface(
         t: t,
@@ -233,10 +229,10 @@ class _PillBarSurface extends StatelessWidget {
 
 /// A page's header as a pill, for scroll views: measures the status-bar
 /// inset itself, so a call site names the page's title and actions and the
-/// bar lands on the same band every page uses.
+/// bar lands on the same band every page uses. A page whose header *is* a
+/// control hands it over as [child] instead of a [title].
 class SliverPillHeader extends StatelessWidget {
   final String title;
-  final String? subtitle;
   final List<Widget> actions;
 
   /// The control at the capsule's leading edge — the back affordance on a
@@ -247,13 +243,17 @@ class SliverPillHeader extends StatelessWidget {
   /// the content slides under it. Null keeps the capsule surfaced.
   final ValueListenable<double>? fade;
 
+  /// A control that replaces the title inside the capsule — the search
+  /// field on a page whose header is the search itself.
+  final Widget? child;
+
   const SliverPillHeader({
     super.key,
     required this.title,
-    this.subtitle,
     this.actions = const [],
     this.leading,
     this.fade,
+    this.child,
   });
 
   @override
@@ -264,8 +264,8 @@ class SliverPillHeader extends StatelessWidget {
       statusTop: statusTop,
       leading: leading,
       title: title,
-      subtitle: subtitle,
       actions: actions,
+      child: child,
     );
   }
 }
@@ -276,16 +276,18 @@ class SliverPillHeader extends StatelessWidget {
 /// and hiding its fill would leave bare controls floating on the page.
 class PillHeader extends StatelessWidget {
   final String title;
-  final String? subtitle;
   final List<Widget> actions;
   final Widget? leading;
+
+  /// A control that replaces the title inside the capsule.
+  final Widget? child;
 
   const PillHeader({
     super.key,
     required this.title,
-    this.subtitle,
     this.actions = const [],
     this.leading,
+    this.child,
   });
 
   @override
@@ -295,7 +297,7 @@ class PillHeader extends StatelessWidget {
         kPillSideGutter,
         kPillSideGutter,
         kPillSideGutter,
-        SolSpace.xs,
+        kPillContentGap,
       ),
       child: PillSurface(
         radius: SolRadius.pillRadius,
@@ -304,9 +306,9 @@ class PillHeader extends StatelessWidget {
           height: kPillBarContentHeight,
           child: _PillContent(
             title: title,
-            subtitle: subtitle,
             actions: actions,
             leading: leading,
+            child: child,
           ),
         ),
       ),

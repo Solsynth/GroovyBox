@@ -90,34 +90,24 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         child: CustomScrollView(
           slivers: [
             SliverPillHeader(
-              title: 'searchTitle'.tr(),
-              subtitle: 'searchSubtitle'.tr(),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  SolSpace.xxl,
-                  0,
-                  SolSpace.xxl,
-                  SolSpace.md,
-                ),
-                child: SearchBar(
-                  controller: _controller,
-                  hintText: 'searchPlaceholder'.tr(),
-                  leading: const Icon(Symbols.search_rounded),
-                  trailing: [
-                    if (_draft.isNotEmpty)
-                      IconButton(
-                        tooltip: 'commonClear'.tr(),
-                        onPressed: () {
-                          _controller.clear();
-                          _onChanged('');
-                        },
-                        icon: const Icon(Symbols.close_rounded),
-                      ),
-                  ],
-                  onChanged: _onChanged,
-                ),
+              title: '',
+              child: SearchBar(
+                controller: _controller,
+                hintText: 'searchPlaceholder'.tr(),
+                leading: const Icon(Symbols.search_rounded),
+                constraints: const BoxConstraints(minHeight: 40, maxHeight: 40),
+                trailing: [
+                  if (_draft.isNotEmpty)
+                    IconButton(
+                      tooltip: 'commonClear'.tr(),
+                      onPressed: () {
+                        _controller.clear();
+                        _onChanged('');
+                      },
+                      icon: const Icon(Symbols.close_rounded),
+                    ),
+                ],
+                onChanged: _onChanged,
               ),
             ),
             if (sources.isEmpty)

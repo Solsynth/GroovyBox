@@ -160,12 +160,6 @@ class PulsarPlaylistDetailScreen extends ConsumerWidget {
               leading: HeaderBackButton(
                 onPressed: () => context.router.maybePop(),
               ),
-              subtitle: detail.maybeWhen(
-                data: (playlist) => playlist.items.isEmpty
-                    ? 'pulsarPlaylistEmptyHeader'.tr()
-                    : null,
-                orElse: () => null,
-              ),
               actions: [
                 IconButton(
                   tooltip: 'ownedPlaylistRename'.tr(),

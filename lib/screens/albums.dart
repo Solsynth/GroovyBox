@@ -143,23 +143,6 @@ class AlbumDetailScreen extends ConsumerWidget {
               leading: HeaderBackButton(
                 onPressed: () => context.router.maybePop(),
               ),
-              subtitle: songs.maybeWhen(
-                data: (list) => list.isEmpty
-                    ? null
-                    : 'albumsTrackCount'.plural(
-                        list.length,
-                        args: [
-                          '${list.length}',
-                          formatDuration(
-                            list.fold(
-                              Duration.zero,
-                              (sum, s) => sum + s.duration,
-                            ),
-                          ),
-                        ],
-                      ),
-                orElse: () => null,
-              ),
             ),
             Expanded(
               child: songs.when(

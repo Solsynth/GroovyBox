@@ -55,23 +55,6 @@ class PlaylistDetailScreen extends ConsumerWidget {
               leading: HeaderBackButton(
                 onPressed: () => context.router.maybePop(),
               ),
-              subtitle: songs.maybeWhen(
-                data: (list) => list.isEmpty
-                    ? 'playlistsDetailEmptyHeader'.tr()
-                    : 'playlistsDetailTrackCount'.plural(
-                        list.length,
-                        args: [
-                          '${list.length}',
-                          formatDuration(
-                            list.fold(
-                              Duration.zero,
-                              (sum, s) => sum + s.duration,
-                            ),
-                          ),
-                        ],
-                      ),
-                orElse: () => null,
-              ),
               actions: [
                 songs.maybeWhen(
                   data: (list) => PulsarUploadButton(
