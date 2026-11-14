@@ -21,6 +21,7 @@ import 'package:groovy_box/widgets/song_actions.dart';
 import 'package:groovy_box/widgets/track_versions.dart';
 import 'package:groovy_box/widgets/transport.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:marqueer/marqueer.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -45,8 +46,8 @@ const double _kCornerInset = SolSpace.lg;
 /// between them.
 ///
 /// The wide layout sizes the cover and the words against it, and its controls
-/// sit in that column. The compact page has no such column any more: its tail
-/// is the docked bar below, which reserves its own height.
+/// sit in that column. The compact page measures its own tail instead; this
+/// is the wide column's number.
 const double _kBodyTail = 300;
 
 /// Narrowest the copy, scrubber and transport column gets before it spills.
@@ -71,39 +72,83 @@ const double _kDockSleeve = 44;
 /// arithmetic taken before the bar has been laid out.
 const double _kDockPad = SolSpace.md;
 
+/// Gap the docked bar keeps under itself, on top of the page's own margin: a
+/// capsule on the page's last pixel reads as the floor rather than as a bar
+/// floating above it.
+const double _kDockMargin = SolSpace.md;
+
 /// Height the bar's track row takes at the default type size: the sleeve is
 /// the tallest thing in it.
 const double _kDockRowHeight = 48;
 
-/// Height the bar's control row takes at the default type size: the play
-/// button's own box — its icon plus the padding [Transport] gives it — and
-/// not a token, because a row shorter than the tallest button overflows
-/// rather than clipping.
-const double _kDockControlHeight = 36 + SolSpace.lg * 2;
+/// Height a slider block takes at the default type size: the slider's tap box
+/// and the two clocks under it, plus the type size's own share.
+const double _kSeekHeight = 40;
 
-/// The docked bar's geometry at a given text size.
+/// Height a transport row takes: the play button's own box, asked of the
+/// widget rather than repeated here — a row shorter than the tallest button
+/// overflows rather than clipping.
+double _transportHeight({bool compact = false}) =>
+    Transport.height(compact: compact);
+
+/// Height the compact copy block takes at the default type size: one line of
+/// headline and the credit line under it.
+///
+/// Measured rather than assumed — a headline line, a body line and the gap
+/// between them — because the block is what the copy is allowed to take
+/// before the artwork above it gives way.
+const double _kCopyHeight = 92;
+
+/// The tail under the compact slot, in either arrangement.
+///
+/// Two tails share the page's floor and swap on the morph: the cover's, which
+/// is the copy and the controls laid on the page, and the alternate's, which
+/// is one docked capsule. [total] is what each takes, so the slot above them
+/// is arithmetic rather than a leftover.
+typedef _TailMetrics = ({double seek, double total});
+
+_TailMetrics _coverTail(double textScale) {
+  final seek = _kSeekHeight + textScale * 16;
+  return (
+    seek: seek,
+    total:
+        textScale * _kCopyHeight +
+        SolSpace.sm +
+        seek +
+        SolSpace.sm +
+        _transportHeight(),
+  );
+}
+
+/// The docked bar's geometry at a given text size, with the cover's landing
+/// box inside it.
 ///
 /// Shared by the bar and by the cover's flight, which has to know where the
 /// sleeve sits before the bar itself has been laid out: both read the same
-/// numbers rather than measuring each other. [total] is the bar's own height,
-/// [sleeveTop] the distance from its top edge to the sleeve's top.
+/// numbers rather than measuring each other. [total] is the bar's own height
+/// — the slot above it is what is left of the page.
 typedef _DockMetrics = ({
   double row,
-  double controls,
+  double seek,
   double total,
   double sleeveTop,
 });
 
 _DockMetrics _dockMetrics(double textScale) {
-  // Two rows: the track, then the seek bar beside the transport. The track's
-  // two lines are text and grow with the reader's size; the control row's
-  // slider clocks do too, but its buttons do not, so it takes the taller.
   final row = math.max(_kDockRowHeight, textScale * _kDockRowHeight);
-  final controls = math.max(_kDockControlHeight, textScale * 40);
+  final seek = _kSeekHeight + textScale * 16;
   return (
     row: row,
-    controls: controls,
-    total: _kDockPad * 2 + row + SolSpace.sm + controls,
+    seek: seek,
+    // Three rows: the track, the seek bar on its own, then the transport.
+    total:
+        _kDockPad * 2 +
+        row +
+        SolSpace.xs +
+        seek +
+        SolSpace.xs +
+        _transportHeight(compact: true) +
+        _kDockMargin,
     sleeveTop: _kDockPad + (row - _kDockSleeve) / 2,
   );
 }
@@ -763,9 +808,10 @@ class _CompactPlayerBody extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // The bar is the page's floor and the slot is what is left above it.
-        // Sizing the artwork from the window instead let the square crowd the
-        // words; now the words own the slot, so the square is what adapts.
+        // Two tails share the page's floor: the cover's copy and controls,
+        // and the docked capsule the alternates use. Each reserves its own
+        // height, so the words get the capsule's room back while the square
+        // above them gives way rather than both claiming the same pixels.
         // engine's `scaleFontSize` asserts when the platform's scaling
         // configuration goes stale (a macOS debug failure that has been seen
         // mid-layout), and these constants are plain layout arithmetic —
@@ -779,31 +825,38 @@ class _CompactPlayerBody extends StatelessWidget {
           constraints.maxHeight - _kPageMargin * 2,
           0.0,
         );
-        // Taken at the reader's type size: the bar is two rows of text and
-        // controls, and a larger type takes its room from the slot rather
-        // than from the transport.
+        final coverTail = _coverTail(textScale);
         final dock = _dockMetrics(textScale);
-        final slotHeight = math.max(available - dock.total, 0.0);
-        // As much of the slot as a square can take without crowding the bar,
-        // capped so a tall window does not turn the sleeve into the page.
+        final coverSlot = math.max(available - coverTail.total, 0.0);
+        final dockSlot = math.max(available - dock.total, 0.0);
+        // As much of the slot as a square can take, capped so a tall window
+        // does not turn the sleeve into the page. Measured at the cover end:
+        // that is the only state that draws it at this size.
         final coverSize = math.min(
-          math.min(slotHeight, contentWidth) * 0.92,
+          math.min(coverSlot, contentWidth) * 0.92,
           360.0,
+        );
+        // The copy, the seek bar and the transport keep the square's width,
+        // so the column reads as one object rather than three rows of
+        // different lengths.
+        final controlsWidth = math.max(
+          coverSize,
+          math.min(320.0, contentWidth),
         );
         final isRtl = Directionality.of(context) == TextDirection.rtl;
         final startRect = Rect.fromLTWH(
           (contentWidth - coverSize) / 2,
-          (slotHeight - coverSize) / 2,
+          (coverSlot - coverSize) / 2,
           coverSize,
           coverSize,
         );
-        // The flight's landing box is the bar's own sleeve, measured from the
-        // bar's geometry rather than from its laid-out children: the artwork
-        // is placed in the stack before the bar has been inflated, so the two
-        // cannot read each other.
+        // The flight's landing box is the bar's own sleeve, taken from the
+        // bar's arithmetic rather than from its laid-out children: the
+        // artwork is placed in the stack before the bar has been inflated,
+        // so the two cannot read each other.
         final endRect = Rect.fromLTWH(
           isRtl ? contentWidth - _kDockPad - _kDockSleeve : _kDockPad,
-          slotHeight + dock.sleeveTop,
+          dockSlot + dock.sleeveTop,
           _kDockSleeve,
           _kDockSleeve,
         );
@@ -812,17 +865,29 @@ class _CompactPlayerBody extends StatelessWidget {
         return AnimatedBuilder(
           animation: morph,
           builder: (context, _) {
-            // Only the artwork's flight reads the morph: the bar stays docked
-            // and still while the pane opens over it.
             final t = morph.value;
+            final slotHeight = lerpDouble(coverSlot, dockSlot, t)!;
+            final tailHeight = lerpDouble(coverTail.total, dock.total, t)!;
             final artRect = Rect.lerp(startRect, endRect, t)!;
             final artRadius = lerpDouble(SolRadius.xl, SolRadius.sm, t)!;
+            // The copy hands over to the capsule: it fades out as the words
+            // take the slot, and the bar settles in behind them. Two ramps
+            // rather than one so there is no frame where the page has neither
+            // a headline nor a way to seek.
+            final copyOut =
+                1 - _eased(Curves.easeInCubic, (t / 0.28).clamp(0.0, 1.0));
+            final barIn = _eased(
+              Curves.easeOutCubic,
+              ((t - 0.35) / 0.65).clamp(0.0, 1.0),
+            );
             return SingleChildScrollView(
               padding: const EdgeInsets.symmetric(
                 horizontal: SolSpace.xl,
-                // The bar is the last thing on the page: on the glass edge it
-                // would read as clipped rather than placed. The same room at
-                // the top keeps the cover off the window edge.
+                // Clear of the phone's own bottom inset, which [SafeArea] has
+                // already applied, and of the window edge: the transport is
+                // the last thing on the page, and a button on the glass edge
+                // reads as clipped rather than placed. The same room at the
+                // top keeps the cover off the window edge.
                 vertical: _kPageMargin,
               ),
               child: Stack(
@@ -831,7 +896,7 @@ class _CompactPlayerBody extends StatelessWidget {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // The slot takes what the bar does not: the cover, or
+                      // The slot takes what the tail does not: the cover, or
                       // the words and the queue in its place.
                       SizedBox(
                         height: slotHeight,
@@ -843,10 +908,60 @@ class _CompactPlayerBody extends StatelessWidget {
                           alternateAlive: alternateAlive,
                         ),
                       ),
-                      // Docked, not a page tail: one capsule holds the sleeve,
-                      // the track, the seek bar and the transport, so the slot
-                      // above it holds nothing but what is being read.
-                      _DockBar(song: song, scrubber: scrubber),
+                      // One frame holds whichever tail is on show; the two
+                      // trade places on the morph. Only the visible one is
+                      // mounted, so a page at rest has one seek bar and one
+                      // transport, not two of each.
+                      SizedBox(
+                        height: tailHeight,
+                        child: ClipRect(
+                          child: Stack(
+                            children: [
+                              // The cover's tail: the copy and the controls,
+                              // laid on the page, anchored to the top so the
+                              // headline stays where the artwork left it.
+                              if (copyOut > 0)
+                                Positioned(
+                                  top: 0,
+                                  left: 0,
+                                  right: 0,
+                                  child: IgnorePointer(
+                                    ignoring: copyOut < 1,
+                                    child: Opacity(
+                                      opacity: copyOut,
+                                      child: _PageTail(
+                                        song: song,
+                                        scrubber: scrubber,
+                                        width: controlsWidth,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              // Docked, and only while an alternate is up:
+                              // the capsule is what buys the words their
+                              // height, so the cover keeps the roomier tail.
+                              // Anchored to the floor so it rises out of the
+                              // page edge as the frame shrinks under it.
+                              if (barIn > 0)
+                                Positioned(
+                                  bottom: 0,
+                                  left: 0,
+                                  right: 0,
+                                  child: IgnorePointer(
+                                    ignoring: barIn < 1,
+                                    child: Opacity(
+                                      opacity: barIn,
+                                      child: _DockBar(
+                                        song: song,
+                                        scrubber: scrubber,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                   // Single persistent artwork widget that flies like a hero
@@ -869,6 +984,61 @@ class _CompactPlayerBody extends StatelessWidget {
           },
         );
       },
+    );
+  }
+}
+
+/// The compact cover's tail: the track's copy, the seek bar and the transport,
+/// straight on the page's own field.
+///
+/// This is the arrangement the page opens in, and the one it returns to when
+/// the words close: nothing is docked here, so the copy is the page's headline
+/// and each control owns its row.
+class _PageTail extends StatelessWidget {
+  final LibrarySong song;
+  final Widget scrubber;
+  final double width;
+
+  const _PageTail({
+    required this.song,
+    required this.scrubber,
+    required this.width,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Same arithmetic the flight and the bar use, at the same type size.
+    // engine's `scaleFontSize` asserts when the platform's scaling
+    // configuration goes stale mid-layout.
+    // ignore: deprecated_member_use
+    final textScale = MediaQuery.textScalerOf(context).textScaleFactor;
+    final tail = _coverTail(textScale);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: textScale * _kCopyHeight,
+          child: Center(child: _TrackCopy(song: song, centered: true)),
+        ),
+        const SizedBox(height: SolSpace.sm),
+        // As wide as the artwork, so the column reads as one object: the
+        // square the cover paints is the square the controls span.
+        Center(
+          child: SizedBox(
+            width: width,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(height: tail.seek, child: scrubber),
+                const SizedBox(height: SolSpace.sm),
+                SizedBox(height: _transportHeight(), child: const Transport()),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1112,7 +1282,6 @@ class _WidePlayerBody extends StatelessWidget {
           math.max(controlsHeight, leftColumnNeeded),
         );
 
-
         return Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(
@@ -1256,7 +1425,6 @@ class _DockBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final playing = song.playing;
     // Same arithmetic the cover's flight lands on, at the same type size.
     // engine's `scaleFontSize` asserts when the platform's scaling
@@ -1265,83 +1433,107 @@ class _DockBar extends StatelessWidget {
     final textScale = MediaQuery.textScalerOf(context).textScaleFactor;
     final metrics = _dockMetrics(textScale);
 
-    return PillSurface(
-      // The page's own surface, not a bar floating over content that scrolls
-      // under it: no margin, and the page's field is what it refracts.
-      radius: const BorderRadius.all(Radius.circular(SolRadius.sheet)),
-      contentPadding: EdgeInsets.fromLTRB(
-        _kDockPad,
-        _kDockPad,
-        SolSpace.md,
-        _kDockPad,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(
-            height: metrics.row,
-            child: Row(
-              children: [
-                // The hero's landing box: the same art, size and radius the
-                // flight ends on, so the cover settles into it without a jump.
-                LibraryArtwork(
-                  sourceId: song.sourceId,
-                  artId: song.artId,
-                  size: _kDockSleeve,
-                  radius: SolRadius.sm,
-                ),
-                const SizedBox(width: SolSpace.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        playing.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      Text(
-                        playing.subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
+    return Padding(
+      // Room under the capsule: on the page's last pixel it reads as the
+      // floor of the window rather than as a bar floating above it. Part of
+      // the bar's own height, so the slot above it is sized for the gap too.
+      padding: const EdgeInsets.only(bottom: _kDockMargin),
+      child: PillSurface(
+        // The page's own surface, not a bar floating over content that
+        // scrolls under it: no margin, and the page's field is what it
+        // refracts.
+        radius: const BorderRadius.all(Radius.circular(SolRadius.sheet)),
+        contentPadding: EdgeInsets.fromLTRB(
+          _kDockPad,
+          _kDockPad,
+          SolSpace.md,
+          _kDockPad,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              height: metrics.row,
+              child: Row(
+                children: [
+                  // The hero's landing box: the same art, size and radius the
+                  // flight ends on, so the cover settles into it without a jump.
+                  LibraryArtwork(
+                    sourceId: song.sourceId,
+                    artId: song.artId,
+                    size: _kDockSleeve,
+                    radius: SolRadius.sm,
                   ),
-                ),
-                // The track's everything else — favourite, playlist, share,
-                // playback info and other versions. The shell's dock has no
-                // room for a menu; this row is the track's own, so it rides
-                // here instead of beside the corner controls.
-                _TrackMoreMenu(),
-              ],
+                  const SizedBox(width: SolSpace.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Same marquee as the cover's headline: the bar's
+                        // row is narrower than a long title, and a menu
+                        // button at its end leaves no room to clamp it.
+                        SizedBox(
+                          height: theme.textTheme.bodyMedium!.fontSize! * 1.5,
+                          child: _MarqueeTitle(
+                            title: playing.title,
+                            centered: false,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        // The credits are links here too, so the bar is not a
+                        // read-only copy of the page's own row.
+                        Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            if (playing.artistId != null && !playing.isRadio)
+                              _CreditLink(
+                                label: playing.artist ?? playing.subtitle,
+                                onTap: () => context.router.push(
+                                  ArtistDetailRoute(
+                                    sourceId: playing.sourceId,
+                                    artistId: playing.artistId!,
+                                    artistName:
+                                        playing.artist ?? playing.subtitle,
+                                  ),
+                                ),
+                              )
+                            else
+                              _CreditText(
+                                label: playing.subtitle,
+                                centered: false,
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  // The track's everything else — favourite, playlist, share,
+                  // playback info and other versions. The shell's dock has no
+                  // room for a menu; this row is the track's own, so it rides
+                  // here instead of beside the corner controls.
+                  _TrackMoreMenu(),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: SolSpace.sm),
-          // Seek and transport share the second row: the shell's dock spends
-          // a whole row on the transport, so putting the bar beside it is
-          // what keeps the page's tail shorter than the covered slot it gives
-          // back. The clocks still scale with the type size, hence the fixed
-          // height — the sleeve above must not move when they re-render.
-          SizedBox(
-            height: metrics.controls,
-            child: Row(
-              children: [
-                Expanded(child: scrubber),
-                const SizedBox(width: SolSpace.sm),
-                const Transport(),
-              ],
+            const SizedBox(height: SolSpace.xs),
+            // The seek bar takes a row of its own: beside the transport it was
+            // squeezed into whatever the buttons left, and a ruler that short
+            // cannot be dragged accurately. Its clocks scale with the type
+            // size, so the row is a fixed height — the sleeve above must not
+            // move while they re-render once a second.
+            SizedBox(height: metrics.seek, child: scrubber),
+            const SizedBox(height: SolSpace.xs),
+            SizedBox(
+              height: _transportHeight(compact: true),
+              child: const Transport(compact: true),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1419,16 +1611,17 @@ class _TrackCopy extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final playing = song.playing;
-    // The artist is the one credit that leads somewhere: a track that
-    // carries its source's artist id opens the artist page from the credit
-    // line. No id — a radio track, an unmapped server — stays plain text;
-    // guessing an artist by name would forge a page the source never
-    // described.
+    // Both credits lead somewhere when the track carries the id: the artist
+    // opens their page, the album its own. No id — a radio track, an
+    // unmapped server — stays plain text; guessing a page by name would forge
+    // one the source never described.
     final artistRef = (playing.artistId == null || playing.isRadio)
         ? null
         : (sourceId: playing.sourceId, id: playing.artistId!);
+    final albumRef = playing.albumId == null
+        ? null
+        : (sourceId: playing.sourceId, id: playing.albumId!);
     final albumCredit = playing.album;
 
     // The button is the title's suffix, not a corner control: the title line
@@ -1445,14 +1638,12 @@ class _TrackCopy extends ConsumerWidget {
           children: [
             const _FavouriteMark(),
             Flexible(
-              child: Text(
+              child: _MarqueeTitle(
                 // A station's row carries what it is playing, so the page
                 // names the track rather than the station it was started
                 // from.
-                playing.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: centered ? TextAlign.center : TextAlign.start,
+                title: playing.title,
+                centered: centered,
                 style: theme.textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w700,
                   letterSpacing: -0.4,
@@ -1466,37 +1657,42 @@ class _TrackCopy extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 4),
-        // The credit line, with the artist tappable when the track knows its
-        // artist id. Centered copy centers it; a left-aligned one keeps the
+        // The credit line: the artist, then the album, each tappable when the
+        // track carries its id. Centered copy centers it; a left-aligned one
+        // keeps the line starting at the same edge as the title.
         Wrap(
           alignment: centered ? WrapAlignment.center : WrapAlignment.start,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             if (artistRef != null)
-              _ArtistCreditLink(
-                artist: artistRef,
-                name: playing.artist ?? playing.subtitle,
+              _CreditLink(
+                label: playing.artist ?? playing.subtitle,
+                onTap: () => context.router.push(
+                  ArtistDetailRoute(
+                    sourceId: artistRef.sourceId,
+                    artistId: artistRef.id,
+                    artistName: playing.artist ?? playing.subtitle,
+                  ),
+                ),
               )
             else
-              Text(
-                playing.subtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: centered ? TextAlign.center : TextAlign.start,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-            if (albumCredit != null)
-              Text(
-                '  ·  $albumCredit',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: centered ? TextAlign.center : TextAlign.start,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
+              _CreditText(label: playing.subtitle, centered: centered),
+            if (albumCredit != null) ...[
+              _CreditText(label: '·', centered: centered),
+              if (albumRef != null)
+                _CreditLink(
+                  label: albumCredit,
+                  onTap: () => context.router.push(
+                    AlbumDetailRoute(
+                      sourceId: albumRef.sourceId,
+                      albumId: albumRef.id,
+                      albumName: albumCredit,
+                    ),
+                  ),
+                )
+              else
+                _CreditText(label: albumCredit, centered: centered),
+            ],
           ],
         ),
       ],
@@ -1504,38 +1700,118 @@ class _TrackCopy extends ConsumerWidget {
   }
 }
 
-/// The artist's name on the credit line, as a way into their page.
+/// The track's name, scrolling when it does not fit.
 ///
-/// A quiet link: the name keeps the credit line's own colour and only the
-/// cursor says it is tappable, because on this page nine words out of ten
-/// are not links and one that shouts would be noise.
-class _ArtistCreditLink extends ConsumerWidget {
-  final LibraryRef artist;
-  final String name;
+/// The headline is the one string on the page that can outgrow its row and
+/// cannot be shortened: clamping it to two lines either pushes the controls
+/// down or cuts off the name the reader came to see. The marquee runs only
+/// when the text is wider than the box it was given, so a short title sits
+/// still and centred like ordinary copy.
+class _MarqueeTitle extends StatelessWidget {
+  final String title;
+  final bool centered;
+  final TextStyle? style;
 
-  const _ArtistCreditLink({required this.artist, required this.name});
+  const _MarqueeTitle({
+    required this.title,
+    required this.centered,
+    required this.style,
+  });
 
   @override
-  Widget build(BuildContext context, WidgetRef widgetRef) {
+  Widget build(BuildContext context) {
+    final text = Text(
+      title,
+      maxLines: 1,
+      softWrap: false,
+      overflow: TextOverflow.visible,
+      textAlign: centered ? TextAlign.center : TextAlign.start,
+      style: style,
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Measured with the style the text actually draws in, so the two
+        // cannot disagree about whether the row overflows.
+        final painter = TextPainter(
+          text: TextSpan(text: title, style: style),
+          maxLines: 1,
+          textDirection: Directionality.of(context),
+        )..layout();
+        final overflows = painter.width > constraints.maxWidth;
+        painter.dispose();
+        if (!overflows) return Center(child: text);
+        return Marqueer(
+          // Left to right is the reading direction, and a title that starts
+          // off screen is a title nobody reads from the beginning.
+          direction: MarqueerDirection.ltr,
+          // Slow enough to read: this is the page's headline, not a ticker
+          // across the bottom of a broadcast.
+          pps: 40,
+          // One pass and then rest at the end. A headline that loops forever
+          // makes a page at rest look busy.
+          infinity: false,
+          edgeDuration: const Duration(seconds: 2),
+          // A horizontal viewport expands across its own axis, and the row's
+          // height is not bounded: the marquee measures the title's line
+          // instead of claiming the whole column.
+          intrinsicCrossAxisSize: true,
+          child: text,
+        );
+      },
+    );
+  }
+}
+
+/// One quiet credit on the copy's second line.
+class _CreditText extends StatelessWidget {
+  final String label;
+  final bool centered;
+
+  const _CreditText({required this.label, required this.centered});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: SolSpace.xs),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textAlign: centered ? TextAlign.center : TextAlign.start,
+        style: Theme.of(context).textTheme.bodyMedium
+            ?.copyWith(color: colorScheme.onSurfaceVariant),
+      ),
+    );
+  }
+}
+
+/// A credit that leads somewhere: the artist's page, or the album's.
+///
+/// A quiet link: the name keeps the credit line's own colour and only the
+/// cursor and the ripple say it is tappable, because on this page nine words
+/// out of ten are not links and one that shouts would be noise.
+class _CreditLink extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _CreditLink({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: InkWell(
         borderRadius: BorderRadius.circular(SolRadius.sm),
-        onTap: () => context.router.push(
-          ArtistDetailRoute(
-            sourceId: artist.sourceId,
-            artistId: artist.id,
-            artistName: name,
-          ),
-        ),
+        onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: SolSpace.xs,
             vertical: 2,
           ),
           child: Text(
-            name,
+            label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodyMedium

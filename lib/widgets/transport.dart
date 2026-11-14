@@ -150,10 +150,21 @@ class _ScrubberState extends ConsumerState<Scrubber> {
 /// the list they shape; this row is the only place the page still draws the
 /// playback's own moment.
 ///
+/// [compact] is the docked bar's row: the capsule already carries the track
+/// and the seek bar, so the transport's buttons shrink to keep its height
+/// from eating the words above it.
+///
 /// Watches only what the buttons draw, so a position tick does not repaint
 /// three buttons and their ink.
 class Transport extends ConsumerWidget {
-  const Transport({super.key});
+  final bool compact;
+
+  const Transport({super.key, this.compact = false});
+
+  /// The play button's box: its icon plus the padding around it. Callers size
+  /// their row from it, so the two cannot disagree about how tall the row is.
+  static double height({bool compact = false}) =>
+      (compact ? 24.0 : 36.0) + (compact ? 10.0 : SolSpace.lg) * 2;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -171,6 +182,9 @@ class Transport extends ConsumerWidget {
       ),
     );
     final controller = ref.read(playbackProvider.notifier);
+    final playSize = compact ? 24.0 : 36.0;
+    final skipSize = compact ? 22.0 : 32.0;
+    final gap = compact ? SolSpace.sm : SolSpace.md;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -178,22 +192,25 @@ class Transport extends ConsumerWidget {
         IconButton(
           tooltip: 'playerPrevious'.tr(),
           onPressed: controller.previous,
-          iconSize: 32,
+          visualDensity: compact ? VisualDensity.compact : null,
+          iconSize: skipSize,
           icon: const Icon(Symbols.skip_previous_rounded),
         ),
-        const SizedBox(width: SolSpace.md),
+        SizedBox(width: gap),
         IconButton.filled(
           tooltip: state.playing ? 'playerPause'.tr() : 'playerPlay'.tr(),
           onPressed: controller.togglePlayPause,
-          iconSize: 36,
-          padding: const EdgeInsets.all(SolSpace.lg),
-          icon: PlayPauseIcon(playing: state.playing, size: 36),
+          visualDensity: compact ? VisualDensity.compact : null,
+          iconSize: playSize,
+          padding: EdgeInsets.all(compact ? 10 : SolSpace.lg),
+          icon: PlayPauseIcon(playing: state.playing, size: playSize),
         ),
-        const SizedBox(width: SolSpace.md),
+        SizedBox(width: gap),
         IconButton(
           tooltip: 'playerNext'.tr(),
           onPressed: state.advances ? controller.next : null,
-          iconSize: 32,
+          visualDensity: compact ? VisualDensity.compact : null,
+          iconSize: skipSize,
           icon: const Icon(Symbols.skip_next_rounded),
         ),
       ],
