@@ -75,7 +75,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             slivers: [
               SliverToBoxAdapter(
                 child: PageHeader(
-                  showRailToggle: true,
                   title: 'libraryTitle'.tr(),
                   subtitle: count ?? 'librarySubtitle'.tr(),
                   actions: [

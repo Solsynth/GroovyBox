@@ -90,20 +90,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           slivers: [
             SliverToBoxAdapter(
               child: PageHeader(
-                showRailToggle: true,
                 title: 'searchTitle'.tr(),
                 subtitle: 'searchSubtitle'.tr(),
-                actions: [
-                  // The compact layout has no rail, so every tab's header is
-                  // where settings lives. Search is the first tab and the one
-                  // a fresh window opens on, so it carries the gear that the
-                  // old landing page used to.
-                  HeaderSettingsButton(
-                    onPressed: () =>
-                        context.router.push(const SettingsRoute()),
-                  ),
-                  const SizedBox(width: SolSpace.sm),
-                ],
               ),
             ),
             SliverToBoxAdapter(

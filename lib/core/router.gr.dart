@@ -314,6 +314,22 @@ class SettingsRoute extends _i12.PageRouteInfo<void> {
 }
 
 /// generated route for
+/// [_i3.SettingsTab]
+class SettingsTab extends _i12.PageRouteInfo<void> {
+  const SettingsTab({List<_i12.PageRouteInfo>? children})
+    : super(SettingsTab.name, initialChildren: children);
+
+  static const String name = 'SettingsTab';
+
+  static _i12.PageInfo page = _i12.PageInfo(
+    name,
+    builder: (data) {
+      return const _i3.SettingsTab();
+    },
+  );
+}
+
+/// generated route for
 /// [_i9.SetupScreen]
 class SetupRoute extends _i12.PageRouteInfo<void> {
   const SetupRoute({List<_i12.PageRouteInfo>? children})

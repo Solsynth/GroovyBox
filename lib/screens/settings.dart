@@ -58,12 +58,7 @@ class SettingsScreen extends ConsumerWidget {
         child: ListView(
           padding: EdgeInsets.only(bottom: bottomInset),
           children: [
-            PageHeader(
-              title: 'tabSettings'.tr(),
-              leading: HeaderBackButton(
-                onPressed: () => context.router.maybePop(),
-              ),
-            ),
+            PageHeader(title: 'tabSettings'.tr()),
             SectionLabel('settingsSectionAppearance'.tr()),
             IslandCard(
               margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),

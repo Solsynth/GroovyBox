@@ -15,22 +15,19 @@ List<AutoRoute> _tabChildren(AutoRoute root) => [
     page: PlaylistDetailRoute.page,
     path: 'playlists/:sourceId/:playlistId',
   ),
-  AutoRoute(page: SettingsRoute.page, path: 'settings'),
 ];
 
 /// The app's route table.
 ///
-/// The shell hosts three tabs, and each tab owns a navigation stack of its
-/// own (see `tab_stack.dart`). Album, playlist and settings pages are
-/// declared *inside* those stacks rather than at the root: pushing them there
-/// keeps the shell — and with it the now-playing capsule — on screen, which a
-/// root-level page would cover.
+/// The shell hosts five tabs, and each tab owns a navigation stack of its
+/// own (see `tab_stack.dart`). Album and playlist pages are declared *inside*
+/// those stacks rather than at the root: pushing them there keeps the shell —
+/// and with it the now-playing capsule — on screen, which a root-level page
+/// would cover.
 ///
-/// Explore is the first tab because it is the page a window opens on: the
-/// mixed home of what is worth playing next. Search answers "do I have this,
-/// and could I?" from the libraries and their stores in one list; the library
-/// is the catalogue itself. Four tabs, each one a different question.
-///
+/// Settings is its own tab: explore opens the window, search answers "do I
+/// have this, and could I?", the library is the catalogue, the play history
+/// keeps the last slot, and settings is where sources and preferences live.
 /// The player is the exception. It is the expanded dock, so it is pushed above
 /// the shell and grows out of the capsule it was opened from.
 @AutoRouterConfig()
@@ -70,6 +67,12 @@ class AppRouter extends RootStackRouter {
         AutoRoute(
           page: StatsTab.page,
           children: _tabChildren(AutoRoute(page: StatsRoute.page, initial: true)),
+        ),
+        AutoRoute(
+          page: SettingsTab.page,
+          children: _tabChildren(
+            AutoRoute(page: SettingsRoute.page, initial: true),
+          ),
         ),
       ],
     ),

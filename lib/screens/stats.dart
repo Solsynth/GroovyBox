@@ -46,7 +46,6 @@ class StatsScreen extends ConsumerWidget {
             padding: EdgeInsets.only(bottom: bottomInset),
             children: [
               PageHeader(
-                showRailToggle: true,
                 title: 'statsTitle'.tr(),
                 subtitle: 'statsSubtitle'.tr(),
                 actions: [

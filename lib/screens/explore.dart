@@ -72,7 +72,6 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
             slivers: [
               SliverToBoxAdapter(
                 child: PageHeader(
-                  showRailToggle: true,
                   title: 'exploreTitle'.tr(),
                   subtitle: servers.isEmpty
                       ? null
@@ -84,11 +83,6 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                           args: ['${servers.length}'],
                         ),
                   actions: [
-                    HeaderSettingsButton(
-                      onPressed: () =>
-                          context.router.push(const SettingsRoute()),
-                    ),
-                    const SizedBox(width: SolSpace.sm),
                     IconButton(
                       tooltip: 'commonRefresh'.tr(),
                       onPressed: refreshAll,

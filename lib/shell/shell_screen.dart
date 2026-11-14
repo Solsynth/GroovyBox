@@ -6,17 +6,15 @@ import 'package:material_ui/material_ui.dart';
 import '../core/glass.dart';
 import '../core/router.gr.dart';
 import '../core/responsive.dart';
-import '../core/tab_navigation.dart';
 import '../core/theme.dart';
 import '../player/player.dart';
 import '../solarpass/providers.dart';
 import '../widgets/now_playing_dock.dart';
-import 'rail_scope.dart';
 import 'tab_destinations.dart';
 import 'window_frame.dart';
 
-/// Shell that hosts the four root tabs: explore, search, the collection, and
-/// the play history.
+/// Shell that hosts the root tabs: explore, search, the collection, the play
+/// history, and settings.
 ///
 /// Tab state lives in `AutoTabsRouter`, never in local widget state: the wide
 /// rail and the compact bottom bar both drive the same router, and each tab
@@ -28,8 +26,7 @@ import 'window_frame.dart';
 /// `solBottomChromeInset`.
 ///
 /// Wide layout: the rail is a solid column beside the page, exactly like
-/// Solian's — no second navigation surface, no divider, and menu requests from
-/// page headers expand it in place (see [RailScope]).
+/// Solian's — no second navigation surface and no divider.
 @RoutePage()
 class ShellScreen extends StatelessWidget {
   const ShellScreen({super.key});
@@ -48,7 +45,13 @@ class ShellScreen extends StatelessWidget {
           // Each tab is an `AutoRouter` with its own stack, so pushing an
           // album or playlist inside a tab keeps the shell — and the
           // now-playing capsule that floats in it — on screen.
-          routes: const [ExploreTab(), SearchTab(), LibraryTab(), StatsTab()],
+          routes: const [
+            ExploreTab(),
+            SearchTab(),
+            LibraryTab(),
+            StatsTab(),
+            SettingsTab(),
+          ],
           duration: const Duration(milliseconds: 320),
           builder: (context, child) => _ShellFrame(child: child),
         );
@@ -67,74 +70,52 @@ class _ShellFrame extends ConsumerStatefulWidget {
 }
 
 class _ShellFrameState extends ConsumerState<_ShellFrame> {
-  /// Whether the wide rail is expanded over every destination.
-  ///
-  /// The rail stands in for a drawer, so a page's menu button expands it
-  /// rather than opening a second navigation surface. Narrow layouts have no
-  /// rail, so a stale expansion must not survive a width change.
-  bool _railExpanded = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_railExpanded && !isWideScreen(context)) _railExpanded = false;
-  }
-
-  void _toggleRail() => setState(() => _railExpanded = !_railExpanded);
-
   @override
   Widget build(BuildContext context) {
     final tabs = AutoTabsRouter.of(context);
-    final wide = isWideScreen(context);
     final isDesktop = DesktopWindowFrame.isPlatformDesktop;
-    if (wide) {
-      final page = Stack(
-        children: [
-          widget.child,
-          // Mounted for keeps: the dock folds itself away when nothing
-          // is playing, so the frame never swaps it out from under that
-          // animation.
-          const Positioned(
-            bottom: SolSpace.sm,
-            left: SolSpace.sm,
-            right: SolSpace.sm,
-            child: NowPlayingDock(),
-          ),
-        ],
-      );
+    final page = Stack(
+      children: [
+        widget.child,
+        // Mounted for keeps: the dock folds itself away when nothing
+        // is playing, so the frame never swaps it out from under that
+        // animation.
+        const Positioned(
+          bottom: SolSpace.sm,
+          left: SolSpace.sm,
+          right: SolSpace.sm,
+          child: NowPlayingDock(),
+        ),
+      ],
+    );
 
-      return RailScope(
-        available: true,
-        expanded: _railExpanded,
-        toggle: _toggleRail,
-        child: Scaffold(
-          backgroundColor: Colors.transparent,
-          body: SafeArea(
-            // Desktop windows have no notch and already sit inside the title
-            // bar.
-            top: !isDesktop,
-            bottom: false,
-            child: Row(
-              children: [
-                _WideRail(
-                  selectedIndex: tabs.activeIndex,
-                  expanded: _railExpanded,
-                  onSelected: tabs.setActiveIndex,
-                ),
-                Expanded(
-                  child: ColoredBox(
-                    color: Theme.of(context).colorScheme.surfaceContainer,
-                    child: ClipRRect(
-                      borderRadius: const BorderRadius.all(Radius.circular(12)),
-                      child: ColoredBox(
-                        color: Theme.of(context).colorScheme.surface,
-                        child: page,
-                      ),
+    if (isWideScreen(context)) {
+      return Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          // Desktop windows have no notch and already sit inside the title
+          // bar.
+          top: !isDesktop,
+          bottom: false,
+          child: Row(
+            children: [
+              _WideRail(
+                selectedIndex: tabs.activeIndex,
+                onSelected: tabs.setActiveIndex,
+              ),
+              Expanded(
+                child: ColoredBox(
+                  color: Theme.of(context).colorScheme.surfaceContainer,
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.all(Radius.circular(12)),
+                    child: ColoredBox(
+                      color: Theme.of(context).colorScheme.surface,
+                      child: page,
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       );
@@ -195,70 +176,34 @@ class _ShellFrameState extends ConsumerState<_ShellFrame> {
 /// where a sampled material is wasted work, and the page behind it is a flat
 /// fill anyway.
 ///
-/// Collapsed it shows icons with small labels; expanded ([RailScope.expanded])
-/// it widens to carry full labels, which is what a page header's menu button
-/// toggles.
+/// It shows icons with small labels and stays that width: expansion was a
+/// second control duplicated across every page header, and the labels it
+/// revealed never earned the jump.
 class _WideRail extends StatelessWidget {
   final int selectedIndex;
-  final bool expanded;
   final ValueChanged<int> onSelected;
 
-  const _WideRail({
-    required this.selectedIndex,
-    required this.expanded,
-    required this.onSelected,
-  });
+  const _WideRail({required this.selectedIndex, required this.onSelected});
 
-  static const double collapsedWidth = 88;
-  static const double expandedWidth = 236;
+  static const double width = 88;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final colorScheme = Theme.of(context).colorScheme;
     final destinations = allTabDestinations;
     final railIndex = destinations.indexWhere(
       (destination) => destination.routeIndex == selectedIndex,
     );
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
-      width: expanded ? expandedWidth : collapsedWidth,
+    return Container(
+      width: width,
       // Flush to the page: the same paper, one step deeper, and no divider.
       decoration: BoxDecoration(color: colorScheme.surfaceContainer),
       child: Column(
         children: [
-          // The wordmark only. Expanding is the page header's menu button —
-          // one control, where a drawer button would be on a phone. A second
-          // toggle in the rail would be two ways to say the same thing an
-          // inch apart.
-          SizedBox(
+          const SizedBox(
             height: 56,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: SolSpace.md),
-              child: Row(
-                mainAxisAlignment: expanded
-                    ? MainAxisAlignment.start
-                    : MainAxisAlignment.center,
-                children: [
-                  const _RailWordmark(),
-                  if (expanded) ...[
-                    const SizedBox(width: SolSpace.sm),
-                    Expanded(
-                      child: Text(
-                        'GroovyBox',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
+            child: Center(child: _RailWordmark()),
           ),
           Expanded(
             child: ListView(
@@ -268,30 +213,11 @@ class _WideRail extends StatelessWidget {
                   _RailDestination(
                     destination: destinations[i],
                     selected: i == (railIndex < 0 ? 0 : railIndex),
-                    expanded: expanded,
                     onTap: () => onSelected(destinations[i].routeIndex),
                   ),
                   const SizedBox(height: SolSpace.xs),
                 ],
               ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              SolSpace.sm,
-              SolSpace.sm,
-              SolSpace.sm,
-              SolSpace.lg,
-            ),
-            child: _RailDestination(
-              destination: kSettingsDestination,
-              selected: false,
-              expanded: expanded,
-              // The rail is above the tabs, so its own router is the root
-              // one: pushing here would put Settings *over* the shell and
-              // hide the now-playing capsule. Open it in the active tab
-              // instead, where the tabs' own pushes go.
-              onTap: () => pushInActiveTab(context, const SettingsRoute()),
             ),
           ),
         ],
@@ -318,33 +244,20 @@ class _RailWordmark extends StatelessWidget {
 class _RailDestination extends StatelessWidget {
   final TabDestination destination;
   final bool selected;
-  final bool expanded;
   final VoidCallback onTap;
 
   const _RailDestination({
     required this.destination,
     required this.selected,
-    required this.expanded,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final foreground = selected
-        ? colorScheme.onSecondaryContainer
-        : colorScheme.onSurfaceVariant;
-
-    final icon = Icon(
-      selected ? destination.selectedIcon : destination.icon,
-      size: 22,
-      fill: selected ? 1 : 0,
-      color: foreground,
-    );
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Tooltip(
-      message: expanded ? '' : destination.label,
+      message: destination.label,
       waitDuration: const Duration(milliseconds: 500),
       child: Material(
         type: MaterialType.transparency,
@@ -355,40 +268,19 @@ class _RailDestination extends StatelessWidget {
             duration: const Duration(milliseconds: 180),
             curve: Curves.easeOutCubic,
             height: 48,
-            padding: EdgeInsets.symmetric(
-              horizontal: expanded ? SolSpace.md : 0,
-            ),
             decoration: BoxDecoration(
               color: selected
                   ? colorScheme.secondaryContainer.withValues(alpha: 0.72)
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(SolRadius.md),
             ),
-            child: Row(
-              mainAxisAlignment: expanded
-                  ? MainAxisAlignment.start
-                  : MainAxisAlignment.center,
-              children: [
-                icon,
-                if (expanded) ...[
-                  const SizedBox(width: SolSpace.md),
-                  Expanded(
-                    child: Text(
-                      destination.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: selected
-                            ? FontWeight.w700
-                            : FontWeight.w500,
-                        color: selected
-                            ? colorScheme.onSecondaryContainer
-                            : colorScheme.onSurface,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
+            child: Icon(
+              selected ? destination.selectedIcon : destination.icon,
+              size: 22,
+              fill: selected ? 1 : 0,
+              color: selected
+                  ? colorScheme.onSecondaryContainer
+                  : colorScheme.onSurfaceVariant,
             ),
           ),
         ),

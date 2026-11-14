@@ -7,7 +7,6 @@ import '../core/responsive.dart';
 import '../core/theme.dart';
 import '../library/models.dart';
 import '../player/player.dart';
-import '../shell/rail_scope.dart';
 import 'format.dart';
 
 /// Centers a page's content in one column on wide windows.
@@ -190,16 +189,12 @@ class EmptyState extends StatelessWidget {
 /// Header used at the top of every tab: a title, an optional subtitle and a
 /// row of trailing actions, aligned like a document rather than centered.
 ///
-/// [leading] is the back affordance for pushed pages. Tabs leave it empty and
-/// get [showRailToggle] instead: on a wide window the rail's collapse/expand
-/// control belongs at the head of the content, where a drawer button would
-/// be on a phone.
+/// [leading] is the back affordance for pushed pages; tabs leave it empty.
 class PageHeader extends StatelessWidget {
   final String title;
   final String? subtitle;
   final List<Widget> actions;
   final Widget? leading;
-  final bool showRailToggle;
 
   const PageHeader({
     super.key,
@@ -207,7 +202,6 @@ class PageHeader extends StatelessWidget {
     this.subtitle,
     this.actions = const [],
     this.leading,
-    this.showRailToggle = false,
   });
 
   @override
@@ -225,9 +219,6 @@ class PageHeader extends StatelessWidget {
         children: [
           if (leading != null) ...[
             leading!,
-            const SizedBox(width: SolSpace.xs),
-          ] else if (showRailToggle) ...[
-            const RailToggleButton(),
             const SizedBox(width: SolSpace.xs),
           ],
           Expanded(
@@ -280,48 +271,6 @@ class HeaderBackButton extends StatelessWidget {
   }
 }
 
-/// The wide layout's navigation toggle.
-///
-/// The rail is the only navigation surface there, so this button expands and
-/// collapses it in place — the same gesture a drawer button performs on a
-/// phone. Renders nothing on layouts without a rail.
-class RailToggleButton extends StatelessWidget {
-  const RailToggleButton({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final rail = RailScope.maybeOf(context);
-    if (rail == null || !rail.available) return const SizedBox.shrink();
-    return IconButton(
-      tooltip: rail.expanded
-          ? 'commonNavCollapse'.tr()
-          : 'commonNavExpand'.tr(),
-      onPressed: rail.toggle,
-      icon: const Icon(Symbols.menu_rounded),
-    );
-  }
-}
-
-/// Settings, as reached from a page header on layouts without a rail.
-///
-/// On wide windows the rail already carries the gear at the bottom of the
-/// column, so this renders nothing there: one destination, one button.
-class HeaderSettingsButton extends StatelessWidget {
-  final VoidCallback onPressed;
-
-  const HeaderSettingsButton({super.key, required this.onPressed});
-
-  @override
-  Widget build(BuildContext context) {
-    final rail = RailScope.maybeOf(context);
-    if (rail != null && rail.available) return const SizedBox.shrink();
-    return IconButton(
-      tooltip: 'tabSettings'.tr(),
-      onPressed: onPressed,
-      icon: const Icon(Symbols.settings),
-    );
-  }
-}
 
 /// Section label above a group of rows or cards.
 class SectionLabel extends StatelessWidget {
