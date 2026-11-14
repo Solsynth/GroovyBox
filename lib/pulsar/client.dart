@@ -9,8 +9,18 @@ library;
 import 'package:dio/dio.dart';
 
 import '../core/identity.dart';
+import '../library/models.dart';
 import '../solarpass/models.dart';
 import 'models.dart';
+
+/// The stable identity GroovyBox sends for one track, scoped to its source.
+///
+/// A [LibrarySong.id] is only unique inside the library it came from; two
+/// servers can hand out the same number. Every catalog write the fleet sees
+/// — share links, playlist items, scrobbles — uses this as `provider_key`,
+/// so the same recording dedupes to one entry and two different ones never
+/// merge.
+String pulsarTrackKey(LibrarySong song) => '${song.sourceId}:${song.id}';
 
 /// Pushes playlists, friends' listening and share targets over the fleet.
 class PulsarClient {
@@ -85,6 +95,22 @@ class PulsarClient {
     return PulsarPlaylist.fromJson(data ?? const {});
   }
 
+  /// Renames a playlist. The server answers with the updated collection.
+  Future<PulsarPlaylist> renamePlaylist(
+    OAuthSession session,
+    String id, {
+    required String name,
+  }) async {
+    final data = await _send<Map<String, dynamic>>(
+      () => dio.put<Map<String, dynamic>>(
+        '$_basePath/collections/$id',
+        data: {'name': name},
+        options: Options(headers: _headers(session)),
+      ),
+    );
+    return PulsarPlaylist.fromJson(data ?? const {});
+  }
+
   /// Deletes a playlist. The server answers 204.
   Future<void> deletePlaylist(OAuthSession session, String id) async {
     await _send<Object?>(
@@ -105,6 +131,7 @@ class PulsarClient {
     String? artist,
     String? artworkUrl,
     int? durationSeconds,
+    String? trackKey,
   }) async {
     await _send<Map<String, dynamic>>(
       () => dio.post<Map<String, dynamic>>(
@@ -112,6 +139,7 @@ class PulsarClient {
         data: {
           'domain': 'music',
           'provider': 'groovybox',
+          'provider_key': ?trackKey,
           'title': title,
           if (artist != null && artist.isNotEmpty) 'subtitle': artist,
           if (artworkUrl != null && artworkUrl.isNotEmpty)
@@ -132,6 +160,66 @@ class PulsarClient {
     await _send<Object?>(
       () => dio.delete<Object?>(
         '$_basePath/collections/$playlistId/items/$itemId',
+        options: Options(headers: _headers(session)),
+      ),
+    );
+  }
+
+  /// Makes the playlist hold exactly [tracks], in order: the upload a user
+  /// runs to push a device or server playlist into Pulsar, and the re-sync
+  /// that runs again later. Tracks the playlist no longer names are removed
+  /// server-side, so this is safe to repeat with the same list.
+  Future<int> replacePlaylistTracks(
+    OAuthSession session, {
+    required String playlistId,
+    required List<PulsarTrackPayload> tracks,
+  }) async {
+    final data = await _send<Map<String, dynamic>>(
+      () => dio.put<Map<String, dynamic>>(
+        '$_basePath/collections/$playlistId/items',
+        data: {
+          'items': [for (final track in tracks) track.toJson()],
+        },
+        options: Options(headers: _headers(session)),
+      ),
+    );
+    return (data?['count'] as num?)?.toInt() ?? tracks.length;
+  }
+
+  /// The account's favourite tracks, newest first. One entry per recording.
+  Future<List<PlaylistItem>> favourites(OAuthSession session) async {
+    final data = await _send<Map<String, dynamic>>(
+      () => dio.get<Map<String, dynamic>>(
+        '$_basePath/collections/favourites',
+        queryParameters: {'domain': 'music'},
+        options: Options(headers: _headers(session)),
+      ),
+    );
+    return [
+      for (final entry in (data?['items'] as List?) ?? const [])
+        if (entry is Map<String, dynamic>) PlaylistItem.fromJson(entry),
+    ];
+  }
+
+  /// Marks one track a favourite. Idempotent, so a sync can re-send it.
+  Future<void> addFavourite(
+    OAuthSession session,
+    PulsarTrackPayload track,
+  ) async {
+    await _send<Map<String, dynamic>>(
+      () => dio.put<Map<String, dynamic>>(
+        '$_basePath/collections/favourites',
+        data: track.toJson(),
+        options: Options(headers: _headers(session)),
+      ),
+    );
+  }
+
+  /// Clears one track's favourite.
+  Future<void> removeFavourite(OAuthSession session, String catalogId) async {
+    await _send<Object?>(
+      () => dio.delete<Object?>(
+        '$_basePath/collections/favourites/$catalogId',
         options: Options(headers: _headers(session)),
       ),
     );
@@ -182,6 +270,10 @@ class PulsarClient {
 
   /// Shares one track: registers it as a catalog item (find-or-create, so
   /// repeat shares return the same id) and returns the public share URL.
+  ///
+  /// [trackKey] is the source-scoped identity from [pulsarTrackKey]: the
+  /// song's own id is only unique inside its [LibrarySong.sourceId], and two
+  /// servers reusing one id would otherwise share a page.
   Future<MusicShare> shareTrack(
     OAuthSession session, {
     required String title,
@@ -189,7 +281,7 @@ class PulsarClient {
     String? album,
     String? artworkUrl,
     int? durationSeconds,
-    String? trackId,
+    String? trackKey,
   }) async {
     final data = await _send<Map<String, dynamic>>(
       () => dio.post<Map<String, dynamic>>(
@@ -197,7 +289,7 @@ class PulsarClient {
         data: {
           'domain': 'music',
           'provider': 'groovybox',
-          if (trackId != null && trackId.isNotEmpty) 'provider_key': trackId,
+          'provider_key': ?trackKey,
           'title': title,
           if (artist != null && artist.isNotEmpty) 'subtitle': artist,
           if (album != null && album.isNotEmpty) 'caption': album,

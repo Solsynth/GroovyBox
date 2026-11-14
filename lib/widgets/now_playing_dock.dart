@@ -218,9 +218,7 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
                 onTap: () {},
                 child: SongLyricsPane(
                   height: _sheetHeight(),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: SolSpace.lg,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: SolSpace.lg),
                 ),
               ),
               _DockSheet.queue => GestureDetector(
@@ -313,23 +311,24 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
                     opacity: _dockCurve,
                     child: AnimatedBuilder(
                       animation: _sheetCurve,
-                      builder: (context, capsule) => GlassSurface(
+                      builder: (context, capsule) => PillSurface(
                         key: _capsuleKey,
                         // A capsule while no sheet has given it height, a
                         // card once one has, where a pill's ends would eat
                         // the first and last row. Lerp on the sheet's own
                         // curve so the ends change shape with the panel
                         // rather than popping under it.
-                        cornerRadius:
-                            SolRadius.pill +
-                            (SolRadius.xxl - SolRadius.pill) *
-                                _sheetCurve.value,
+                        radius: BorderRadius.circular(
+                          SolRadius.pill +
+                              (SolRadius.xxl - SolRadius.pill) *
+                                  _sheetCurve.value,
+                        ),
                         // Leading inset matches the artwork's own corner, so
                         // the cover sits square in the capsule's left end. A
                         // sheet keeps the same padding: its own list has the
                         // inner inset instead, and changing this box is what
                         // the morph would read as movement.
-                        padding: const EdgeInsets.fromLTRB(
+                        contentPadding: const EdgeInsets.fromLTRB(
                           SolSpace.sm,
                           0,
                           SolSpace.md,

@@ -201,10 +201,7 @@ class _WideRail extends StatelessWidget {
       decoration: BoxDecoration(color: colorScheme.surfaceContainer),
       child: Column(
         children: [
-          const SizedBox(
-            height: 56,
-            child: Center(child: _RailWordmark()),
-          ),
+          const SizedBox(height: 56, child: Center(child: _RailWordmark())),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: SolSpace.sm),
@@ -315,9 +312,9 @@ class _PillBottomNav extends StatelessWidget {
         kChromeGutter,
         kChromeGutter + safeBottom,
       ),
-      child: GlassSurface(
-        cornerRadius: SolRadius.pill,
-        padding: const EdgeInsets.symmetric(horizontal: SolSpace.sm),
+      child: PillSurface(
+        radius: SolRadius.pillRadius,
+        contentPadding: const EdgeInsets.symmetric(horizontal: SolSpace.sm),
         child: SizedBox(
           height: kBottomNavHeight,
           child: Row(

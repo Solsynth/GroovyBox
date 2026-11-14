@@ -8,6 +8,7 @@ import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/collection_hero.dart';
 import 'package:groovy_box/widgets/common.dart';
+import 'package:groovy_box/widgets/pill_app_bar.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -137,7 +138,7 @@ class AlbumDetailScreen extends ConsumerWidget {
       body: ContentFrame(
         child: Column(
           children: [
-            PageHeader(
+            PillHeader(
               title: albumName ?? 'albumsDetailTitleFallback'.tr(),
               leading: HeaderBackButton(
                 onPressed: () => context.router.maybePop(),

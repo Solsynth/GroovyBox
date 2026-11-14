@@ -12,6 +12,7 @@ import 'package:groovy_box/library/track_identity.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/common.dart';
+import 'package:groovy_box/widgets/pill_app_bar.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -88,11 +89,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       body: ContentFrame(
         child: CustomScrollView(
           slivers: [
-            SliverToBoxAdapter(
-              child: PageHeader(
-                title: 'searchTitle'.tr(),
-                subtitle: 'searchSubtitle'.tr(),
-              ),
+            SliverPillHeader(
+              title: 'searchTitle'.tr(),
+              subtitle: 'searchSubtitle'.tr(),
             ),
             SliverToBoxAdapter(
               child: Padding(
@@ -171,9 +170,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                             'searchStoresUnavailable'.tr(),
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
                                 ),
                           ),
                         )
@@ -270,9 +269,8 @@ class _StoreResults extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final held = ref
-        .watch(searchSongsProvider(query))
-        .value ?? const <LibrarySong>[];
+    final held =
+        ref.watch(searchSongsProvider(query)).value ?? const <LibrarySong>[];
     // The library's own fingerprints, so a store result the user already has
     // is not offered again. Album names are compared case-insensitively:
     // there is no id to join on across two different services.
@@ -430,9 +428,11 @@ class _StoreRowState extends ConsumerState<_StoreRow> {
     try {
       final added = await ref
           .read(libraryEditorProvider.notifier)
-          .add(widget.kind, (sourceId: widget.sourceId, id: widget.id), [
-            widget.id,
-          ]);
+          .add(
+            widget.kind,
+            (sourceId: widget.sourceId, id: widget.id),
+            [widget.id],
+          );
       if (!mounted) return;
       setState(() => _added = added > 0);
     } catch (error) {

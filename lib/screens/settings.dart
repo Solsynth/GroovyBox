@@ -11,8 +11,12 @@ import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/library/store.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/screens/library_sync_section.dart';
+
+import 'pulsar_section.dart';
+
 import 'package:groovy_box/solarpass/solarpass_section.dart';
 import 'package:groovy_box/widgets/common.dart';
+import 'package:groovy_box/widgets/pill_app_bar.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
@@ -58,7 +62,7 @@ class SettingsScreen extends ConsumerWidget {
         child: ListView(
           padding: EdgeInsets.only(bottom: bottomInset),
           children: [
-            PageHeader(title: 'tabSettings'.tr()),
+            PillHeader(title: 'tabSettings'.tr()),
             SectionLabel('settingsSectionAppearance'.tr()),
             IslandCard(
               margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
@@ -361,6 +365,7 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const SolarpassSettingsSection(),
             const LibrarySyncSection(),
+            const PulsarCloudSection(),
             SectionLabel('settingsSectionData'.tr()),
             IslandCard(
               margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),

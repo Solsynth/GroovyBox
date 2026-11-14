@@ -11,6 +11,7 @@ import 'package:groovy_box/screens/explore.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:groovy_box/widgets/collection_hero.dart';
 import 'package:groovy_box/widgets/common.dart';
+import 'package:groovy_box/widgets/pill_app_bar.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
@@ -142,6 +143,12 @@ class _BodyState extends ConsumerState<_Body> {
               ref.read(libraryArtistsProvider.notifier).refresh(),
           child: CustomScrollView(
             slivers: [
+              SliverPillHeader(
+                title: fallback,
+                leading: HeaderBackButton(
+                  onPressed: () => context.router.maybePop(),
+                ),
+              ),
               SliverToBoxAdapter(
                 child: CollectionHero(
                   sourceId: widget.sourceId,

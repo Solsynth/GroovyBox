@@ -7,10 +7,12 @@ import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/screens/albums.dart';
+import 'package:groovy_box/pulsar/models.dart';
 import 'package:groovy_box/pulsar/providers.dart';
 import 'package:groovy_box/screens/explore.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/common.dart';
+import 'package:groovy_box/widgets/pill_app_bar.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:groovy_box/widgets/playlist_name_dialog.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -81,22 +83,19 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         child: ContentFrame(
           child: CustomScrollView(
             slivers: [
-              SliverToBoxAdapter(
-                child: PageHeader(
-                  title: 'libraryTitle'.tr(),
-                  subtitle: count ?? 'librarySubtitle'.tr(),
-                  actions: [
-                    IconButton(
-                      tooltip: 'commonRefresh'.tr(),
-                      onPressed: () {
-                        ref.read(recentAlbumsProvider.notifier).refresh();
-                        ref.read(playlistsProvider.notifier).refresh();
-                      },
-                      icon: const Icon(Symbols.refresh_rounded),
-                    ),
-                    const SizedBox(width: SolSpace.sm),
-                  ],
-                ),
+              SliverPillHeader(
+                title: 'libraryTitle'.tr(),
+                subtitle: count ?? 'librarySubtitle'.tr(),
+                actions: [
+                  IconButton(
+                    tooltip: 'commonRefresh'.tr(),
+                    onPressed: () {
+                      ref.read(recentAlbumsProvider.notifier).refresh();
+                      ref.read(playlistsProvider.notifier).refresh();
+                    },
+                    icon: const Icon(Symbols.refresh_rounded),
+                  ),
+                ],
               ),
               SliverToBoxAdapter(
                 child: Padding(
@@ -243,6 +242,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                     ],
                   ),
                   const _CloudPlaylistsSection(),
+                  const _CloudFavouritesSection(),
                 ],
               },
               SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
@@ -853,6 +853,159 @@ class _CloudPlaylistsSection extends ConsumerWidget {
       ),
       // A signed-out window has no cloud playlists: silence, not an error.
       error: (_, _) => const SliverToBoxAdapter(child: SizedBox.shrink()),
+    );
+  }
+}
+
+/// The account's favourites as Pulsar holds them: the same hearts this device
+/// records, read back where a second device can see them.
+///
+/// It is a mirror, not a source of truth. A catalog entry names a recording,
+/// not a stream, so a row is a label and one action — clearing the heart in
+/// the fleet — and never pretends to be playable. Playing happens where the
+/// local library lists the song.
+class _CloudFavouritesSection extends ConsumerWidget {
+  const _CloudFavouritesSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final signedIn = ref.watch(
+      pulsarSessionProvider.select((session) => session.value != null),
+    );
+    if (!signedIn) return const SliverToBoxAdapter(child: SizedBox.shrink());
+    final favourites = ref.watch(pulsarFavouritesProvider);
+    return favourites.when(
+      data: (list) {
+        if (list.isEmpty) {
+          return const SliverToBoxAdapter(child: SizedBox.shrink());
+        }
+        return SliverMainAxisGroup(
+          slivers: [
+            SliverToBoxAdapter(
+              child: LibrarySectionHeader(title: 'libraryCloudFavourites'.tr()),
+            ),
+            SliverList.builder(
+              itemCount: list.length,
+              itemBuilder: (context, index) {
+                final item = list[index];
+                final track = item.catalogItem;
+                final catalogId = item.catalogId;
+                if (track == null || catalogId == null) {
+                  return const SizedBox.shrink();
+                }
+                return _CloudFavouriteRow(
+                  title: track.title,
+                  artist: track.subtitle,
+                  artworkUrl: track.artworkUrl,
+                  onRemove: () => _remove(context, ref, catalogId, track),
+                );
+              },
+            ),
+          ],
+        );
+      },
+      loading: () => const SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.all(SolSpace.md),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      ),
+      error: (_, _) => const SliverToBoxAdapter(child: SizedBox.shrink()),
+    );
+  }
+
+  Future<void> _remove(
+    BuildContext context,
+    WidgetRef ref,
+    String catalogId,
+    CatalogItem track,
+  ) async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      await ref.read(pulsarFavouritesProvider.notifier).clear(catalogId);
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text('libraryCloudFavouriteRemoved'.tr(args: [track.title])),
+        ),
+      );
+    } catch (error) {
+      messenger?.showSnackBar(
+        SnackBar(content: Text(describeServerError(error))),
+      );
+    }
+  }
+}
+
+/// One row of the cloud favourites: what the account likes, and the one
+/// action that takes it back out of the fleet.
+class _CloudFavouriteRow extends StatelessWidget {
+  final String title;
+  final String? artist;
+  final String? artworkUrl;
+  final VoidCallback onRemove;
+
+  const _CloudFavouriteRow({
+    required this.title,
+    required this.artist,
+    required this.artworkUrl,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final art = artworkUrl;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: SolSpace.md, vertical: 2),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(SolRadius.md),
+            child: SizedBox.square(
+              dimension: 52,
+              child: art == null || art.isEmpty
+                  ? ColoredBox(
+                      color: scheme.surfaceContainerHigh,
+                      child: Icon(
+                        Symbols.favorite_rounded,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    )
+                  : Image.network(art, fit: BoxFit.cover),
+            ),
+          ),
+          const SizedBox(width: SolSpace.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall,
+                ),
+                if (artist != null && artist!.isNotEmpty)
+                  Text(
+                    artist!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'libraryCloudFavouriteRemove'.tr(),
+            icon: const Icon(Symbols.favorite_rounded),
+            color: scheme.error,
+            onPressed: onRemove,
+          ),
+        ],
+      ),
     );
   }
 }

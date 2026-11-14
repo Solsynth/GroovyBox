@@ -17,7 +17,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:window_manager/window_manager.dart';
+import 'package:window_manager/legacy.dart';
 
 /// Translations live in `assets/i18n/<language>-<COUNTRY>.json`, one file per
 /// locale, matching the path declared under `flutter.assets` in pubspec.yaml.

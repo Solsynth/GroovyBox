@@ -595,9 +595,10 @@ class Favourites {
 
   /// Writes the device's answer, then forwards it to the source.
   ///
-  /// The local write is the record; the forward is best effort. [forwardError]
-  /// is what the caller shows, and it is null when the source agreed or when
-  /// there was no source to ask.
+  /// The local write is the record; the forward is best effort. The returned
+  /// value is what the caller shows, and it is null when the source agreed or
+  /// when there was no source to ask. The fleet copy is pushed by the caller,
+  /// the layer that is allowed to know about Pulsar.
   Future<Object?> set(LibrarySong song, {required bool value}) async {
     await _ref.read(libraryCatalogProvider)?.setFavourite(song, value: value);
     final source = _ref.read(librarySourceByIdProvider)[song.sourceId];

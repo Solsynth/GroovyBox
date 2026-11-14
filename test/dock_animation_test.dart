@@ -97,7 +97,7 @@ Future<_Playback> _pumpDock(WidgetTester tester) async {
 
 Finder _capsule() => find.descendant(
   of: find.byType(NowPlayingDock),
-  matching: find.byType(GlassSurface),
+  matching: find.byType(PillSurface),
 );
 
 void main() {

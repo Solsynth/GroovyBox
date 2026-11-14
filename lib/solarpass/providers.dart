@@ -8,6 +8,7 @@ import '../core/app.dart';
 import '../library/models.dart';
 import '../library/providers.dart';
 import '../player/player.dart';
+import '../pulsar/client.dart';
 import 'client.dart';
 import 'models.dart';
 
@@ -394,7 +395,7 @@ class SolarpassScrobbler {
         duration: song.duration,
         listened: listened,
         artworkUrl: artUri?.toString(),
-        trackId: song.id,
+        trackId: pulsarTrackKey(song),
         playedAt: playedAt,
       );
     } catch (e) {
@@ -437,7 +438,7 @@ class SolarpassScrobbler {
         duration: song.duration,
         position: position,
         artworkUrl: artUri?.toString(),
-        trackId: song.id,
+        trackId: pulsarTrackKey(song),
       );
       final displayTrack = song.artist != null
           ? '${song.title} · ${song.artist}'

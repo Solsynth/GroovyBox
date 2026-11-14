@@ -11,6 +11,7 @@ import 'package:groovy_box/solarpass/models.dart';
 import 'package:groovy_box/solarpass/providers.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/common.dart';
+import 'package:groovy_box/widgets/pill_app_bar.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -54,7 +55,7 @@ class ProfileScreen extends ConsumerWidget {
           child: ListView(
             padding: EdgeInsets.only(bottom: bottomInset),
             children: [
-              PageHeader(
+              PillHeader(
                 title: 'profileTitle'.tr(),
                 subtitle: 'profileSubtitle'.tr(),
                 actions: [
@@ -66,7 +67,6 @@ class ProfileScreen extends ConsumerWidget {
                     },
                     icon: const Icon(Symbols.refresh_rounded),
                   ),
-                  const SizedBox(width: SolSpace.sm),
                 ],
               ),
               _Identity(account: account),
@@ -131,8 +131,9 @@ class TasteWindowState extends Notifier<TasteWindow> {
   void set(TasteWindow value) => state = value;
 }
 
-final tasteWindowProvider =
-    NotifierProvider<TasteWindowState, TasteWindow>(TasteWindowState.new);
+final tasteWindowProvider = NotifierProvider<TasteWindowState, TasteWindow>(
+  TasteWindowState.new,
+);
 
 /// How far back the taste summary reaches, as chips: all time, a year, a
 /// month. Short spans make the ranking answer "what have I been into lately"
@@ -146,7 +147,10 @@ class _WindowSwitch extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return SegmentedButton<TasteWindow>(
       segments: [
-        ButtonSegment(value: TasteWindow.all, label: Text('tasteWindowAll'.tr())),
+        ButtonSegment(
+          value: TasteWindow.all,
+          label: Text('tasteWindowAll'.tr()),
+        ),
         ButtonSegment(
           value: TasteWindow.year,
           label: Text('tasteWindowYear'.tr()),
@@ -397,9 +401,7 @@ class _TasteBody extends StatelessWidget {
                     subtitle: stats.topItems[i].subtitle,
                     trailing:
                         '${formatPlayCount(stats.topItems[i].count)}  ·  '
-                        '${formatListeningTime(
-                          Duration(seconds: stats.topItems[i].seconds),
-                        )}',
+                        '${formatListeningTime(Duration(seconds: stats.topItems[i].seconds))}',
                   ),
               ],
             ),
@@ -678,8 +680,7 @@ class _CompletionLine extends StatelessWidget {
           stats.libraryTracks,
           args: ['${stats.distinctTracks}', '${stats.libraryTracks}'],
         ),
-      if (stats.orphaned > 0)
-        'statsOrphaned'.tr(args: ['${stats.orphaned}']),
+      if (stats.orphaned > 0) 'statsOrphaned'.tr(args: ['${stats.orphaned}']),
     ];
     return Text(
       parts.join('  ·  '),

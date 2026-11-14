@@ -54,6 +54,44 @@ enum CollectionKind {
       value == null ? null : values.where((k) => k.value == value).firstOrNull;
 }
 
+/// One track as every Pulsar write spells it: a playlist upload, a favourite,
+/// a share. The catalog record is find-or-created server-side on
+/// `provider` + `provider_key`, so the same recording never duplicates.
+class PulsarTrackPayload {
+  const PulsarTrackPayload({
+    required this.title,
+    this.artist,
+    this.album,
+    this.artworkUrl,
+    this.durationSeconds,
+    this.providerKey,
+  });
+
+  /// The track's name — the one field the server cannot invent.
+  final String title;
+  final String? artist;
+  final String? album;
+  final String? artworkUrl;
+  final int? durationSeconds;
+
+  /// The track's identity inside its source, from [pulsarTrackKey]. Absent
+  /// when a row is being written from a library that has no stable id.
+  final String? providerKey;
+
+  Map<String, dynamic> toJson() => {
+    'domain': 'music',
+    'provider': 'groovybox',
+    if (providerKey != null && providerKey!.isNotEmpty)
+      'provider_key': providerKey,
+    'title': title,
+    if (artist != null && artist!.isNotEmpty) 'subtitle': artist,
+    if (album != null && album!.isNotEmpty) 'caption': album,
+    if (artworkUrl != null && artworkUrl!.isNotEmpty)
+      'artwork_url': artworkUrl,
+    'duration_seconds': ?durationSeconds,
+  };
+}
+
 /// A Pulsar catalog item: the server-side record of a track, deduped on
 /// `provider` + `provider_key` or `domain` + `title` + `subtitle`.
 class CatalogItem {

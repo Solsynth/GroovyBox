@@ -12,6 +12,7 @@ import 'package:groovy_box/screens/albums.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/friends_listening.dart';
 import 'package:groovy_box/widgets/common.dart';
+import 'package:groovy_box/widgets/pill_app_bar.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
@@ -71,27 +72,24 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
         child: ContentFrame(
           child: CustomScrollView(
             slivers: [
-              SliverToBoxAdapter(
-                child: PageHeader(
-                  title: 'exploreTitle'.tr(),
-                  subtitle: servers.isEmpty
-                      ? null
-                      : servers.length == 1
-                      ? 'exploreStreamingFrom'.tr(
-                          args: [servers.single.displayName],
-                        )
-                      : 'exploreStreamingFromLibraries'.tr(
-                          args: ['${servers.length}'],
-                        ),
-                  actions: [
-                    IconButton(
-                      tooltip: 'commonRefresh'.tr(),
-                      onPressed: refreshAll,
-                      icon: const Icon(Symbols.refresh_rounded),
-                    ),
-                    const SizedBox(width: SolSpace.sm),
-                  ],
-                ),
+              SliverPillHeader(
+                title: 'exploreTitle'.tr(),
+                subtitle: servers.isEmpty
+                    ? null
+                    : servers.length == 1
+                    ? 'exploreStreamingFrom'.tr(
+                        args: [servers.single.displayName],
+                      )
+                    : 'exploreStreamingFromLibraries'.tr(
+                        args: ['${servers.length}'],
+                      ),
+                actions: [
+                  IconButton(
+                    tooltip: 'commonRefresh'.tr(),
+                    onPressed: refreshAll,
+                    icon: const Icon(Symbols.refresh_rounded),
+                  ),
+                ],
               ),
               if (servers.isEmpty)
                 const SliverToBoxAdapter(child: AddSourceCard()),
@@ -116,8 +114,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                 loading: () => const <Widget>[],
                 error: (_, _) => const <Widget>[],
               ),
-              for (final shelf
-                  in curated.value ?? const <LandingShelf>[]) ...[
+              for (final shelf in curated.value ?? const <LandingShelf>[]) ...[
                 SliverToBoxAdapter(
                   child: LibrarySectionHeader(title: shelf.title),
                 ),
@@ -132,9 +129,8 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                   child: LibrarySectionHeader(
                     title: 'exploreMadeForYou'.tr(),
                     trailing: TextButton.icon(
-                      onPressed: () => ref
-                          .read(randomSongsProvider.notifier)
-                          .refresh(),
+                      onPressed: () =>
+                          ref.read(randomSongsProvider.notifier).refresh(),
                       icon: const Icon(Symbols.refresh_rounded, size: 18),
                       label: Text('exploreShuffle'.tr()),
                     ),
@@ -405,11 +401,7 @@ class LibrarySectionHeader extends StatelessWidget {
   final String title;
   final Widget? trailing;
 
-  const LibrarySectionHeader({
-    super.key,
-    required this.title,
-    this.trailing,
-  });
+  const LibrarySectionHeader({super.key, required this.title, this.trailing});
 
   @override
   Widget build(BuildContext context) {
@@ -425,9 +417,8 @@ class LibrarySectionHeader extends StatelessWidget {
           Expanded(
             child: Text(
               title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(context).textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
           ?trailing,

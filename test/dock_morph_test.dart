@@ -95,7 +95,7 @@ void main() {
     final capsule = find
         .descendant(
           of: find.byType(NowPlayingDock),
-          matching: find.byType(GlassSurface),
+          matching: find.byType(PillSurface),
         )
         .first;
     expect(capsule, findsOneWidget);

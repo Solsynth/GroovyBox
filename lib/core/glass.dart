@@ -26,106 +26,128 @@ class GlassEffects extends InheritedWidget {
       oldWidget.enabled != enabled;
 }
 
-/// Alpha of a floating surface's shadow.
-const double _kGlassShadowOpacity = 0.16;
+/// Alpha of a floating pill's shadow once it is fully surfaced.
+const double _kPillShadowOpacity = 0.12;
 
-/// Floating chrome: a capsule or squircle painted as iOS 27 regular glass when
-/// [GlassEffects] is on, and as a flat tonal fill with a hairline when it is
-/// off or the platform cannot run the shader.
+/// The painted chrome of a floating pill or rounded surface: GroovyBox's port
+/// of Solian's `PillSurface`, so the two apps' floating chrome reads as one
+/// system.
 ///
-/// Geometry is identical in both branches — same margin, radius and padding —
-/// so toggling the material never moves a control. Only the paint changes.
+/// **This is the one glass material in the app.** A capsule, the now-playing
+/// dock and every page header paint through it; nothing else builds a
+/// `LiquidGlassLayer` of its own.
 ///
-/// **This is for chrome that floats over content**, never for cards: the
-/// navigation capsules, the now-playing dock and the rail. Anything in the
-/// scrolling plane is an `IslandCard`, which is tonal and opaque so text stays
-/// legible and long lists stay cheap; the player page paints no card at all,
-/// because its blurred field already is the surface.
+/// Geometry is fixed: the surface keeps the same [margin], [radius] and
+/// padding at every scroll offset, so its controls never move under the
+/// user's thumb. Only the fill fades with [t] (0..1): invisible at rest,
+/// glass (or a tonal Material fill) once the page moves beneath it.
 ///
-/// The glass samples the page painted *behind* it, so the surface has to sit
-/// in a stack over the content it floats above (a `Scaffold` slot with
+/// When [GlassEffects] is on, a [LiquidGlassLayer] samples the page behind
+/// the surface and refracts it through a [LiquidRoundedSuperellipse]. When it
+/// is off, the same shape is painted as a `colorScheme.surfaceContainer` fill
+/// with an elevation shadow — same geometry, same fade, no backdrop sample or
+/// shader pass.
+///
+/// The surface layer is skipped while [t] is 0: there is nothing under the bar
+/// yet, and an idle layer would still copy the backdrop.
+///
+/// The glass samples what is painted *behind* it, so a surface has to sit in a
+/// stack over the content it floats above (a `Scaffold` slot with
 /// `extendBody`, or a `Stack`). Painting it inside an opaque ancestor hides
 /// the effect rather than breaking it.
-class GlassSurface extends StatelessWidget {
+class PillSurface extends StatelessWidget {
+  /// Fade position, 0..1. Drives the surface and shadow together.
+  final double t;
+
+  /// Outer margin of the surface, painted against the container it floats in.
+  final EdgeInsetsGeometry margin;
+
+  /// Corner radius of the surface. [SolRadius.pillRadius] collapses to a
+  /// capsule.
+  final BorderRadius radius;
+
+  /// Inset of [child] inside the surface.
+  final EdgeInsetsGeometry contentPadding;
+
   final Widget child;
 
-  /// Corner radius in logical pixels. [SolRadius.pill] collapses to a capsule.
-  final double cornerRadius;
-
-  final EdgeInsets margin;
-  final EdgeInsets padding;
-
-  /// Material tint. Its alpha controls how strongly it mixes with the
-  /// backdrop; leave null for the neutral material.
-  final Color? tint;
-
-  /// Whether to draw the exterior shadow. Off for surfaces flush with a page.
-  final bool shadow;
-
-  const GlassSurface({
+  const PillSurface({
     super.key,
-    required this.child,
-    this.cornerRadius = SolRadius.card,
+    this.t = 1.0,
     this.margin = EdgeInsets.zero,
-    this.padding = EdgeInsets.zero,
-    this.tint,
-    this.shadow = true,
+    this.radius = SolRadius.pillRadius,
+    this.contentPadding = EdgeInsets.zero,
+    required this.child,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final radius = BorderRadius.circular(cornerRadius);
-    final shadows = shadow
-        ? [
-            BoxShadow(
-              color: colorScheme.shadow.withValues(alpha: _kGlassShadowOpacity),
-              blurRadius: 24,
-              offset: const Offset(0, 8),
-            ),
-          ]
-        : const <BoxShadow>[];
-    // Transparent Material so ripples and tooltips paint *above* the glass
-    // instead of on the scaffold surface underneath it.
-    final content = Material(
-      type: MaterialType.transparency,
-      child: Padding(padding: padding, child: child),
-    );
-
-    if (!GlassEffects.of(context)) {
-      return Container(
-        margin: margin,
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.94),
-          borderRadius: radius,
-          border: Border.all(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.6),
-          ),
-          boxShadow: shadows,
-        ),
-        child: content,
-      );
-    }
+    final effectiveT = t.clamp(0.0, 1.0);
 
     return Container(
       margin: margin,
-      child: LiquidGlassLayer(
-        // Every floating capsule samples the same page plane, so they share
-        // one backdrop capture: two independent captures in one frame are two
-        // full-screen readbacks.
-        useBackdropGroup: true,
-        settings: LiquidGlassSettings.ios27Regular(
-          brightness: theme.brightness,
+      // The shadow wraps the Stack so it always paints behind the surface,
+      // never over the glass. A plain [DecoratedBox] tracks [t] synchronously
+      // without restarting an implicit animation on every scroll frame.
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          boxShadow: effectiveT == 0
+              ? null
+              : [
+                  BoxShadow(
+                    color: colorScheme.shadow.withValues(
+                      alpha: _kPillShadowOpacity * effectiveT,
+                    ),
+                    blurRadius: 12 * effectiveT,
+                    offset: Offset(0, 4 * effectiveT),
+                  ),
+                ],
         ),
-        defaultAppearance: LiquidGlassAppearance.ios27Regular(
-          brightness: theme.brightness,
-          tint: tint ?? const Color(0x00007AFF),
-        ),
-        child: LiquidGlass(
-          shape: LiquidRoundedSuperellipse(borderRadius: cornerRadius),
-          shadows: shadows,
-          child: content,
+        // `passthrough` so the surface's height comes from its controls: the
+        // glass layer is positioned and contributes no size of its own.
+        child: Stack(
+          fit: StackFit.passthrough,
+          children: [
+            if (effectiveT > 0)
+              Positioned.fill(
+                child: GlassEffects.of(context)
+                    ? LiquidGlassLayer(
+                        // Every floating surface samples the same page plane,
+                        // so they share one backdrop capture: two independent
+                        // captures in one frame are two full-screen readbacks.
+                        useBackdropGroup: true,
+                        settings: LiquidGlassSettings.ios27Regular(
+                          brightness: theme.brightness,
+                        ),
+                        // Layer-level appearance: the surface holds a single
+                        // shape, and the layer path is the cheaper shader one.
+                        defaultAppearance: LiquidGlassAppearance.ios27Regular(
+                          brightness: theme.brightness,
+                        ).copyWith(visibility: effectiveT),
+                        child: LiquidGlass(
+                          shape: LiquidRoundedSuperellipse(
+                            borderRadius: radius.topLeft.x,
+                          ),
+                          child: const SizedBox.expand(),
+                        ),
+                      )
+                    : DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainer.withValues(
+                            alpha: effectiveT,
+                          ),
+                          borderRadius: radius,
+                        ),
+                      ),
+              ),
+            Padding(
+              padding: contentPadding,
+              child: Material(type: MaterialType.transparency, child: child),
+            ),
+          ],
         ),
       ),
     );

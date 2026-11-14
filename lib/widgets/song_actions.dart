@@ -4,6 +4,8 @@ import 'package:groovy_box/library/catalog.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/source.dart';
+import 'package:groovy_box/pulsar/client.dart';
+import 'package:groovy_box/pulsar/models.dart';
 import 'package:groovy_box/pulsar/providers.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/common.dart';
@@ -187,9 +189,27 @@ class _SongActionBarState extends ConsumerState<SongActionBar> {
     final error = await ref
         .read(favouritesProvider)
         .set(widget.song, value: next);
+    // The fleet copy is pushed here, not in the device's record: this is the
+    // layer that may know about Pulsar. A failure is reported once and never
+    // undoes the tap — the device already agrees with the user.
+    final fleetError = await _pushFavouriteToFleet(widget.song, next);
     if (!mounted) return;
     setState(() => _busy = false);
     if (error != null) _report(error);
+    if (fleetError != null) _report(fleetError);
+  }
+
+  /// Mirrors the heart into the account's Pulsar favourites, when signed in.
+  /// Signed out is not a failure: the device keeps the opinion and the fleet
+  /// learns it on the next sync.
+  Future<Object?> _pushFavouriteToFleet(LibrarySong song, bool value) async {
+    if (!_signedIn || song.isRadio) return null;
+    try {
+      await ref.read(pulsarFavouritesProvider.notifier).set(song, value: value);
+      return null;
+    } catch (error) {
+      return error;
+    }
   }
 
   /// Shares the track: hands a public Pulsar link to the OS share sheet.
@@ -227,7 +247,7 @@ class _SongActionBarState extends ConsumerState<SongActionBar> {
             album: widget.song.album,
             artworkUrl: artUri?.toString(),
             durationSeconds: widget.song.duration.inSeconds,
-            trackId: widget.song.id,
+            trackKey: pulsarTrackKey(widget.song),
           );
       if (!mounted) return;
       await SharePlus.instance.share(
@@ -279,6 +299,11 @@ class _SongActionBarState extends ConsumerState<SongActionBar> {
           await ref.read(ownedPlaylistsProvider.notifier).add(playlist.id, [
             widget.song,
           ]);
+          name = playlist.name;
+        case _CloudChoice(:final playlist):
+          await ref
+              .read(pulsarPlaylistsProvider.notifier)
+              .addSong(playlist, widget.song);
           name = playlist.name;
         case _SourceChoice(:final playlist):
           await actions.addToPlaylist(playlist);
@@ -364,14 +389,29 @@ abstract final class SongActionsRunner {
     SongActions actions,
   ) async {
     if (!actions.canFavourite) return;
-    final value = await ref.read(favouritesProvider).read(actions.song);
-    final error = await ref
-        .read(favouritesProvider)
-        .set(actions.song, value: !(value ?? false));
+    final favourites = ref.read(favouritesProvider);
+    final value = await favourites.read(actions.song);
+    final next = !(value ?? false);
+    final error = await favourites.set(actions.song, value: next);
+    // The fleet copy, same as the bar's: the two surfaces answer a tap
+    // identically, so neither may be the one that forgets the account.
+    Object? fleetError;
+    if (ref.read(pulsarSessionProvider).value != null &&
+        !actions.song.isRadio) {
+      try {
+        await ref
+            .read(pulsarFavouritesProvider.notifier)
+            .set(actions.song, value: next);
+      } catch (error) {
+        fleetError = error;
+      }
+    }
+    if (!context.mounted) return;
     // The state is the provider, not any widget's field: dropping the family
     // entry is what turns the prefix heart and the menu item together.
     ref.invalidate(favouriteStateProvider(actions.song));
-    if (error != null && context.mounted) _report(context, error);
+    if (error != null) _report(context, error);
+    if (fleetError != null) _report(context, fleetError);
   }
 
   /// Opens the playlist picker and puts the track where it was chosen.
@@ -392,9 +432,14 @@ abstract final class SongActionsRunner {
       final String name;
       switch (choice) {
         case _OwnedChoice(:final playlist):
+          await ref.read(ownedPlaylistsProvider.notifier).add(playlist.id, [
+            actions.song,
+          ]);
+          name = playlist.name;
+        case _CloudChoice(:final playlist):
           await ref
-              .read(ownedPlaylistsProvider.notifier)
-              .add(playlist.id, [actions.song]);
+              .read(pulsarPlaylistsProvider.notifier)
+              .addSong(playlist, actions.song);
           name = playlist.name;
         case _SourceChoice(:final playlist):
           await actions.addToPlaylist(playlist);
@@ -418,6 +463,8 @@ abstract final class SongActionsRunner {
     LibrarySong song,
   ) async {
     try {
+      final sources = ref.read(librarySourceByIdProvider);
+      final pulsarClient = ref.read(pulsarClientProvider);
       final session = await ref.read(pulsarSessionProvider.future);
       if (session == null) {
         if (context.mounted) {
@@ -427,19 +474,16 @@ abstract final class SongActionsRunner {
         }
         return;
       }
-      final sources = ref.read(librarySourceByIdProvider);
       final artUri = sources[song.sourceId]?.artworkUri(song.artId);
-      final share = await ref
-          .read(pulsarClientProvider)
-          .shareTrack(
-            session,
-            title: song.title,
-            artist: song.artist,
-            album: song.album,
-            artworkUrl: artUri?.toString(),
-            durationSeconds: song.duration.inSeconds,
-            trackId: song.id,
-          );
+      final share = await pulsarClient.shareTrack(
+        session,
+        title: song.title,
+        artist: song.artist,
+        album: song.album,
+        artworkUrl: artUri?.toString(),
+        durationSeconds: song.duration.inSeconds,
+        trackKey: pulsarTrackKey(song),
+      );
       if (!context.mounted) return;
       await SharePlus.instance.share(
         ShareParams(text: share.shareUrl, subject: song.title),
@@ -455,8 +499,8 @@ abstract final class SongActionsRunner {
   }
 }
 
-/// What the picker hands back: one of this device's playlists, or one of the
-/// account's own.
+/// What the picker hands back: one of this device's playlists, one of the
+/// account's cloud playlists, or one a connected source holds.
 sealed class _PlaylistChoice {
   const _PlaylistChoice();
 }
@@ -467,6 +511,12 @@ class _OwnedChoice extends _PlaylistChoice {
   const _OwnedChoice(this.playlist);
 }
 
+class _CloudChoice extends _PlaylistChoice {
+  final PulsarPlaylist playlist;
+
+  const _CloudChoice(this.playlist);
+}
+
 class _SourceChoice extends _PlaylistChoice {
   final LibraryPlaylist playlist;
 
@@ -474,14 +524,15 @@ class _SourceChoice extends _PlaylistChoice {
 }
 
 /// Where a track can be put, as a sheet: this device's playlists first, then
-/// the account's own when its source has any.
+/// the account's cloud playlists when it is signed in, then the ones the
+/// connected source holds.
 ///
 /// Device playlists are the primary list — they exist before a library does
-/// and survive every one of them being swapped. The account's playlists are a
-/// second section, not a replacement: adding there is a write to a service
-/// the app does not own, and only the ones the service says are editable are
-/// offered, because the favourites mix appears among them but silently refuses
-/// an add.
+/// and survive every one of them being swapped. The other sections are
+/// writes that leave the app, so they follow, not replace: a cloud playlist
+/// needs a Pulsar session, and a source playlist only appears when the
+/// source says it is editable, because the favourites mix appears among them
+/// but silently refuses an add.
 class _PlaylistPicker extends ConsumerStatefulWidget {
   final SongActions actions;
 
@@ -541,6 +592,10 @@ class _PlaylistPickerState extends ConsumerState<_PlaylistPicker> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final owned = ref.watch(ownedPlaylistsProvider);
+    final cloud = ref.watch(pulsarPlaylistsProvider);
+    final cloudSession = ref.watch(
+      pulsarSessionProvider.select((session) => session.value != null),
+    );
     return SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -605,10 +660,76 @@ class _PlaylistPickerState extends ConsumerState<_PlaylistPicker> {
             ],
             error: (_, _) => const [],
           ),
+          ..._cloudRows(theme, cloud, cloudSession),
           ..._accountRows(theme),
         ],
       ),
     );
+  }
+
+  /// The account's cloud playlists, between the device's own and a server's.
+  /// Signed out is the normal state for half the app's windows, so the
+  /// section is silence rather than an empty-state row.
+  List<Widget> _cloudRows(
+    ThemeData theme,
+    AsyncValue<List<PulsarPlaylist>> cloud,
+    bool signedIn,
+  ) {
+    if (!signedIn) return const [];
+    final list = cloud.value;
+    if (list == null) {
+      return const [
+        Padding(
+          padding: EdgeInsets.all(SolSpace.lg),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      ];
+    }
+    if (list.isEmpty) return const [];
+    return [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(
+          SolSpace.md,
+          SolSpace.md,
+          SolSpace.md,
+          SolSpace.xs,
+        ),
+        child: Text(
+          'playlistPickerCloudSection'.tr(),
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.2,
+          ),
+        ),
+      ),
+      Flexible(
+        child: ListView.builder(
+          shrinkWrap: true,
+          itemCount: list.length,
+          itemBuilder: (context, index) {
+            final playlist = list[index];
+            return ListTile(
+              leading: SizedBox.square(
+                dimension: 40,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(SolRadius.sm),
+                  ),
+                  child: const Icon(Symbols.cloud_rounded),
+                ),
+              ),
+              title: Text(playlist.name),
+              subtitle: playlist.items.isEmpty
+                  ? null
+                  : Text('playlistsTrackCount'.plural(playlist.items.length)),
+              onTap: () => Navigator.of(context).pop(_CloudChoice(playlist)),
+            );
+          },
+        ),
+      ),
+    ];
   }
 
   List<Widget> _accountRows(ThemeData theme) {

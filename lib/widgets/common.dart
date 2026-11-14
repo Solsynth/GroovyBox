@@ -186,76 +186,7 @@ class EmptyState extends StatelessWidget {
   }
 }
 
-/// Header used at the top of every tab: a title, an optional subtitle and a
-/// row of trailing actions, aligned like a document rather than centered.
-///
-/// [leading] is the back affordance for pushed pages; tabs leave it empty.
-class PageHeader extends StatelessWidget {
-  final String title;
-  final String? subtitle;
-  final List<Widget> actions;
-  final Widget? leading;
-
-  const PageHeader({
-    super.key,
-    required this.title,
-    this.subtitle,
-    this.actions = const [],
-    this.leading,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        SolSpace.xxl,
-        SolSpace.xl,
-        SolSpace.md,
-        SolSpace.md,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          if (leading != null) ...[
-            leading!,
-            const SizedBox(width: SolSpace.xs),
-          ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          ...actions,
-        ],
-      ),
-    );
-  }
-}
-
-/// Back button for a pushed page's [PageHeader].
+/// Back button for a pushed page's pill header.
 class HeaderBackButton extends StatelessWidget {
   final VoidCallback onPressed;
 
@@ -270,7 +201,6 @@ class HeaderBackButton extends StatelessWidget {
     );
   }
 }
-
 
 /// Section label above a group of rows or cards.
 class SectionLabel extends StatelessWidget {

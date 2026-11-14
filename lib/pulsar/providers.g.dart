@@ -129,7 +129,7 @@ final class PulsarPlaylistsProvider
   PulsarPlaylists create() => PulsarPlaylists();
 }
 
-String _$pulsarPlaylistsHash() => r'ea40091f66b32d1a8e56e07a9ebcc9879db6f450';
+String _$pulsarPlaylistsHash() => r'23a0980ee839f2e469c5c1086c3e54be7fc20506';
 
 /// The account's playlists, as Pulsar holds them. Empty without a session:
 /// a signed-out window has no cloud playlists and that is not an error.
@@ -157,9 +157,103 @@ abstract class _$PulsarPlaylists extends $AsyncNotifier<List<PulsarPlaylist>> {
   }
 }
 
+/// One cloud playlist as the detail page reads it: the collection itself
+/// with its items preloaded, from the one endpoint that returns both.
+
+@ProviderFor(pulsarPlaylistDetail)
+final pulsarPlaylistDetailProvider = PulsarPlaylistDetailFamily._();
+
+/// One cloud playlist as the detail page reads it: the collection itself
+/// with its items preloaded, from the one endpoint that returns both.
+
+final class PulsarPlaylistDetailProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<PulsarPlaylist>,
+          PulsarPlaylist,
+          FutureOr<PulsarPlaylist>
+        >
+    with $FutureModifier<PulsarPlaylist>, $FutureProvider<PulsarPlaylist> {
+  /// One cloud playlist as the detail page reads it: the collection itself
+  /// with its items preloaded, from the one endpoint that returns both.
+  PulsarPlaylistDetailProvider._({
+    required PulsarPlaylistDetailFamily super.from,
+    required String super.argument,
+  }) : super(
+         retry: null,
+         name: r'pulsarPlaylistDetailProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$pulsarPlaylistDetailHash();
+
+  @override
+  String toString() {
+    return r'pulsarPlaylistDetailProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<PulsarPlaylist> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<PulsarPlaylist> create(Ref ref) {
+    final argument = this.argument as String;
+    return pulsarPlaylistDetail(ref, argument);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is PulsarPlaylistDetailProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$pulsarPlaylistDetailHash() =>
+    r'42d08798baf0d9190d0dbf15a721caac56aa8c32';
+
+/// One cloud playlist as the detail page reads it: the collection itself
+/// with its items preloaded, from the one endpoint that returns both.
+
+final class PulsarPlaylistDetailFamily extends $Family
+    with $FunctionalFamilyOverride<FutureOr<PulsarPlaylist>, String> {
+  PulsarPlaylistDetailFamily._()
+    : super(
+        retry: null,
+        name: r'pulsarPlaylistDetailProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  /// One cloud playlist as the detail page reads it: the collection itself
+  /// with its items preloaded, from the one endpoint that returns both.
+
+  PulsarPlaylistDetailProvider call(String playlistId) =>
+      PulsarPlaylistDetailProvider._(argument: playlistId, from: this);
+
+  @override
+  String toString() => r'pulsarPlaylistDetailProvider';
+}
+
 /// The songs of one Pulsar playlist, resolved against the connected library
 /// sources. A catalog entry is a record of a track, not a playable stream:
 /// matching is on title + artist, which is how the server dedupes too.
+///
+/// The result is index-aligned with [PulsarPlaylist.items], with null where
+/// no library holds the track: the playlist's order is the server's, and a
+/// dropped entry would shift every row after it onto the wrong track.
 
 @ProviderFor(pulsarPlaylistSongs)
 final pulsarPlaylistSongsProvider = PulsarPlaylistSongsFamily._();
@@ -167,20 +261,28 @@ final pulsarPlaylistSongsProvider = PulsarPlaylistSongsFamily._();
 /// The songs of one Pulsar playlist, resolved against the connected library
 /// sources. A catalog entry is a record of a track, not a playable stream:
 /// matching is on title + artist, which is how the server dedupes too.
+///
+/// The result is index-aligned with [PulsarPlaylist.items], with null where
+/// no library holds the track: the playlist's order is the server's, and a
+/// dropped entry would shift every row after it onto the wrong track.
 
 final class PulsarPlaylistSongsProvider
     extends
         $FunctionalProvider<
-          AsyncValue<List<LibrarySong>>,
-          List<LibrarySong>,
-          FutureOr<List<LibrarySong>>
+          AsyncValue<List<LibrarySong?>>,
+          List<LibrarySong?>,
+          FutureOr<List<LibrarySong?>>
         >
     with
-        $FutureModifier<List<LibrarySong>>,
-        $FutureProvider<List<LibrarySong>> {
+        $FutureModifier<List<LibrarySong?>>,
+        $FutureProvider<List<LibrarySong?>> {
   /// The songs of one Pulsar playlist, resolved against the connected library
   /// sources. A catalog entry is a record of a track, not a playable stream:
   /// matching is on title + artist, which is how the server dedupes too.
+  ///
+  /// The result is index-aligned with [PulsarPlaylist.items], with null where
+  /// no library holds the track: the playlist's order is the server's, and a
+  /// dropped entry would shift every row after it onto the wrong track.
   PulsarPlaylistSongsProvider._({
     required PulsarPlaylistSongsFamily super.from,
     required PulsarPlaylist super.argument,
@@ -204,12 +306,12 @@ final class PulsarPlaylistSongsProvider
 
   @$internal
   @override
-  $FutureProviderElement<List<LibrarySong>> $createElement(
+  $FutureProviderElement<List<LibrarySong?>> $createElement(
     $ProviderPointer pointer,
   ) => $FutureProviderElement(pointer);
 
   @override
-  FutureOr<List<LibrarySong>> create(Ref ref) {
+  FutureOr<List<LibrarySong?>> create(Ref ref) {
     final argument = this.argument as PulsarPlaylist;
     return pulsarPlaylistSongs(ref, argument);
   }
@@ -226,15 +328,22 @@ final class PulsarPlaylistSongsProvider
 }
 
 String _$pulsarPlaylistSongsHash() =>
-    r'db13bea5cd8d26e8a5defbe970e7fa33ca0599d0';
+    r'ee273a45a9eda1a5c86362cefaf44eb196826844';
 
 /// The songs of one Pulsar playlist, resolved against the connected library
 /// sources. A catalog entry is a record of a track, not a playable stream:
 /// matching is on title + artist, which is how the server dedupes too.
+///
+/// The result is index-aligned with [PulsarPlaylist.items], with null where
+/// no library holds the track: the playlist's order is the server's, and a
+/// dropped entry would shift every row after it onto the wrong track.
 
 final class PulsarPlaylistSongsFamily extends $Family
     with
-        $FunctionalFamilyOverride<FutureOr<List<LibrarySong>>, PulsarPlaylist> {
+        $FunctionalFamilyOverride<
+          FutureOr<List<LibrarySong?>>,
+          PulsarPlaylist
+        > {
   PulsarPlaylistSongsFamily._()
     : super(
         retry: null,
@@ -247,6 +356,10 @@ final class PulsarPlaylistSongsFamily extends $Family
   /// The songs of one Pulsar playlist, resolved against the connected library
   /// sources. A catalog entry is a record of a track, not a playable stream:
   /// matching is on title + artist, which is how the server dedupes too.
+  ///
+  /// The result is index-aligned with [PulsarPlaylist.items], with null where
+  /// no library holds the track: the playlist's order is the server's, and a
+  /// dropped entry would shift every row after it onto the wrong track.
 
   PulsarPlaylistSongsProvider call(PulsarPlaylist playlist) =>
       PulsarPlaylistSongsProvider._(argument: playlist, from: this);
@@ -406,4 +519,138 @@ final class PulsarTasteFamily extends $Family
 
   @override
   String toString() => r'pulsarTasteProvider';
+}
+
+/// The account's favourites, as Pulsar holds them: the same heart the device
+/// keeps, in the fleet where a second device can read it.
+
+@ProviderFor(PulsarFavourites)
+final pulsarFavouritesProvider = PulsarFavouritesProvider._();
+
+/// The account's favourites, as Pulsar holds them: the same heart the device
+/// keeps, in the fleet where a second device can read it.
+final class PulsarFavouritesProvider
+    extends $AsyncNotifierProvider<PulsarFavourites, List<PlaylistItem>> {
+  /// The account's favourites, as Pulsar holds them: the same heart the device
+  /// keeps, in the fleet where a second device can read it.
+  PulsarFavouritesProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'pulsarFavouritesProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$pulsarFavouritesHash();
+
+  @$internal
+  @override
+  PulsarFavourites create() => PulsarFavourites();
+}
+
+String _$pulsarFavouritesHash() => r'f93a84749b0d702434524420f66617237f1048c5';
+
+/// The account's favourites, as Pulsar holds them: the same heart the device
+/// keeps, in the fleet where a second device can read it.
+
+abstract class _$PulsarFavourites extends $AsyncNotifier<List<PlaylistItem>> {
+  FutureOr<List<PlaylistItem>> build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref =
+        this.ref as $Ref<AsyncValue<List<PlaylistItem>>, List<PlaylistItem>>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<AsyncValue<List<PlaylistItem>>, List<PlaylistItem>>,
+              AsyncValue<List<PlaylistItem>>,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
+/// Whether Pulsar knows [song] as one of the account's favourites.
+
+@ProviderFor(pulsarFavouriteState)
+final pulsarFavouriteStateProvider = PulsarFavouriteStateFamily._();
+
+/// Whether Pulsar knows [song] as one of the account's favourites.
+
+final class PulsarFavouriteStateProvider
+    extends $FunctionalProvider<AsyncValue<bool>, bool, FutureOr<bool>>
+    with $FutureModifier<bool>, $FutureProvider<bool> {
+  /// Whether Pulsar knows [song] as one of the account's favourites.
+  PulsarFavouriteStateProvider._({
+    required PulsarFavouriteStateFamily super.from,
+    required LibrarySong super.argument,
+  }) : super(
+         retry: null,
+         name: r'pulsarFavouriteStateProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$pulsarFavouriteStateHash();
+
+  @override
+  String toString() {
+    return r'pulsarFavouriteStateProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<bool> $createElement($ProviderPointer pointer) =>
+      $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<bool> create(Ref ref) {
+    final argument = this.argument as LibrarySong;
+    return pulsarFavouriteState(ref, argument);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is PulsarFavouriteStateProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$pulsarFavouriteStateHash() =>
+    r'10d2d2ea21861919bcc447228626aa96ca159127';
+
+/// Whether Pulsar knows [song] as one of the account's favourites.
+
+final class PulsarFavouriteStateFamily extends $Family
+    with $FunctionalFamilyOverride<FutureOr<bool>, LibrarySong> {
+  PulsarFavouriteStateFamily._()
+    : super(
+        retry: null,
+        name: r'pulsarFavouriteStateProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  /// Whether Pulsar knows [song] as one of the account's favourites.
+
+  PulsarFavouriteStateProvider call(LibrarySong song) =>
+      PulsarFavouriteStateProvider._(argument: song, from: this);
+
+  @override
+  String toString() => r'pulsarFavouriteStateProvider';
 }

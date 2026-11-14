@@ -6,8 +6,11 @@ import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/collection_hero.dart';
 import 'package:groovy_box/widgets/common.dart';
+import 'package:groovy_box/widgets/pill_app_bar.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:groovy_box/widgets/playlist_name_dialog.dart';
+import 'package:groovy_box/pulsar/links.dart';
+import 'package:groovy_box/widgets/pulsar_upload.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
@@ -91,7 +94,7 @@ class OwnedPlaylistDetailScreen extends ConsumerWidget {
       body: ContentFrame(
         child: Column(
           children: [
-            PageHeader(
+            PillHeader(
               title:
                   playlist?.name ??
                   playlistName ??
@@ -117,6 +120,11 @@ class OwnedPlaylistDetailScreen extends ConsumerWidget {
                 orElse: () => null,
               ),
               actions: [
+                PulsarUploadButton(
+                  localKey: PulsarPlaylistLinks.deviceKey(playlistId),
+                  suggestedName: playlist?.name ?? playlistName ?? '',
+                  songs: (ref) => PulsarUpload.deviceSongs(ref, playlistId),
+                ),
                 IconButton(
                   tooltip: 'ownedPlaylistRename'.tr(),
                   icon: const Icon(Symbols.edit_rounded),
