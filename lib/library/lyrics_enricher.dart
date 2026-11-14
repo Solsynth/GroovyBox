@@ -2,6 +2,7 @@
 library;
 
 import 'dart:convert';
+import 'dart:isolate';
 import 'dart:ui' as ui;
 
 import 'package:dio/dio.dart';
@@ -38,6 +39,33 @@ class LyricsEnricher {
   static final _cjkRegex = RegExp(
     r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF\uAC00-\uD7AF\u1100-\u11FF]',
   );
+
+  /// A lyric line longer than this is a whole song's text that arrived
+  /// without line breaks, not a line anyone sings. The romanizers are
+  /// quadratic on long unbroken CJK strings — the pinyin dictionary lookup
+  /// re-slices the remaining text per character, so a 4 000-character line
+  /// costs about ninety seconds — and a reading under a blob of that size
+  /// is unreadable anyway. Such lines get no pronunciation layer.
+  static const _maxRomanizeLineLength = 500;
+
+  /// Total text past which the romanization pass moves to a background
+  /// isolate. Below it the work is dictionary hits measured in microseconds
+  /// per line and stays inline; above it a page of lyrics could hold the UI
+  /// isolate for frames it cannot spare. The dictionaries are rebuilt inside
+  /// the spawned isolate — statics do not cross an isolate boundary.
+  static const _isolateOffloadThreshold = 1200;
+
+  /// Whether the romanization pass is heavy enough to leave the UI isolate:
+  /// any single huge line, or more text than a page of short lines.
+  static bool _needsIsolate(List<LyricLine> lines) {
+    var total = 0;
+    for (final line in lines) {
+      if (line.text.length > 200) return true;
+      total += line.text.length;
+      if (total > _isolateOffloadThreshold) return true;
+    }
+    return false;
+  }
 
   /// Initializes Kuromoji and TextRomanizer dictionaries once.
   static Future<void> ensureInitialized() async {
@@ -148,6 +176,37 @@ class LyricsEnricher {
     }
   }
 
+  /// One line's romanization pass: keeps an existing reading, skips lines
+  /// with no CJK text, refuses lines past the length cap, and adds a fresh
+  /// reading when the romanizer produces something different.
+  static LyricLine _romanize(LyricLine line, String songLang) {
+    final trimmed = line.text.trim();
+    final lowerText = trimmed.toLowerCase();
+
+    // Clean existing pronunciation if it matches text exactly
+    if (line.pronunciation != null) {
+      if (line.pronunciation!.trim().toLowerCase() == lowerText) {
+        return LyricLine(line.at, line.text, translation: line.translation);
+      }
+      return line;
+    }
+
+    // Do not romanize if line has no CJK characters (e.g. English lines)
+    if (!hasCjk(trimmed)) return line;
+
+    // A line past the cap is a mis-parsed text blob, not a sung line:
+    // romanizing it would stall for minutes (the pinyin lookup is
+    // quadratic) and the reading under a wall of text is unreadable.
+    final roman = trimmed.length <= _maxRomanizeLineLength
+        ? romanizeLine(trimmed, songLang)
+        : '';
+    final romanClean = roman.trim();
+    if (romanClean.isEmpty || romanClean.toLowerCase() == lowerText) {
+      return line;
+    }
+    return line.withLayers(pronunciation: romanClean);
+  }
+
   /// The language lyric translations should be written in, for an app running
   /// in [languageCode].
   ///
@@ -210,45 +269,23 @@ class LyricsEnricher {
   /// lines into the user's preferred language.
   Future<Lyrics> enrich(Lyrics lyrics, {String? targetLanguage}) async {
     if (lyrics.isEmpty) return lyrics;
-    await ensureInitialized();
 
     final songLang = lyrics.language ?? detectLanguage(lyrics.lines);
     final targetLang = targetLanguage ?? resolveTargetLanguage();
 
-    // 1. Romanization for CJK lines only (and clean up any identical pronunciations)
-    final withPronunciation = <LyricLine>[];
-    for (final line in lyrics.lines) {
-      final trimmed = line.text.trim();
-      final lowerText = trimmed.toLowerCase();
-
-      // Clean existing pronunciation if it matches text exactly
-      if (line.pronunciation != null) {
-        if (line.pronunciation!.trim().toLowerCase() == lowerText) {
-          withPronunciation.add(
-            LyricLine(line.at, line.text, translation: line.translation),
-          );
-        } else {
-          withPronunciation.add(line);
-        }
-        continue;
-      }
-
-      // Do not romanize if line has no CJK characters (e.g. English lines)
-      if (!hasCjk(trimmed)) {
-        withPronunciation.add(line);
-        continue;
-      }
-
-      final roman = romanizeLine(trimmed, songLang);
-      final romanClean = roman.trim();
-      if (romanClean.isEmpty || romanClean.toLowerCase() == lowerText) {
-        withPronunciation.add(line);
-      } else {
-        withPronunciation.add(
-          line.withLayers(pronunciation: romanClean),
-        );
-      }
+    // 1. Romanization for CJK lines only (and clean up any identical
+    // pronunciations). Short workloads stay inline; heavy ones — a whole
+    // page of CJK lines, or a single huge line — run on a background
+    // isolate so a lyric pane loading never holds the UI isolate. The
+    // dictionaries are built there because statics do not cross an isolate
+    // boundary.
+    Future<List<LyricLine>> romanizeAll() async {
+      await ensureInitialized();
+      return [for (final line in lyrics.lines) _romanize(line, songLang)];
     }
+
+    final withPronunciation =
+        _needsIsolate(lyrics.lines) ? await Isolate.run(romanizeAll) : await romanizeAll();
 
     // 2. Translation
     // Identify lines that actually need a translation

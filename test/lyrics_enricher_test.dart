@@ -132,5 +132,22 @@ void main() {
       expect(cleaned.lines[0].pronunciation, isNull);
       expect(cleaned.lines[0].translation, isNull);
     });
+
+    test('skips romanization for a mis-parsed text blob', () async {
+      // A whole song's plain text that arrived without line breaks used to
+      // reach the pinyin dictionary as one line; the lookup is quadratic and
+      // froze the app for minutes. Past the cap the line gets no reading.
+      final blob = '夜空中最亮的星能否听清那仰望的人心底的孤独和叹息' * 100;
+      expect(blob.length, greaterThan(1000));
+
+      final sw = Stopwatch()..start();
+      final enriched = await enricher.enrich(
+        Lyrics(lines: [LyricLine(Duration.zero, blob)], synced: false),
+        targetLanguage: 'zh-CN',
+      );
+      // Generous bound: the point is it returns, not how fast.
+      expect(sw.elapsed, lessThan(const Duration(seconds: 30)));
+      expect(enriched.lines.single.pronunciation, isNull);
+    });
   });
 }
