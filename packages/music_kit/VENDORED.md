@@ -21,6 +21,11 @@ macOS only.
 - Added `seekToPosition` (method key + `MusicKitPlatform.setPlaybackTime` +
   `MusicKit.setPlaybackTime`): upstream only exposed the `playbackTime`
   getter, and the property is settable, which is what a scrubber needs.
+- Added `clearQueue` (method key + `MusicKitPlatform.clearQueue` +
+  `MusicKit.clearQueue`): `ApplicationMusicPlayer` keeps its queue loaded
+  after `stop()`, so macOS keeps showing the now-playing entry its playback
+  published next to the app's own session. Assigning an empty queue retires
+  it, which a hybrid player needs on every hand-over away from MusicKit.
 - `register` installs a `SilentStreamHandler` on the two player event
   channels where there is no player, so the eagerly-subscribing Dart side
   does not see a missing handler.

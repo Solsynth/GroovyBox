@@ -159,6 +159,11 @@ class MethodChannelMusicKit extends MusicKitPlatform {
   }
 
   @override
+  Future<void> clearQueue() {
+    return methodChannel.invokeMethod('clearQueue');
+  }
+
+  @override
   Future<void> setQueue(String type, {required ResourceObject item}) {
     return methodChannel.invokeMethod('setQueue', {
       'type': type,

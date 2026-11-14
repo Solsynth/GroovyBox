@@ -28,6 +28,7 @@ extension MusicKitPlugin {
     case skipToNextEntry
     case skipToPreviousEntry
     case stop
+    case clearQueue
     case setQueue
     case setQueueWithItems
     case repeatMode

@@ -35,6 +35,10 @@ abstract interface class MusicKitClient {
 
   Future<void> stop();
 
+  /// Empties the system player's queue, retiring the now-playing entry its
+  /// playback published. Part of handing playback back to a streamed track.
+  Future<void> clearQueue();
+
   Future<void> seek(Duration position);
 
   Future<Duration> playbackTime();
@@ -153,6 +157,9 @@ class PluginMusicKit implements MusicKitClient {
 
   @override
   Future<void> stop() => _kit.stop();
+
+  @override
+  Future<void> clearQueue() => _kit.clearQueue();
 
   @override
   Future<void> seek(Duration position) => _kit.setPlaybackTime(
@@ -290,6 +297,9 @@ class SilentMusicKit implements MusicKitClient {
 
   @override
   Future<void> stop() async {}
+
+  @override
+  Future<void> clearQueue() async {}
 
   @override
   Future<void> seek(Duration position) async {}

@@ -118,6 +118,8 @@ class _RecordingKit extends Fake implements MusicKitClient {
   Future<void> pause() async => calls.add('pause');
   @override
   Future<void> stop() async => calls.add('stop');
+  @override
+  Future<void> clearQueue() async => calls.add('clearQueue');
 
   @override
   Future<void> seek(Duration target) async {

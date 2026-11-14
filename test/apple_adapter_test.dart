@@ -54,6 +54,11 @@ class _FakeMusicKit implements MusicKitClient {
   }
 
   @override
+  Future<void> clearQueue() async {
+    playing = false;
+  }
+
+  @override
   Future<void> seek(Duration position) async {
     sought.add(position);
     clock = position;

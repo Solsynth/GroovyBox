@@ -718,7 +718,12 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     if (_appleMode) {
       _appleMode = false;
       state = state.copyWith(volumeIsSystemControlled: false);
+      // `stop` only pauses: the run the system player was given stays
+      // loaded, and macOS keeps showing its now-playing entry next to the
+      // app's own for a track that is no longer the system's to describe.
+      // Emptying the queue retires that entry.
       unawaited(_apple?.stop());
+      unawaited(_apple?.clearQueue());
     }
 
     if (source == null) {

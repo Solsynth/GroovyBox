@@ -78,6 +78,8 @@ class MusicKit {
 
   Future<void> stop() => _platform.stop();
 
+  Future<void> clearQueue() => _platform.clearQueue();
+
   Future<void> setQueue(String type, {required ResourceObject item}) => _platform.setQueue(
         type,
         item: item,

@@ -70,6 +70,9 @@ extension MusicKitPlugin {
     case .stop:
       stop(result)
 
+    case .clearQueue:
+      clearQueue(result)
+
     case .setQueue:
       let arguments = call.arguments as! JSONObject
       setQueue(
@@ -189,6 +192,15 @@ extension MusicKitPlugin {
 
   func stop(_ result: @escaping FlutterResult) {
     musicPlayer.stop()
+    result(nil)
+  }
+
+  /// Empties the queue and retires the entry the system player published to
+  /// the now-playing centre. `stop()` alone leaves a paused entry behind:
+  /// the queue stays loaded, so macOS keeps showing it next to whatever the
+  /// app's own session publishes afterwards.
+  func clearQueue(_ result: @escaping FlutterResult) {
+    musicPlayer.queue = []
     result(nil)
   }
 }

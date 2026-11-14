@@ -103,6 +103,11 @@ abstract class MusicKitPlatform extends PlatformInterface {
     throw UnimplementedError('stop() has not been implemented.');
   }
 
+  /// Empties the player's queue without touching playback state.
+  Future<void> clearQueue() async {
+    throw UnimplementedError('clearQueue() has not been implemented.');
+  }
+
   Future<void> setQueue(String type, {required ResourceObject item}) async {
     throw UnimplementedError('setQueue() has not been implemented.');
   }

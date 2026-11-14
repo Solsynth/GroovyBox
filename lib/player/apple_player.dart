@@ -98,6 +98,15 @@ class ApplePlayer {
     await _client.stop();
   }
 
+  /// Empties the system player's queue after a stop, retiring the now-playing
+  /// entry its playback published. Called when the transport hands playback
+  /// back to a streamed track.
+  Future<void> clearQueue() async {
+    _stopClock();
+    _started = false;
+    await _client.clearQueue();
+  }
+
   /// Seeks inside the current track.
   ///
   /// Seeking is one of the operations that *pauses* the system player, so a
