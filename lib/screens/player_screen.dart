@@ -899,6 +899,8 @@ class _CompactPlayerBody extends StatelessWidget {
                           ),
                         ),
                       ),
+                    ],
+                  ),
                       // Single persistent artwork widget that flies like a
                       // hero between the centered slot and the compact
                       // header's sleeve.
@@ -914,8 +916,6 @@ class _CompactPlayerBody extends StatelessWidget {
                           shadowOffsetY: lerpDouble(10, 3, t)!,
                         ),
                       ),
-                    ],
-                  ),
                 ],
               ),
             );
