@@ -9,7 +9,7 @@ import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/player/player.dart';
-import 'package:groovy_box/screens/stats.dart';
+import 'package:groovy_box/screens/profile.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -101,7 +101,7 @@ Future<void> _pumpScreen(WidgetTester tester, LibraryDatabase db) async {
       ],
       child: MaterialApp(
         theme: createAppThemeSet().light,
-        home: const Scaffold(body: StatsScreen()),
+        home: const Scaffold(body: ProfileScreen()),
       ),
     ),
   );
@@ -160,7 +160,7 @@ void main() {
 
     await _pumpScreen(tester, db);
 
-    expect(find.text('Stats'), findsOneWidget);
+    expect(find.text('Profile'), findsOneWidget);
     expect(find.text('4'), findsOneWidget);
     expect(find.text('plays'), findsOneWidget);
     expect(find.text('2'), findsWidgets);
@@ -185,7 +185,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the shell carries Stats where the queue tab used to be', (
+  testWidgets('the shell carries Profile where the stats tab used to be', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(430, 900);
@@ -213,13 +213,14 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
-    // Three tabs: search, the collection and the history. The queue is the
-    // player's pane now, so it never became a tab.
+    // The stats tab became the profile tab; the queue is still the player's
+    // pane, so it never became a tab.
     expect(find.byIcon(Symbols.queue_music), findsNothing);
-    await tester.tap(find.byIcon(Symbols.query_stats));
+    expect(find.byIcon(Symbols.query_stats), findsNothing);
+    await tester.tap(find.byIcon(Symbols.account_circle));
     await tester.pumpAndSettle();
 
-    expect(find.text('Stats'), findsOneWidget);
+    expect(find.text('Profile'), findsOneWidget);
     expect(find.text('Yellow'), findsWidgets);
     expect(tester.takeException(), isNull);
   });

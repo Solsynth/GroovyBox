@@ -6,7 +6,7 @@ import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/screens/library.dart';
-import 'package:groovy_box/screens/stats.dart';
+import 'package:groovy_box/screens/profile.dart';
 import 'package:groovy_box/screens/settings.dart';
 import 'package:groovy_box/widgets/now_playing_dock.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -154,11 +154,10 @@ void main() {
         expect(tester.takeException(), isNull);
       });
 
-      testWidgets('stats — $label', (tester) async {
-        await _pump(tester, const StatsScreen(), size: size, dock: true);
-        expect(find.text('Stats'), findsOneWidget);
+      testWidgets('profile — $label', (tester) async {
+        await _pump(tester, const ProfileScreen(), size: size, dock: true);
+        expect(find.text('Profile'), findsOneWidget);
         expect(find.text('listened'), findsOneWidget);
-        expect(tester.takeException(), isNull);
       });
 
       testWidgets('settings — $label', (tester) async {

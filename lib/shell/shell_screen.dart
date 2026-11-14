@@ -49,7 +49,7 @@ class ShellScreen extends StatelessWidget {
             ExploreTab(),
             SearchTab(),
             LibraryTab(),
-            StatsTab(),
+            ProfileTab(),
             SettingsTab(),
           ],
           duration: const Duration(milliseconds: 320),

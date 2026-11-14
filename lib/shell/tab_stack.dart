@@ -47,10 +47,11 @@ class SettingsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) => const AutoRouter();
 }
+
 /// See [ExploreTab].
 @RoutePage()
-class StatsTab extends StatelessWidget {
-  const StatsTab({super.key});
+class ProfileTab extends StatelessWidget {
+  const ProfileTab({super.key});
 
   @override
   Widget build(BuildContext context) => const AutoRouter();

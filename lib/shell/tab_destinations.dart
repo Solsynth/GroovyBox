@@ -56,11 +56,11 @@ List<TabDestination> get allTabDestinations => const [
     selectedIcon: Symbols.library_music_rounded,
   ),
   TabDestination(
-    id: 'stats',
+    id: 'profile',
     routeIndex: 3,
-    labelKey: 'tabStats',
-    icon: Symbols.query_stats,
-    selectedIcon: Symbols.query_stats_rounded,
+    labelKey: 'tabProfile',
+    icon: Symbols.account_circle,
+    selectedIcon: Symbols.account_circle_rounded,
   ),
   TabDestination(
     id: 'settings',
