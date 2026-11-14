@@ -12,6 +12,7 @@ import 'dart:math' as math;
 
 import 'package:dio/dio.dart';
 
+import '../core/identity.dart';
 import 'lyrics.dart';
 
 /// A resolved lyric from LRCLIB.
@@ -62,7 +63,7 @@ class Lrclib {
 
   /// LRCLIB asks every client to name itself and to leave a way to be reached.
   static const defaultIdentity =
-      'GroovyBox/0.1.0 (+https://github.com/littlesheep/GroovyBox)';
+      '$kAppName/$kAppVersion (+https://github.com/littlesheep/GroovyBox)';
 
   /// Records further apart than this are a different recording even when the
   /// title and artist match: live takes, remasters and edits all collide.

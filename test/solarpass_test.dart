@@ -116,6 +116,22 @@ void main() {
   });
 
   group('SolarpassClient', () {
+    test('every request names GroovyBox as the user agent', () async {
+      // Stargate stores this header as the session's device name and Solian
+      // shows it in the account's device list; `Dart/<sdk>` there is
+      // unrecognisable, so the client has to send its own.
+      RequestOptions? recorded;
+      final dio = Dio();
+      dio.httpClientAdapter = _MockDioAdapter((options) async {
+        recorded = options;
+        return ResponseBody.fromString('{}', 200);
+      });
+
+      await SolarpassClient(dio: dio).discover();
+
+      expect(recorded!.headers['User-Agent'], matches(r'^GroovyBox/\d'));
+    });
+
     test('discover loads openid configuration or falls back', () async {
       final dio = Dio();
       dio.httpClientAdapter = _MockDioAdapter((options) async {
@@ -401,6 +417,39 @@ void main() {
       await notifier.signOut();
       expect(container.read(solarpassSessionProvider).value, isNull);
       expect(prefs.getString('solarpass_oauth_session'), isNull);
+    });
+
+    test('signing out while the profile is watched does not cycle', () async {
+      // The settings section watches the account provider, which in turn
+      // watches the session. Signing out used to invalidate the account
+      // provider from inside the session notifier, which Riverpod rejects as a
+      // circular dependency — exactly the case a signed-in user hits.
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        'solarpass_oauth_session',
+        jsonEncode(const OAuthSession(accessToken: 'tok').toJson()),
+      );
+
+      final container = ProviderContainer(
+        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      );
+      addTearDown(container.dispose);
+
+      final subscription = container.listen(
+        solarpassAccountProvider,
+        (_, _) {},
+      );
+      addTearDown(subscription.close);
+
+      final session = await container.read(solarpassSessionProvider.future);
+      expect(session?.accessToken, 'tok');
+
+      await container.read(solarpassSessionProvider.notifier).signOut();
+      expect(container.read(solarpassSessionProvider).value, isNull);
+      expect(container.read(solarpassAccountProvider).value, isNull);
+      expect(prefs.getString('solarpass_oauth_session'), isNull);
+      expect(prefs.getString('solarpass_user_account'), isNull);
     });
   });
 }

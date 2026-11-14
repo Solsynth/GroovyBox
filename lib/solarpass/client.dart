@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 
+import '../core/identity.dart';
 import 'models.dart';
 
 class OidcConfiguration {
@@ -52,7 +53,13 @@ class SolarpassClient {
               connectTimeout: const Duration(seconds: 15),
               receiveTimeout: const Duration(seconds: 15),
             ),
-          );
+          ) {
+    // Stargate records the user agent that obtained a session and Solian lists
+    // it as the device name. Without this the session shows up as
+    // `Dart/<sdk> (dart:io)` and cannot be recognised. Set on the instance
+    // rather than the BaseOptions above so an injected Dio gets it too.
+    _dio.options.headers['User-Agent'] = appUserAgent;
+  }
 
   final Dio _dio;
   SolarpassConfig config;

@@ -2,6 +2,7 @@ import 'dart:io' show HttpHeaders;
 
 import 'package:dio/dio.dart';
 
+import '../core/identity.dart';
 import 'http.dart';
 import 'lyrics.dart';
 import 'models.dart';
@@ -96,10 +97,10 @@ class JellyfinAdapter implements LibraryAdapter {
 
   static String _authorization(String deviceId, {String? token}) {
     final fields = [
-      'Client="GroovyBox"',
-      'Device="GroovyBox"',
+      'Client="$kAppName"',
+      'Device="$kAppName"',
       'DeviceId="$deviceId"',
-      'Version="0.1.0"',
+      'Version="$kAppVersion"',
       if (token != null && token.isNotEmpty) 'Token="$token"',
     ];
     return 'MediaBrowser ${fields.join(', ')}';

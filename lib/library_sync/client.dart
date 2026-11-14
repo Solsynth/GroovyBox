@@ -4,6 +4,7 @@ library;
 
 import 'package:dio/dio.dart';
 
+import '../core/identity.dart';
 import '../solarpass/models.dart';
 import 'models.dart';
 
@@ -54,6 +55,7 @@ class LibrarySyncClient {
   Map<String, String> _headers(OAuthSession session) => {
     'Accept': 'application/json',
     'Content-Type': 'application/json',
+    'User-Agent': appUserAgent,
     'Authorization': '${session.tokenType} ${session.accessToken}',
   };
 

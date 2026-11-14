@@ -112,7 +112,9 @@ class SolarpassSessionNotifier extends AsyncNotifier<OAuthSession?> {
     try {
       final session = await client.authorizeBrowser();
       await _saveSession(session);
-      await ref.read(solarpassAccountProvider.notifier).refresh();
+      // The account notifier watches the session, so the saved state rebuilds
+      // it; reading it back here would make the two providers depend on one
+      // another, which Riverpod refuses.
       return session;
     } catch (error, stack) {
       state = AsyncError(error, stack);
@@ -128,7 +130,7 @@ class SolarpassSessionNotifier extends AsyncNotifier<OAuthSession?> {
     try {
       final session = await client.authorizeDevice(onDeviceCode: onDeviceCode);
       await _saveSession(session);
-      await ref.read(solarpassAccountProvider.notifier).refresh();
+      // Rebuilt by the session watch above; see signInBrowser.
       return session;
     } catch (error, stack) {
       state = AsyncError(error, stack);
@@ -148,7 +150,8 @@ class SolarpassSessionNotifier extends AsyncNotifier<OAuthSession?> {
     await prefs.remove(_kSolarpassSessionKey);
     await prefs.remove(_kSolarpassAccountKey);
     state = const AsyncData(null);
-    ref.invalidate(solarpassAccountProvider);
+    // The account notifier watches the session: its rebuild sees the null and
+    // drops the profile, so nothing else is invalidated from here.
   }
 }
 
