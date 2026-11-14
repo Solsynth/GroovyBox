@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
@@ -12,7 +13,56 @@ import '../pulsar/client.dart';
 import 'client.dart';
 import 'models.dart';
 
+/// How much of a track must be heard before it counts as a scrobble.
+///
+/// Last.fm's own rule is a half; a quarter is what someone skipping through a
+/// playlist still means by "I listened to that". The comparison is done in
+/// milliseconds so no float rounding decides a borderline track.
+const _kScrobbleFraction = 0.25;
+
+/// Tracks shorter than this are never scrobbled, matching Last.fm, which
+/// ignores anything under 30 seconds rather than logging a jingle.
+const _kMinScrobbleDuration = Duration(seconds: 30);
+
+/// A row with no length of its own (a station) has no fraction to reach, so
+/// it needs this much listening instead.
+const _kUnknownDurationThreshold = Duration(seconds: 30);
+
+/// Now-playing broadcasts coalesce over this window: skipping through a list
+/// announces the track the user settles on, not every one passed over.
+const _kPresenceDebounce = Duration(seconds: 2);
+
+/// How often the presence lease is renewed while a track plays. The lease
+/// itself is five minutes; this leaves two renewals of slack.
+const _kHeartbeatInterval = Duration(seconds: 150);
+
+/// How long a paused track stays up as presence before it is cleared.
+const _kPauseGrace = Duration(seconds: 30);
+
+/// Whether a play counts as a scrobble.
+///
+/// A quarter of the track is the bar: it is what someone who skipped ahead
+/// still heard enough of to mean it, and it keeps a browse-through playlist
+/// from logging rows the listener passed over. A row with no length of its
+/// own (a station) has no fraction to take, so it needs
+/// [_kUnknownDurationThreshold] instead. Rows shorter than
+/// [_kMinScrobbleDuration] never count.
+bool isScrobbleEligible({
+  required Duration duration,
+  required Duration listened,
+}) {
+  if (duration > Duration.zero && duration < _kMinScrobbleDuration) {
+    return false;
+  }
+  final needed = duration > Duration.zero
+      ? Duration(
+          microseconds: (duration.inMicroseconds * _kScrobbleFraction).round(),
+        )
+      : _kUnknownDurationThreshold;
+  return listened >= needed;
+}
 const _kSolarpassSessionKey = 'solarpass_oauth_session';
+
 const _kSolarpassAccountKey = 'solarpass_user_account';
 const _kSolarpassConfigKey = 'solarpass_settings_config';
 
@@ -252,7 +302,8 @@ class SolarpassScrobbleStatusNotifier extends Notifier<ScrobbleStatus> {
   }
 }
 
-/// Central presence scrobbler that listens to [playbackProvider] and syncs with Solar Network.
+/// Central presence scrobbler that listens to [playbackProvider] and syncs with
+/// Solar Network.
 final solarpassScrobblerProvider = Provider<SolarpassScrobbler>((ref) {
   final scrobbler = SolarpassScrobbler(ref);
   ref.onDispose(scrobbler.dispose);
@@ -266,6 +317,7 @@ class SolarpassScrobbler {
   final Ref _ref;
   Timer? _heartbeatTimer;
   Timer? _pauseDebounceTimer;
+  Timer? _presenceTimer;
   String? _lastScrobbledKey;
   bool _disposed = false;
 
@@ -283,10 +335,7 @@ class SolarpassScrobbler {
       if (prev?.scrobbleEnabled == true && !next.scrobbleEnabled) {
         _clearPresence();
       } else if (prev?.scrobbleEnabled == false && next.scrobbleEnabled) {
-        final playback = _ref.read(playbackProvider);
-        if (playback.playing && playback.current != null) {
-          _scrobbleTrack(playback.current!, playback.position);
-        }
+        _schedulePresence();
       }
     });
   }
@@ -309,22 +358,25 @@ class SolarpassScrobbler {
         _commitPendingScrobble();
 
         _activeSong = song;
-        _playStartedAt = DateTime.now();
+        _playStartedAt = clock.now();
         _listenedDuration = Duration.zero;
-        _lastResumeTime = DateTime.now();
+        _lastResumeTime = clock.now();
         _lastScrobbledKey = key;
-
-        _scrobbleTrack(song, next.position);
+        // Only a change or a resume arms the broadcast: position ticks land
+        // here every second and would otherwise keep pushing it back.
+        _schedulePresence();
       } else if (prev?.playing != true) {
         // Resumed playing same song
-        _lastResumeTime = DateTime.now();
-        _scrobbleTrack(song, next.position);
+        _lastResumeTime = clock.now();
+        _schedulePresence();
       }
       _ensureHeartbeat();
     } else {
       // Paused or playback stopped
+      _presenceTimer?.cancel();
+      _presenceTimer = null;
       if (_lastResumeTime != null) {
-        _listenedDuration += DateTime.now().difference(_lastResumeTime!);
+        _listenedDuration += clock.now().difference(_lastResumeTime!);
         _lastResumeTime = null;
       }
 
@@ -336,8 +388,8 @@ class SolarpassScrobbler {
         _commitPendingScrobble();
         _clearPresence();
       } else {
-        // Paused on track: debounce clearing activity by 30 seconds
-        _pauseDebounceTimer ??= Timer(const Duration(seconds: 30), () {
+        // Paused on track: debounce clearing activity by [_kPauseGrace]
+        _pauseDebounceTimer ??= Timer(_kPauseGrace, () {
           if (!_disposed && !_ref.read(playbackProvider).playing) {
             _clearPresence();
           }
@@ -349,21 +401,15 @@ class SolarpassScrobbler {
   void _commitPendingScrobble() {
     if (_activeSong == null) return;
     if (_lastResumeTime != null) {
-      _listenedDuration += DateTime.now().difference(_lastResumeTime!);
+      _listenedDuration += clock.now().difference(_lastResumeTime!);
       _lastResumeTime = null;
     }
 
     final song = _activeSong!;
     final listened = _listenedDuration;
-    final playedAt = _playStartedAt ?? DateTime.now();
+    final playedAt = _playStartedAt ?? clock.now();
 
-    // Check Last.fm standard rule: listened >= 30s or >= 50% track duration
-    final songSec = song.duration.inSeconds;
-    final listenedSec = listened.inSeconds;
-    final isEligible =
-        listenedSec >= 30 || (songSec > 0 && listenedSec >= (songSec / 2));
-
-    if (isEligible) {
+    if (isScrobbleEligible(duration: song.duration, listened: listened)) {
       _submitPermanentScrobble(song, listened, playedAt);
     }
 
@@ -404,13 +450,29 @@ class SolarpassScrobbler {
   }
 
   void _ensureHeartbeat() {
-    _heartbeatTimer?.cancel();
-    // Renew lease every 2.5 minutes (Stargate lease duration is 5 minutes)
-    _heartbeatTimer = Timer.periodic(const Duration(seconds: 150), (_) {
+    // Renew the lease while the track plays. Position ticks re-enter here
+    // every second, so the timer is created once and left alone: recreating
+    // it on each tick would push the first renewal out forever.
+    _heartbeatTimer ??= Timer.periodic(_kHeartbeatInterval, (_) {
+      _schedulePresence();
+    });
+  }
+
+  /// Broadcasts the current track after [_kPresenceDebounce] of quiet.
+  ///
+  /// Every track change and resume only arms the timer, so a listener
+  /// skipping down a playlist announces the row they stop on rather than each
+  /// one they pass. The heartbeat and the settings toggle go through here too,
+  /// which keeps one place responsible for what presence says.
+  void _schedulePresence() {
+    _presenceTimer?.cancel();
+    _presenceTimer = Timer(_kPresenceDebounce, () {
+      _presenceTimer = null;
+      if (_disposed) return;
       final playback = _ref.read(playbackProvider);
-      if (playback.playing && playback.current != null) {
-        _scrobbleTrack(playback.current!, playback.position);
-      }
+      final song = playback.current;
+      if (!playback.playing || song == null) return;
+      _scrobbleTrack(song, playback.position);
     });
   }
 
@@ -467,11 +529,12 @@ class SolarpassScrobbler {
 
   Future<void> _clearPresence() async {
     _lastScrobbledKey = null;
+    _presenceTimer?.cancel();
+    _presenceTimer = null;
     _pauseDebounceTimer?.cancel();
     _pauseDebounceTimer = null;
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
-
     final session = await _ref
         .read(solarpassSessionProvider.notifier)
         .validSession();
@@ -490,6 +553,7 @@ class SolarpassScrobbler {
   void dispose() {
     _disposed = true;
     _commitPendingScrobble();
+    _presenceTimer?.cancel();
     _heartbeatTimer?.cancel();
     _pauseDebounceTimer?.cancel();
   }
