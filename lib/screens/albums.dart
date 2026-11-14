@@ -6,6 +6,7 @@ import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/artwork.dart';
+import 'package:groovy_box/widgets/collection_hero.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -149,7 +150,10 @@ class AlbumDetailScreen extends ConsumerWidget {
                         args: [
                           '${list.length}',
                           formatDuration(
-                            list.fold(Duration.zero, (sum, s) => sum + s.duration),
+                            list.fold(
+                              Duration.zero,
+                              (sum, s) => sum + s.duration,
+                            ),
                           ),
                         ],
                       ),
@@ -169,11 +173,41 @@ class AlbumDetailScreen extends ConsumerWidget {
                         itemCount: list.length + 1,
                         itemBuilder: (context, index) {
                           if (index == 0) {
-                            return _AlbumHero(
-                              songs: list,
-                              onPlay: () => ref
-                                  .read(playbackProvider.notifier)
-                                  .playQueue(list),
+                            final first = list.first;
+                            return CollectionHero(
+                              sourceId: first.sourceId,
+                              artId: first.artId,
+                              eyebrow: 'albumsEyebrow'.tr(),
+                              meta: [
+                                first.artist ?? 'commonUnknownArtist'.tr(),
+                                if (first.year != null) '${first.year}',
+                                if (first.albumArtist != null &&
+                                    first.albumArtist != first.artist)
+                                  first.albumArtist!,
+                              ].join('  ·  '),
+                              actions: [
+                                FilledButton.icon(
+                                  onPressed: () => ref
+                                      .read(playbackProvider.notifier)
+                                      .playQueue(list),
+                                  icon: const Icon(
+                                    Symbols.play_arrow_rounded,
+                                    size: 20,
+                                  ),
+                                  label: Text('albumsPlayAlbum'.tr()),
+                                ),
+                                IconButton.filledTonal(
+                                  tooltip: 'libraryShuffle'.tr(),
+                                  onPressed: () {
+                                    final notifier = ref.read(
+                                      playbackProvider.notifier,
+                                    );
+                                    notifier.playQueue(list);
+                                    notifier.setShuffle(true);
+                                  },
+                                  icon: const Icon(Symbols.shuffle_rounded),
+                                ),
+                              ],
                             );
                           }
 
@@ -188,16 +222,15 @@ class AlbumDetailScreen extends ConsumerWidget {
                               '${song.track ?? index}',
                               style: Theme.of(context).textTheme.labelMedium
                                   ?.copyWith(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
                                     fontFeatures: const [
                                       FontFeature.tabularFigures(),
                                     ],
                                   ),
                             ),
-                            subtitle:
-                                song.artist ?? 'commonUnknownArtist'.tr(),
+                            subtitle: song.artist ?? 'commonUnknownArtist'.tr(),
                             trailing: formatDuration(song.duration),
                             onTap: () => ref
                                 .read(playbackProvider.notifier)
@@ -222,97 +255,6 @@ class AlbumDetailScreen extends ConsumerWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Cover, title block and play action at the top of an album.
-class _AlbumHero extends StatelessWidget {
-  final List<LibrarySong> songs;
-  final VoidCallback onPlay;
-
-  const _AlbumHero({required this.songs, required this.onPlay});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final first = songs.first;
-    final wide = isWideScreen(context);
-    final coverSize = wide ? 168.0 : 132.0;
-
-    // The page header already names the record and counts its tracks: the
-    // hero would only repeat it in smaller type. It carries what the header
-    // does not — who made it, when, and the way in.
-    final details = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          first.artist ?? 'commonUnknownArtist'.tr(),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: SolSpace.xxs),
-        Text(
-          [
-            if (first.year != null) '${first.year}',
-            if (first.genre != null) first.genre!,
-            if (first.albumArtist != null &&
-                first.albumArtist != first.artist)
-              first.albumArtist!,
-          ].join('  ·  '),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: SolSpace.md),
-        FilledButton.icon(
-          onPressed: onPlay,
-          icon: const Icon(Symbols.play_arrow_rounded),
-          label: Text('albumsPlayAlbum'.tr()),
-        ),
-      ],
-    );
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        SolSpace.xxl,
-        SolSpace.sm,
-        SolSpace.xxl,
-        SolSpace.md,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(SolRadius.lg),
-              boxShadow: [
-                BoxShadow(
-                  color: colorScheme.shadow.withValues(alpha: 0.24),
-                  blurRadius: 28,
-                  offset: const Offset(0, 12),
-                ),
-              ],
-            ),
-            child: LibraryArtwork(
-              sourceId: first.sourceId,
-              artId: first.artId,
-              size: coverSize,
-              radius: SolRadius.lg,
-              fallbackIcon: Symbols.album,
-            ),
-          ),
-          const SizedBox(width: SolSpace.lg),
-          Expanded(child: details),
-        ],
       ),
     );
   }

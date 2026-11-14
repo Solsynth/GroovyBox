@@ -5,6 +5,7 @@ import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/artwork.dart';
+import 'package:groovy_box/widgets/collection_hero.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -12,6 +13,10 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// One playlist's tracks, with a play-all button.
+///
+/// The playlist belongs to a server, so it is read-only here: adding to it
+/// happens through the player's add-to-playlist action, which knows which
+/// playlists the account can still write to.
 @RoutePage()
 class PlaylistDetailScreen extends ConsumerWidget {
   /// Which library the playlist belongs to.
@@ -55,23 +60,15 @@ class PlaylistDetailScreen extends ConsumerWidget {
                         args: [
                           '${list.length}',
                           formatDuration(
-                            list.fold(Duration.zero, (sum, s) => sum + s.duration),
+                            list.fold(
+                              Duration.zero,
+                              (sum, s) => sum + s.duration,
+                            ),
                           ),
                         ],
                       ),
                 orElse: () => null,
               ),
-              actions: [
-                if (songs.hasValue && songs.value!.isNotEmpty)
-                  FilledButton.icon(
-                    onPressed: () => ref
-                        .read(playbackProvider.notifier)
-                        .playQueue(songs.value!),
-                    icon: const Icon(Symbols.play_arrow_rounded, size: 20),
-                    label: Text('commonPlay'.tr()),
-                  ),
-                const SizedBox(width: SolSpace.sm),
-              ],
             ),
             Expanded(
               child: songs.when(
@@ -83,9 +80,45 @@ class PlaylistDetailScreen extends ConsumerWidget {
                       )
                     : ListView.builder(
                         padding: EdgeInsets.only(bottom: bottomInset),
-                        itemCount: list.length,
+                        itemCount: list.length + 1,
                         itemBuilder: (context, index) {
-                          final song = list[index];
+                          if (index == 0) {
+                            final first = list.first;
+                            return CollectionHero(
+                              sourceId: first.sourceId,
+                              artId: first.artId,
+                              eyebrow: 'playlistsKind'.tr(),
+                              meta: [
+                                first.artist ?? 'commonUnknownArtist'.tr(),
+                                'playlistsTrackCount'.plural(list.length),
+                              ].join('  ·  '),
+                              fallbackIcon: Symbols.playlist_play,
+                              actions: [
+                                FilledButton.icon(
+                                  onPressed: () => ref
+                                      .read(playbackProvider.notifier)
+                                      .playQueue(list),
+                                  icon: const Icon(
+                                    Symbols.play_arrow_rounded,
+                                    size: 20,
+                                  ),
+                                  label: Text('commonPlay'.tr()),
+                                ),
+                                IconButton.filledTonal(
+                                  tooltip: 'libraryShuffle'.tr(),
+                                  onPressed: () {
+                                    final notifier = ref.read(
+                                      playbackProvider.notifier,
+                                    );
+                                    notifier.playQueue(list);
+                                    notifier.setShuffle(true);
+                                  },
+                                  icon: const Icon(Symbols.shuffle_rounded),
+                                ),
+                              ],
+                            );
+                          }
+                          final song = list[index - 1];
                           return SongTrackRow(
                             song: song,
                             subtitle: songRowSubtitle(ref, song),
@@ -98,7 +131,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
                             ),
                             onTap: () => ref
                                 .read(playbackProvider.notifier)
-                                .playQueue(list, startIndex: index),
+                                .playQueue(list, startIndex: index - 1),
                           );
                         },
                       ),

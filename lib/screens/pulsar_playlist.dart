@@ -6,6 +6,7 @@ import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/pulsar/models.dart';
 import 'package:groovy_box/pulsar/providers.dart';
 import 'package:groovy_box/widgets/artwork.dart';
+import 'package:groovy_box/widgets/collection_hero.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -38,7 +39,11 @@ class PulsarPlaylistDetailScreen extends ConsumerWidget {
     final songs = ref.watch(
       pulsarPlaylistSongsProvider(
         playlist ??
-            PulsarPlaylist(id: playlistId, name: playlistName ?? '', isPublic: true),
+            PulsarPlaylist(
+              id: playlistId,
+              name: playlistName ?? '',
+              isPublic: true,
+            ),
       ),
     );
     // One boolean, not the transport: rows decide their own selection.
@@ -53,7 +58,10 @@ class PulsarPlaylistDetailScreen extends ConsumerWidget {
         child: Column(
           children: [
             PageHeader(
-              title: playlist?.name ?? playlistName ?? 'playlistsDetailTitleFallback'.tr(),
+              title:
+                  playlist?.name ??
+                  playlistName ??
+                  'playlistsDetailTitleFallback'.tr(),
               leading: HeaderBackButton(
                 onPressed: () => context.router.maybePop(),
               ),
@@ -65,23 +73,16 @@ class PulsarPlaylistDetailScreen extends ConsumerWidget {
                         args: [
                           '${list.length}',
                           formatDuration(
-                            list.fold(Duration.zero, (sum, s) => sum + s.duration),
+                            list.fold(
+                              Duration.zero,
+                              (sum, s) => sum + s.duration,
+                            ),
                           ),
                         ],
                       ),
                 orElse: () => null,
               ),
-              actions: [
-                if (songs.hasValue && songs.value!.isNotEmpty)
-                  FilledButton.icon(
-                    onPressed: () => ref
-                        .read(playbackProvider.notifier)
-                        .playQueue(songs.value!),
-                    icon: const Icon(Symbols.play_arrow_rounded, size: 20),
-                    label: Text('commonPlay'.tr()),
-                  ),
-                const SizedBox(width: SolSpace.sm),
-              ],
+              actions: const [SizedBox(width: SolSpace.sm)],
             ),
             Expanded(
               child: songs.when(
@@ -93,9 +94,45 @@ class PulsarPlaylistDetailScreen extends ConsumerWidget {
                       )
                     : ListView.builder(
                         padding: EdgeInsets.only(bottom: bottomInset),
-                        itemCount: list.length,
+                        itemCount: list.length + 1,
                         itemBuilder: (context, index) {
-                          final song = list[index];
+                          if (index == 0) {
+                            return CollectionHero(
+                              artId: null,
+                              eyebrow: 'pulsarPlaylistKind'.tr(),
+                              meta: [
+                                if (playlist?.description != null &&
+                                    playlist!.description!.isNotEmpty)
+                                  playlist.description!,
+                                'playlistsTrackCount'.plural(list.length),
+                              ].join('  ·  '),
+                              fallbackIcon: Symbols.cloud_rounded,
+                              actions: [
+                                FilledButton.icon(
+                                  onPressed: () => ref
+                                      .read(playbackProvider.notifier)
+                                      .playQueue(list),
+                                  icon: const Icon(
+                                    Symbols.play_arrow_rounded,
+                                    size: 20,
+                                  ),
+                                  label: Text('commonPlay'.tr()),
+                                ),
+                                IconButton.filledTonal(
+                                  tooltip: 'libraryShuffle'.tr(),
+                                  onPressed: () {
+                                    final notifier = ref.read(
+                                      playbackProvider.notifier,
+                                    );
+                                    notifier.playQueue(list);
+                                    notifier.setShuffle(true);
+                                  },
+                                  icon: const Icon(Symbols.shuffle_rounded),
+                                ),
+                              ],
+                            );
+                          }
+                          final song = list[index - 1];
                           return SongTrackRow(
                             song: song,
                             subtitle: songRowSubtitle(ref, song),
@@ -108,7 +145,7 @@ class PulsarPlaylistDetailScreen extends ConsumerWidget {
                             ),
                             onTap: () => ref
                                 .read(playbackProvider.notifier)
-                                .playQueue(list, startIndex: index),
+                                .playQueue(list, startIndex: index - 1),
                           );
                         },
                       ),
