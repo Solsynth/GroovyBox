@@ -614,10 +614,67 @@ class OwnedPlaylists extends AsyncNotifier<List<OwnedPlaylist>> {
     ref.invalidateSelf();
   }
 
+  /// Removes one track from a device-owned playlist.
+  Future<void> removeSong(int playlistId, int entryId) async {
+    final catalog = ref.read(libraryCatalogProvider);
+    if (catalog == null) return;
+    await catalog.removeFromOwnedPlaylist(playlistId, entryId);
+    ref.invalidateSelf();
+  }
+
+  /// Renames a device-owned playlist.
+  Future<void> rename(int playlistId, String name) async {
+    final catalog = ref.read(libraryCatalogProvider);
+    if (catalog == null) return;
+    await catalog.renameOwnedPlaylist(playlistId, name);
+    ref.invalidateSelf();
+  }
+
+  /// Removes a device-owned playlist.
+  Future<void> delete(int playlistId) async {
+    final catalog = ref.read(libraryCatalogProvider);
+    if (catalog == null) return;
+    await catalog.deleteOwnedPlaylist(playlistId);
+    ref.invalidateSelf();
+  }
+
   /// The songs of one owned playlist, in order.
   Future<List<LibrarySong>> songsOf(int playlistId) async {
     final catalog = ref.read(libraryCatalogProvider);
     if (catalog == null) return const [];
     return catalog.ownedPlaylistSongs(playlistId);
   }
+}
+
+/// One row of [ownedPlaylistEntries]: the song in order, with the entry id
+/// the remove action needs. A plain list of [LibrarySong] would lose that
+/// handle, and a remove that guessed by position would delete a different
+/// track after any edit shifted the order.
+class OwnedPlaylistEntry {
+  final int entryId;
+  final LibrarySong song;
+
+  /// The row's place in the list, for the track-number column.
+  final int position;
+
+  const OwnedPlaylistEntry({
+    required this.entryId,
+    required this.song,
+    required this.position,
+  });
+}
+
+/// The entries of one owned playlist, in the order the user put them.
+@riverpod
+Future<List<OwnedPlaylistEntry>> ownedPlaylistEntries(
+  Ref ref,
+  int playlistId,
+) async {
+  final catalog = ref.watch(libraryCatalogProvider);
+  if (catalog == null) return const [];
+  final rows = await catalog.ownedPlaylistEntryRows(playlistId);
+  return [
+    for (final (index, entry) in rows.indexed)
+      OwnedPlaylistEntry(entryId: entry.$1, song: entry.$2, position: index),
+  ];
 }

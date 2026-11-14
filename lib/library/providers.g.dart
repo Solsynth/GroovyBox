@@ -1973,7 +1973,7 @@ final class OwnedPlaylistsProvider
   OwnedPlaylists create() => OwnedPlaylists();
 }
 
-String _$ownedPlaylistsHash() => r'84fed55886b700493565f10e1f2bf272d038e746';
+String _$ownedPlaylistsHash() => r'ba021842ac0bf3b149dbbe1e345fde3a55ca39d6';
 
 /// The device's own playlists, and the source's when the account has any.
 ///
@@ -1999,4 +1999,91 @@ abstract class _$OwnedPlaylists extends $AsyncNotifier<List<OwnedPlaylist>> {
             >;
     return element.handleCreate(ref, build);
   }
+}
+
+/// The entries of one owned playlist, in the order the user put them.
+
+@ProviderFor(ownedPlaylistEntries)
+final ownedPlaylistEntriesProvider = OwnedPlaylistEntriesFamily._();
+
+/// The entries of one owned playlist, in the order the user put them.
+
+final class OwnedPlaylistEntriesProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<List<OwnedPlaylistEntry>>,
+          List<OwnedPlaylistEntry>,
+          FutureOr<List<OwnedPlaylistEntry>>
+        >
+    with
+        $FutureModifier<List<OwnedPlaylistEntry>>,
+        $FutureProvider<List<OwnedPlaylistEntry>> {
+  /// The entries of one owned playlist, in the order the user put them.
+  OwnedPlaylistEntriesProvider._({
+    required OwnedPlaylistEntriesFamily super.from,
+    required int super.argument,
+  }) : super(
+         retry: null,
+         name: r'ownedPlaylistEntriesProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$ownedPlaylistEntriesHash();
+
+  @override
+  String toString() {
+    return r'ownedPlaylistEntriesProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<List<OwnedPlaylistEntry>> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<List<OwnedPlaylistEntry>> create(Ref ref) {
+    final argument = this.argument as int;
+    return ownedPlaylistEntries(ref, argument);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is OwnedPlaylistEntriesProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$ownedPlaylistEntriesHash() =>
+    r'6cc9674560f4ce9328a9a0da5b1234ef381a777a';
+
+/// The entries of one owned playlist, in the order the user put them.
+
+final class OwnedPlaylistEntriesFamily extends $Family
+    with $FunctionalFamilyOverride<FutureOr<List<OwnedPlaylistEntry>>, int> {
+  OwnedPlaylistEntriesFamily._()
+    : super(
+        retry: null,
+        name: r'ownedPlaylistEntriesProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  /// The entries of one owned playlist, in the order the user put them.
+
+  OwnedPlaylistEntriesProvider call(int playlistId) =>
+      OwnedPlaylistEntriesProvider._(argument: playlistId, from: this);
+
+  @override
+  String toString() => r'ownedPlaylistEntriesProvider';
 }

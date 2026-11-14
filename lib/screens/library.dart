@@ -12,6 +12,7 @@ import 'package:groovy_box/screens/explore.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/format.dart';
+import 'package:groovy_box/widgets/playlist_name_dialog.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
@@ -54,15 +55,16 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 
     final albumList = albums.value ?? const <LibraryAlbum>[];
     final playlistList = playlists.value ?? const <LibraryPlaylist>[];
+    final ownedList = ref.watch(ownedPlaylistsProvider).value ?? const [];
     // The count belongs to the half that is showing: a heading that counted
     // both would describe a list the user cannot see.
     final count = switch (_view) {
-      LibraryView.albums => albumList.isEmpty
-          ? null
-          : 'albumsCount'.plural(albumList.length),
-      LibraryView.playlists => playlistList.isEmpty
-          ? null
-          : 'playlistsCount'.plural(playlistList.length),
+      LibraryView.albums =>
+        albumList.isEmpty ? null : 'albumsCount'.plural(albumList.length),
+      LibraryView.playlists =>
+        (playlistList.isEmpty && ownedList.isEmpty)
+            ? null
+            : 'playlistsCount'.plural(playlistList.length + ownedList.length),
     };
 
     return Scaffold(
@@ -162,30 +164,39 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                     ),
                   ],
                 ),
-                LibraryView.playlists => playlists.when(
-                  data: (list) => [
-                    if (list.isEmpty) const _EmptyPlaylists(),
-                    if (list.isNotEmpty)
-                      SliverList.builder(
-                        itemCount: list.length,
-                        itemBuilder: (context, index) => PlaylistCard(
-                          playlist: list[index],
-                          onTap: () => _openPlaylist(context, list[index]),
+                LibraryView.playlists => [
+                  const _OwnedPlaylistsSection(),
+                  ...playlists.when(
+                    data: (list) => [
+                      if (list.isNotEmpty)
+                        SliverToBoxAdapter(
+                          child: LibrarySectionHeader(
+                            title: 'libraryServerPlaylists'.tr(),
+                          ),
                         ),
+                      if (list.isNotEmpty)
+                        SliverList.builder(
+                          itemCount: list.length,
+                          itemBuilder: (context, index) => PlaylistCard(
+                            playlist: list[index],
+                            onTap: () => _openPlaylist(context, list[index]),
+                          ),
+                        ),
+                      if (list.isEmpty) const _EmptyPlaylists(),
+                    ],
+                    loading: () => const [_LoadingSliver()],
+                    error: (error, _) => [
+                      _ErrorSliver(
+                        icon: Symbols.playlist_play,
+                        title: 'playlistsLoadError'.tr(),
+                        error: error,
+                        onRetry: () =>
+                            ref.read(playlistsProvider.notifier).refresh(),
                       ),
-                    const _CloudPlaylistsSection(),
-                  ],
-                  loading: () => const [_LoadingSliver()],
-                  error: (error, _) => [
-                    _ErrorSliver(
-                      icon: Symbols.playlist_play,
-                      title: 'playlistsLoadError'.tr(),
-                      error: error,
-                      onRetry: () =>
-                          ref.read(playlistsProvider.notifier).refresh(),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                  const _CloudPlaylistsSection(),
+                ],
               },
               SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
             ],
@@ -258,11 +269,7 @@ class PlaylistCard extends StatelessWidget {
   final LibraryPlaylist playlist;
   final VoidCallback onTap;
 
-  const PlaylistCard({
-    super.key,
-    required this.playlist,
-    required this.onTap,
-  });
+  const PlaylistCard({super.key, required this.playlist, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -333,6 +340,232 @@ class PlaylistCard extends StatelessWidget {
   }
 }
 
+/// The playlists this device owns, above every other playlist.
+///
+/// They are first because they are the only ones the app can create and
+/// edit: a server playlist belongs to a Navidrome or Jellyfin account, a cloud
+/// playlist to Pulsar. Putting the editable list under the read-only ones
+/// would make the one thing the user can act on the hardest thing to find.
+class _OwnedPlaylistsSection extends ConsumerWidget {
+  const _OwnedPlaylistsSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final owned = ref.watch(ownedPlaylistsProvider);
+    return SliverMainAxisGroup(
+      slivers: [
+        SliverToBoxAdapter(
+          child: LibrarySectionHeader(
+            title: 'libraryOwnedPlaylists'.tr(),
+            trailing: TextButton.icon(
+              onPressed: () => _createOwnedPlaylist(context, ref),
+              icon: const Icon(Symbols.add_rounded, size: 18),
+              label: Text('libraryNewPlaylist'.tr()),
+            ),
+          ),
+        ),
+        ...owned.when(
+          data: (list) => [
+            if (list.isEmpty)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    SolSpace.xxl,
+                    0,
+                    SolSpace.xxl,
+                    SolSpace.sm,
+                  ),
+                  child: Text(
+                    'libraryOwnedPlaylistsEmpty'.tr(),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              )
+            else
+              SliverList.builder(
+                itemCount: list.length,
+                itemBuilder: (context, index) {
+                  final playlist = list[index];
+                  return PlaylistCard(
+                    playlist: LibraryPlaylist(
+                      sourceId: kLocalSourceId,
+                      id: '${playlist.id}',
+                      name: playlist.name,
+                      duration: Duration.zero,
+                      songCount: playlist.trackCount,
+                    ),
+                    onTap: () => context.router.push(
+                      OwnedPlaylistDetailRoute(
+                        playlistId: playlist.id,
+                        playlistName: playlist.name,
+                      ),
+                    ),
+                  );
+                },
+              ),
+          ],
+          loading: () => const [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.all(SolSpace.md),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            ),
+          ],
+          // A device with no catalog can still browse servers; the section
+          // simply has nothing it could create.
+          error: (_, _) => const [SliverToBoxAdapter(child: SizedBox.shrink())],
+        ),
+      ],
+    );
+  }
+}
+
+/// One row of the cloud playlist list, carrying the server's own artwork.
+///
+/// [PlaylistCard] resolves art through a library source, and a cloud playlist
+/// has none: its cover URL is the playlist's, not a source's, so it is drawn
+/// directly instead of through [LibraryArtwork].
+class CloudPlaylistCard extends StatelessWidget {
+  final String name;
+  final String subtitle;
+  final String? artworkUrl;
+  final VoidCallback onTap;
+
+  const CloudPlaylistCard({
+    super.key,
+    required this.name,
+    required this.subtitle,
+    required this.onTap,
+    this.artworkUrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final art = artworkUrl;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: SolSpace.md, vertical: 2),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(SolRadius.md),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: SolSpace.md,
+              vertical: SolSpace.sm,
+            ),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(SolRadius.md),
+                  child: SizedBox.square(
+                    dimension: 52,
+                    child: art == null || art.isEmpty
+                        ? ColoredBox(
+                            color: colorScheme.surfaceContainerHigh,
+                            child: Icon(
+                              Symbols.cloud_rounded,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          )
+                        : Image.network(
+                            art,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => ColoredBox(
+                              color: colorScheme.surfaceContainerHigh,
+                              child: Icon(
+                                Symbols.cloud_rounded,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                  ),
+                ),
+                const SizedBox(width: SolSpace.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (subtitle.isNotEmpty)
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Symbols.chevron_right_rounded,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Creates a device playlist and opens it.
+Future<void> _createOwnedPlaylist(BuildContext context, WidgetRef ref) async {
+  final name = await askPlaylistName(context, title: 'libraryNewPlaylist'.tr());
+  if (name == null || !context.mounted) return;
+  final created = await ref.read(ownedPlaylistsProvider.notifier).create(name);
+  if (created == null || !context.mounted) return;
+  context.router.push(
+    OwnedPlaylistDetailRoute(
+      playlistId: created.id,
+      playlistName: created.name,
+    ),
+  );
+}
+
+/// Creates a cloud playlist and opens it. Failures are the server's own
+/// words: a create that silently does nothing leaves the user naming it again.
+Future<void> _createCloudPlaylist(BuildContext context, WidgetRef ref) async {
+  final name = await askPlaylistName(
+    context,
+    title: 'libraryNewCloudPlaylist'.tr(),
+  );
+  if (name == null || !context.mounted) return;
+  try {
+    final created = await ref
+        .read(pulsarPlaylistsProvider.notifier)
+        .create(name);
+    if (created == null || !context.mounted) return;
+    context.router.push(
+      PulsarPlaylistDetailRoute(
+        playlistId: created.id,
+        playlistName: created.name,
+      ),
+    );
+  } catch (error) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.maybeOf(context)
+        ?.showSnackBar(SnackBar(content: Text(describeServerError(error))));
+  }
+}
+
 class _LoadingSliver extends StatelessWidget {
   const _LoadingSliver();
 
@@ -383,53 +616,52 @@ class _ErrorSliver extends StatelessWidget {
 /// They are a different list, not a merged one: a device playlist exists
 /// before any account does, and a cloud playlist follows the account across
 /// devices. One section header keeps the distinction visible without a
-/// second switch.
+/// second switch, and the header is where a cloud playlist is made.
 class _CloudPlaylistsSection extends ConsumerWidget {
   const _CloudPlaylistsSection();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cloud = ref.watch(pulsarPlaylistsProvider);
-    final hasSong = ref.watch(
-      playbackProvider.select((state) => state.current != null),
+    final signedIn = ref.watch(
+      pulsarSessionProvider.select((session) => session.value != null),
     );
-    final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
     return cloud.when(
-      data: (list) {
-        if (list.isEmpty) {
-          return SliverToBoxAdapter(child: SizedBox(height: bottomInset));
-        }
-        return SliverMainAxisGroup(
-          slivers: [
+      data: (list) => SliverMainAxisGroup(
+        slivers: [
+          if (signedIn)
             SliverToBoxAdapter(
               child: LibrarySectionHeader(
                 title: 'libraryCloudPlaylists'.tr(),
+                trailing: TextButton.icon(
+                  onPressed: () => _createCloudPlaylist(context, ref),
+                  icon: const Icon(Symbols.add_rounded, size: 18),
+                  label: Text('libraryNewCloudPlaylist'.tr()),
+                ),
               ),
             ),
-            SliverList.builder(
-              itemCount: list.length,
-              itemBuilder: (context, index) {
-                final playlist = list[index];
-                return PlaylistCard(
-                  playlist: LibraryPlaylist(
-                    sourceId: 'pulsar',
-                    id: playlist.id,
-                    name: playlist.name,
-                    duration: Duration.zero,
+          SliverList.builder(
+            itemCount: list.length,
+            itemBuilder: (context, index) {
+              final playlist = list[index];
+              final count = playlist.items.length;
+              return CloudPlaylistCard(
+                name: playlist.name,
+                subtitle: count == 0
+                    ? 'ownedPlaylistEmptyHeader'.tr()
+                    : 'playlistsTrackCount'.plural(count),
+                artworkUrl: playlist.artworkUrl,
+                onTap: () => context.router.push(
+                  PulsarPlaylistDetailRoute(
+                    playlistId: playlist.id,
+                    playlistName: playlist.name,
                   ),
-                  onTap: () => context.router.push(
-                    PulsarPlaylistDetailRoute(
-                      playlistId: playlist.id,
-                      playlistName: playlist.name,
-                    ),
-                  ),
-                );
-              },
-            ),
-            SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
-          ],
-        );
-      },
+                ),
+              );
+            },
+          ),
+        ],
+      ),
       loading: () => const SliverToBoxAdapter(
         child: Padding(
           padding: EdgeInsets.all(SolSpace.md),

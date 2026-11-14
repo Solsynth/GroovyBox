@@ -1242,4 +1242,33 @@ extension LocalPlaylistQuery on LibraryDatabase {
             ..where((row) => row.playlistId.equals(playlistId))
             ..orderBy([(row) => OrderingTerm.asc(row.position)]))
           .get();
+
+  /// Renames a device-owned playlist and marks the change.
+  Future<void> renamePlaylist(int playlistId, String name, {DateTime? at}) =>
+      (update(localPlaylists)..where((row) => row.id.equals(playlistId))).write(
+        LocalPlaylistsCompanion(
+          name: Value(name),
+          updatedAt: Value(at ?? DateTime.now()),
+        ),
+      );
+
+  /// Removes a device-owned playlist; its entries follow by cascade.
+  Future<void> deletePlaylist(int playlistId) =>
+      (delete(localPlaylists)..where((row) => row.id.equals(playlistId))).go();
+
+  /// Removes one entry, keeping the rest at their positions: deleting must
+  /// not renumber, or a later reorder would move tracks the user did not
+  /// touch (the same rule [appendToPlaylist] follows at the tail).
+  Future<void> removePlaylistEntry(int playlistId, int entryId) async {
+    await (delete(localPlaylistEntries)
+          ..where(
+            (row) => row.id.equals(entryId) & row.playlistId.equals(playlistId),
+          ))
+        .go();
+    await (update(
+      localPlaylists,
+    )..where((row) => row.id.equals(playlistId))).write(
+      LocalPlaylistsCompanion(updatedAt: Value(DateTime.now())),
+    );
+  }
 }

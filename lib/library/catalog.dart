@@ -544,6 +544,59 @@ extension FavouritesAndPlaylists on LibraryCatalog {
     }
     return songs;
   }
+
+  /// Removes one track from a device-owned playlist. The entry id, not the
+  /// position, is what the UI holds when it asks: positions shift, entry ids
+  /// do not.
+  Future<void> removeFromOwnedPlaylist(int playlistId, int entryId) =>
+      _db.removePlaylistEntry(playlistId, entryId);
+
+  /// Renames a device-owned playlist.
+  Future<void> renameOwnedPlaylist(int playlistId, String name) =>
+      _db.renamePlaylist(playlistId, name);
+
+  /// Removes a device-owned playlist and its entries.
+  Future<void> deleteOwnedPlaylist(int playlistId) =>
+      _db.deletePlaylist(playlistId);
+
+  /// The entries of a device-owned playlist as (entry id, song) pairs, in
+  /// position order. The id is what removal names: positions shift with every
+  /// edit, entry ids do not.
+  Future<List<(int, LibrarySong)>> ownedPlaylistEntryRows(
+    int playlistId,
+  ) async {
+    final entries = await _db.playlistEntries(playlistId);
+    final rows = <(int, LibrarySong)>[];
+    for (final entry in entries) {
+      final track = await (_db.select(_db.tracks)
+            ..where((t) => t.id.equals(entry.trackId)))
+          .getSingleOrNull();
+      if (track == null) continue;
+      final links = await _db.linksOf(entry.trackId);
+      if (links.isEmpty) continue;
+      final link = links.first;
+      rows.add((
+        entry.id,
+        LibrarySong(
+          sourceId: link.sourceId,
+          id: link.externalId,
+          title: track.title,
+          artist: track.artist,
+          album: track.album,
+          albumId: link.albumExternalId,
+          artistId: link.artistExternalId,
+          artId: link.artId,
+          duration: Duration(milliseconds: track.durationMs),
+          track: track.trackNumber,
+          discNumber: track.discNumber,
+          year: track.year,
+          genre: track.genre,
+          mbid: track.mbid,
+        ),
+      ));
+    }
+    return rows;
+  }
 }
 
 /// One favourite, as the library page lists it.

@@ -1,4 +1,3 @@
-
 import 'package:easy_localization/easy_localization.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/catalog.dart';
@@ -6,9 +5,9 @@ import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/pulsar/providers.dart';
-import 'package:groovy_box/solarpass/providers.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/common.dart';
+import 'package:groovy_box/widgets/playlist_name_dialog.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
@@ -99,10 +98,15 @@ class _SongActionBarState extends ConsumerState<SongActionBar> {
 
   bool _busy = false;
 
-  /// Whether a Solarpass session exists: sharing points at the account's
-  /// server, so without one there is nothing to share from.
+  /// Anchors the share popover on iPad. The share used to be reported broken
+  /// partly because it opened with no origin, which fails outright there.
+  final _shareKey = GlobalKey();
+
+  /// Whether the Pulsar session that actually serves the share link is
+  /// present. It was reading Solarpass, which can be signed in while Pulsar
+  /// is not — the button then appeared and did nothing.
   bool get _signedIn =>
-      ref.watch(solarpassSessionProvider.select((s) => s.value != null));
+      ref.watch(pulsarSessionProvider.select((s) => s.value != null));
 
   /// What the account can do with this track, or a no-op when its source has
   /// no write capability: a server reads and plays but has no account of its
@@ -187,18 +191,29 @@ class _SongActionBarState extends ConsumerState<SongActionBar> {
   /// Shares the track: hands a public Pulsar link to the OS share sheet.
   ///
   /// The link resolves to an OpenGraph page any chat app unfurls, so the
-  /// recipient sees the track without opening GroovyBox first. Without a
-  /// signed-in session there is nothing to point at, so the button stays
-  /// quiet rather than sharing a dead URL.
+  /// recipient sees the track without opening GroovyBox first.
+  ///
+  /// Two things used to make this look broken. The button was shown for a
+  /// Solarpass session but the share needed a Pulsar one, which can be absent
+  /// or expired while Solarpass is fine; the call then returned silently and
+  /// the tap did nothing. And the sheet was opened without an origin rect,
+  /// which iPad needs — without it the share fails or lands as a popover in
+  /// the wrong place. Both are fixed here: one session decides both the
+  /// button and the call, and a failure says what happened instead of
+  /// swallowing it.
   Future<void> _share() async {
     if (_busy) return;
     setState(() => _busy = true);
     try {
       final session = await ref.read(pulsarSessionProvider.future);
-      if (session == null) return;
+      if (session == null) {
+        if (mounted) _say('playerShareNeedsAccount'.tr());
+        return;
+      }
       final sources = ref.read(librarySourceByIdProvider);
-      final artUri =
-          sources[widget.song.sourceId]?.artworkUri(widget.song.artId);
+      final artUri = sources[widget.song.sourceId]?.artworkUri(
+        widget.song.artId,
+      );
       final share = await ref
           .read(pulsarClientProvider)
           .shareTrack(
@@ -212,13 +227,32 @@ class _SongActionBarState extends ConsumerState<SongActionBar> {
           );
       if (!mounted) return;
       await SharePlus.instance.share(
-        ShareParams(text: share.shareUrl, title: widget.song.title),
+        ShareParams(
+          text: share.shareUrl,
+          subject: widget.song.title,
+          sharePositionOrigin: _shareOrigin(),
+        ),
       );
     } catch (error) {
       if (mounted) _report(error);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// The rect the share popover anchors to on iPad and macOS.
+  ///
+  /// The button's own box, so the sheet appears next to what was tapped
+  /// rather than at the top-left of the window.
+  Rect? _shareOrigin() {
+    final box = _shareKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return null;
+    return box.localToGlobal(Offset.zero) & box.size;
+  }
+
+  void _say(String message) {
+    ScaffoldMessenger.maybeOf(context)
+        ?.showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _pickPlaylist() async {
@@ -238,9 +272,9 @@ class _SongActionBarState extends ConsumerState<SongActionBar> {
       final String name;
       switch (choice) {
         case _OwnedChoice(:final playlist):
-          await ref
-              .read(ownedPlaylistsProvider.notifier)
-              .add(playlist.id, [widget.song]);
+          await ref.read(ownedPlaylistsProvider.notifier).add(playlist.id, [
+            widget.song,
+          ]);
           name = playlist.name;
         case _SourceChoice(:final playlist):
           await actions.addToPlaylist(playlist);
@@ -248,9 +282,7 @@ class _SongActionBarState extends ConsumerState<SongActionBar> {
       }
       if (mounted) {
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-          SnackBar(
-            content: Text('playerPlaylistAdded'.tr(args: [name])),
-          ),
+          SnackBar(content: Text('playerPlaylistAdded'.tr(args: [name]))),
         );
       }
     } catch (error) {
@@ -300,6 +332,7 @@ class _SongActionBarState extends ConsumerState<SongActionBar> {
             ),
           if (_signedIn)
             IconButton(
+              key: _shareKey,
               tooltip: 'playerShare'.tr(),
               onPressed: _busy ? null : _share,
               icon: const Icon(Symbols.ios_share_rounded),
@@ -375,35 +408,12 @@ class _PlaylistPickerState extends ConsumerState<_PlaylistPicker> {
   /// A name is asked for rather than invented: a playlist called "New
   /// playlist" is one the user has to rename before it means anything.
   Future<void> _create() async {
-    final controller = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('playlistPickerNewTitle'.tr()),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          textInputAction: TextInputAction.done,
-          decoration: InputDecoration(
-            labelText: 'playlistPickerNewLabel'.tr(),
-          ),
-          onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text('commonCancel'.tr()),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
-            child: Text('commonSave'.tr()),
-          ),
-        ],
-      ),
+    final trimmed = await askPlaylistName(
+      context,
+      title: 'playlistPickerNewTitle'.tr(),
+      confirmLabelKey: 'commonSave',
     );
-    controller.dispose();
-    final trimmed = name?.trim() ?? '';
-    if (trimmed.isEmpty || !mounted) return;
+    if (trimmed == null || !mounted) return;
     setState(() => _creating = true);
     final playlist = await ref
         .read(ownedPlaylistsProvider.notifier)
