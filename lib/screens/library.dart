@@ -7,6 +7,8 @@ import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/screens/albums.dart';
+import 'package:groovy_box/pulsar/providers.dart';
+import 'package:groovy_box/screens/explore.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/format.dart';
@@ -161,17 +163,18 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                   ],
                 ),
                 LibraryView.playlists => playlists.when(
-                  data: (list) => list.isEmpty
-                      ? const [_EmptyPlaylists()]
-                      : [
-                          SliverList.builder(
-                            itemCount: list.length,
-                            itemBuilder: (context, index) => PlaylistCard(
-                              playlist: list[index],
-                              onTap: () => _openPlaylist(context, list[index]),
-                            ),
-                          ),
-                        ],
+                  data: (list) => [
+                    if (list.isEmpty) const _EmptyPlaylists(),
+                    if (list.isNotEmpty)
+                      SliverList.builder(
+                        itemCount: list.length,
+                        itemBuilder: (context, index) => PlaylistCard(
+                          playlist: list[index],
+                          onTap: () => _openPlaylist(context, list[index]),
+                        ),
+                      ),
+                    const _CloudPlaylistsSection(),
+                  ],
                   loading: () => const [_LoadingSliver()],
                   error: (error, _) => [
                     _ErrorSliver(
@@ -371,6 +374,70 @@ class _ErrorSliver extends StatelessWidget {
           child: Text('commonTryAgain'.tr()),
         ),
       ),
+    );
+  }
+}
+
+/// The account's cloud playlists, from Pulsar, under the device's own.
+///
+/// They are a different list, not a merged one: a device playlist exists
+/// before any account does, and a cloud playlist follows the account across
+/// devices. One section header keeps the distinction visible without a
+/// second switch.
+class _CloudPlaylistsSection extends ConsumerWidget {
+  const _CloudPlaylistsSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cloud = ref.watch(pulsarPlaylistsProvider);
+    final hasSong = ref.watch(
+      playbackProvider.select((state) => state.current != null),
+    );
+    final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
+    return cloud.when(
+      data: (list) {
+        if (list.isEmpty) {
+          return SliverToBoxAdapter(child: SizedBox(height: bottomInset));
+        }
+        return SliverMainAxisGroup(
+          slivers: [
+            SliverToBoxAdapter(
+              child: LibrarySectionHeader(
+                title: 'libraryCloudPlaylists'.tr(),
+              ),
+            ),
+            SliverList.builder(
+              itemCount: list.length,
+              itemBuilder: (context, index) {
+                final playlist = list[index];
+                return PlaylistCard(
+                  playlist: LibraryPlaylist(
+                    sourceId: 'pulsar',
+                    id: playlist.id,
+                    name: playlist.name,
+                    duration: Duration.zero,
+                  ),
+                  onTap: () => context.router.push(
+                    PulsarPlaylistDetailRoute(
+                      playlistId: playlist.id,
+                      playlistName: playlist.name,
+                    ),
+                  ),
+                );
+              },
+            ),
+            SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
+          ],
+        );
+      },
+      loading: () => const SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.all(SolSpace.md),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      ),
+      // A signed-out window has no cloud playlists: silence, not an error.
+      error: (_, _) => const SliverToBoxAdapter(child: SizedBox.shrink()),
     );
   }
 }

@@ -1,14 +1,18 @@
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/catalog.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/source.dart';
+import 'package:groovy_box/pulsar/providers.dart';
+import 'package:groovy_box/solarpass/providers.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:share_plus/share_plus.dart';
 
 /// What the account can remember about a track: whether it is a favourite,
 /// and which of its own playlists it can still be put into.
@@ -95,6 +99,11 @@ class _SongActionBarState extends ConsumerState<SongActionBar> {
 
   bool _busy = false;
 
+  /// Whether a Solarpass session exists: sharing points at the account's
+  /// server, so without one there is nothing to share from.
+  bool get _signedIn =>
+      ref.watch(solarpassSessionProvider.select((s) => s.value != null));
+
   /// What the account can do with this track, or a no-op when its source has
   /// no write capability: a server reads and plays but has no account of its
   /// own to save anything to. A cast would fail on that source, and this is a
@@ -175,6 +184,43 @@ class _SongActionBarState extends ConsumerState<SongActionBar> {
     if (error != null) _report(error);
   }
 
+  /// Shares the track: hands a public Pulsar link to the OS share sheet.
+  ///
+  /// The link resolves to an OpenGraph page any chat app unfurls, so the
+  /// recipient sees the track without opening GroovyBox first. Without a
+  /// signed-in session there is nothing to point at, so the button stays
+  /// quiet rather than sharing a dead URL.
+  Future<void> _share() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final session = await ref.read(pulsarSessionProvider.future);
+      if (session == null) return;
+      final sources = ref.read(librarySourceByIdProvider);
+      final artUri =
+          sources[widget.song.sourceId]?.artworkUri(widget.song.artId);
+      final share = await ref
+          .read(pulsarClientProvider)
+          .shareTrack(
+            session,
+            title: widget.song.title,
+            artist: widget.song.artist,
+            album: widget.song.album,
+            artworkUrl: artUri?.toString(),
+            durationSeconds: widget.song.duration.inSeconds,
+            trackId: widget.song.id,
+          );
+      if (!mounted) return;
+      await SharePlus.instance.share(
+        ShareParams(text: share.shareUrl, title: widget.song.title),
+      );
+    } catch (error) {
+      if (mounted) _report(error);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _pickPlaylist() async {
     final actions = _actions;
     if (_busy || !actions.canAddToPlaylist) return;
@@ -251,6 +297,12 @@ class _SongActionBarState extends ConsumerState<SongActionBar> {
               tooltip: 'playerAddToPlaylist'.tr(),
               onPressed: _busy ? null : _pickPlaylist,
               icon: const Icon(Symbols.playlist_add_rounded),
+            ),
+          if (_signedIn)
+            IconButton(
+              tooltip: 'playerShare'.tr(),
+              onPressed: _busy ? null : _share,
+              icon: const Icon(Symbols.ios_share_rounded),
             ),
         ],
       ),

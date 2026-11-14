@@ -15,6 +15,10 @@ List<AutoRoute> _tabChildren(AutoRoute root) => [
     page: PlaylistDetailRoute.page,
     path: 'playlists/:sourceId/:playlistId',
   ),
+  AutoRoute(
+    page: PulsarPlaylistDetailRoute.page,
+    path: 'cloud-playlists/:playlistId',
+  ),
 ];
 
 /// The app's route table.
@@ -65,8 +69,10 @@ class AppRouter extends RootStackRouter {
           ),
         ),
         AutoRoute(
-          page: StatsTab.page,
-          children: _tabChildren(AutoRoute(page: StatsRoute.page, initial: true)),
+          page: ProfileTab.page,
+          children: _tabChildren(
+            AutoRoute(page: ProfileRoute.page, initial: true),
+          ),
         ),
         AutoRoute(
           page: SettingsTab.page,

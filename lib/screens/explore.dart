@@ -10,6 +10,7 @@ import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/screens/albums.dart';
 import 'package:groovy_box/widgets/artwork.dart';
+import 'package:groovy_box/widgets/friends_listening.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -122,6 +123,10 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                 ),
                 SliverToBoxAdapter(child: SongShelf(songs: shelf.songs)),
               ],
+              // What the account's friends are playing, right now. Sits
+              // above the app's own shelves: it is live, and it changes
+              // without the user asking.
+              const SliverToBoxAdapter(child: FriendsListeningShelf()),
               if (hasMusic) ...[
                 SliverToBoxAdapter(
                   child: LibrarySectionHeader(
