@@ -1,6 +1,5 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/core/glass.dart';
 import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/router.gr.dart';
@@ -219,7 +218,9 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
                 onTap: () {},
                 child: SongLyricsPane(
                   height: _sheetHeight(),
-                  padding: const EdgeInsets.symmetric(horizontal: SolSpace.md),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: SolSpace.lg,
+                  ),
                 ),
               ),
               _DockSheet.queue => GestureDetector(
@@ -227,7 +228,13 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
                 onTap: () {},
                 child: SizedBox(
                   height: _queueSheetHeight(),
-                  child: const QueuePanel(),
+                  // The capsule's own padding is the capsule's; a panel that
+                  // took the same edges put every row against the glass. Its
+                  // list keeps no inset of its own, so this is the panel's.
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: SolSpace.md),
+                    child: QueuePanel(),
+                  ),
                 ),
               ),
               _DockSheet.none => const SizedBox.shrink(),
@@ -267,10 +274,6 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
     final controller = ref.read(playbackProvider.notifier);
     // The same rule the player page's transport uses, so the two Next buttons
     // never disagree about whether the queue has anywhere to go.
-    final advances = canAdvance(
-      playback,
-      infinite: ref.watch(infinitePlaybackEnabledProvider),
-    );
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final wide = isWideScreen(context);
@@ -525,16 +528,6 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
                                         onPressed: controller.togglePlayPause,
                                         icon: PlayPauseIcon(
                                           playing: playback.playing,
-                                        ),
-                                      ),
-                                      IconButton(
-                                        tooltip: 'playerNext'.tr(),
-                                        visualDensity: VisualDensity.compact,
-                                        onPressed: advances
-                                            ? controller.next
-                                            : null,
-                                        icon: const Icon(
-                                          Symbols.skip_next_rounded,
                                         ),
                                       ),
                                     ],

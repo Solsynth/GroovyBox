@@ -818,7 +818,7 @@ final class CatalogSearchProvider
   }
 }
 
-String _$catalogSearchHash() => r'db10561df566c163b47630358d3018d0f6ddd4a3';
+String _$catalogSearchHash() => r'252be45e1172f62133059eef71bf8386cba92f1e';
 
 /// A store search, fanned out over every library that has a store.
 ///
@@ -1882,6 +1882,118 @@ abstract class _$LyricsMaintenance extends $Notifier<void> {
             as $ClassProviderElement<
               AnyNotifier<void, void>,
               void,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
+@ProviderFor(favourites)
+final favouritesProvider = FavouritesProvider._();
+
+final class FavouritesProvider
+    extends $FunctionalProvider<Favourites, Favourites, Favourites>
+    with $Provider<Favourites> {
+  FavouritesProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'favouritesProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$favouritesHash();
+
+  @$internal
+  @override
+  $ProviderElement<Favourites> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  Favourites create(Ref ref) {
+    return favourites(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(Favourites value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<Favourites>(value),
+    );
+  }
+}
+
+String _$favouritesHash() => r'e24140a5aac76425baf6f8072789915c19f3e024';
+
+/// The device's own playlists, and the source's when the account has any.
+///
+/// Device playlists exist before a library does and survive every server being
+/// swapped, so they are the primary list. A source that can edit its own
+/// playlists is a second section, not a replacement: adding there writes to
+/// that account, which the app does not own.
+
+@ProviderFor(OwnedPlaylists)
+final ownedPlaylistsProvider = OwnedPlaylistsProvider._();
+
+/// The device's own playlists, and the source's when the account has any.
+///
+/// Device playlists exist before a library does and survive every server being
+/// swapped, so they are the primary list. A source that can edit its own
+/// playlists is a second section, not a replacement: adding there writes to
+/// that account, which the app does not own.
+final class OwnedPlaylistsProvider
+    extends $AsyncNotifierProvider<OwnedPlaylists, List<OwnedPlaylist>> {
+  /// The device's own playlists, and the source's when the account has any.
+  ///
+  /// Device playlists exist before a library does and survive every server being
+  /// swapped, so they are the primary list. A source that can edit its own
+  /// playlists is a second section, not a replacement: adding there writes to
+  /// that account, which the app does not own.
+  OwnedPlaylistsProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'ownedPlaylistsProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$ownedPlaylistsHash();
+
+  @$internal
+  @override
+  OwnedPlaylists create() => OwnedPlaylists();
+}
+
+String _$ownedPlaylistsHash() => r'84fed55886b700493565f10e1f2bf272d038e746';
+
+/// The device's own playlists, and the source's when the account has any.
+///
+/// Device playlists exist before a library does and survive every server being
+/// swapped, so they are the primary list. A source that can edit its own
+/// playlists is a second section, not a replacement: adding there writes to
+/// that account, which the app does not own.
+
+abstract class _$OwnedPlaylists extends $AsyncNotifier<List<OwnedPlaylist>> {
+  FutureOr<List<OwnedPlaylist>> build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref =
+        this.ref as $Ref<AsyncValue<List<OwnedPlaylist>>, List<OwnedPlaylist>>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<AsyncValue<List<OwnedPlaylist>>, List<OwnedPlaylist>>,
+              AsyncValue<List<OwnedPlaylist>>,
               Object?,
               Object?
             >;

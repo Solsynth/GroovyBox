@@ -5,7 +5,7 @@ import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/player/player.dart';
-import 'package:groovy_box/screens/browse.dart';
+import 'package:groovy_box/screens/search.dart';
 import 'package:groovy_box/screens/setup.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
@@ -119,7 +119,7 @@ void main() {
     tester.view.physicalSize = const Size(1200, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    await pumpPage(tester, const BrowseScreen());
+    await pumpPage(tester, const SearchScreen());
 
     await tester.tap(find.byType(SearchBar));
     await tester.pump();
@@ -141,7 +141,7 @@ void main() {
     tester.view.physicalSize = const Size(1200, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    await pumpPage(tester, const BrowseScreen());
+    await pumpPage(tester, const SearchScreen());
 
     await tester.tap(find.byType(SearchBar));
     await tester.pump();

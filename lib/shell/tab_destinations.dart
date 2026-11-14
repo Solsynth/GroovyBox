@@ -8,6 +8,7 @@ class TabDestination {
 
   /// Position in `AutoTabsRouter.routes`.
   final int routeIndex;
+
   /// Translation key for the tab's name. Resolved with `.tr()` where the
   /// label is drawn: these destinations are `const`, so they cannot translate
   /// at definition time, and the key keeps one label in one place.
@@ -30,31 +31,37 @@ class TabDestination {
 
 /// Every root tab, in route order. Mirrors the child order in `AppRouter`.
 ///
+/// Four, each a different question. Explore opens the window — it is the
+/// mixed home of what to play next, and every shelf on it is one tap from
+/// playing. Search answers "do I have this, and could I?" across libraries and
+/// stores. The collection is the catalogue (albums and playlists, one page).
+/// The play history keeps the last slot, because a history with nowhere to
+/// read it is a database nobody sees.
+///
 /// There is no Queue tab: the queue is a pane of the player and a sheet in the
 /// now-playing dock, so a third place to see the same list only made the
-/// transport's own controls compete with a page. Stats took the slot, because
-/// a play history with nowhere to read it is a database nobody sees.
+/// transport's own controls compete with a page.
 List<TabDestination> get allTabDestinations => const [
   TabDestination(
-    id: 'browse',
+    id: 'explore',
     routeIndex: 0,
-    labelKey: 'tabBrowse',
+    labelKey: 'tabExplore',
     icon: Symbols.explore,
     selectedIcon: Symbols.explore_rounded,
   ),
   TabDestination(
-    id: 'albums',
+    id: 'search',
     routeIndex: 1,
-    labelKey: 'tabAlbums',
-    icon: Symbols.album,
-    selectedIcon: Symbols.album_rounded,
+    labelKey: 'tabSearch',
+    icon: Symbols.search,
+    selectedIcon: Symbols.search_rounded,
   ),
   TabDestination(
-    id: 'playlists',
+    id: 'library',
     routeIndex: 2,
-    labelKey: 'tabPlaylists',
-    icon: Symbols.playlist_play,
-    selectedIcon: Symbols.playlist_play_rounded,
+    labelKey: 'tabAlbums',
+    icon: Symbols.library_music,
+    selectedIcon: Symbols.library_music_rounded,
   ),
   TabDestination(
     id: 'stats',
@@ -67,7 +74,7 @@ List<TabDestination> get allTabDestinations => const [
 
 /// The compact bottom bar carries every root tab. Settings lives behind the
 /// header's overflow there instead of taking a slot.
-const kBottomBarIds = ['browse', 'albums', 'playlists', 'stats'];
+const kBottomBarIds = ['explore', 'search', 'library', 'stats'];
 
 /// Settings is a pushed route, not a tab, so it is not part of
 /// [allTabDestinations]. Both shells still need one button for it, and they

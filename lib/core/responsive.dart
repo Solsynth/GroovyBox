@@ -71,7 +71,7 @@ double solBottomChromeInset(BuildContext context, {required bool dockVisible}) {
 }
 
 /// Height of the floating now-playing capsule's content box.
-const double kNowPlayingDockHeight = 64.0;
+const double kNowPlayingDockHeight = 56.0;
 
 /// Height of the floating tab capsule's content box.
 const double kBottomNavHeight = 56.0;

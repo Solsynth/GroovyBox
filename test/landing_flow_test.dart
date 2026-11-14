@@ -6,9 +6,9 @@ import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/data/local/library_database.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
-import 'package:groovy_box/screens/browse.dart';
 import 'package:groovy_box/screens/setup.dart';
 import 'package:groovy_box/screens/settings.dart';
+import 'package:groovy_box/screens/explore.dart';
 import 'package:groovy_box/shell/shell_screen.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -56,18 +56,22 @@ void main() {
   ) async {
     await _pumpFreshInstall(tester, const Size(430, 900));
 
-    // The shell is the root: browsing, tabs and settings are all reachable
-    // before any server exists.
+    // The shell is the root: explore, search and the library are all
+    // reachable before any server exists. Explore opens first because it is
+    // the page a window lands on — the mixed home of what to play next.
     expect(find.byType(ShellScreen), findsOneWidget);
-    expect(find.byType(BrowseScreen), findsOneWidget);
+    expect(find.byType(ExploreScreen), findsOneWidget);
     expect(find.byType(SetupScreen), findsNothing);
-    expect(find.byIcon(Symbols.settings), findsOneWidget);
   });
 
-  testWidgets('browse suggests connecting a server or importing files', (
+  testWidgets('the library suggests connecting a server or importing files', (
     tester,
   ) async {
     await _pumpFreshInstall(tester, const Size(430, 900));
+
+    // The nudge is on explore, which is the page that would otherwise be
+    // empty; the library tab says the same thing with its own empty states.
+    await tester.pumpAndSettle();
 
     expect(find.text('Add some music'), findsOneWidget);
     expect(find.text('Connect a library'), findsOneWidget);
@@ -78,7 +82,7 @@ void main() {
   testWidgets('the suggestion opens setup and can come back', (tester) async {
     await _pumpFreshInstall(tester, const Size(430, 900));
 
-    await tester.tap(find.text('Connect a library'));
+    await tester.tap(find.text('Connect a library').first);
     await tester.pumpAndSettle();
 
     expect(find.byType(SetupScreen), findsOneWidget);
@@ -87,13 +91,15 @@ void main() {
 
     await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
+    // Back lands where the page was pushed from: explore.
     expect(find.byType(SetupScreen), findsNothing);
-    expect(find.byType(BrowseScreen), findsOneWidget);
+    expect(find.byType(ExploreScreen), findsOneWidget);
   });
 
   testWidgets('settings offers importing files on this device', (tester) async {
     await _pumpFreshInstall(tester, const Size(430, 900));
 
+    // Settings is reached from the header's gear: it is not a tab.
     await tester.tap(find.byIcon(Symbols.settings));
     await tester.pumpAndSettle();
 

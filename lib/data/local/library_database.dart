@@ -97,6 +97,55 @@ class TrackLinks extends Table {
   ];
 }
 
+/// Whether this device likes one track.
+///
+/// The device owns this answer: it is written the moment the heart is tapped,
+/// without waiting for a server, so the button never flickers and a library
+/// that is offline or rate-limited still remembers what the user said. The
+/// connected source is a *forwarding* target, not the record — a favourite
+/// survives a server being swapped, removed or unreachable, which is why the
+/// canonical track is the key rather than the source's own id.
+@DataClassName('FavouriteTrackRow')
+class FavouriteTracks extends Table {
+  IntColumn get trackId =>
+      integer().references(Tracks, #id, onDelete: KeyAction.cascade)();
+  BoolColumn get favourite => boolean()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  /// One answer per track: the row is the answer, not a log of answers.
+  @override
+  Set<Column> get primaryKey => {trackId};
+}
+
+/// A playlist this device owns.
+///
+/// Device-owned rather than a server's: a playlist made here exists before any
+/// library is connected and survives every one of them being swapped. The
+/// source's own playlists stay the source's, and are listed beside these.
+@DataClassName('LocalPlaylistRow')
+class LocalPlaylists extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text()();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+}
+
+/// One track in a device-owned playlist.
+///
+/// [position] is the order the user put them in, spaced by one; reordering
+/// rewrites the positions rather than relying on insert order.
+@DataClassName('LocalPlaylistEntryRow')
+@TableIndex(name: 'local_playlist_entries_playlist', columns: {#playlistId})
+class LocalPlaylistEntries extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get playlistId =>
+      integer().references(LocalPlaylists, #id, onDelete: KeyAction.cascade)();
+  IntColumn get trackId =>
+      integer().references(Tracks, #id, onDelete: KeyAction.cascade)();
+  IntColumn get position => integer()();
+  DateTimeColumn get addedAt => dateTime()();
+}
+
 /// The stored answer for one track's lyrics, whatever asked for them.
 ///
 /// One row per track: a better answer replaces the old one, and a confirmed
@@ -211,6 +260,9 @@ class LocalFiles extends Table {
     PlayEvents,
     PlaybackSessions,
     LocalFiles,
+    FavouriteTracks,
+    LocalPlaylists,
+    LocalPlaylistEntries,
   ],
 )
 class LibraryDatabase extends _$LibraryDatabase {
@@ -231,7 +283,7 @@ class LibraryDatabase extends _$LibraryDatabase {
   }
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -253,6 +305,11 @@ class LibraryDatabase extends _$LibraryDatabase {
       }
       if (from < 6) {
         await m.addColumn(playEvents, playEvents.touchedAt);
+      }
+      if (from < 7) {
+        await m.createTable(favouriteTracks);
+        await m.createTable(localPlaylists);
+        await m.createTable(localPlaylistEntries);
       }
     },
     beforeOpen: (details) async {
@@ -1084,4 +1141,105 @@ class LibraryDatabase extends _$LibraryDatabase {
       );
     });
   }
+}
+
+/// Whether this device likes one track, and when that answer last changed.
+extension FavouriteQuery on LibraryDatabase {
+  /// The device's own answer for [trackId]. Null when it has never been set.
+  Future<FavouriteTrackRow?> favouriteOf(int trackId) =>
+      (select(favouriteTracks)..where((row) => row.trackId.equals(trackId)))
+          .getSingleOrNull();
+
+  /// Writes the device's answer and returns it.
+  ///
+  /// One row per track, so the answer replaces rather than appends: there is
+  /// no history to keep, and a toggle that wrote a second row would make the
+  /// next read ambiguous.
+  Future<void> setFavourite(
+    int trackId, {
+    required bool favourite,
+    DateTime? at,
+  }) async {
+    final now = at ?? DateTime.now();
+    await into(favouriteTracks).insertOnConflictUpdate(
+      FavouriteTracksCompanion.insert(
+        trackId: Value(trackId),
+        favourite: favourite,
+        updatedAt: now,
+      ),
+    );
+  }
+
+  /// Every track this device likes, newest decision first.
+  Future<List<FavouriteTrackRow>> allFavourites() =>
+      (select(favouriteTracks)
+            ..where((row) => row.favourite.equals(true))
+            ..orderBy([(row) => OrderingTerm.desc(row.updatedAt)]))
+          .get();
+}
+
+/// Device-owned playlists: the ones this app created, not a server's.
+extension LocalPlaylistQuery on LibraryDatabase {
+  /// Creates a playlist and returns its id.
+  Future<int> createPlaylist(String name, {DateTime? at}) async {
+    final now = at ?? DateTime.now();
+    return into(localPlaylists).insert(
+      LocalPlaylistsCompanion.insert(
+        name: name,
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+  }
+
+  /// Adds [trackIds] to the end of [playlistId], in order.
+  ///
+  /// Positions continue from the current tail rather than counting rows:
+  /// deleting an entry must not renumber the rest, or a reorder would silently
+  /// move tracks the user did not touch.
+  Future<void> appendToPlaylist(
+    int playlistId,
+    List<int> trackIds, {
+    DateTime? at,
+  }) async {
+    if (trackIds.isEmpty) return;
+    final now = at ?? DateTime.now();
+    await transaction(() async {
+      final tail =
+          await (selectOnly(localPlaylistEntries)
+                ..addColumns([localPlaylistEntries.position.max()])
+                ..where(localPlaylistEntries.playlistId.equals(playlistId)))
+              .map((row) => row.read(localPlaylistEntries.position.max()))
+              .getSingleOrNull();
+      var position = (tail ?? 0) + 1;
+      for (final trackId in trackIds) {
+        await into(localPlaylistEntries).insert(
+          LocalPlaylistEntriesCompanion.insert(
+            playlistId: playlistId,
+            trackId: trackId,
+            position: position++,
+            addedAt: now,
+          ),
+        );
+      }
+      await (update(
+        localPlaylists,
+      )..where((row) => row.id.equals(playlistId))).write(
+        LocalPlaylistsCompanion(updatedAt: Value(now)),
+      );
+    });
+  }
+
+  /// Every device-owned playlist, newest change first.
+  Future<List<LocalPlaylistRow>> localPlaylists_() =>
+      (select(localPlaylists)
+            ..orderBy([(row) => OrderingTerm.desc(row.updatedAt)]))
+          .get();
+
+  /// The entries of one device-owned playlist, in position order.
+  Future<List<LocalPlaylistEntryRow>> playlistEntries(int playlistId) =>
+      (select(localPlaylistEntries)
+            ..where((row) => row.playlistId.equals(playlistId))
+            ..orderBy([(row) => OrderingTerm.asc(row.position)]))
+          .get();
 }

@@ -42,10 +42,14 @@ const double _kCornerInset = SolSpace.lg;
 /// plus the gaps between them.
 ///
 /// Measured rather than assumed from [SolSpace], because the transport is a
-/// row of icon buttons and the copy is three lines of text; the compact body
-/// subtracts it (scaled by the reader's text size) from the window to size the
-/// slot, so the tail and the slot cannot both claim the same pixels.
-const double _kBodyTail = 252;
+/// row of icon buttons, the action bar is two more, and the copy is three
+/// lines of text; the compact body subtracts it (scaled by the reader's text
+/// size) from the window to size the slot, so the tail and the slot cannot
+/// both claim the same pixels.
+///
+/// The wide layout uses the same number: the column beside the cover holds
+/// exactly the same things, in the same order.
+const double _kBodyTail = 300;
 
 /// Narrowest the copy, scrubber and transport column gets before it spills.
 ///
@@ -92,10 +96,23 @@ double _eased(Curve curve, double t) {
 /// space; a pane that filled it edge to edge would put its first line under
 /// the corner controls and its last on the track title. Horizontal is wider
 /// than vertical because lines of text need the break at the ends.
-const EdgeInsets _kPanePadding = EdgeInsets.symmetric(
-  horizontal: SolSpace.sm,
-  vertical: SolSpace.sm,
+const EdgeInsets _kPanePadding = EdgeInsets.fromLTRB(
+  SolSpace.sm,
+  _kPaneTopClearance,
+  SolSpace.sm,
+  SolSpace.sm,
 );
+
+/// Room the floating corner controls need above a pane's first row.
+///
+/// The controls are not a bar: they float [_kCornerInset] off the window edge
+/// and each is a 48 px icon button, so their bottom edge sits at
+/// `_kCornerInset + 48`. The slot starts one [_kPageMargin] down, and that
+/// room already counts, so what the pane owes is the difference plus a gap —
+/// enough for its heading — the queue's title and count, the lyrics' first
+/// line — to clear the buttons instead of sitting under them.
+const double _kPaneTopClearance =
+    _kCornerInset + 48 + SolSpace.sm - _kPageMargin;
 
 /// Full-window player: large cover, scrubber and transport.
 ///
@@ -706,7 +723,10 @@ class _CompactPlayerBody extends StatelessWidget {
                 ),
               ),
               _TrackCopy(song: song, centered: true),
-              SongActionBar(song: song),
+              // The action bar sits under the transport: it is about the
+              // track that is playing, and the transport is the row that
+              // plays it, so the two belong in one block. Above the controls
+              // it pushed the scrubber away from the title it measures.
               const SizedBox(height: SolSpace.sm),
               // As wide as the artwork, so the column reads as one object:
               // the square the cover paints is the square the controls span.
@@ -715,7 +735,11 @@ class _CompactPlayerBody extends StatelessWidget {
                   width: controlsWidth,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
-                    children: [scrubber, const _Transport()],
+                    children: [
+                      scrubber,
+                      const _Transport(),
+                      SongActionBar(song: song),
+                    ],
                   ),
                 ),
               ),
@@ -935,11 +959,15 @@ class _WidePlayerBody extends StatelessWidget {
         // left-aligned title sat under the artwork's left edge and read as a
         // caption for it rather than as the page's headline.
         _TrackCopy(song: song, centered: true),
-        SongActionBar(song: song),
         const SizedBox(height: SolSpace.sm),
         scrubber,
         const SizedBox(height: SolSpace.sm),
         const _Transport(),
+        // Under the transport, where the other controls for the same track
+        // are: the heart and the playlist button act on what is playing. The
+        // row may render nothing at all (a station, or a source that cannot
+        // act), so it is never given a minimum height of its own.
+        SongActionBar(song: song),
       ],
     );
 

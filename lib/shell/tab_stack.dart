@@ -12,32 +12,34 @@ import 'package:material_ui/material_ui.dart';
 /// Each class is only a nested [AutoRouter]; the pages themselves are declared
 /// as children in `AppRouter`.
 @RoutePage()
-class BrowseTab extends StatelessWidget {
-  const BrowseTab({super.key});
+class ExploreTab extends StatelessWidget {
+  const ExploreTab({super.key});
 
   @override
   Widget build(BuildContext context) => const AutoRouter();
 }
 
-/// See [BrowseTab].
+/// See [ExploreTab].
 @RoutePage()
-class AlbumsTab extends StatelessWidget {
-  const AlbumsTab({super.key});
+class SearchTab extends StatelessWidget {
+  const SearchTab({super.key});
 
   @override
   Widget build(BuildContext context) => const AutoRouter();
 }
 
-/// See [BrowseTab].
+/// The collection tab: albums and playlists, one page in two shapes.
+///
+/// See [ExploreTab].
 @RoutePage()
-class PlaylistsTab extends StatelessWidget {
-  const PlaylistsTab({super.key});
+class LibraryTab extends StatelessWidget {
+  const LibraryTab({super.key});
 
   @override
   Widget build(BuildContext context) => const AutoRouter();
 }
 
-/// See [BrowseTab].
+/// See [ExploreTab].
 @RoutePage()
 class StatsTab extends StatelessWidget {
   const StatsTab({super.key});

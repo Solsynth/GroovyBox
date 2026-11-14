@@ -425,3 +425,153 @@ class LibraryCatalog {
   Future<List<LibrarySong>> randomTracks({int limit = 30}) =>
       _db.randomTracks(limit: limit);
 }
+
+/// Whether this device likes one track, and the playlists it owns itself.
+///
+/// Both live on the device rather than on the library that happens to serve
+/// the track: the heart is the user's opinion, not a server's, and a playlist
+/// made here must survive every connected server being swapped. A connected
+/// source is told about the favourite afterwards, as a forwarding target.
+extension FavouritesAndPlaylists on LibraryCatalog {
+  /// The device's own answer for [song], or null when it has never been set.
+  ///
+  /// Reading adopts the song first, so a track the user has never browsed is
+  /// still addressable — the heart must not be missing for a song that is
+  /// playing but that no list happened to include.
+  Future<bool?> favouriteOf(LibrarySong song) async {
+    final trackId = await trackIdOf(song);
+    final row = await _db.favouriteOf(trackId);
+    return row?.favourite;
+  }
+
+  /// Writes the device's answer. The source is not consulted: it is told
+  /// afterwards by whoever holds the capability.
+  Future<void> setFavourite(LibrarySong song, {required bool value}) async {
+    final trackId = await trackIdOf(song);
+    await _db.setFavourite(trackId, favourite: value);
+  }
+
+  /// Every track this device likes, newest decision first.
+  Future<List<FavouriteTrack>> favourites() async {
+    final rows = await _db.allFavourites();
+    return [
+      for (final row in rows) await _favouriteOf(row),
+    ];
+  }
+
+  Future<FavouriteTrack> _favouriteOf(FavouriteTrackRow row) async {
+    final track = await (_db.select(_db.tracks)
+          ..where((t) => t.id.equals(row.trackId)))
+        .getSingle();
+    final links = await _db.linksOf(row.trackId);
+    return FavouriteTrack(
+      track: track,
+      link: links.isEmpty ? null : links.first,
+      decidedAt: row.updatedAt,
+    );
+  }
+
+  /// Creates a device-owned playlist and returns it.
+  Future<OwnedPlaylist> createPlaylist(String name) async {
+    final id = await _db.createPlaylist(name);
+    final row = await (_db.select(
+      _db.localPlaylists,
+    )..where((p) => p.id.equals(id))).getSingle();
+    return OwnedPlaylist(
+      id: row.id,
+      name: row.name,
+      trackCount: 0,
+      updatedAt: row.updatedAt,
+    );
+  }
+
+  /// Every device-owned playlist, newest change first.
+  Future<List<OwnedPlaylist>> ownedPlaylists() async {
+    final rows = await _db.localPlaylists_();
+    return [
+      for (final row in rows)
+        OwnedPlaylist(
+          id: row.id,
+          name: row.name,
+          trackCount: (await _db.playlistEntries(row.id)).length,
+          updatedAt: row.updatedAt,
+        ),
+    ];
+  }
+
+  /// Appends [songs] to a device-owned playlist, in the order given.
+  Future<void> addToOwnedPlaylist(int playlistId, List<LibrarySong> songs) async {
+    final ids = <int>[];
+    for (final song in songs) {
+      ids.add(await trackIdOf(song));
+    }
+    await _db.appendToPlaylist(playlistId, ids);
+  }
+
+  /// The songs of a device-owned playlist, in the order the user put them.
+  ///
+  /// Rows whose track no longer exists are skipped rather than shown as
+  /// blanks: they were deleted, and a playlist is not a graveyard.
+  Future<List<LibrarySong>> ownedPlaylistSongs(int playlistId) async {
+    final entries = await _db.playlistEntries(playlistId);
+    final songs = <LibrarySong>[];
+    for (final entry in entries) {
+      final track = await (_db.select(_db.tracks)
+            ..where((t) => t.id.equals(entry.trackId)))
+          .getSingleOrNull();
+      if (track == null) continue;
+      final links = await _db.linksOf(entry.trackId);
+      if (links.isEmpty) continue;
+      final link = links.first;
+      songs.add(
+        LibrarySong(
+          sourceId: link.sourceId,
+          id: link.externalId,
+          title: track.title,
+          artist: track.artist,
+          album: track.album,
+          albumId: link.albumExternalId,
+          artistId: link.artistExternalId,
+          artId: link.artId,
+          duration: Duration(milliseconds: track.durationMs),
+          track: track.trackNumber,
+          discNumber: track.discNumber,
+          year: track.year,
+          genre: track.genre,
+          mbid: track.mbid,
+        ),
+      );
+    }
+    return songs;
+  }
+}
+
+/// One favourite, as the library page lists it.
+class FavouriteTrack with _PlayableTrack {
+  @override
+  final TrackRow track;
+  @override
+  final TrackLinkRow? link;
+  final DateTime decidedAt;
+
+  const FavouriteTrack({
+    required this.track,
+    required this.link,
+    required this.decidedAt,
+  });
+}
+
+/// One playlist this device owns.
+class OwnedPlaylist {
+  final int id;
+  final String name;
+  final int trackCount;
+  final DateTime updatedAt;
+
+  const OwnedPlaylist({
+    required this.id,
+    required this.name,
+    required this.trackCount,
+    required this.updatedAt,
+  });
+}

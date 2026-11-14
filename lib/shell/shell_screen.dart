@@ -15,7 +15,8 @@ import 'rail_scope.dart';
 import 'tab_destinations.dart';
 import 'window_frame.dart';
 
-/// Shell that hosts the four root tabs.
+/// Shell that hosts the four root tabs: explore, search, the collection, and
+/// the play history.
 ///
 /// Tab state lives in `AutoTabsRouter`, never in local widget state: the wide
 /// rail and the compact bottom bar both drive the same router, and each tab
@@ -47,7 +48,7 @@ class ShellScreen extends StatelessWidget {
           // Each tab is an `AutoRouter` with its own stack, so pushing an
           // album or playlist inside a tab keeps the shell — and the
           // now-playing capsule that floats in it — on screen.
-          routes: const [BrowseTab(), AlbumsTab(), PlaylistsTab(), StatsTab()],
+          routes: const [ExploreTab(), SearchTab(), LibraryTab(), StatsTab()],
           duration: const Duration(milliseconds: 320),
           builder: (context, child) => _ShellFrame(child: child),
         );

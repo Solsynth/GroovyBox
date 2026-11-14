@@ -5,9 +5,7 @@ import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/player/player.dart';
-import 'package:groovy_box/screens/albums.dart';
-import 'package:groovy_box/screens/browse.dart';
-import 'package:groovy_box/screens/playlists.dart';
+import 'package:groovy_box/screens/library.dart';
 import 'package:groovy_box/screens/stats.dart';
 import 'package:groovy_box/screens/settings.dart';
 import 'package:groovy_box/widgets/now_playing_dock.dart';
@@ -148,23 +146,11 @@ void main() {
     for (final size in [phone, wide]) {
       final label = size.width > 1000 ? 'wide' : 'compact';
 
-      testWidgets('browse — $label', (tester) async {
-        await _pump(tester, const BrowseScreen(), size: size, dock: true);
-        expect(find.text('Browse'), findsOneWidget);
-        expect(find.text('Made for you'), findsOneWidget);
-        expect(tester.takeException(), isNull);
-      });
-
-      testWidgets('albums — $label', (tester) async {
-        await _pump(tester, const AlbumsScreen(), size: size, dock: true);
-        expect(find.text('Albums'), findsOneWidget);
+      testWidgets('library — $label', (tester) async {
+        await _pump(tester, const LibraryScreen(), size: size, dock: true);
+        expect(find.text('Library'), findsOneWidget);
         expect(find.text('An album'), findsOneWidget);
-        expect(tester.takeException(), isNull);
-      });
-
-      testWidgets('playlists — $label', (tester) async {
-        await _pump(tester, const PlaylistsScreen(), size: size, dock: true);
-        expect(find.text('A playlist'), findsOneWidget);
+        expect(find.text('Playlists'), findsOneWidget, reason: 'the switch');
         expect(tester.takeException(), isNull);
       });
 

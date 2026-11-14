@@ -188,6 +188,28 @@ abstract interface class PlatformPlayedSource implements LibrarySource {
   String platformItemType(LibrarySong song);
 }
 
+/// A library whose tracks can be marked as favourites.
+///
+/// Every service the app speaks to has this: Subsonic stars a song, Jellyfin
+/// sets `IsFavorite`, Apple Music writes a rating. It used to live inside
+/// [ExtendableSource], which is a *store* capability — so a Subsonic server,
+/// which has no store, silently lost the heart on the player page even though
+/// it could have answered. The two are separate questions: what the account
+/// can remember, and what the catalogue can sell.
+abstract interface class RatedSource implements LibrarySource {
+  /// Whether the account has favourited [song].
+  ///
+  /// A favourite is the account's own opinion, not the library's: it is the
+  /// value the service's own app shows, so it stays in step when the count
+  /// changes elsewhere. A source that cannot answer says false rather than
+  /// throwing — the tap is what reports a failure.
+  Future<bool> isFavourite(LibrarySong song);
+
+  /// Sets or clears [song]'s favourite. A write, so it is never done by a
+  /// read or a play. Throws [LibraryException] when the service refuses it.
+  Future<void> setFavourite(LibrarySong song, {required bool value});
+}
+
 /// A library backed by a store the user can browse and add from.
 ///
 /// Apple Music's account library is a subset of a much larger catalog: the
@@ -197,7 +219,7 @@ abstract interface class PlatformPlayedSource implements LibrarySource {
 ///
 /// Adding is a *write*: it changes the user's account, so it is never done
 /// implicitly by a read or a play.
-abstract interface class ExtendableSource implements LibrarySource {
+abstract interface class ExtendableSource implements RatedSource {
   /// Search the store, not just the account. [limit] is per kind.
   Future<CatalogSearch> searchCatalog(String query, {int limit});
 
@@ -207,18 +229,6 @@ abstract interface class ExtendableSource implements LibrarySource {
   /// account cannot add (no subscription, or a token that lost its write
   /// scope).
   Future<int> addToLibrary(CatalogKind kind, List<String> ids);
-
-  /// Whether the account has favourited [song].
-  ///
-  /// A favourite is the account's own opinion, not the library's: it is the
-  /// same value the stock Music app shows, and it syncs everywhere the account
-  /// is signed in. [song] must name a catalog item — a track that exists only
-  /// in the account's library has no rating.
-  Future<bool> isFavourite(LibrarySong song);
-
-  /// Sets or clears [song]'s favourite. A write, so it is never done by a
-  /// read or a play.
-  Future<void> setFavourite(LibrarySong song, {required bool value});
 
   /// Puts [song] into one of the account's own [playlist]s.
   ///

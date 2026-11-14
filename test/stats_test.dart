@@ -213,8 +213,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
-    // The queue is the player's pane now, so its tab is gone and the fourth
-    // slot belongs to the history.
+    // Three tabs: search, the collection and the history. The queue is the
+    // player's pane now, so it never became a tab.
     expect(find.byIcon(Symbols.queue_music), findsNothing);
     await tester.tap(find.byIcon(Symbols.query_stats));
     await tester.pumpAndSettle();

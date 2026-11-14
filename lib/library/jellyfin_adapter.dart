@@ -127,7 +127,7 @@ class JellyfinAdapter implements LibraryAdapter {
 ///
 /// Jellyfin's item model is one flat `BaseItemDto` for albums, songs, artists
 /// and playlists, so mapping is a single pair of helpers over `/Items`.
-class JellyfinSource extends LibrarySource {
+class JellyfinSource extends LibrarySource implements RatedSource {
   @override
   final SourceConfig config;
   final Dio _dio;
@@ -347,6 +347,50 @@ class JellyfinSource extends LibrarySource {
       'Limit': size,
     });
     return [for (final item in items) _song(item)];
+  }
+
+  /// `/Users/{userId}/FavoriteItems/{itemId}`: PUT is a favourite, DELETE
+  /// clears it. Jellyfin's own API has no partial-update for the flag.
+  @override
+  Future<void> setFavourite(LibrarySong song, {required bool value}) async {
+    final path =
+        '/Users/${Uri.encodeComponent(_userId)}/FavoriteItems/'
+        '${Uri.encodeComponent(song.id)}';
+    try {
+      if (value) {
+        await _dio.post<void>(path);
+      } else {
+        await _dio.delete<void>(path);
+      }
+    } on DioException catch (error) {
+      final status = error.response?.statusCode;
+      throw LibraryException(
+        'Jellyfin returned HTTP $status.',
+        code: status,
+        messageKey: 'libraryHttpError',
+        messageArgs: [status?.toString() ?? ''],
+      );
+    }
+  }
+
+  /// Whether the server reports the item as a favourite.
+  ///
+  /// One `Items` read with the `UserData` field: the flag lives there, and
+  /// the list endpoints only include it when asked.
+  @override
+  Future<bool> isFavourite(LibrarySong song) async {
+    try {
+      final items = await _items({
+        'Ids': song.id,
+        'Fields': 'UserData',
+        'Recursive': true,
+      });
+      if (items.isEmpty) return false;
+      final userData = items.first['UserData'];
+      return userData is Map && userData['IsFavorite'] == true;
+    } on LibraryException {
+      return false;
+    }
   }
 
   /// `/Audio/{id}/Lyrics`; 404 means the item has no lyrics at all.

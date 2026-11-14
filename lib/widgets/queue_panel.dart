@@ -60,7 +60,7 @@ class QueuePanel extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(
             SolSpace.sm,
             SolSpace.xs,
-            SolSpace.md,
+            SolSpace.lg,
             SolSpace.sm,
           ),
           child: Row(
@@ -119,7 +119,9 @@ class QueuePanel extends ConsumerWidget {
                   message: 'queueEmptyMessage'.tr(),
                 )
               : ListView.builder(
-                  padding: EdgeInsets.zero,
+                  // Room under the last row, so a short pane does not end
+                  // with a row flush against its bottom edge.
+                  padding: const EdgeInsets.only(bottom: SolSpace.sm),
                   itemCount: rows.length,
                   itemBuilder: (context, index) {
                     final song = rows[index];

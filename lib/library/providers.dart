@@ -529,3 +529,95 @@ class LyricsMaintenance extends Notifier<void> {
     ref.invalidate(storedLyricsProvider);
   }
 }
+
+/// The device's record of favourites: read it, and write it.
+///
+/// No notifier state. The heart's value belongs to the widget that draws it,
+/// and a provider whose state is written from `didChangeDependencies` mutates
+/// the container while the tree is building — which Riverpod rightly refuses.
+/// The database is the record; this class is the one way to reach it.
+class Favourites {
+  const Favourites(this._ref);
+
+  final Ref _ref;
+
+  /// The device's answer for [song], falling back to the connected source the
+  /// first time. Null only when neither has an opinion.
+  Future<bool?> read(LibrarySong song) async {
+    final catalog = _ref.read(libraryCatalogProvider);
+    if (catalog != null) {
+      final local = await catalog.favouriteOf(song);
+      if (local != null) return local;
+    }
+    final source = _ref.read(librarySourceByIdProvider)[song.sourceId];
+    if (source is RatedSource) {
+      try {
+        return await source.isFavourite(song);
+      } on LibraryException {
+        return false;
+      }
+    }
+    return null;
+  }
+
+  /// Writes the device's answer, then forwards it to the source.
+  ///
+  /// The local write is the record; the forward is best effort. [forwardError]
+  /// is what the caller shows, and it is null when the source agreed or when
+  /// there was no source to ask.
+  Future<Object?> set(LibrarySong song, {required bool value}) async {
+    await _ref.read(libraryCatalogProvider)?.setFavourite(song, value: value);
+    final source = _ref.read(librarySourceByIdProvider)[song.sourceId];
+    if (source is! RatedSource || song.isRadio) return null;
+    try {
+      await source.setFavourite(song, value: value);
+      return null;
+    } catch (error) {
+      // The device keeps the answer; the source simply does not know yet.
+      return error;
+    }
+  }
+}
+
+@Riverpod(keepAlive: true)
+Favourites favourites(Ref ref) => Favourites(ref);
+
+/// The device's own playlists, and the source's when the account has any.
+///
+/// Device playlists exist before a library does and survive every server being
+/// swapped, so they are the primary list. A source that can edit its own
+/// playlists is a second section, not a replacement: adding there writes to
+/// that account, which the app does not own.
+@Riverpod(keepAlive: true)
+class OwnedPlaylists extends AsyncNotifier<List<OwnedPlaylist>> {
+  @override
+  Future<List<OwnedPlaylist>> build() async {
+    final catalog = ref.watch(libraryCatalogProvider);
+    if (catalog == null) return const [];
+    return catalog.ownedPlaylists();
+  }
+
+  /// Creates a playlist and returns it, so a caller can add to it immediately.
+  Future<OwnedPlaylist?> create(String name) async {
+    final catalog = ref.read(libraryCatalogProvider);
+    if (catalog == null) return null;
+    final playlist = await catalog.createPlaylist(name);
+    ref.invalidateSelf();
+    return playlist;
+  }
+
+  /// Puts [songs] at the end of [playlistId].
+  Future<void> add(int playlistId, List<LibrarySong> songs) async {
+    final catalog = ref.read(libraryCatalogProvider);
+    if (catalog == null) return;
+    await catalog.addToOwnedPlaylist(playlistId, songs);
+    ref.invalidateSelf();
+  }
+
+  /// The songs of one owned playlist, in order.
+  Future<List<LibrarySong>> songsOf(int playlistId) async {
+    final catalog = ref.read(libraryCatalogProvider);
+    if (catalog == null) return const [];
+    return catalog.ownedPlaylistSongs(playlistId);
+  }
+}

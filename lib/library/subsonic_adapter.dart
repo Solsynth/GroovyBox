@@ -72,7 +72,7 @@ const _apiVersion = '1.16.1';
 /// `subsonic-response` envelope, converts `status: failed` into a
 /// [LibraryException] and returns the inner map. That keeps the individual
 /// endpoints readable and means no caller ever sees the envelope.
-class SubsonicSource extends LibrarySource {
+class SubsonicSource extends LibrarySource implements RatedSource {
   @override
   final SourceConfig config;
   final Dio _dio;
@@ -307,6 +307,33 @@ class SubsonicSource extends LibrarySource {
       for (final song in random['song'] as List)
         if (song is Map) _songFromJson(_stringKeyed(song)),
     ];
+  }
+
+  /// `/star` and `/unstar`, or the OpenSubsonic extension's identical pair.
+  ///
+  /// The star is the server's own favourite: Navidrome and Gonic surface it as
+  /// a heart, and `getStarred` is the list it builds. A server that refuses the
+  /// write throws, so the button can put the heart back where the server says.
+  @override
+  Future<void> setFavourite(LibrarySong song, {required bool value}) async {
+    await _request(value ? 'star' : 'unstar', query: {'id': song.id});
+  }
+
+  /// Whether the server's `starred` field is set on [song].
+  ///
+  /// One `getSong` read rather than a starred-list scan: the song id is what
+  /// the page already has, and a list of every star in a large library is not
+  /// something to fetch to answer one boolean.
+  @override
+  Future<bool> isFavourite(LibrarySong song) async {
+    try {
+      final body = await _request('getSong', query: {'id': song.id});
+      final songJson = body['song'];
+      return songJson is Map && songJson['starred'] != null;
+    } on LibraryException {
+      // A server that cannot answer is drawn as "not set"; the tap reports.
+      return false;
+    }
   }
 
   /// OpenSubsonic's timed endpoint first, then the older plain-text one.

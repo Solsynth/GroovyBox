@@ -1,7 +1,6 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:groovy_box/core/responsive.dart';
-import 'package:groovy_box/core/router.gr.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
@@ -13,105 +12,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// Every album from every library, as a grid of covers.
-///
-/// The sources' own sort orders are used rather than a client-side sort: paged
-/// lists must agree with the server about order or pages drift.
-@RoutePage()
-class AlbumsScreen extends ConsumerWidget {
-  const AlbumsScreen({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final albums = ref.watch(recentAlbumsProvider);
-    // Select the identity, not the state: watching the whole transport would
-    // rebuild this page on every position tick, once a second.
-    final hasSong = ref.watch(
-      playbackProvider.select((state) => state.current != null),
-    );
-    final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
-
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: ContentFrame(
-        child: Column(
-          children: [
-            PageHeader(
-              showRailToggle: true,
-              title: 'albumsTitle'.tr(),
-              subtitle: albums.maybeWhen(
-                data: (list) => 'albumsCount'.plural(list.length),
-                orElse: () => null,
-              ),
-              actions: [
-                IconButton(
-                  tooltip: 'commonRefresh'.tr(),
-                  onPressed: () =>
-                      ref.read(recentAlbumsProvider.notifier).refresh(),
-                  icon: const Icon(Symbols.refresh_rounded),
-                ),
-                const SizedBox(width: SolSpace.sm),
-              ],
-            ),
-            Expanded(
-              child: albums.when(
-                data: (list) => list.isEmpty
-                    ? EmptyState(
-                        icon: Symbols.album,
-                        title: 'albumsEmptyTitle'.tr(),
-                        message: 'albumsEmptyMessage'.tr(),
-                      )
-                    : GridView.builder(
-                        padding: EdgeInsets.fromLTRB(
-                          SolSpace.xl,
-                          0,
-                          SolSpace.xl,
-                          bottomInset,
-                        ),
-                        gridDelegate:
-                            const SliverGridDelegateWithMaxCrossAxisExtent(
-                              maxCrossAxisExtent: 200,
-                              mainAxisSpacing: SolSpace.md,
-                              crossAxisSpacing: SolSpace.md,
-                              childAspectRatio: 0.72,
-                            ),
-                        itemCount: list.length,
-                        itemBuilder: (context, index) {
-                          final album = list[index];
-                          return AlbumCard(
-                            album: album,
-                            onTap: () => context.router.push(
-                              AlbumDetailRoute(
-                                sourceId: album.sourceId,
-                                albumId: album.id,
-                                albumName: album.name,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, _) => EmptyState(
-                  icon: Symbols.error_rounded,
-                  title: 'albumsLoadError'.tr(),
-                  message: describeServerError(error),
-                  iconColor: Theme.of(context).colorScheme.error,
-                  action: FilledButton(
-                    onPressed: () =>
-                        ref.read(recentAlbumsProvider.notifier).refresh(),
-                    child: Text('commonTryAgain'.tr()),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Shared album cover card, used by the grid and the browse shelves.
+/// Shared album cover card, used by the library grid.
 ///
 /// The cover lifts on hover instead of drawing a border: on a grid of
 /// artwork, a hairline around every tile is noise, and motion is the cheapest

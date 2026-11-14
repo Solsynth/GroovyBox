@@ -6,7 +6,7 @@ import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/player/player.dart';
-import 'package:groovy_box/screens/browse.dart';
+import 'package:groovy_box/screens/explore.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -63,7 +63,7 @@ Future<void> _pump(WidgetTester tester, _AccountSource source) async {
       ],
       child: MaterialApp(
         theme: createAppThemeSet().light,
-        home: const BrowseScreen(),
+        home: const ExploreScreen(),
       ),
     ),
   );
@@ -103,8 +103,9 @@ void main() {
       ),
     );
 
-    // The account's own numbers, and the shelf the provider curated.
-    expect(find.text('browseAppleMusicDashboard'.tr()), findsOneWidget);
+    // The account's own numbers, and the shelf the provider curated: both
+    // live on the explore page, which is the mixed home of what to play next.
+    expect(find.text('libraryAccountDashboard'.tr()), findsOneWidget);
     expect(find.textContaining('604'), findsOneWidget);
     expect(find.text('Stations for you'), findsOneWidget);
     expect(find.text('Mirror Mirror Radio'), findsOneWidget);
@@ -115,6 +116,6 @@ void main() {
   testWidgets('a server library renders no account card', (tester) async {
     await _pump(tester, _AccountSource(null, const []));
 
-    expect(find.text('browseAppleMusicDashboard'.tr()), findsNothing);
+    expect(find.text('libraryAccountDashboard'.tr()), findsNothing);
   });
 }

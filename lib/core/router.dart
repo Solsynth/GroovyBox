@@ -20,15 +20,19 @@ List<AutoRoute> _tabChildren(AutoRoute root) => [
 
 /// The app's route table.
 ///
-/// The shell hosts four tabs, and each tab owns a navigation stack of its own
-/// (see `tab_stack.dart`). Album, playlist and settings pages are declared
-/// *inside* those stacks rather than at the root: pushing them there keeps the
-/// shell — and with it the now-playing capsule — on screen, which a root-level
-/// page would cover.
+/// The shell hosts three tabs, and each tab owns a navigation stack of its
+/// own (see `tab_stack.dart`). Album, playlist and settings pages are
+/// declared *inside* those stacks rather than at the root: pushing them there
+/// keeps the shell — and with it the now-playing capsule — on screen, which a
+/// root-level page would cover.
+///
+/// Explore is the first tab because it is the page a window opens on: the
+/// mixed home of what is worth playing next. Search answers "do I have this,
+/// and could I?" from the libraries and their stores in one list; the library
+/// is the catalogue itself. Four tabs, each one a different question.
 ///
 /// The player is the exception. It is the expanded dock, so it is pushed above
 /// the shell and grows out of the capsule it was opened from.
-
 @AutoRouterConfig()
 class AppRouter extends RootStackRouter {
   @override
@@ -45,18 +49,22 @@ class AppRouter extends RootStackRouter {
       initial: true,
       children: [
         AutoRoute(
-          page: BrowseTab.page,
+          page: ExploreTab.page,
           initial: true,
-          children: _tabChildren(AutoRoute(page: BrowseRoute.page, initial: true)),
-        ),
-        AutoRoute(
-          page: AlbumsTab.page,
-          children: _tabChildren(AutoRoute(page: AlbumsRoute.page, initial: true)),
-        ),
-        AutoRoute(
-          page: PlaylistsTab.page,
           children: _tabChildren(
-            AutoRoute(page: PlaylistsRoute.page, initial: true),
+            AutoRoute(page: ExploreRoute.page, initial: true),
+          ),
+        ),
+        AutoRoute(
+          page: SearchTab.page,
+          children: _tabChildren(
+            AutoRoute(page: SearchRoute.page, initial: true),
+          ),
+        ),
+        AutoRoute(
+          page: LibraryTab.page,
+          children: _tabChildren(
+            AutoRoute(page: LibraryRoute.page, initial: true),
           ),
         ),
         AutoRoute(

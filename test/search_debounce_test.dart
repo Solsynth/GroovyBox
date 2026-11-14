@@ -5,10 +5,33 @@ import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/player/player.dart';
-import 'package:groovy_box/screens/browse.dart';
+import 'package:groovy_box/screens/search.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+/// One server, so the page is not in its "nothing to search" state.
+class _Server extends LibrarySource {
+  @override
+  String get id => 'a';
+
+  @override
+  SourceConfig get config => const SourceConfig(
+    id: 'a',
+    kind: LibraryKind.subsonic,
+    baseUrl: 'https://music.example.com',
+    displayName: 'Home',
+  );
+
+  @override
+  Uri streamUri(LibrarySong song) => Uri.parse('https://x/${song.id}');
+
+  @override
+  Uri? artworkUri(String? artId, {int size = 600}) => null;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
+}
 
 class _Idle extends Playback {
   @override
@@ -31,7 +54,7 @@ Future<void> _pump(WidgetTester tester) async {
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
         playbackProvider.overrideWith(_Idle.new),
-        librarySourcesProvider.overrideWithValue(const <LibrarySource>[]),
+        librarySourcesProvider.overrideWithValue([_Server()]),
         searchSongsProvider.overrideWith((ref, query) async {
           if (query.trim().isEmpty) return const <LibrarySong>[];
           _asked.add(query);
@@ -40,7 +63,7 @@ Future<void> _pump(WidgetTester tester) async {
       ],
       child: MaterialApp(
         theme: createAppThemeSet().light,
-        home: const BrowseScreen(),
+        home: const SearchScreen(),
       ),
     ),
   );
@@ -79,11 +102,17 @@ void main() {
     await tester.enterText(find.byType(SearchBar), 'sunset');
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
-    expect(find.text('No songs match “sunset”.'), findsOneWidget);
+    expect(
+      find.text('Nothing in your libraries matches “sunset”.'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byTooltip('Clear'));
     await tester.pump();
 
-    expect(find.text('No songs match “sunset”.'), findsNothing);
+    expect(
+      find.text('Nothing in your libraries matches “sunset”.'),
+      findsNothing,
+    );
   });
 }
