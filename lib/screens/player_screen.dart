@@ -901,21 +901,21 @@ class _CompactPlayerBody extends StatelessWidget {
                       ),
                     ],
                   ),
-                      // Single persistent artwork widget that flies like a
-                      // hero between the centered slot and the compact
-                      // header's sleeve.
-                      Positioned.fromRect(
-                        rect: artRect,
-                        child: _Cover(
-                          song: song,
-                          size: artRect.width,
-                          radius: artRadius,
-                          pixelSize: coverPixelSize,
-                          shadowOpacity: lerpDouble(0.20, 0.06, t)!,
-                          shadowBlur: lerpDouble(40, 10, t)!,
-                          shadowOffsetY: lerpDouble(10, 3, t)!,
-                        ),
-                      ),
+                  // Single persistent artwork widget that flies like a
+                  // hero between the centered slot and the compact
+                  // header's sleeve.
+                  Positioned.fromRect(
+                    rect: artRect,
+                    child: _Cover(
+                      song: song,
+                      size: artRect.width,
+                      radius: artRadius,
+                      pixelSize: coverPixelSize,
+                      shadowOpacity: lerpDouble(0.20, 0.06, t)!,
+                      shadowBlur: lerpDouble(40, 10, t)!,
+                      shadowOffsetY: lerpDouble(10, 3, t)!,
+                    ),
+                  ),
                 ],
               ),
             );
@@ -1426,6 +1426,8 @@ class _TrackCopy extends ConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Row(
+          mainAxisAlignment: .center,
+          spacing: 4,
           children: [
             const _FavouriteMark(),
             Flexible(
@@ -1660,10 +1662,15 @@ class _FavouriteMark extends ConsumerWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return SizedBox(
-      width: 40,
-      height: 40,
+      width: 32,
+      height: 32,
       child: favourited
-          ? Icon(Symbols.favorite_rounded, size: 20, color: colorScheme.error)
+          ? Icon(
+              Symbols.favorite_rounded,
+              size: 20,
+              color: colorScheme.error,
+              fill: 1,
+            )
           : null,
     );
   }

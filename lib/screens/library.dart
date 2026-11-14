@@ -67,7 +67,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           child: CustomScrollView(
             slivers: [
               SliverPillHeader(
-                title: 'libraryTitle'.tr(),
+                title: '',
                 actions: [
                   IconButton(
                     tooltip: 'commonRefresh'.tr(),
@@ -78,41 +78,38 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                     icon: const Icon(Symbols.refresh_rounded),
                   ),
                 ],
-              ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    SolSpace.xxl,
-                    0,
-                    SolSpace.xxl,
-                    SolSpace.md,
+                // The view switch is the header's own content: one row says
+                // where you are and what the page can be, nothing under the
+                // pill repeats it.
+                child: SegmentedButton<LibraryView>(
+                  showSelectedIcon: false,
+                  style: const ButtonStyle(
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                  child: SegmentedButton<LibraryView>(
-                    showSelectedIcon: false,
-                    segments: [
-                      ButtonSegment(
-                        value: LibraryView.albums,
-                        icon: const Icon(Symbols.album_rounded, size: 18),
-                        label: Text('libraryAlbums'.tr()),
+                  segments: [
+                    ButtonSegment(
+                      value: LibraryView.albums,
+                      icon: const Icon(Symbols.album_rounded, size: 18),
+                      label: Text('libraryAlbums'.tr()),
+                    ),
+                    ButtonSegment(
+                      value: LibraryView.artists,
+                      icon: const Icon(Symbols.artist, size: 18),
+                      label: Text('libraryArtists'.tr()),
+                    ),
+                    ButtonSegment(
+                      value: LibraryView.playlists,
+                      icon: const Icon(
+                        Symbols.playlist_play_rounded,
+                        size: 18,
                       ),
-                      ButtonSegment(
-                        value: LibraryView.artists,
-                        icon: const Icon(Symbols.artist, size: 18),
-                        label: Text('libraryArtists'.tr()),
-                      ),
-                      ButtonSegment(
-                        value: LibraryView.playlists,
-                        icon: const Icon(
-                          Symbols.playlist_play_rounded,
-                          size: 18,
-                        ),
-                        label: Text('libraryPlaylists'.tr()),
-                      ),
-                    ],
-                    selected: {_view},
-                    onSelectionChanged: (selection) =>
-                        setState(() => _view = selection.first),
-                  ),
+                      label: Text('libraryPlaylists'.tr()),
+                    ),
+                  ],
+                  selected: {_view},
+                  onSelectionChanged: (selection) =>
+                      setState(() => _view = selection.first),
                 ),
               ),
               ...switch (_view) {

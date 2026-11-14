@@ -132,69 +132,24 @@ class _Sleeve extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final mat = size * 0.13;
-    return Container(
-      padding: EdgeInsets.fromLTRB(mat * 1.25, mat, mat, mat),
+    return DecoratedBox(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(SolRadius.xl),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            colorScheme.primaryContainer.withValues(alpha: 0.55),
-            colorScheme.surfaceContainerHigh.withValues(alpha: 0.35),
-          ],
-        ),
-      ),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          // The fold of the sleeve: the one drawn detail, at the edge the
-          // cover is hinged on. Without it the mat is a rounded rectangle;
-          // with it the cover reads as something a record came in.
-          Positioned(
-            left: -mat * 0.62,
-            top: mat * 0.35,
-            bottom: mat * 0.35,
-            width: 3,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    colorScheme.primary.withValues(alpha: 0.05),
-                    colorScheme.primary.withValues(alpha: 0.38),
-                    colorScheme.primary.withValues(alpha: 0.05),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(SolRadius.pill),
-              ),
-            ),
+        borderRadius: BorderRadius.circular(SolRadius.lg),
+        boxShadow: [
+          BoxShadow(
+            color: colorScheme.shadow.withValues(alpha: 0.22),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
           ),
-          _cover(colorScheme),
         ],
+      ),
+      child: LibraryArtwork(
+        sourceId: sourceId,
+        artId: artId,
+        size: size,
+        radius: SolRadius.lg,
+        fallbackIcon: fallbackIcon,
       ),
     );
   }
-
-  Widget _cover(ColorScheme colorScheme) => DecoratedBox(
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(SolRadius.lg),
-      boxShadow: [
-        BoxShadow(
-          color: colorScheme.shadow.withValues(alpha: 0.22),
-          blurRadius: 22,
-          offset: const Offset(0, 10),
-        ),
-      ],
-    ),
-    child: LibraryArtwork(
-      sourceId: sourceId,
-      artId: artId,
-      size: size,
-      radius: SolRadius.lg,
-      fallbackIcon: fallbackIcon,
-    ),
-  );
 }

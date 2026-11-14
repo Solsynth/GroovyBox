@@ -148,8 +148,10 @@ void main() {
 
       testWidgets('library — $label', (tester) async {
         await _pump(tester, const LibraryScreen(), size: size, dock: true);
-        expect(find.text('Library'), findsOneWidget);
         expect(find.text('An album'), findsOneWidget);
+        // The title merged into the switch: the pill's own row carries the
+        // view selector, and nothing under it repeats "Library".
+        expect(find.text('Albums'), findsOneWidget, reason: 'the switch');
         expect(find.text('Playlists'), findsOneWidget, reason: 'the switch');
         expect(tester.takeException(), isNull);
       });
