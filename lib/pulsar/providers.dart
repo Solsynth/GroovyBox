@@ -365,3 +365,68 @@ Future<bool> pulsarFavouriteState(Ref ref, LibrarySong song) async {
   return favourites.any((item) => item.catalogItem?.providerKey == key);
 }
 
+
+/// What the fleet knows about one artist, as the artist page draws it.
+///
+/// Matched by name, in the artist's own domain (`music`): Pulsar's creators
+/// are per-domain, and the fleet has no id the device's libraries share. A
+/// miss is silence, not an error — the page is built from the device's own
+/// libraries first, and the fleet section only ever adds.
+class PulsarArtistMetadata {
+  const PulsarArtistMetadata({
+    required this.creator,
+    required this.roles,
+    required this.catalog,
+  });
+
+  final PulsarCreator creator;
+
+  /// Every role the catalog credits this creator with, alphabetical and
+  /// deduped across items.
+  final List<String> roles;
+
+  /// The fleet's catalog items credited to them, newest first as the server
+  /// returns them.
+  final List<CatalogItem> catalog;
+}
+
+/// The fleet's view of [name]. Null when signed out, when nothing matches,
+/// or when the fleet is unreachable — each a reason the section stays quiet,
+/// never a failure of the page.
+@riverpod
+Future<PulsarArtistMetadata?> pulsarArtistMetadata(Ref ref, String name) async {
+  final session = ref.watch(pulsarSessionProvider).value;
+  if (session == null || name.trim().isEmpty) return null;
+  final client = ref.watch(pulsarClientProvider);
+
+  final creators = await client.creators(
+    query: name,
+    domain: 'music',
+    session: session,
+  );
+  // The list is alphabetical; an exact, case-insensitive name match is the
+  // one this page means — a prefix hit for a different artist is not.
+  final creator = creators
+      .where((candidate) => candidate.name.toLowerCase() == name.toLowerCase())
+      .firstOrNull;
+  if (creator == null) return null;
+
+  final catalog = await client.creatorCatalog(
+    creator.id,
+    domain: 'music',
+    session: session,
+  );
+  final roles = {
+    for (final item in catalog)
+      for (final credit in item.creators)
+        if (credit.name.toLowerCase() == creator.name.toLowerCase() &&
+            credit.role.isNotEmpty)
+          credit.role,
+  }.toList()..sort();
+
+  return PulsarArtistMetadata(
+    creator: creator,
+    roles: roles,
+    catalog: catalog,
+  );
+}

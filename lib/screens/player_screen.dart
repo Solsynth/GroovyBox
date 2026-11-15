@@ -1906,7 +1906,10 @@ class _TrackMoreMenu extends ConsumerWidget {
         // would forge a page the source never described.
         MenuItemButton(
           leadingIcon: const Icon(Symbols.person_rounded),
-          onPressed: song.playing.artistId == null || song.isRadio
+          // The gate reads the track on the air, not the row: a station's
+          // folded track carries the store's artist id, so its artist page
+          // opens like any other track's.
+          onPressed: song.playing.artistId == null || song.playing.isRadio
               ? null
               : () => context.router.push(
                   ArtistDetailRoute(
@@ -1919,7 +1922,7 @@ class _TrackMoreMenu extends ConsumerWidget {
         ),
         MenuItemButton(
           leadingIcon: const Icon(Symbols.album_rounded),
-          onPressed: song.playing.albumId == null || song.isRadio
+          onPressed: song.playing.albumId == null || song.playing.isRadio
               ? null
               : () => context.router.push(
                   AlbumDetailRoute(

@@ -232,35 +232,30 @@ class AppleMusicSource extends LibrarySource
 
   @override
   Future<LibraryAlbum?> album(String albumId) async {
+    // A store id — the ids the platform player's queue reports — has no row
+    // in the account's library; the catalog is what describes it.
+    if (_isCatalogId(albumId)) {
+      final storefront = await _storefront();
+      final items = await _data(
+        '/v1/catalog/$storefront/albums/${_path(albumId)}',
+      );
+      return items.isEmpty ? null : _album(items.first);
+    }
     final items = await _data('/v1/me/library/albums/${_path(albumId)}');
     return items.isEmpty ? null : _album(items.first);
   }
 
   @override
   Future<List<LibrarySong>> albumSongs(String albumId) async {
+    if (_isCatalogId(albumId)) {
+      final storefront = await _storefront();
+      final items = await _data(
+        '/v1/catalog/$storefront/albums/${_path(albumId)}/tracks',
+      );
+      return [for (final item in items) _song(item, albumId: albumId)];
+    }
     final items = await _data('/v1/me/library/albums/${_path(albumId)}/tracks');
     return [for (final item in items) _song(item, albumId: albumId)];
-  }
-
-  @override
-  Future<List<LibraryArtist>> artists() async {
-    final items = await _data('/v1/me/library/artists', query: {'limit': 100});
-    return [
-      for (final item in items)
-        LibraryArtist(
-          sourceId: id,
-          id: '${item['id']}',
-          name: _attributes(item)['name'] as String? ?? 'Unknown artist',
-        ),
-    ];
-  }
-
-  @override
-  Future<List<LibraryAlbum>> artistAlbums(String artistId) async {
-    final items = await _data(
-      '/v1/me/library/artists/${_path(artistId)}/albums',
-    );
-    return [for (final item in items) _album(item)];
   }
 
   @override
@@ -278,6 +273,44 @@ class AppleMusicSource extends LibrarySource
           duration: Duration.zero,
         ),
     ];
+  }
+
+  @override
+  Future<List<LibraryArtist>> artists() async {
+    final items = await _data('/v1/me/library/artists', query: {'limit': 100});
+    return [
+      for (final item in items)
+        LibraryArtist(
+          sourceId: id,
+          id: '${item['id']}',
+          name: _attributes(item)['name'] as String? ?? 'Unknown artist',
+        ),
+    ];
+  }
+
+  /// A store (catalog) id rather than one of the account's library. Apple's
+  /// library resources id as dotted local names (`l.1`, `r.1`); the store's
+  /// ids are bare digit strings, and every endpoint that answers one is
+  /// `/v1/catalog/...`, never `/v1/me/library/...`.
+  static bool _isCatalogId(String id) => RegExp(r'^\d+$').hasMatch(id);
+
+  @override
+  Future<List<LibraryAlbum>> artistAlbums(String artistId) async {
+    // The platform player names artists by their store id; the account's
+    // library only knows the ids its own artists list handed out. A store id
+    // is a catalog read — the library endpoint answers 404 on it.
+    if (_isCatalogId(artistId)) {
+      final storefront = await _storefront();
+      final items = await _data(
+        '/v1/catalog/$storefront/artists/${_path(artistId)}/albums',
+        query: {'limit': 100},
+      );
+      return [for (final item in items) _album(item)];
+    }
+    final items = await _data(
+      '/v1/me/library/artists/${_path(artistId)}/albums',
+    );
+    return [for (final item in items) _album(item)];
   }
 
   @override
@@ -851,8 +884,12 @@ class AppleMusicSource extends LibrarySource
       id: '${json['id']}',
       title: attributes['name'] as String? ?? 'Untitled',
       artist: attributes['artistName'] as String?,
+      // Catalog responses name the artist's store id in attributes;
+      // library responses do not, and the artist page falls back to a
+      // library lookup through the album when the id is missing.
+      artistId: attributes['artistId']?.toString(),
       album: attributes['albumName'] as String?,
-      albumId: albumId,
+      albumId: albumId ?? _relationshipId(json, 'albums'),
       artId: _artTemplate(attributes),
       duration: _duration(attributes),
       track: (attributes['trackNumber'] as num?)?.toInt(),
@@ -863,6 +900,18 @@ class AppleMusicSource extends LibrarySource
     );
   }
 
+  /// The first related resource's id, or null: catalog resources link their
+  /// album and artist this way.
+  static String? _relationshipId(Map<String, dynamic> json, String kind) {
+    final relationships = json['relationships'];
+    final section = relationships is Map ? relationships[kind] : null;
+    final data = section is Map ? section['data'] : null;
+    if (data is List && data.isNotEmpty && data.first is Map) {
+      return '${(data.first as Map)['id']}';
+    }
+    return null;
+  }
+
   LibraryAlbum _album(Map<String, dynamic> json) {
     final attributes = _attributes(json);
     return LibraryAlbum(
@@ -870,6 +919,9 @@ class AppleMusicSource extends LibrarySource
       id: '${json['id']}',
       name: attributes['name'] as String? ?? 'Untitled',
       artist: attributes['artistName'] as String?,
+      artistId:
+          attributes['artistId']?.toString() ??
+          _relationshipId(json, 'artists'),
       artId: _artTemplate(attributes),
       songCount: (attributes['trackCount'] as num?)?.toInt(),
       duration: Duration.zero,

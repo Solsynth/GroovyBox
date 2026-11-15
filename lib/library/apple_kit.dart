@@ -81,7 +81,9 @@ class AppleQueueEntry {
     this.catalogId,
     this.title,
     this.artist,
+    this.artistId,
     this.album,
+    this.albumId,
     this.duration = Duration.zero,
     this.artTemplate,
   });
@@ -96,7 +98,15 @@ class AppleQueueEntry {
   final String? catalogId;
   final String? title;
   final String? artist;
+
+  /// The store artist id, when the resolved item names one. It is the
+  /// catalog's own identity: the artist page resolves it through the store,
+  /// not the account's library.
+  final String? artistId;
   final String? album;
+
+  /// The store album id, same provenance as [artistId].
+  final String? albumId;
   final Duration duration;
 
   /// Apple's `{w}x{h}` artwork template, when the entry carries one.
@@ -251,12 +261,27 @@ class PluginMusicKit implements MusicKitClient {
     final catalogId = href is String
         ? RegExp(r'/songs/(\d+)$').firstMatch(href)?.group(1)
         : null;
+    final relationships = item?['relationships'];
+    String? relatedId(String kind) {
+      final section = relationships is Map ? relationships[kind] : null;
+      final data = section is Map ? section['data'] : null;
+      if (data is List && data.isNotEmpty && data.first is Map) {
+        return '${(data.first as Map)['id']}';
+      }
+      return null;
+    }
+
     return AppleQueueEntry(
       id: item?['id'] == null ? null : '${item!['id']}',
       catalogId: catalogId,
       title: (attrs['name'] as String?) ?? current?.title,
       artist: attrs['artistName'] as String?,
+      // Catalog items name their artist's store id in attributes; queue
+      // items resolved from playParams often do not, and the catalog read
+      // the artwork already performs resolves the ids there.
+      artistId: attrs['artistId']?.toString() ?? relatedId('artists'),
       album: attrs['albumName'] as String?,
+      albumId: relatedId('albums'),
       duration: switch (attrs['durationInMillis']) {
         final num millis => Duration(milliseconds: millis.toInt()),
         _ => Duration.zero,

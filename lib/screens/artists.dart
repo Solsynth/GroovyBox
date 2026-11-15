@@ -6,6 +6,7 @@ import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
+import 'package:groovy_box/pulsar/providers.dart';
 import 'package:groovy_box/screens/albums.dart';
 import 'package:groovy_box/screens/explore.dart';
 import 'package:groovy_box/widgets/format.dart';
@@ -258,11 +259,109 @@ class _BodyState extends ConsumerState<_Body> {
                     ),
                   ),
               ],
+
+              if (artist != null)
+                SliverToBoxAdapter(
+                  child: _FleetSection(name: artist),
+                ),
               SliverToBoxAdapter(child: SizedBox(height: widget.bottomInset)),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// What the fleet holds for this artist: the catalog entries every signed-in
+/// device has pushed to Pulsar, plus how the fleet credits them.
+///
+/// Matched by the artist's display name in the music domain — Pulsar has no
+/// id the device's libraries share, and a name is exactly what the fleet
+/// dedupes on per domain. Everything here is additive: a miss, a sign-out or
+/// an unreachable fleet leaves the page as the device's own libraries drew
+/// it, never an error row.
+class _FleetSection extends ConsumerWidget {
+  final String name;
+
+  const _FleetSection({required this.name});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final signedIn = ref.watch(
+      pulsarSessionProvider.select((session) => session.value != null),
+    );
+    if (!signedIn) return const SizedBox.shrink();
+    final metadata = ref.watch(pulsarArtistMetadataProvider(name));
+    return metadata.when(
+      data: (metadata) {
+        if (metadata == null || metadata.catalog.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        return Padding(
+          padding: const EdgeInsets.only(top: SolSpace.xl),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              LibrarySectionHeader(title: 'artistsFleetHeader'.tr()),
+              if (metadata.roles.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    SolSpace.xl,
+                    SolSpace.xs,
+                    SolSpace.xl,
+                    0,
+                  ),
+                  child: Text(
+                    'artistsFleetRoles'
+                        .plural(metadata.roles.length)
+                        // The plural handles the count wrapper; the roles
+                        // themselves are joined by the app, not by ICU.
+                        .replaceFirst('{}', metadata.roles.join(', ')),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: SolSpace.sm),
+              for (final item in metadata.catalog)
+                ListTile(
+                  leading: item.artworkUrl == null
+                      ? null
+                      : ClipRRect(
+                          borderRadius: BorderRadius.circular(SolRadius.sm),
+                          child: Image.network(
+                            item.artworkUrl!,
+                            width: 44,
+                            height: 44,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) =>
+                                const SizedBox(width: 44, height: 44),
+                          ),
+                        ),
+                  title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  subtitle: item.subtitle == null
+                      ? null
+                      : Text(
+                          item.subtitle!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                  trailing: Text(
+                    'artistsFleetTrack'.tr(),
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+      // A fleet that is slow or down must not blank the artist page: the
+      // section simply stays out, and the page keeps its own libraries' body.
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
     );
   }
 }

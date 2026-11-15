@@ -675,3 +675,100 @@ final class PulsarFavouriteStateFamily extends $Family
   @override
   String toString() => r'pulsarFavouriteStateProvider';
 }
+
+/// The fleet's view of [name]. Null when signed out, when nothing matches,
+/// or when the fleet is unreachable — each a reason the section stays quiet,
+/// never a failure of the page.
+
+@ProviderFor(pulsarArtistMetadata)
+final pulsarArtistMetadataProvider = PulsarArtistMetadataFamily._();
+
+/// The fleet's view of [name]. Null when signed out, when nothing matches,
+/// or when the fleet is unreachable — each a reason the section stays quiet,
+/// never a failure of the page.
+
+final class PulsarArtistMetadataProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<PulsarArtistMetadata?>,
+          PulsarArtistMetadata?,
+          FutureOr<PulsarArtistMetadata?>
+        >
+    with
+        $FutureModifier<PulsarArtistMetadata?>,
+        $FutureProvider<PulsarArtistMetadata?> {
+  /// The fleet's view of [name]. Null when signed out, when nothing matches,
+  /// or when the fleet is unreachable — each a reason the section stays quiet,
+  /// never a failure of the page.
+  PulsarArtistMetadataProvider._({
+    required PulsarArtistMetadataFamily super.from,
+    required String super.argument,
+  }) : super(
+         retry: null,
+         name: r'pulsarArtistMetadataProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$pulsarArtistMetadataHash();
+
+  @override
+  String toString() {
+    return r'pulsarArtistMetadataProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<PulsarArtistMetadata?> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<PulsarArtistMetadata?> create(Ref ref) {
+    final argument = this.argument as String;
+    return pulsarArtistMetadata(ref, argument);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is PulsarArtistMetadataProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$pulsarArtistMetadataHash() =>
+    r'a846e27313e6b11d627b64fa441b8bfae3b4c1a7';
+
+/// The fleet's view of [name]. Null when signed out, when nothing matches,
+/// or when the fleet is unreachable — each a reason the section stays quiet,
+/// never a failure of the page.
+
+final class PulsarArtistMetadataFamily extends $Family
+    with $FunctionalFamilyOverride<FutureOr<PulsarArtistMetadata?>, String> {
+  PulsarArtistMetadataFamily._()
+    : super(
+        retry: null,
+        name: r'pulsarArtistMetadataProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  /// The fleet's view of [name]. Null when signed out, when nothing matches,
+  /// or when the fleet is unreachable — each a reason the section stays quiet,
+  /// never a failure of the page.
+
+  PulsarArtistMetadataProvider call(String name) =>
+      PulsarArtistMetadataProvider._(argument: name, from: this);
+
+  @override
+  String toString() => r'pulsarArtistMetadataProvider';
+}
