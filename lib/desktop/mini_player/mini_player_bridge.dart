@@ -1,9 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:desktop_multi_window/desktop_multi_window.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:groovy_box/desktop/mini_player/link.dart';
 import 'package:groovy_box/library/models.dart';
@@ -151,7 +149,6 @@ Future<void> openMiniPlayer(WidgetRef ref) async {
       _controller = null;
     }
   }
-  if (Platform.environment['GB_NO_WINDOW'] == '1') return;
   try {
     _controller = await WindowController.create(
       WindowConfiguration(
@@ -160,8 +157,9 @@ Future<void> openMiniPlayer(WidgetRef ref) async {
       ),
     );
     await _controller!.show();
-  } catch (e, st) {
-    debugPrint('[MiniPlayer] create/show failed: $e\n$st');
+  } catch (_) {
+    // A window the platform refused to create leaves the main window alone:
+    // a convenience button must never surface an error of its own.
     _controller = null;
   }
 }

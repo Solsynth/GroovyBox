@@ -18,6 +18,10 @@ const kMiniPlayerChannelName = 'groovy_box/mini_player';
 /// without two engines.
 Map<String, dynamic> encodeSnapshot(PlaybackState state) => {
   'kind': 'snapshot',
+  // Position rides the snapshot too: the guest's scrubber reads it, and a
+  // snapshot that omitted it would snap the thumb back to 0:00 on every
+  // track change, pause, or duration update until the next tick arrived.
+  'positionMs': state.position.inMilliseconds,
   'queue': [for (final song in state.queue) song.toJson()],
   'stationTracks': [for (final song in state.stationTracks) song.toJson()],
   'currentIndex': state.currentIndex,
@@ -61,7 +65,7 @@ PlaybackState decodeSnapshot(Map<String, dynamic> json) => PlaybackState(
   stationIndex: json['stationIndex'] as int? ?? -1,
   playing: json['playing'] as bool? ?? false,
   buffering: json['buffering'] as bool? ?? false,
-  position: Duration.zero,
+  position: Duration(milliseconds: json['positionMs'] as int? ?? 0),
   duration: Duration(milliseconds: json['durationMs'] as int? ?? 0),
   shuffle: json['shuffle'] as bool? ?? false,
   repeatMode: switch (json['repeatMode'] as String?) {

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:easy_localization/easy_localization.dart';
 import 'package:groovy_box/core/app.dart';
@@ -8,9 +9,11 @@ import 'package:groovy_box/desktop/mini_player/link.dart';
 import 'package:groovy_box/desktop/mini_player/mini_playback.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/player/player.dart';
+import 'package:groovy_box/shell/window_frame.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/lyrics_view.dart';
 import 'package:groovy_box/widgets/queue_panel.dart';
+import 'package:groovy_box/widgets/format.dart';
 import 'package:groovy_box/widgets/transport.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -95,141 +98,84 @@ void _applyBounds(Window window, {required bool expanded}) {
     ).toNative();
 }
 
-
-/// The bar: what is playing, and the two views that grow the window.
+/// The window's single screen: Apple Music's mini player — the artwork fills
+/// the window, the track info, scrubber and transport float over it.
 ///
-/// With no pane open the bar is the whole window and its artwork takes the
-/// room: drag the window taller and the sleeve becomes a cover. With a pane
-/// open the bar collapses to a header stripe so the pane gets the height.
-class _Bar extends StatelessWidget {
-  final LibrarySong song;
-  final MiniPane? pane;
-  final ValueChanged<MiniPane> onPick;
+/// With a pane open the artwork shrinks to a small sleeve in the header and
+/// the pane takes the rest, still over the blurred art field.
+class MiniPlayerHome extends ConsumerStatefulWidget {
+  const MiniPlayerHome({super.key});
 
-  /// Whether the bar fills the window's height instead of sitting as a stripe
-  /// above a pane.
-  final bool expanded;
+  @override
+  ConsumerState<MiniPlayerHome> createState() => _MiniPlayerHomeState();
+}
 
-  const _Bar({
-    required this.song,
-    required this.pane,
-    required this.onPick,
-    required this.expanded,
-  });
+class _MiniPlayerHomeState extends ConsumerState<MiniPlayerHome> {
+  ListenerId? _closeListener;
+
+  @override
+  void initState() {
+    super.initState();
+    // The window's controls close it. Closing hides rather than destroys:
+    // the engine stays alive and reopening is instant.
+    final window = WindowManager.instance.getCurrent();
+    if (window != null) {
+      _closeListener = window.addListener((event) async {
+        if (event is WindowCloseRequestedEvent) {
+          event.request.cancel();
+          await hideMiniPlayer();
+        }
+      });
+    }
+    // The mirror subscribes to the host here rather than in `main()`: the
+    // notifier only exists once the container does, and this is the earliest
+    // point the window is about to draw anyway.
+    final controller = ref.read(playbackProvider.notifier);
+    if (controller is MiniPlayback) {
+      controller.attach(ref.read(miniPlayerLinkProvider));
+    }
+  }
+
+  @override
+  void dispose() {
+    final listenerId = _closeListener;
+    if (listenerId != null) {
+      WindowManager.instance.getCurrent()?.removeListener(listenerId);
+    }
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final song = ref.watch(playbackProvider.select((state) => state.current));
 
-    Widget content = DragToMoveArea(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          // The sleeve grows with the window, between the size a stripe needs
-          // and a size that still leaves the title room beside it.
-          final art = expanded
-              ? math.min(
-                  math.min(constraints.maxWidth * 0.45, 220.0),
-                  math.max(constraints.maxHeight - SolSpace.sm, 24.0),
-                )
-              : 36.0;
-
-          return Row(
-            children: [
-              LibraryArtwork(
-                sourceId: song.sourceId,
-                artId: song.playing.artId,
-                size: art,
-                radius: art >= 64 ? SolRadius.md : SolRadius.sm,
-                pixelSize: art >= 64 ? 512 : 128,
-                fallbackIcon: Symbols.music_note_rounded,
-              ),
-              const SizedBox(width: SolSpace.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      song.playing.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelLarge,
-                    ),
-                    Text(
-                      song.playing.subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+    return DesktopWindowFrame(
+      isDesktopPlatform: true,
+      // Closing hides this window, keeping the engine alive: the event
+      // listener in `initState` cancels the real close, so this button is
+      // the same path.
+      onClose: () => unawaited(hideMiniPlayer()),
+      child: song == null
+          ? Center(
+              child: Text(
+                'playerNothingPlaying'.tr(),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
-              _BarButton(
-                tooltip: pane == MiniPane.queue
-                    ? 'playerQueueHide'.tr()
-                    : 'playerQueueShow'.tr(),
-                selected: pane == MiniPane.queue,
-                icon: Symbols.queue_music_rounded,
-                onPressed: () => onPick(MiniPane.queue),
-              ),
-              _BarButton(
-                tooltip: pane == MiniPane.lyrics
-                    ? 'playerLyricsHide'.tr()
-                    : 'playerLyricsShow'.tr(),
-                selected: pane == MiniPane.lyrics,
-                icon: Symbols.lyrics_rounded,
-                onPressed: () => onPick(MiniPane.lyrics),
-              ),
-              const SizedBox(width: SolSpace.xs),
-            ],
-          );
-        },
-      ),
+            )
+          : MiniPlayerView(song: song),
     );
-
-    if (expanded) return content;
-
-    return SizedBox(height: 44, child: content);
   }
 }
 
-/// One control in the bar's trailing row.
-///
-/// Smaller than a page's icon button on purpose: two of them plus the sleeve
-/// and the title have to fit 340 pixels, and a 48px tap box each would leave
-/// the title nothing.
-class _BarButton extends StatelessWidget {
-  final String tooltip;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onPressed;
+class MiniPlayerView extends ConsumerStatefulWidget {
+  final LibrarySong song;
 
-  const _BarButton({
-    required this.tooltip,
-    required this.icon,
-    required this.onPressed,
-    this.selected = false,
-  });
+  const MiniPlayerView({super.key, required this.song});
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return IconButton(
-      tooltip: tooltip,
-      onPressed: onPressed,
-      isSelected: selected,
-      iconSize: 20,
-      padding: EdgeInsets.zero,
-      visualDensity: VisualDensity.compact,
-      constraints: const BoxConstraints.tightFor(width: 34, height: 34),
-      color: selected
-          ? theme.colorScheme.primary
-          : theme.colorScheme.onSurfaceVariant,
-      icon: Icon(icon),
-    );
-  }
+  ConsumerState<MiniPlayerView> createState() => _MiniPlayerViewState();
 }
 
 class _MiniPlayerViewState extends ConsumerState<MiniPlayerView> {

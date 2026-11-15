@@ -343,3 +343,4 @@ class _WindowTitle extends ConsumerWidget {
     );
   }
 }
+
