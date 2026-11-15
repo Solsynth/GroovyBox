@@ -26,6 +26,11 @@ dependencies:
   window_manager: ^0.6.0
   desktop_multi_window: ^0.3.1
   shared_preferences: ^2.5.6
+  # The guest engine swaps SharedPreferences' platform backend for an
+  # in-memory store (InMemorySharedPreferencesStore) — reading that class from
+  # the interface package keeps it a direct, linted import rather than a
+  # transitive one.
+  shared_preferences_platform_interface: ^2.4.0
 
   # Library + playback
   media_kit: ^1.2.6

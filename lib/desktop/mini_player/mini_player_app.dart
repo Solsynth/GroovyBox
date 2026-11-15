@@ -15,7 +15,7 @@ import 'package:groovy_box/widgets/transport.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:window_manager/legacy.dart';
+import 'package:window_manager/window_manager.dart';
 
 /// Room the macOS window buttons take at the leading edge, plus the gap that
 /// keeps the sleeve from sliding under them.
@@ -68,13 +68,16 @@ final miniPlayerPane = ValueNotifier<MiniPane?>(null);
 /// that one is the user's.
 Future<void> hideMiniPlayer() async {
   miniPlayerPane.value = null;
-  try {
-    final size = await windowManager.getSize();
-    await windowManager.setSize(Size(size.width, kMiniPlayerBarHeight));
-  } catch (_) {
-    // A failed resize costs the next open a moment of the old size.
-  }
-  await windowManager.hide();
+  final window = WindowManager.instance.getCurrent();
+  if (window == null) return;
+  // Shrinking before hiding is what makes reopening instant *and* correct:
+  // the engine keeps its last surface size, so a window hidden with the
+  // queue open would come back as a queue over a blank bar.
+  window.setSize(
+    Size(window.size.width, kMiniPlayerBarHeight).toNative(),
+    false,
+  );
+  window.hide();
 }
 
 /// The window's single screen: a bar of transport, with the queue or the
@@ -91,13 +94,25 @@ class MiniPlayerHome extends ConsumerStatefulWidget {
 }
 
 class _MiniPlayerHomeState extends ConsumerState<MiniPlayerHome> {
-  late final _CloseInterceptor _interceptor;
+  ListenerId? _closeListener;
 
   @override
   void initState() {
     super.initState();
-    _interceptor = _CloseInterceptor();
-    windowManager.addListener(_interceptor);
+    // The close request is answered here rather than in `main()`: the window
+    // is looked up per engine, and this is the widget tree that decides what
+    // closing means for it.
+    final window = WindowManager.instance.getCurrent();
+    if (window != null) {
+      _closeListener = window.addListener((event) async {
+        if (event is WindowCloseRequestedEvent) {
+          // Closes by hiding, not destroying: the engine stays alive, so
+          // reopening is instant.
+          event.request.cancel();
+          await hideMiniPlayer();
+        }
+      });
+    }
     // The mirror subscribes to the host here rather than in `main()`: the
     // notifier only exists once the container does, and this is the earliest
     // point the window is about to draw anyway.
@@ -109,7 +124,10 @@ class _MiniPlayerHomeState extends ConsumerState<MiniPlayerHome> {
 
   @override
   void dispose() {
-    windowManager.removeListener(_interceptor);
+    final listenerId = _closeListener;
+    if (listenerId != null) {
+      WindowManager.instance.getCurrent()?.removeListener(listenerId);
+    }
     super.dispose();
   }
 
@@ -134,20 +152,6 @@ class _MiniPlayerHomeState extends ConsumerState<MiniPlayerHome> {
   }
 }
 
-/// Closes by hiding, not destroying: the engine stays alive, so reopening is
-/// instant, and `setPreventClose(true)` makes this the only close path.
-class _CloseInterceptor with WindowListener {
-  bool _closing = false;
-
-  @override
-  void onWindowClose() async {
-    if (_closing) return;
-    _closing = true;
-    await hideMiniPlayer();
-    _closing = false;
-  }
-}
-
 /// The pane the window grows for, if any.
 enum MiniPane { lyrics, queue }
 
@@ -164,25 +168,23 @@ class _MiniPlayerViewState extends ConsumerState<MiniPlayerView> {
   /// Grows or shrinks the window to fit the pane that is on show.
   ///
   /// The height is the only thing that changes; the width is the user's.
-  Future<void> _fitWindow(MiniPane? pane) async {
-    try {
-      final size = await windowManager.getSize();
-      await windowManager.setSize(
-        Size(
-          size.width,
-          kMiniPlayerBarHeight + (pane == null ? 0 : kMiniPlayerPaneHeight),
-        ),
-      );
-    } catch (_) {
-      // A window that refused the resize still shows the right content; it
-      // is just too short for it.
-    }
+  void _fitWindow(MiniPane? pane) {
+    final window = WindowManager.instance.getCurrent();
+    if (window == null) return;
+    // The height is the only thing that changes; the width is the user's.
+    window.setSize(
+      Size(
+        window.size.width,
+        kMiniPlayerBarHeight + (pane == null ? 0 : kMiniPlayerPaneHeight),
+      ).toNative(),
+      false,
+    );
   }
 
   void _pick(MiniPane next) {
     final pane = miniPlayerPane.value == next ? null : next;
     miniPlayerPane.value = pane;
-    unawaited(_fitWindow(pane));
+    _fitWindow(pane);
   }
 
   @override

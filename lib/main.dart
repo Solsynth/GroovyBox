@@ -6,7 +6,6 @@ import 'package:audio_session/audio_session.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/desktop/mini_player/link.dart';
 import 'package:groovy_box/desktop/mini_player/mini_playback.dart';
@@ -24,7 +23,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
-import 'package:window_manager/legacy.dart';
+import 'package:window_manager/window_manager.dart' hide Window;
 
 /// Translations live in `assets/i18n/<language>-<COUNTRY>.json`, one file per
 /// locale, matching the path declared under `flutter.assets` in pubspec.yaml.
@@ -100,26 +99,27 @@ Future<void> main() async {
   );
 
   if (DesktopWindowFrame.isPlatformDesktop) {
-    await windowManager.ensureInitialized();
-    const options = WindowOptions(
-      size: kDefaultWindowSize,
-      minimumSize: kMinimumWindowSize,
-      center: true,
-      backgroundColor: Colors.transparent,
-      titleBarStyle: TitleBarStyle.hidden,
-      windowButtonVisibility: true,
-      title: 'GroovyBox',
-    );
-    await windowManager.waitUntilReadyToShow(options, () async {
-      await windowManager.show();
-      await windowManager.focus();
-    });
+    // The window exists before this engine runs — the runner created it — so
+    // `getCurrent` answers immediately and the options apply to it directly.
+    final window = WindowManager.instance.getCurrent();
+    if (window != null) {
+      window
+        ..title = 'GroovyBox'
+        ..minimumSize = kMinimumWindowSize.toNative()
+        ..titleBarStyle = TitleBarStyle.hidden
+        ..isWindowControlButtonsVisible = true
+        ..backgroundColor = Colors.transparent.toNative();
+      window.setSize(kDefaultWindowSize.toNative(), false);
+      window.center();
+      window.show();
+      window.focus();
+    }
     // Wayland ignores the hidden-title-bar hint until the window is frameless.
     if (Platform.isLinux &&
         Platform.environment.containsKey('WAYLAND_DISPLAY')) {
       try {
-        await windowManager.setAsFrameless();
-      } on PlatformException catch (error) {
+        window?.setFrameless(true);
+      } catch (error) {
         debugPrint('[Window] Could not go frameless on Wayland: $error');
       }
     }
@@ -188,47 +188,47 @@ Future<void> _runMiniPlayer() async {
   await EasyLocalization.ensureInitialized();
 
   // The guest engine manages its own window: small, always on top, and
-  // hiding instead of closing so reopening is instant.
-  await windowManager.ensureInitialized();
-  // The guest engine registers only the multi-window channel natively (see
-  // MainFlutterWindow.swift): registering platform plugins into a second
-  // engine initializes their native singletons twice in one process and
-  // corrupts the Dart heap. So the guest backs SharedPreferences with an
-  // in-memory store instead of the platform plugin: the provider tree reads
-  // it exactly as the host does, the values are defaults and last for the
-  // window's lifetime, and no native code runs twice.
-  SharedPreferencesStorePlatform.instance = InMemorySharedPreferencesStore.empty();
-  final prefs = await SharedPreferences.getInstance();
-  const savedWidth = kMiniPlayerBarWidth;
-  await windowManager.waitUntilReadyToShow(
-    WindowOptions(
-      // Height is not restored: the window opens as a bar and grows when a
-      // pane opens, so a saved pane height would only open it wrong.
-      size: Size(savedWidth, kMiniPlayerBarHeight),
-      minimumSize: const Size(kMiniPlayerMinWidth, kMiniPlayerBarHeight),
-      maximumSize: const Size(
+  // hiding instead of closing so reopening is instant. `getCurrent` answers
+  // this engine's window — nativeapi reads the app's focused window, and the
+  // secondary engine's window is the one that exists here.
+  final window = WindowManager.instance.getCurrent();
+  if (window != null) {
+    // Height is not restored: the window opens as a bar and grows when a
+    // pane opens, so a saved pane height would only open it wrong.
+    window
+      ..title = 'GroovyBox Mini'
+      ..minimumSize = const Size(
+        kMiniPlayerMinWidth,
+        kMiniPlayerBarHeight,
+      ).toNative()
+      ..maximumSize = const Size(
         kMiniPlayerMaxWidth,
         kMiniPlayerBarHeight + kMiniPlayerPaneHeight,
-      ),
-      center: true,
-      alwaysOnTop: true,
-      backgroundColor: Colors.transparent,
-      title: 'GroovyBox Mini',
-      skipTaskbar: false,
+      ).toNative()
+      ..isAlwaysOnTop = true
+      ..backgroundColor = Colors.transparent.toNative()
       // Transparent, frameless windows are only reliable on macOS; Windows
       // and Linux keep the native frame, or the secondary engine can stay a
       // gray undecorated surface before the first Flutter frame.
-      titleBarStyle: Platform.isMacOS
+      ..titleBarStyle = Platform.isMacOS
           ? TitleBarStyle.hidden
-          : TitleBarStyle.normal,
-      windowButtonVisibility: Platform.isMacOS,
-    ),
-    () async {
-      await windowManager.show();
-      await windowManager.setAlwaysOnTop(true);
-    },
-  );
-  await windowManager.setPreventClose(true);
+          : TitleBarStyle.normal
+      ..isWindowControlButtonsVisible = Platform.isMacOS;
+    window.setSize(
+      const Size(kMiniPlayerBarWidth, kMiniPlayerBarHeight).toNative(),
+      false,
+    );
+    window.center();
+    window.show();
+    // Close intercepts in the app layer: the widget tree answers the
+    // `closeRequested` event with hide instead of an accepted request.
+    window.addListener((event) async {
+      if (event is WindowCloseRequestedEvent) {
+        event.request.cancel();
+        await hideMiniPlayer();
+      }
+    });
+  }
 
   // The guest never opens the library database. Even with WAL, a second
   // engine opening the same SQLite file while the main engine holds a write
@@ -236,6 +236,13 @@ Future<void> _runMiniPlayer() async {
   // page caches, one file. The guest renders what the host publishes; the
   // lyrics pane falls back to the network resolver when the cache is out of
   // reach.
+  // The guest backs SharedPreferences with an in-memory store instead of the
+  // platform plugin (see the engine-registration note in MainFlutterWindow):
+  // the provider tree reads it exactly as the host does, the values are
+  // defaults and last for the window's lifetime, and no native code runs twice.
+  SharedPreferencesStorePlatform.instance = InMemorySharedPreferencesStore.empty();
+  final prefs = await SharedPreferences.getInstance();
+
   const libraryDatabase = null;
   const localLibraryPath = null;
 
@@ -314,7 +321,7 @@ class GroovyBoxApp extends ConsumerWidget {
               title: const _WindowTitle(),
               // Closing the window ends the app; a music player sitting in the
               // tray with no UI would be a surprise, not a convenience.
-              onClose: () => windowManager.close(),
+              onClose: () => WindowManager.instance.getCurrent()?.close(),
               child: child ?? const SizedBox.shrink(),
             ),
           ),

@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:window_manager/legacy.dart';
+import 'package:window_manager/window_manager.dart';
 
 /// The frameless desktop chrome: a draggable title bar plus window controls.
 ///
@@ -55,11 +55,24 @@ class DesktopWindowFrame extends HookWidget {
     useEffect(() {
       if (!isDesktopPlatform) return null;
 
-      final maximizeListener = _WindowMaximizeListener(isMaximized);
-      windowManager.addListener(maximizeListener);
-      windowManager.isMaximized().then((max) => isMaximized.value = max);
+      final window = WindowManager.instance.getCurrent();
+      if (window == null) return null;
 
-      return () => windowManager.removeListener(maximizeListener);
+      isMaximized.value = window.isMaximized;
+      final listenerId = window.addListener((event) {
+        switch (event) {
+          case WindowMaximizedEvent():
+            isMaximized.value = true;
+          case WindowRestoredEvent():
+            // One `restored` covers both "no longer maximized" and "no longer
+            // minimized"; reading the window settles which.
+            isMaximized.value = window.isMaximized;
+          default:
+            break;
+        }
+      });
+
+      return () => window.removeListener(listenerId);
     }, [isDesktopPlatform]);
 
     final framedChild = isDesktopPlatform
@@ -107,6 +120,8 @@ class DesktopWindowFrame extends HookWidget {
   }
 
   Widget _buildTitleBar(BuildContext context, ValueNotifier<bool> isMaximized) {
+    // One lookup per build: the window exists for this engine's lifetime.
+    final window = WindowManager.instance.getCurrent();
     final bar = SizedBox(
       height: titleBarHeight,
       child: Stack(alignment: Alignment.center, children: [?title]),
@@ -126,23 +141,23 @@ class DesktopWindowFrame extends HookWidget {
         ),
         _WindowButton(
           icon: Symbols.minimize,
-          onPressed: () => windowManager.minimize(),
+          onPressed: () => window?.minimize(),
         ),
         _WindowButton(
           icon: isMaximized.value
               ? Symbols.fullscreen_exit
               : Symbols.fullscreen,
-          onPressed: () async {
-            if (await windowManager.isMaximized()) {
-              windowManager.restore();
+          onPressed: () {
+            if (isMaximized.value) {
+              window?.unmaximize();
             } else {
-              windowManager.maximize();
+              window?.maximize();
             }
           },
         ),
         _WindowButton(
           icon: Symbols.close,
-          onPressed: onClose ?? () => windowManager.close(),
+          onPressed: onClose ?? () => window?.close(),
         ),
       ],
     );
@@ -166,16 +181,4 @@ class _WindowButton extends StatelessWidget {
       color: Theme.of(context).iconTheme.color,
     );
   }
-}
-
-class _WindowMaximizeListener with WindowListener {
-  final ValueNotifier<bool> isMaximized;
-
-  _WindowMaximizeListener(this.isMaximized);
-
-  @override
-  void onWindowMaximize() => isMaximized.value = true;
-
-  @override
-  void onWindowUnmaximize() => isMaximized.value = false;
 }
