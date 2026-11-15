@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:auto_route/auto_route.dart';
@@ -331,6 +332,132 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
         ),
       ),
     );
+  }
+
+  /// Starts the adapter's interactive login: mints the code its first step
+  /// needs, then subscribes to that step's scan state. Nothing here knows
+  /// which service is being signed in to.
+  Future<void> _startInteractive() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final interactive = adapter as InteractiveLoginAdapter;
+    final steps = interactive.loginSteps(_serverController.text.trim());
+    setState(() {
+      _loginSteps = steps;
+      _error = null;
+      _busy = true;
+      _qrCode = null;
+      _qrState = null;
+    });
+    final qr = steps.whereType<QrLoginStep>().firstOrNull;
+    if (qr == null) return;
+    try {
+      final code = await qr.prepare();
+      if (!mounted) return;
+      // The mint is done; from here the user is scanning, so the Cancel
+      // button has to be live again.
+      setState(() {
+        _qrCode = code;
+        _busy = false;
+      });
+      _qrPoll = qr.poll().listen(
+        (state) {
+          if (!mounted) return;
+          setState(() => _qrState = state);
+          if (state == 803) _connectInteractive();
+        },
+        onError: (Object error) {
+          if (!mounted) return;
+          // Back to a startable state: an expired code needs a new key, so
+          // the button must read "show code" again rather than leaving a
+          // dead QR on screen.
+          setState(() {
+            _error = describeServerError(error);
+            _busy = false;
+            _loginSteps = null;
+            _qrCode = null;
+            _qrState = null;
+          });
+        },
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = describeServerError(error);
+        _busy = false;
+        _loginSteps = null;
+        _qrCode = null;
+        _qrState = null;
+      });
+    }
+  }
+
+  /// Renders one login step: the code while it is being scanned, or a
+  /// spinner while it is being minted.
+  Widget _stepWidget(LoginStep step) {
+    final theme = Theme.of(context);
+    return switch (step) {
+      QrLoginStep() => Column(
+        children: [
+          const SizedBox(height: SolSpace.lg),
+          SizedBox(
+            width: 200,
+            height: 200,
+            child: switch (_qrCode) {
+              final String code when code.startsWith('data:') => Image.memory(
+                base64Decode(code.split(',').last),
+              ),
+              final String code => Image.network(code),
+              _ => const Center(child: CircularProgressIndicator()),
+            },
+          ),
+          const SizedBox(height: SolSpace.md),
+          Text(
+            _qrState == 802 ? 'setupQrScanned'.tr() : step.prompt,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+      BusyLoginStep() => Padding(
+        padding: const EdgeInsets.only(top: SolSpace.lg),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: SolSpace.md),
+            Expanded(child: Text(step.prompt)),
+          ],
+        ),
+      ),
+    };
+  }
+
+  /// Completes the interactive login and stores the config.
+  Future<void> _connectInteractive() async {
+    await _qrPoll?.cancel();
+    setState(() => _busy = true);
+    try {
+      final interactive = adapter as InteractiveLoginAdapter;
+      final config = await interactive.completeLogin(
+        _serverController.text.trim(),
+        _loginSteps ?? const [],
+      );
+      await ref.read(sourceStoreProvider.notifier).add(config);
+      TextInput.finishAutofillContext();
+      if (mounted) _leave();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = describeServerError(error);
+        _busy = false;
+      });
+    }
   }
 
   /// Runs the adapter's connect flow, or returns null when the form is

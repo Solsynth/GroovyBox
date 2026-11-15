@@ -334,6 +334,80 @@ abstract interface class LibraryAdapter {
   bool get needsCredentials => true;
 }
 
+/// A login that cannot be typed into a form: it runs as a sequence the user
+/// follows (scan a QR code, confirm on the phone, wait for the poll to say
+/// yes) rather than a single credential check.
+///
+/// The setup screen renders the steps this capability yields and never asks
+/// the adapter's kind, so the next interactive provider plugs in without a
+/// special case. [connect] stays the contract for an adapter whose login is
+/// one synchronous call with an address and a secret.
+abstract interface class InteractiveLoginAdapter implements LibraryAdapter {
+  /// The login steps, in display order.
+  ///
+  /// Each step is one of the shapes [LoginStep] names. The screen walks the
+  /// list once and redraws as the stream updates the last step's state.
+  List<LoginStep> loginSteps(String baseUrl);
+
+  /// Completes the login and returns the config to store, or throws
+  /// [LibraryException] when the user aborted or the service refused.
+  Future<SourceConfig> completeLogin(String baseUrl, List<LoginStep> steps);
+}
+
+/// One interactive login step.
+///
+/// A step is declarative on purpose: the screen draws a spinner, a QR image
+/// or a text prompt from the shape alone, and the adapter stays free to
+/// reorder or extend steps without the screen learning about them.
+sealed class LoginStep {
+  const LoginStep();
+
+  /// Stable identity within one adapter's step list.
+  String get id;
+
+  /// What the step asks of the user, already localized by the adapter (the
+  /// adapter knows the service's own vocabulary; the screen only draws).
+  String get prompt;
+}
+
+/// A step that shows a QR code and watches it being scanned.
+///
+/// The adapter owns the state the code is minted against (a unikey, a
+/// session), so [prepare] produces the code and [poll] watches it. The screen
+/// only draws what it is handed: it never learns a service's vocabulary.
+class QrLoginStep extends LoginStep {
+  @override
+  final String id;
+  @override
+  final String prompt;
+
+  /// Mints the code and returns it: a `data:` URL for an image the adapter
+  /// has already rendered. Throws [LibraryException] when the service
+  /// refuses.
+  final Future<String> Function() prepare;
+
+  /// Polls the service for the scan state. Yields `800` (expired), `801`
+  /// (waiting), `802` (scanned, awaiting confirm) and `803` (authorized).
+  /// Done when it yields 803, or throws when it yields 800.
+  final Stream<int> Function() poll;
+
+  const QrLoginStep({
+    required this.id,
+    required this.prompt,
+    required this.prepare,
+    required this.poll,
+  });
+}
+
+/// A step that only reports progress while the adapter works.
+class BusyLoginStep extends LoginStep {
+  @override
+  final String id;
+  @override
+  final String prompt;
+  const BusyLoginStep({required this.id, required this.prompt});
+}
+
 /// One adapter per kind.
 final Map<LibraryKind, LibraryAdapter> libraryAdapters = {
   LibraryKind.subsonic: SubsonicAdapter(),
