@@ -193,10 +193,9 @@ Future<void> _runMiniPlayer() async {
   // secondary engine's window is the one that exists here.
   final window = WindowManager.instance.getCurrent();
   if (window != null) {
-    // A real title bar on every platform, not a frameless surface: the
-    // window's own buttons are what close it, and a floating player without
-    // them reads as a panel that cannot be dismissed. It also means nothing
-    // drawn inside has to dodge the traffic lights.
+    // The window is frameless like the main one, so [DesktopWindowFrame]
+    // draws the title bar and the window controls for both: one chrome, one
+    // place to change it. macOS keeps its traffic lights on the hidden bar.
     window
       ..title = 'GroovyBox Mini'
       ..minimumSize = const Size(
@@ -208,9 +207,8 @@ Future<void> _runMiniPlayer() async {
         kMiniPlayerMaxHeight,
       ).toNative()
       ..isAlwaysOnTop = true
-      // A native frame, so the surface stays opaque: a transparent one would
-      // show the desktop through a window that looks like a system window.
-      ..titleBarStyle = TitleBarStyle.normal
+      ..backgroundColor = Colors.transparent.toNative()
+      ..titleBarStyle = TitleBarStyle.hidden
       ..isWindowControlButtonsVisible = true;
     window.setSize(
       const Size(kMiniPlayerBarWidth, kMiniPlayerBarHeight).toNative(),

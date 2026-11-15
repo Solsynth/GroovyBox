@@ -86,15 +86,21 @@ class _LyricsPickerSheetState extends ConsumerState<LyricsPickerSheet> {
   /// pushed into it: without the invalidate the words on screen stay whatever
   /// the failed fetch had left there, and the rescue reads as doing nothing.
   Future<void> _adopt(Lyrics lyrics) async {
-    // Read before the await: a context use must not cross an async gap.
+    // Everything context- or ref-derived is read before the first await: the
+    // sheet can be dismissed while the resolver writes, and a `ref` touched
+    // after that throws instead of doing the invalidation.
     final languageCode = Localizations.localeOf(context).languageCode;
     final request = LyricsRequest.of(widget.song);
+    final lyricsProvider = songLyricsProvider(
+      request,
+      languageCode: languageCode,
+    );
     final resolver = await ref.read(lyricsResolverProvider.future);
     await resolver.adopt(request, lyrics, languageCode: languageCode);
-    ref
-      ..invalidate(songLyricsProvider(request, languageCode: languageCode))
-      ..invalidate(storedLyricsProvider);
     if (!mounted) return;
+    ref
+      ..invalidate(lyricsProvider)
+      ..invalidate(storedLyricsProvider);
     Navigator.of(context).maybePop();
   }
 

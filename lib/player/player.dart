@@ -883,6 +883,9 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
           }
         }
       }
+    } catch (_) {
+      // The stream URL was refused (offline source, expired mint, gone
+      // track): the queue stays where it is rather than crashing playback.
     }
   }
 

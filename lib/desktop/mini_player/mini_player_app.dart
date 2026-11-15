@@ -95,164 +95,6 @@ void _applyBounds(Window window, {required bool expanded}) {
     ).toNative();
 }
 
-/// The window's single screen: a bar of transport, with the queue or the
-/// lyrics growing it in place.
-///
-/// The bar is deliberately not the player page at small scale — the full page
-/// already exists one shortcut away. What is left is the sleeve, the title and
-/// the transport: the three things a floating window is for.
-class MiniPlayerHome extends ConsumerStatefulWidget {
-  const MiniPlayerHome({super.key});
-
-  @override
-  ConsumerState<MiniPlayerHome> createState() => _MiniPlayerHomeState();
-}
-
-class _MiniPlayerHomeState extends ConsumerState<MiniPlayerHome> {
-  ListenerId? _closeListener;
-
-  @override
-  void initState() {
-    super.initState();
-    // The mini window keeps a real title bar, so its close button is the
-    // window's own. Closing hides rather than destroys: the engine stays
-    // alive and reopening is instant.
-    final window = WindowManager.instance.getCurrent();
-    if (window != null) {
-      _closeListener = window.addListener((event) async {
-        if (event is WindowCloseRequestedEvent) {
-          event.request.cancel();
-          await hideMiniPlayer();
-        }
-      });
-    }
-    // The mirror subscribes to the host here rather than in `main()`: the
-    // notifier only exists once the container does, and this is the earliest
-    // point the window is about to draw anyway.
-    final controller = ref.read(playbackProvider.notifier);
-    if (controller is MiniPlayback) {
-      controller.attach(ref.read(miniPlayerLinkProvider));
-    }
-  }
-
-  @override
-  void dispose() {
-    final listenerId = _closeListener;
-    if (listenerId != null) {
-      WindowManager.instance.getCurrent()?.removeListener(listenerId);
-    }
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final song = ref.watch(playbackProvider.select((state) => state.current));
-    final theme = Theme.of(context);
-
-    return Scaffold(
-      backgroundColor: theme.colorScheme.surface,
-      body: song == null
-          ? Center(
-              child: Text(
-                'playerNothingPlaying'.tr(),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            )
-          : MiniPlayerView(song: song),
-    );
-  }
-}
-
-class MiniPlayerView extends ConsumerStatefulWidget {
-  final LibrarySong song;
-
-  const MiniPlayerView({super.key, required this.song});
-
-  @override
-  ConsumerState<MiniPlayerView> createState() => _MiniPlayerViewState();
-}
-
-class _MiniPlayerViewState extends ConsumerState<MiniPlayerView> {
-  /// Grows or shrinks the window to fit the pane that is on show.
-  ///
-  /// Only the height changes, and only to the shape's opening height: a user
-  /// who dragged the window taller keeps their height when a pane opens — the
-  /// pane takes the room that is already there — and only a window too short
-  /// for the pane is grown.
-  void _fitWindow(MiniPane? pane) {
-    final window = WindowManager.instance.getCurrent();
-    if (window == null) return;
-    _applyBounds(window, expanded: pane != null);
-
-    final target =
-        kMiniPlayerBarHeight + (pane == null ? 0 : kMiniPlayerPaneHeight);
-    final height = pane == null ? target : math.max(window.size.height, target);
-    window.setSize(
-      Size(window.size.width, height).toNative(),
-      // Animated on macOS; other platforms apply it at once.
-      true,
-    );
-  }
-
-  void _pick(MiniPane next) {
-    final pane = miniPlayerPane.value == next ? null : next;
-    miniPlayerPane.value = pane;
-    _fitWindow(pane);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // The live track, not the one this widget was built with: the mirror
-    // state changes underneath the window, and the whole view follows it.
-    final song = ref.watch(playbackProvider.select((state) => state.current));
-    final shown = song ?? widget.song;
-
-    return ValueListenableBuilder<MiniPane?>(
-      valueListenable: miniPlayerPane,
-      builder: (context, pane, _) => SafeArea(
-        minimum: const EdgeInsets.fromLTRB(
-          SolSpace.sm,
-          SolSpace.sm,
-          SolSpace.sm,
-          SolSpace.sm,
-        ),
-        child: Column(
-          children: [
-            if (pane == null)
-              // The bar is the only content, so it takes whatever height the
-              // window has and the artwork grows into it.
-              Expanded(
-                child: _Bar(
-                  song: shown,
-                  pane: pane,
-                  onPick: _pick,
-                  expanded: true,
-                ),
-              )
-            else ...[
-              _Bar(song: shown, pane: pane, onPick: _pick, expanded: false),
-              Expanded(
-                child: switch (pane) {
-                  MiniPane.lyrics => SongLyricsPane(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: SolSpace.sm,
-                    ),
-                    fade: true,
-                  ),
-                  MiniPane.queue => const QueuePanel(),
-                },
-              ),
-            ],
-            if (!shown.isRadio) const Scrubber(),
-            const Transport(),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 /// The bar: what is playing, and the two views that grow the window.
 ///
@@ -354,6 +196,402 @@ class _Bar extends StatelessWidget {
 }
 
 /// One control in the bar's trailing row.
+///
+/// Smaller than a page's icon button on purpose: two of them plus the sleeve
+/// and the title have to fit 340 pixels, and a 48px tap box each would leave
+/// the title nothing.
+class _BarButton extends StatelessWidget {
+  final String tooltip;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  const _BarButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+    this.selected = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      isSelected: selected,
+      iconSize: 20,
+      padding: EdgeInsets.zero,
+      visualDensity: VisualDensity.compact,
+      constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+      color: selected
+          ? theme.colorScheme.primary
+          : theme.colorScheme.onSurfaceVariant,
+      icon: Icon(icon),
+    );
+  }
+}
+
+class _MiniPlayerViewState extends ConsumerState<MiniPlayerView> {
+  /// Grows or shrinks the window to fit the pane that is on show.
+  ///
+  /// Only the height changes, and only to the shape's opening height: a user
+  /// who dragged the window taller keeps their height when a pane opens — the
+  /// pane takes the room that is already there — and only a window too short
+  /// for the pane is grown.
+  void _fitWindow(MiniPane? pane) {
+    final window = WindowManager.instance.getCurrent();
+    if (window == null) return;
+    _applyBounds(window, expanded: pane != null);
+
+    final target =
+        kMiniPlayerBarHeight + (pane == null ? 0 : kMiniPlayerPaneHeight);
+    final height = pane == null ? target : math.max(window.size.height, target);
+    window.setSize(
+      Size(window.size.width, height).toNative(),
+      // Animated on macOS; other platforms apply it at once.
+      true,
+    );
+  }
+
+  void _pick(MiniPane next) {
+    final pane = miniPlayerPane.value == next ? null : next;
+    miniPlayerPane.value = pane;
+    _fitWindow(pane);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // The live track, not the one this widget was built with: the mirror
+    // state changes underneath the window, and the whole view follows it.
+    final song = ref.watch(playbackProvider.select((state) => state.current));
+    final shown = song ?? widget.song;
+
+    return ValueListenableBuilder<MiniPane?>(
+      valueListenable: miniPlayerPane,
+      builder: (context, pane, _) => Stack(
+        fit: StackFit.expand,
+        children: [
+          // The cover fills the window and everything floats over it, the
+          // way Apple Music's mini player does. A pane opens over the same
+          // field, blurred harder so the pane's text still reads.
+          _ArtworkField(song: shown, paneOpen: pane != null),
+          Column(
+            children: [
+              _Header(
+                song: shown,
+                pane: pane,
+                onPick: _pick,
+                compact: pane != null,
+              ),
+              if (pane != null)
+                Expanded(
+                  child: switch (pane) {
+                    MiniPane.lyrics => SongLyricsPane(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: SolSpace.sm,
+                      ),
+                      fade: true,
+                    ),
+                    MiniPane.queue => const QueuePanel(),
+                  },
+                )
+              else
+                const Spacer(),
+              if (!shown.isRadio) const _Scrubber(),
+              const _TransportRow(),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The blurred cover that carries the whole window's colour.
+///
+/// Blurred past recognition like the main player page's backdrop, so detail
+/// would be decoded and thrown away — a thumbnail is enough. Over it a scrim
+/// keeps text legible no matter how bright the art is.
+class _ArtworkField extends ConsumerWidget {
+  final LibrarySong song;
+  final bool paneOpen;
+
+  const _ArtworkField({required this.song, required this.paneOpen});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final surface = Theme.of(context).colorScheme.surface;
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainer,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          RepaintBoundary(
+            child: ClipRect(
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(
+                  sigmaX: paneOpen ? 90 : 60,
+                  sigmaY: paneOpen ? 90 : 60,
+                ),
+                child: Opacity(
+                  opacity: paneOpen ? 0.55 : 0.7,
+                  child: LibraryArtwork(
+                    sourceId: song.sourceId,
+                    artId: song.playing.artId,
+                    radius: 0,
+                    pixelSize: 256,
+                    fallbackIcon: Symbols.music_note_rounded,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // The scrim: without it, a bright cover washes the labels out.
+          IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [surface.withValues(alpha: 0.15), surface.withValues(alpha: 0.55)],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The window's top strip: artwork and track title, plus the two pane toggles.
+///
+/// Drag anywhere that is not a button — it is the only chrome the frameless
+/// surface has that is not a control. When a pane is open it shrinks to a
+/// small sleeve so the pane gets the height.
+class _Header extends StatelessWidget {
+  final LibrarySong song;
+  final MiniPane? pane;
+  final ValueChanged<MiniPane> onPick;
+  final bool compact;
+
+  const _Header({
+    required this.song,
+    required this.pane,
+    required this.onPick,
+    required this.compact,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final art = compact ? 36.0 : 64.0;
+
+    Widget body = Row(
+      children: [
+        LibraryArtwork(
+          sourceId: song.sourceId,
+          artId: song.playing.artId,
+          size: art,
+          radius: SolRadius.sm,
+          pixelSize: 128,
+          fallbackIcon: Symbols.music_note_rounded,
+        ),
+        SizedBox(width: compact ? SolSpace.sm : SolSpace.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                song.playing.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Text(
+                song.playing.subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+        _BarButton(
+          tooltip: pane == MiniPane.queue
+              ? 'playerQueueHide'.tr()
+              : 'playerQueueShow'.tr(),
+          selected: pane == MiniPane.queue,
+          icon: Symbols.queue_music_rounded,
+          onPressed: () => onPick(MiniPane.queue),
+        ),
+        _BarButton(
+          tooltip: pane == MiniPane.lyrics
+              ? 'playerLyricsHide'.tr()
+              : 'playerLyricsShow'.tr(),
+          selected: pane == MiniPane.lyrics,
+          icon: Symbols.lyrics_rounded,
+          onPressed: () => onPick(MiniPane.lyrics),
+        ),
+      ],
+    );
+
+    if (!compact) {
+      body = Padding(
+        padding: const EdgeInsets.symmetric(horizontal: SolSpace.lg),
+        child: body,
+      );
+    }
+
+    return DragToMoveArea(child: SizedBox(height: 72, child: body));
+  }
+}
+
+/// A light scrubber over the artwork: hairline track, small thumb.
+class _Scrubber extends ConsumerWidget {
+  const _Scrubber();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final state = ref.watch(
+      playbackProvider.select(
+        (state) => (state.position, state.duration, state.current?.duration),
+      ),
+    );
+    final (position, reported, songLength) = state;
+    final duration = reported == Duration.zero
+        ? songLength ?? Duration.zero
+        : reported;
+    final maxMs = duration.inMilliseconds.toDouble();
+    final labelStyle = theme.textTheme.labelSmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: SolSpace.lg),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 3,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+              activeTickMarkColor: Colors.transparent,
+              inactiveTickMarkColor: Colors.transparent,
+            ),
+            child: Slider(
+              value: position.inMilliseconds
+                  .clamp(0, maxMs <= 0 ? 1 : maxMs)
+                  .toDouble(),
+              max: maxMs <= 0 ? 1 : maxMs,
+              onChanged: maxMs <= 0
+                  ? null
+                  : (value) => ref
+                        .read(playbackProvider.notifier)
+                        .seek(Duration(milliseconds: value.round())),
+            ),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(formatDuration(position), style: labelStyle),
+              Text(formatDuration(duration), style: labelStyle),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Previous, play, next, flanked by the two mode toggles.
+///
+/// Own row instead of the shared [Transport]: the shared one sits on plain
+/// surfaces with filled accents; here every button but play is a ghost over
+/// the artwork, the way Apple Music's overlay reads.
+class _TransportRow extends ConsumerWidget {
+  const _TransportRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final controller = ref.read(playbackProvider.notifier);
+    final state = ref.watch(
+      playbackProvider.select(
+        (state) => (state.playing, state.shuffle, state.repeatMode),
+      ),
+    );
+    final (playing, shuffle, repeat) = state;
+    final ghostColor = theme.colorScheme.onSurfaceVariant;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        SolSpace.lg,
+        0,
+        SolSpace.lg,
+        SolSpace.md,
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: 'playerShuffle'.tr(),
+            isSelected: shuffle,
+            onPressed: () => controller.setShuffle(!shuffle),
+            color: ghostColor,
+            iconSize: 20,
+            icon: const Icon(Symbols.shuffle_rounded),
+          ),
+          const Spacer(),
+          IconButton(
+            tooltip: 'playerPrevious'.tr(),
+            onPressed: controller.previous,
+            color: theme.colorScheme.onSurface,
+            iconSize: 28,
+            icon: const Icon(Symbols.skip_previous_rounded),
+          ),
+          const Spacer(),
+          IconButton.filled(
+            tooltip: playing ? 'playerPause'.tr() : 'playerPlay'.tr(),
+            onPressed: controller.togglePlayPause,
+            iconSize: 26,
+            padding: const EdgeInsets.all(10),
+            icon: PlayPauseIcon(playing: playing, size: 26),
+          ),
+          const Spacer(),
+          IconButton(
+            tooltip: 'playerNext'.tr(),
+            onPressed: controller.next,
+            color: theme.colorScheme.onSurface,
+            iconSize: 28,
+            icon: const Icon(Symbols.skip_next_rounded),
+          ),
+          const Spacer(),
+          IconButton(
+            tooltip: repeat == PlaybackRepeatMode.single
+                ? 'playerRepeatSong'.tr()
+                : 'playerRepeat'.tr(),
+            isSelected: repeat != PlaybackRepeatMode.off,
+            onPressed: controller.cycleRepeatMode,
+            color: ghostColor,
+            iconSize: 20,
+            icon: const Icon(Symbols.repeat_rounded),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One control in the header's trailing row.
 ///
 /// Smaller than a page's icon button on purpose: two of them plus the sleeve
 /// and the title have to fit 340 pixels, and a 48px tap box each would leave
