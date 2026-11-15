@@ -91,8 +91,26 @@ flutter:
         - asset: assets/fonts/Nunito-Italic.ttf
           style: italic
 
+    # Brand faces. Space Grotesk's weights are instanced from its variable
+    # original, so the display face has real 400/500/600/700 cuts and Flutter
+    # never has to synthesize a bold. Licences sit beside the files.
+    - family: SpaceGrotesk
+      fonts:
+        - asset: assets/fonts/SpaceGrotesk-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/SpaceGrotesk-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/SpaceGrotesk-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/SpaceGrotesk-Bold.ttf
+          weight: 700
+    - family: SpaceMono
+      fonts:
+        - asset: assets/fonts/SpaceMono-Regular.ttf
+
   assets:
     - assets/i18n/
+    - assets/images/
 
 flutter_launcher_icons:
   android: true

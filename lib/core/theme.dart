@@ -2,16 +2,21 @@ import 'package:cupertino_ui/cupertino_ui.dart' show CupertinoPageTransitionsBui
 import 'package:material_color_utilities/material_color_utilities.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'brand.dart';
+
 // ---------------------------------------------------------------------------
 // Design tokens
 //
-// One small scale for the whole app, ported from Solian so the two apps read
-// as one family. Values are deliberately coarse: if a spacing or radius is not
-// on this list, it is probably a one-off rather than a system decision.
+// One small scale for the whole app. Values are deliberately coarse: if a
+// spacing or radius is not on this list, it is probably a one-off rather than
+// a system decision.
 //
-// Visual direction: "sun-warmed paper". Neutrals are tinted toward the seed's
-// own hue instead of blue-gray, geometry is generous and rounded, and contrast
-// comes from tone and space rather than hard outlines.
+// Visual direction: "glacier paper". The app icon's teal seeds the scheme, so
+// the neutral ramp carries the brand's own cool hue instead of a generic
+// blue-gray; geometry is generous and rounded, and contrast comes from tone
+// and space rather than hard outlines. Type splits in two: Space Grotesk
+// carries titles, eyebrows and brand lines, while Nunito carries everything
+// read at length.
 // ---------------------------------------------------------------------------
 
 /// Spacing scale, in logical pixels.
@@ -120,9 +125,10 @@ const _menuShape = RoundedRectangleBorder(borderRadius: SolRadius.menuRadius);
 
 const _cardShape = RoundedRectangleBorder(borderRadius: SolRadius.cardRadius);
 
-/// Default seed: a deep violet that stays legible as both paper tint and
-/// accent in light and dark modes.
-const kDefaultSeedColor = Color(0xFF6E5BD8);
+/// Default seed: the icon's own teal. Every neutral, the dark scheme and the
+/// fallback for dynamic colour derive from it, so the app looks like its mark
+/// on the first frame and in every window that has no cover to follow.
+const kDefaultSeedColor = kBrandTeal;
 
 class ThemeSet {
   final ThemeData light;
@@ -149,7 +155,7 @@ ThemeData createAppTheme(Brightness brightness, Color seedColor) {
     useMaterial3: true,
     colorScheme: colorScheme,
     brightness: brightness,
-    fontFamily: 'Nunito',
+    fontFamily: kBrandFontBody,
     scaffoldBackgroundColor: colorScheme.surface,
     canvasColor: colorScheme.surface,
     iconTheme: IconThemeData(
@@ -589,8 +595,9 @@ ThemeData createAppTheme(Brightness brightness, Color seedColor) {
 /// Only the *ground* is rebuilt here: accent roles (primary, secondary,
 /// tertiary, error) are left exactly as the seed produced them. Tones are
 /// fixed to a soft, paper-like ramp while the hue and a trace of the seed's
-/// chroma are kept, so a violet seed reads as cool paper and a clay seed as
-/// warm paper. A near-gray seed stays neutral instead of picking up a hue.
+/// chroma are kept, so the icon's teal reads as glacier paper and a cover's
+/// clay as warm paper. A near-gray seed stays neutral instead of picking up
+/// a hue.
 ColorScheme _seedPaper(
   ColorScheme scheme,
   Color seedColor,
@@ -627,63 +634,47 @@ ColorScheme _seedPaper(
   );
 }
 
-/// Softens the generated type ramp without changing its sizes.
+/// The app's voice: one display face over one body face.
 ///
-/// Nunito already carries most of the warmth; the extra tracking on headings
-/// and the taller body leading keep dense lists scannable without feeling
-/// loose.
+/// Titles, eyebrows and headings are Space Grotesk — flat terminals, squared
+/// shoulders, the shape the icon's note is drawn in — while body copy stays
+/// Nunito, which is warmer and better at length. A heading is never Nunito
+/// bolded up: the two faces split the work, so a title is recognisably the
+/// app's and a paragraph is recognisably readable.
+///
+/// Tracking tightens as size grows, because the display face's sidebearings
+/// are built for display sizes; the smaller label ramp keeps a whisper of
+/// positive tracking so all-caps section labels stay legible.
 TextTheme _buildTextTheme(TextTheme base) {
+  TextStyle? display(TextStyle? style, FontWeight weight, double tracking) =>
+      style?.copyWith(
+        fontFamily: kBrandFontDisplay,
+        fontWeight: weight,
+        letterSpacing: tracking,
+        height: 1.15,
+      );
+
   return base.copyWith(
-    displayLarge: base.displayLarge?.copyWith(
-      fontWeight: FontWeight.w700,
-      letterSpacing: -1,
-    ),
-    displayMedium: base.displayMedium?.copyWith(
-      fontWeight: FontWeight.w700,
-      letterSpacing: -0.8,
-    ),
-    displaySmall: base.displaySmall?.copyWith(
-      fontWeight: FontWeight.w700,
-      letterSpacing: -0.6,
-    ),
-    headlineLarge: base.headlineLarge?.copyWith(
-      fontWeight: FontWeight.w700,
-      letterSpacing: -0.5,
-    ),
-    headlineMedium: base.headlineMedium?.copyWith(
-      fontWeight: FontWeight.w700,
-      letterSpacing: -0.4,
-    ),
-    headlineSmall: base.headlineSmall?.copyWith(
-      fontWeight: FontWeight.w700,
-      letterSpacing: -0.3,
-    ),
-    titleLarge: base.titleLarge?.copyWith(
-      fontWeight: FontWeight.w700,
-      letterSpacing: -0.25,
-      height: 1.25,
-    ),
-    titleMedium: base.titleMedium?.copyWith(
-      fontWeight: FontWeight.w600,
-      letterSpacing: -0.1,
-      height: 1.3,
-    ),
-    titleSmall: base.titleSmall?.copyWith(
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0,
-      height: 1.3,
-    ),
+    displayLarge: display(base.displayLarge, FontWeight.w500, -1.6),
+    displayMedium: display(base.displayMedium, FontWeight.w500, -1.3),
+    displaySmall: display(base.displaySmall, FontWeight.w500, -1.0),
+    headlineLarge: display(base.headlineLarge, FontWeight.w600, -0.7),
+    headlineMedium: display(base.headlineMedium, FontWeight.w600, -0.6),
+    headlineSmall: display(base.headlineSmall, FontWeight.w600, -0.4),
+    // A pill header and a card title: the same face as a headline, one step
+    // quieter, so a page's chrome and its content belong to one voice.
+    titleLarge: display(base.titleLarge, FontWeight.w600, -0.3),
+    titleMedium: display(base.titleMedium, FontWeight.w600, -0.2),
+    titleSmall: display(base.titleSmall, FontWeight.w600, -0.1),
     bodyLarge: base.bodyLarge?.copyWith(height: 1.5),
     bodyMedium: base.bodyMedium?.copyWith(height: 1.45),
     bodySmall: base.bodySmall?.copyWith(height: 1.4),
-    labelLarge: base.labelLarge?.copyWith(
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.2,
-    ),
-    labelMedium: base.labelMedium?.copyWith(
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.2,
-    ),
+    // Labels are small and often uppercase: the display face at label size
+    // stays legible because of the positive tracking, and the mono face is
+    // deliberately not used here — a table of labels in mono reads as data.
+    labelLarge: display(base.labelLarge, FontWeight.w600, 0.3),
+    labelMedium: display(base.labelMedium, FontWeight.w600, 0.3),
+    labelSmall: display(base.labelSmall, FontWeight.w600, 0.35),
   );
 }
 
