@@ -6,6 +6,11 @@ import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/netease_adapter.dart';
 import 'package:groovy_box/library/source.dart';
 
+/// A 1x1 transparent PNG as a `data:` URL — what the bridge's `qrimg` is,
+/// without the bytes a real QR would carry.
+const _kQrDataUrl =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+
 /// Minimal NetEase bridge surface: exactly the endpoints the adapter calls,
 /// with the field names a real NeteaseCloudMusicApi deployment sends.
 class _FakeNetease {
@@ -19,8 +24,14 @@ class _FakeNetease {
   /// Whether the minted stream URL is a playable one.
   bool trackPlayable = true;
 
+  /// The scan states `/login/qr/check` walks through, one per call. The last
+  /// value repeats if the list runs out.
+  List<int> qrStates = [801, 802, 803];
+
   /// Every request's query, keyed by path — the assertions read these.
   final Map<String, Map<String, String>> lastQuery = {};
+
+  int _qrChecks = 0;
 
   static Future<_FakeNetease> start() async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -40,34 +51,50 @@ class _FakeNetease {
     response.headers.contentType = ContentType.json;
 
     switch (path) {
-      case '/login/cellphone':
-        final phoneQuery = request.uri.queryParameters;
-        if (phoneQuery['phone'] == '5550100' &&
-            phoneQuery['password'] == 'secret') {
-          signedInCookie = 'MUSIC_U=fake-cookie';
+      case '/login/qr/key':
+        response.write(
+          jsonEncode({
+            'code': 200,
+            'data': {'unikey': 'qr-key'},
+          }),
+        );
+      case '/login/qr/create':
+        response.write(
+          jsonEncode({
+            'code': 200,
+            'data': {
+              'qrurl': 'https://music.163.com/login?codekey=qr-key',
+              'qrimg': _kQrDataUrl,
+            },
+          }),
+        );
+      case '/login/qr/check':
+        final index = _qrChecks < qrStates.length
+            ? _qrChecks
+            : qrStates.length - 1;
+        _qrChecks++;
+        final state = qrStates[index];
+        if (state == 803) {
+          signedInCookie = 'MUSIC_U=qr-cookie';
           response.write(
             jsonEncode({
-              'code': 200,
-              'cookie': 'MUSIC_U=fake-cookie',
-              'profile': {'nickname': 'Someone', 'userId': 42},
+              'code': 803,
+              'cookie': 'MUSIC_U=qr-cookie',
+              'message': '授权登陆成功',
             }),
           );
         } else {
-          response.write(jsonEncode({'code': 502, 'msg': '密码错误'}));
-        }
-      case '/login':
-        final query = request.uri.queryParameters;
-        if (query['email'] == 'me@163.com' && query['password'] == 'secret') {
-          signedInCookie = 'MUSIC_U=fake-cookie';
           response.write(
             jsonEncode({
-              'code': 200,
-              'cookie': 'MUSIC_U=fake-cookie',
-              'profile': {'nickname': 'Mail', 'userId': 7},
+              'code': state,
+              'message': switch (state) {
+                801 => '等待扫码',
+                802 => '授权中',
+                800 => '二维码不存在或已过期',
+                _ => '',
+              },
             }),
           );
-        } else {
-          response.write(jsonEncode({'code': 502, 'msg': '密码错误'}));
         }
       case '/user/account':
         if (_rejectUnsigned(request)) {
@@ -76,7 +103,10 @@ class _FakeNetease {
           return;
         }
         response.write(
-          jsonEncode({'code': 200, 'profile': {'userId': 42}}),
+          jsonEncode({
+            'code': 200,
+            'profile': {'userId': 42, 'nickname': 'Someone'},
+          }),
         );
       case '/user/playlist':
         if (_rejectUnsigned(request)) {
@@ -185,14 +215,7 @@ class _FakeNetease {
           jsonEncode({'code': 200, 'ids': [101, 102]}),
         );
       case '/like':
-        final query = request.uri.queryParameters;
-        final liked = query['like'] == 'true';
-        response.write(
-          jsonEncode({
-            'code': liked ? 200 : 200,
-            if (!liked) 'playlistId': null,
-          }),
-        );
+        response.write(jsonEncode({'code': 200}));
       case '/song/url/v1':
         if (_rejectUnsigned(request)) {
           response.write(jsonEncode({'code': 301}));
@@ -264,9 +287,10 @@ void main() {
   setUp(() async {
     server = await _FakeNetease.start();
     server.trackPlayable = true;
+    server.qrStates = [801, 802, 803];
     // The config()-based tests construct a source directly; the fake has to
-    // recognise the cookie they carry without a connect() first.
-    server.signedInCookie = 'MUSIC_U=fake-cookie';
+    // recognise the cookie they carry without a login first.
+    server.signedInCookie = 'MUSIC_U=qr-cookie';
   });
   tearDown(() => server.close());
 
@@ -278,50 +302,80 @@ void main() {
     auth: {'cookie': cookie},
   );
 
-  test('connect signs in with a phone number and stores the cookie', () async {
-    final config = await NeteaseAdapter().connect(
-      baseUrl: server.baseUrl,
-      username: '+1 5550100',
-      password: 'secret',
-    );
+  NeteaseSource signedIn() =>
+      NeteaseAdapter().sourceFor(config('MUSIC_U=qr-cookie')) as NeteaseSource;
+
+  /// Drives the QR flow to completion: mint the code, then consume the poll
+  /// stream, which sets the cookie on the adapter.
+  Future<SourceConfig> completeQr(NeteaseAdapter adapter) async {
+    final steps = adapter.loginSteps(server.baseUrl);
+    final qr = steps.single as QrLoginStep;
+    expect(await qr.prepare(), _kQrDataUrl);
+    await qr.poll().drain<void>();
+    return adapter.completeLogin(server.baseUrl, steps);
+  }
+
+  test('login is a QR step, not a password form', () {
+    final adapter = NeteaseAdapter();
+    expect(adapter, isA<InteractiveLoginAdapter>());
+    // Nothing is typed into a username or password field.
+    expect(adapter.needsCredentials, isFalse);
+
+    final step = adapter.loginSteps(server.baseUrl).single;
+    expect(step, isA<QrLoginStep>());
+    expect(step.id, 'qr');
+  });
+
+  test('the QR flow stores the session cookie and names the account', () async {
+    server.signedInCookie = null;
+    final config = await completeQr(NeteaseAdapter());
+
     expect(config.kind, LibraryKind.netease);
     expect(config.baseUrl, server.baseUrl);
-    expect(config.auth['cookie'], 'MUSIC_U=fake-cookie');
+    expect(config.auth['cookie'], 'MUSIC_U=qr-cookie');
     expect(config.displayName, 'Someone');
-    expect(server.lastQuery['/login/cellphone']?['countrycode'], '1');
-    expect(server.lastQuery['/login/cellphone']?['phone'], '5550100');
+
+    // The unikey was minted, rendered and then polled.
+    expect(server.lastQuery['/login/qr/key'], isNotNull);
+    expect(server.lastQuery['/login/qr/create']?['key'], 'qr-key');
+    expect(server.lastQuery['/login/qr/create']?['qrimg'], 'true');
+    expect(server.lastQuery['/login/qr/check']?['key'], 'qr-key');
   });
 
-  test('connect signs in with an email', () async {
-    final config = await NeteaseAdapter().connect(
-      baseUrl: server.baseUrl,
-      username: 'me@163.com',
-      password: 'secret',
-    );
-    expect(config.auth['cookie'], 'MUSIC_U=fake-cookie');
-    expect(server.lastQuery['/login'], isNotNull);
-    expect(server.lastQuery['/login/cellphone'], isNull);
-  });
-
-  test('connect surfaces a refused sign-in', () async {
+  test('an expired code ends the login as an error', () async {
+    server.signedInCookie = null;
+    server.qrStates = [800];
+    final adapter = NeteaseAdapter();
+    final qr = adapter.loginSteps(server.baseUrl).single as QrLoginStep;
+    await qr.prepare();
     await expectLater(
-      NeteaseAdapter().connect(
-        baseUrl: server.baseUrl,
-        username: '5550100',
-        password: 'wrong',
-      ),
+      qr.poll().drain<void>(),
       throwsA(
         isA<LibraryException>().having(
-          (e) => e.message,
-          'message',
-          contains('密码错误'),
+          (e) => e.messageKey,
+          'messageKey',
+          'libraryNeteaseQrExpired',
+        ),
+      ),
+    );
+  });
+
+  test('completing without a scan refuses to store a source', () async {
+    final adapter = NeteaseAdapter();
+    await expectLater(
+      adapter.completeLogin(server.baseUrl, adapter.loginSteps(server.baseUrl)),
+      throwsA(
+        isA<LibraryException>().having(
+          (e) => e.messageKey,
+          'messageKey',
+          'libraryNeteaseNoCookie',
         ),
       ),
     );
   });
 
   test('maps songs, playlists and albums onto the neutral models', () async {
-    final source = NeteaseAdapter().sourceFor(config('MUSIC_U=fake-cookie'));
+    final source = signedIn();
 
     final playlists = await source.playlists();
     expect(playlists, hasLength(2));
@@ -360,27 +414,22 @@ void main() {
   });
 
   test('reads carry the session cookie', () async {
-    final source = NeteaseAdapter().sourceFor(config('MUSIC_U=fake-cookie'));
+    final source = signedIn();
     await source.playlistSongs('1');
     expect(
       server.lastQuery['/playlist/track/all']?['cookie'],
-      contains('MUSIC_U=fake-cookie'),
+      contains('MUSIC_U=qr-cookie'),
     );
   });
 
   test('the daily mix arrives as a landing shelf', () async {
-    final source =
-        NeteaseAdapter().sourceFor(config("MUSIC_U=fake-cookie"))
-            as NeteaseSource;
-    final shelves = await source.landingShelves();
+    final shelves = await signedIn().landingShelves();
     expect(shelves, hasLength(1));
     expect(shelves.single.songs.single.title, 'Daily Pick');
   });
 
   test('favourites read and write the red-heart list', () async {
-    final source =
-        NeteaseAdapter().sourceFor(config('MUSIC_U=fake-cookie'))
-            as NeteaseSource;
+    final source = signedIn();
     final song = (await source.playlistSongs('1')).single;
 
     expect(await source.isFavourite(song), isTrue);
@@ -390,9 +439,7 @@ void main() {
   });
 
   test('playback resolves a minted URL, and caches it', () async {
-    final source =
-        NeteaseAdapter().sourceFor(config('MUSIC_U=fake-cookie'))
-            as NeteaseSource;
+    final source = signedIn();
     final song = (await source.playlistSongs('1')).single;
 
     final uri = await source.resolveStreamUri(song);
@@ -409,9 +456,7 @@ void main() {
 
   test('an unplayable track is a refusal, not a network failure', () async {
     server.trackPlayable = false;
-    final source =
-        NeteaseAdapter().sourceFor(config('MUSIC_U=fake-cookie'))
-            as NeteaseSource;
+    final source = signedIn();
     final song = (await source.playlistSongs('1')).single;
     await expectLater(
       source.resolveStreamUri(song),
@@ -426,9 +471,7 @@ void main() {
   });
 
   test('lyrics merge the translation layer', () async {
-    final source =
-        NeteaseAdapter().sourceFor(config('MUSIC_U=fake-cookie'))
-            as NeteaseSource;
+    final source = signedIn();
     final song = (await source.playlistSongs('1')).single;
     final lyrics = await source.lyrics(song);
     expect(lyrics.synced, isTrue);

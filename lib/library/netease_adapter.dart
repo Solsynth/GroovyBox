@@ -20,7 +20,7 @@ import 'source.dart';
 /// and personalised playlists) and [ResolvedStreamSource], because the
 /// playback URL is minted per request by `song/url/v1` instead of being
 /// derivable from the item.
-class NeteaseAdapter implements LibraryAdapter {
+class NeteaseAdapter implements InteractiveLoginAdapter {
   @override
   LibraryKind get kind => LibraryKind.netease;
 
@@ -28,96 +28,138 @@ class NeteaseAdapter implements LibraryAdapter {
   @override
   bool get isAvailable => true;
 
-  /// Server address, account and password are exactly what the bridge needs:
-  /// the account is a NetEase phone number or 163 email, and the password is
-  /// what the account signs in with.
+  /// The address is the only thing typed; the account signs in by scanning
+  /// the QR the bridge mints, because NetEase's risk control rejects plain
+  /// password logins from API bridges.
   @override
-  bool get needsCredentials => true;
+  bool get needsCredentials => false;
 
+  /// Never called: the setup screen drives [loginSteps] and
+  /// [completeLogin] for an [InteractiveLoginAdapter].
   @override
   Future<SourceConfig> connect({
     required String baseUrl,
     required String username,
     required String password,
-  }) async {
-    final normalized = normalizeBaseUrl(baseUrl);
-    final client = _NeteaseHttp(normalized, cookie: null);
-    try {
-      final account = await _login(client, username, password);
-      return SourceConfig(
-        id: newSourceId(LibraryKind.netease),
-        kind: LibraryKind.netease,
-        baseUrl: normalized,
-        displayName: account.nickname,
-        auth: {'cookie': account.cookie},
-      );
-    } finally {
-      client.close();
-    }
-  }
+  }) => completeLogin(baseUrl, const []);
 
   @override
   LibrarySource sourceFor(SourceConfig config) => NeteaseSource(config);
 
-  /// [username] is a phone number (an optional `+`-prefixed country code, as
-  /// in `+1 5550100`) or a 163 email, told apart by the `@` every email has.
-  Future<_NeteaseAccount> _login(
-    _NeteaseHttp http,
-    String username,
-    String password,
-  ) async {
-    final isEmail = username.contains('@');
-    final isPhoneWithCode = !isEmail && username.startsWith('+');
-    final countryCode = isPhoneWithCode
-        ? username.substring(1).split(' ').first
-        : null;
-    final account = isPhoneWithCode
-        ? username.substring(1 + (countryCode?.length ?? 0)).trim()
-        : username;
+  // ---- interactive login ---------------------------------------------------
 
-    final body = await http.post(
-      isEmail ? '/login' : '/login/cellphone',
-      query: isEmail
-          ? {'email': account, 'password': password}
-          : {
-              'phone': account,
-              'password': password,
-              'countrycode': ?countryCode,
+  /// QR sign-in: the bridge mints a unikey, renders it as a base64 QR, and
+  /// the poll stream reports the scan state (801 waiting, 802 scanned,
+  /// 803 authorized, 800 expired). The cookie arrives with the 803.
+  @override
+  List<LoginStep> loginSteps(String baseUrl) {
+    final normalized = normalizeBaseUrl(baseUrl);
+    final http = _NeteaseHttp(normalized, cookie: null);
+    String? key;
+    return [
+      QrLoginStep(
+        id: 'qr',
+        prompt: 'setupNeteaseScanQr'.tr(),
+        prepare: () async {
+          final keyBody = await http.get(
+            '/login/qr/key',
+            query: {'timestamp': DateTime.now().millisecondsSinceEpoch},
+          );
+          final keyData = keyBody['data'];
+          final unikey = keyData is Map ? keyData['unikey'] : null;
+          if (unikey is! String || unikey.isEmpty) {
+            throw http.errorOf(keyBody);
+          }
+          key = unikey;
+          final qrBody = await http.get(
+            '/login/qr/create',
+            query: {
+              'key': unikey,
+              'qrimg': true,
+              'timestamp': DateTime.now().millisecondsSinceEpoch,
             },
-    );
-    final code = (body['code'] as num?)?.toInt();
-    if (code != 200) {
-      throw LibraryException(
-        '${body['msg'] ?? body['message'] ?? 'Sign-in failed'}',
-        code: code,
-        messageKey: 'libraryNeteaseLoginFailed',
-      );
-    }
-    final cookie = body['cookie'];
-    if (cookie is! String || cookie.isEmpty) {
+          );
+          final qrData = qrBody['data'];
+          final qrimg = qrData is Map ? qrData['qrimg'] : null;
+          if (qrimg is! String || qrimg.isEmpty) {
+            throw http.errorOf(qrBody);
+          }
+          return qrimg;
+        },
+        poll: () async* {
+          final pollingKey = key;
+          if (pollingKey == null) {
+            throw const LibraryException(
+              'The QR code was not prepared. Start again.',
+              messageKey: 'libraryNeteaseNoCookie',
+            );
+          }
+          // 800 ends the stream rather than retrying: an expired code needs a
+          // fresh key, which is a new login, not another poll.
+          while (true) {
+            await Future<void>.delayed(const Duration(seconds: 2));
+            final check = await http.get(
+              '/login/qr/check',
+              query: {
+                'key': pollingKey,
+                'timestamp': DateTime.now().millisecondsSinceEpoch,
+              },
+            );
+            final code = (check['code'] as num?)?.toInt();
+            if (code == null) continue;
+            yield code;
+            if (code == 800) {
+              throw LibraryException(
+                'The QR code expired. Start again.',
+                messageKey: 'libraryNeteaseQrExpired',
+              );
+            }
+            if (code == 803) {
+              final cookie = check['cookie'];
+              _cookie = cookie is String && cookie.isNotEmpty ? cookie : null;
+              return;
+            }
+          }
+        },
+      ),
+    ];
+  }
+
+  String? _cookie;
+
+  @override
+  Future<SourceConfig> completeLogin(
+    String baseUrl,
+    List<LoginStep> steps,
+  ) async {
+    final cookie = _cookie;
+    if (cookie == null || cookie.isEmpty) {
       throw const LibraryException(
-        'The server did not return a login session.',
+        'The sign-in did not complete. Try again.',
         messageKey: 'libraryNeteaseNoCookie',
       );
     }
-    final profile = body['profile'];
-    final nickname = profile is Map
-        ? (profile['nickname'] as String?) ?? displayNameHost(body)
-        : displayNameHost(body);
-    return _NeteaseAccount(cookie: cookie, nickname: nickname);
+    final normalized = normalizeBaseUrl(baseUrl);
+    final source = NeteaseSource(
+      SourceConfig(
+        id: newSourceId(LibraryKind.netease),
+        kind: LibraryKind.netease,
+        baseUrl: normalized,
+        displayName: '',
+        auth: {'cookie': cookie},
+      ),
+    );
+    // One read proves the session works and learns the account's name for
+    // the settings row, in the same call.
+    final account = await source.accountName();
+    return SourceConfig(
+      id: source.config.id,
+      kind: LibraryKind.netease,
+      baseUrl: normalized,
+      displayName: account ?? 'NetEase Cloud Music',
+      auth: {'cookie': cookie},
+    );
   }
-
-  static String displayNameHost(Map<String, dynamic> body) {
-    final account = body['account'];
-    final id = account is Map ? account['id'] : null;
-    return id == null ? 'NetEase Cloud Music' : 'NetEase $id';
-  }
-}
-
-class _NeteaseAccount {
-  final String cookie;
-  final String nickname;
-  const _NeteaseAccount({required this.cookie, required this.nickname});
 }
 
 /// The HTTP half of the bridge: every endpoint is a GET with query
@@ -244,6 +286,15 @@ class NeteaseSource extends LibrarySource
     final id = (account['userId'] as num?)?.toInt();
     if (id == null) throw _malformed;
     return _userId = id;
+  }
+
+  /// The signed-in account's nickname, or null when the bridge does not say.
+  /// Used by [NeteaseAdapter.completeLogin] to name the settings row.
+  Future<String?> accountName() async {
+    final body = await _call('/user/account');
+    final profile = body['profile'];
+    final nickname = profile is Map ? profile['nickname'] : null;
+    return nickname is String && nickname.isNotEmpty ? nickname : null;
   }
 
   // ---- library reads -------------------------------------------------------

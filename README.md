@@ -23,10 +23,11 @@ than block you behind a form.
   at 128 px, its dominant usable colour is scored by Material Color Utilities,
   and that colour seeds the whole scheme (`lib/core/dynamic_color.dart`). A
   coverless or grayscale cover leaves the app's own violet seed in place.
-- **Server layer** — `lib/library/` maps Subsonic, Jellyfin and Apple Music
-  onto one provider-neutral model. Subsonic uses salted token auth (never the
-  password); Jellyfin signs in with the `Authorization: MediaBrowser …` header
-  that 10.11+ requires and keeps the issued access token in that same header.
+- **Server layer** — `lib/library/` maps Subsonic, Jellyfin, Apple Music and
+  NetEase Cloud Music onto one provider-neutral model. Subsonic uses salted
+  token auth (never the password); Jellyfin signs in with the
+  `Authorization: MediaBrowser …` header that 10.11+ requires and keeps the
+  issued access token in that same header.
   Apple Music is read over its REST API with the two tokens MusicKit hands
   the app (a developer token it generates itself, and the account's music
   user token), and is played by the system's `ApplicationMusicPlayer`
@@ -43,6 +44,19 @@ than block you behind a form.
   advances instead of stopping dead. The plugin is vendored under `packages/music_kit` (MIT) so
   the darwin player can expose seek and stay inert on macOS 12/13, where
   `ApplicationMusicPlayer` does not exist.
+- **NetEase Cloud Music** — the same provider-neutral layer, against a
+  self-hosted [NeteaseCloudMusicApi](https://github.com/Binaryify/NeteaseCloudMusicApi)
+  bridge the user runs themselves; no address is shipped or defaulted. Sign-in
+  is the bridge's QR flow (mint a unikey, render the code, poll `801 → 802 →
+  803`): it is expressed as `InteractiveLoginAdapter` steps, so the setup
+  screen renders whatever steps an adapter hands it and never asks the kind.
+  The session cookie lives in `SourceConfig.auth` like every other token.
+  Reads map `ar`/`al`/`dt` onto the neutral models; the red-heart list is
+  `RatedSource`, the daily mix is a `CuratedSource` shelf, and lyrics merge
+  `tlyric` as a translation layer. Playback URLs are minted per request by
+  `song/url/v1`, which is `ResolvedStreamSource` — the transport asks that
+  capability before falling back to `streamUri`, so a refused mint falls
+  through the cross-library fallback like a dead URL.
 - **Playback** — one `media_kit` player for the app's lifetime
   (`lib/player/player.dart`), exposed through Riverpod. Shuffle reorders the
   visible queue instead of hiding randomization underneath. The media session

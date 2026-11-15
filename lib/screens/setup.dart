@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:auto_route/auto_route.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/services.dart';
@@ -33,6 +35,20 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   String? _error;
   String? _success;
 
+  /// The interactive login in progress, when the adapter has one: the steps
+  /// to draw and the stream of the QR step's scan state.
+  List<LoginStep>? _loginSteps;
+  StreamSubscription<int>? _qrPoll;
+  int? _qrState; // 801 waiting, 802 scanned, 803 authorized.
+
+  /// The code the current QR step was minted against: a `data:` URL or an
+  /// image URL. Null while it is still being prepared.
+  String? _qrCode;
+
+  /// Whether the current adapter signs in through an interactive flow
+  /// instead of the three-field form.
+  bool get _isInteractive => adapter is InteractiveLoginAdapter;
+
   /// The adapter of the kind currently picked in the picker.
   LibraryAdapter get adapter => libraryAdapters[_kind]!;
 
@@ -41,6 +57,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     _serverController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
+    _qrPoll?.cancel();
     super.dispose();
   }
 
@@ -137,10 +154,50 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                               _kind = selection.first;
                               _error = null;
                               _success = null;
+                              // A half-finished interactive login belongs to
+                              // the kind that started it.
+                              _qrPoll?.cancel();
+                              _qrPoll = null;
+                              _loginSteps = null;
+                              _qrCode = null;
+                              _qrState = null;
+                              _busy = false;
                             }),
                           ),
                           const SizedBox(height: SolSpace.lg),
-                          if (!adapter.needsCredentials) ...[
+                          // An interactive adapter (QR sign-in) draws the
+                          // address field plus its steps once started; a
+                          // credential one draws the three-field form.
+                          // Apple Music signs in through the system: a note
+                          // instead of fields.
+                          if (_isInteractive) ...[
+                            TextFormField(
+                              controller: _serverController,
+                              autofocus: true,
+                              keyboardType: TextInputType.url,
+                              textInputAction: TextInputAction.done,
+                              onFieldSubmitted: (_) => _startInteractive(),
+                              decoration: InputDecoration(
+                                labelText: 'setupServerAddress'.tr(),
+                                hintText: _kind.addressHint,
+                                prefixIcon: const Icon(Symbols.dns_rounded),
+                              ),
+                              validator: (value) {
+                                final text = value?.trim() ?? '';
+                                if (text.isEmpty) {
+                                  return 'setupServerAddressError'.tr();
+                                }
+                                final uri = Uri.tryParse(
+                                  text.contains('://') ? text : 'https://$text',
+                                );
+                                if (uri == null || uri.host.isEmpty) {
+                                  return 'setupServerAddressInvalid'.tr();
+                                }
+                                return null;
+                              },
+                            ),
+                            ...?_loginSteps?.map(_stepWidget),
+                          ] else if (!adapter.needsCredentials) ...[
                             Text(
                               'setupAppleMusicNote'.tr(),
                               textAlign: TextAlign.center,
@@ -149,9 +206,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                                 height: 1.5,
                               ),
                             ),
-                            const SizedBox(height: SolSpace.lg),
-                          ],
-                          if (adapter.needsCredentials) ...[
+                          ] else ...[
                             TextFormField(
                               controller: _serverController,
                               autofocus: true,
@@ -220,18 +275,27 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                             ),
                           ],
                           const SizedBox(height: SolSpace.xl),
-                          FilledButton(
-                            onPressed: _busy ? null : _connect,
-                            child: _busy
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
+                          if (!_isInteractive || _loginSteps == null)
+                            FilledButton(
+                              onPressed: _busy
+                                  ? null
+                                  : _isInteractive
+                                  ? _startInteractive
+                                  : _connect,
+                              child: _busy
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : Text(
+                                      _isInteractive
+                                          ? 'setupStartLogin'.tr()
+                                          : 'setupConnect'.tr(),
                                     ),
-                                  )
-                                : Text('setupConnect'.tr()),
-                          ),
+                            ),
                           if (adapter.needsCredentials) ...[
                             const SizedBox(height: SolSpace.sm),
                             TextButton(
