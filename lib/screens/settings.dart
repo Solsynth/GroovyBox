@@ -6,6 +6,7 @@ import 'package:groovy_box/core/router.gr.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/backup.dart';
 import 'package:groovy_box/library/local_import.dart';
+import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/library/store.dart';
@@ -38,6 +39,14 @@ class SettingsScreen extends ConsumerWidget {
     final infinitePlayback = ref.watch(infinitePlaybackEnabledProvider);
     final sources = ref.watch(librarySourcesProvider);
     final failures = ref.watch(sourceFailuresProvider);
+    // The accounts' own sizes, beside the rows that name them: an account's
+    // track count is a property of the connection, which is what this page
+    // manages, and the landing page is the wrong place to report it.
+    final digests = {
+      for (final digest
+          in ref.watch(libraryDigestsProvider).value ?? const <LibraryDigest>[])
+        digest.sourceId: digest,
+    };
     final theme = Theme.of(context);
     // Select the identity, not the state: watching the whole transport would
     // rebuild this page on every position tick, once a second.
@@ -209,16 +218,33 @@ class SettingsScreen extends ConsumerWidget {
                           source.kind.mark ?? Symbols.cloud_rounded,
                         ),
                         title: Text(source.displayName),
-                        subtitle: Text(
-                          [
-                            source.kind.label,
-                            if (source.addressLabel.isNotEmpty)
-                              source.addressLabel,
-                            if (failures[source.id] != null)
-                              failures[source.id]!,
-                          ].join(' · '),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              [
+                                source.kind.label,
+                                if (source.addressLabel.isNotEmpty)
+                                  source.addressLabel,
+                                if (failures[source.id] != null)
+                                  failures[source.id]!,
+                              ].join(' · '),
+                            ),
+                            if (digests[source.id] case final digest?) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                _describeDigest(digest),
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
-                        isThreeLine: failures[source.id] != null,
+                        isThreeLine:
+                            failures[source.id] != null ||
+                            digests[source.id] != null,
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -307,6 +333,7 @@ class SettingsScreen extends ConsumerWidget {
                       ref.invalidate(recentAlbumsProvider);
                       ref.invalidate(randomSongsProvider);
                       ref.invalidate(playlistsProvider);
+                      ref.invalidate(libraryDigestsProvider);
                     },
                   ),
                 ],
@@ -607,6 +634,16 @@ class _LanguageTile extends StatelessWidget {
 /// Deliberately not the empty string: [DropdownButton] reads `''` as "nothing
 /// selected" and then never calls `onChanged`, so picking it would be a no-op.
 const _systemValue = 'system';
+
+/// One account's own line in the libraries list: who is signed in, and how
+/// many tracks the account holds.
+///
+/// Only an account-backed source answers a digest at all; a server's rows are
+/// the app's, not the server's, so its row never grows this line.
+String _describeDigest(LibraryDigest digest) => [
+  'libraryAccountLabel'.tr(),
+  'libraryDigestTracks'.tr(args: ['${digest.libraryTracks}']),
+].join(' · ');
 
 /// One sentence about the local library: how many songs it knows, and how many
 /// of them only a removed server could play.

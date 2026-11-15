@@ -402,18 +402,12 @@ class AppleMusicSource extends LibrarySource
     }
   }
 
-  /// What the account has, for the landing page's header card.
+  /// What the account has, for the row that manages this connection.
   @override
-  Future<LibraryDigest?> digest() async {
-    final tracks = await _count('/v1/me/library/songs');
-    return LibraryDigest(
-      sourceId: id,
-      // The API has no account-name endpoint an app token can reach; the kind
-      // is the honest label, and the size is the point of the card.
-      subtitle: displayName,
-      libraryTracks: tracks,
-    );
-  }
+  Future<LibraryDigest?> digest() async => LibraryDigest(
+    sourceId: id,
+    libraryTracks: await _count('/v1/me/library/songs'),
+  );
 
   /// A collection's size. Apple pages a library and reports its total, so one
   /// row is enough. A collection without a total (recommendations never carry

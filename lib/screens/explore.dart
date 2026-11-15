@@ -37,9 +37,8 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   Widget build(BuildContext context) {
     final recentAlbums = ref.watch(recentAlbumsProvider);
     final randomSongs = ref.watch(randomSongsProvider);
-    // Only accounts bring their own curation and their own numbers; a server
-    // library contributes nothing here and the shelves below carry it.
-    final digests = ref.watch(libraryDigestsProvider);
+    // Only accounts curate their own shelves; a server library contributes
+    // nothing here and the shelves below carry it.
     final curated = ref.watch(landingShelvesProvider);
     final servers = ref.watch(librarySourcesProvider);
     final hasSong = ref.watch(
@@ -56,7 +55,6 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     void refreshAll() {
       ref.read(recentAlbumsProvider.notifier).refresh();
       ref.read(randomSongsProvider.notifier).refresh();
-      ref.read(libraryDigestsProvider.notifier).refresh();
       ref.read(landingShelvesProvider.notifier).refresh();
     }
 
@@ -66,7 +64,6 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
         onRefresh: () async {
           await ref.read(recentAlbumsProvider.notifier).refresh();
           await ref.read(randomSongsProvider.notifier).refresh();
-          await ref.read(libraryDigestsProvider.notifier).refresh();
           await ref.read(landingShelvesProvider.notifier).refresh();
         },
         child: ContentFrame(
@@ -88,23 +85,6 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
               // are the source's curation, which the merged shelves below
               // cannot reconstruct (a mix is not a playlist and a station is
               // not a track).
-              ...digests.when(
-                data: (list) => [
-                  for (final digest in list)
-                    SliverToBoxAdapter(
-                      child: LibraryDigestCard(
-                        digest: digest,
-                        shelves: [
-                          for (final shelf
-                              in curated.value ?? const <LandingShelf>[])
-                            if (shelf.sourceId == digest.sourceId) shelf,
-                        ],
-                      ),
-                    ),
-                ],
-                loading: () => const <Widget>[],
-                error: (_, _) => const <Widget>[],
-              ),
               for (final shelf in curated.value ?? const <LandingShelf>[]) ...[
                 SliverToBoxAdapter(
                   child: LibrarySectionHeader(title: shelf.title),
@@ -210,110 +190,6 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   /// be pushed: selecting the tab is the same move the rail and the bottom
   /// bar make.
   void _openLibrary(BuildContext context) => activateTab(context, 'library');
-}
-
-/// What a connected account says about itself, at the top of the page.
-///
-/// It is a dashboard line rather than a shelf: the numbers are the point
-/// ("this account has 842 tracks, 10 mixes, 3 stations"), and they are the
-/// only place the app reports a cloud library's own size — a server's rows are
-/// the app's business, but Apple Music's curation is not reconstructible from
-/// what the app can see.
-class LibraryDigestCard extends ConsumerWidget {
-  final LibraryDigest digest;
-
-  /// The shelves the page is showing for this account. Counted here rather
-  /// than read again, so the card can never disagree with what is under it.
-  final List<LandingShelf> shelves;
-
-  const LibraryDigestCard({
-    super.key,
-    required this.digest,
-    required this.shelves,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final stationCount = shelves
-        .expand((shelf) => shelf.songs)
-        .where((song) => song.isRadio)
-        .length;
-    final stats = [
-      if (digest.libraryTracks != null)
-        'libraryDigestTracks'.tr(args: ['${digest.libraryTracks}']),
-      if (shelves.isNotEmpty)
-        'libraryDigestMixes'.tr(args: ['${shelves.length}']),
-      if (stationCount > 0) 'libraryDigestStations'.tr(args: ['$stationCount']),
-    ];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        SolSpace.xl,
-        SolSpace.md,
-        SolSpace.xl,
-        0,
-      ),
-      child: IslandCard(
-        padding: const EdgeInsets.all(SolSpace.lg),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: colorScheme.primaryContainer,
-                borderRadius: SolRadius.cardRadius,
-              ),
-              child: Icon(
-                Symbols.music_note_rounded,
-                color: colorScheme.onPrimaryContainer,
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: SolSpace.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    digest.subtitle ?? 'libraryAccountDashboard'.tr(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    ['libraryAccountLabel'.tr(), ...stats].join('  ·  '),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: SolSpace.sm),
-            IconButton(
-              tooltip: 'commonRefresh'.tr(),
-              // The numbers and the recipes behind them are one read each, so
-              // the card refreshes both rather than leaving a stale count over
-              // freshly-read shelves.
-              onPressed: () {
-                ref.read(libraryDigestsProvider.notifier).refresh();
-                ref.read(landingShelvesProvider.notifier).refresh();
-              },
-              icon: const Icon(Symbols.refresh_rounded),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 /// The one nudge this page makes: with no server connected the library is

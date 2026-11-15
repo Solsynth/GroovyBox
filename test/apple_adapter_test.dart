@@ -611,7 +611,6 @@ void main() {
     final digest = await AppleMusicSource(connected()).digest();
 
     expect(digest?.libraryTracks, 842);
-    expect(digest?.subtitle, 'Apple Music');
   });
 
   test('a station is queued as a station, alone', () async {

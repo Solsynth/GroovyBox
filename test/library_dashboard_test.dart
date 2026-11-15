@@ -7,6 +7,7 @@ import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/screens/explore.dart';
+import 'package:groovy_box/screens/settings.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -47,7 +48,11 @@ class _IdlePlayback extends Playback {
   PlaybackState build() => const PlaybackState();
 }
 
-Future<void> _pump(WidgetTester tester, _AccountSource source) async {
+Future<void> _pump(
+  WidgetTester tester,
+  _AccountSource source,
+  Widget page,
+) async {
   tester.view.physicalSize = const Size(1000, 2400);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -61,28 +66,60 @@ Future<void> _pump(WidgetTester tester, _AccountSource source) async {
         librarySourcesProvider.overrideWithValue([source]),
         playbackProvider.overrideWith(_IdlePlayback.new),
       ],
-      child: MaterialApp(
-        theme: createAppThemeSet().light,
-        home: const ExploreScreen(),
-      ),
+      child: MaterialApp(theme: createAppThemeSet().light, home: page),
     ),
   );
-  // The page waits on its reads before it shelves anything.
+  // The page waits on its reads before it shows anything.
   await tester.pumpAndSettle();
 }
 
 void main() {
-  testWidgets('the landing page shows the account card and its own shelves', (
+  // The account's numbers are a property of the connection, so they sit on the
+  // row that manages it rather than above the shelves that page plays from.
+  testWidgets('settings reports the account inside its library row', (
     tester,
   ) async {
     await _pump(
       tester,
       _AccountSource(
-        const LibraryDigest(
-          sourceId: 'apple-1',
-          subtitle: 'Apple Music',
-          libraryTracks: 604,
-        ),
+        const LibraryDigest(sourceId: 'apple-1', libraryTracks: 604),
+        const [],
+      ),
+      const SettingsScreen(),
+    );
+
+    await tester.scrollUntilVisible(
+      find.textContaining('604 tracks'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('604 tracks'), findsOneWidget);
+    expect(find.textContaining('Signed in on this device'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an account with nothing to report adds no line', (tester) async {
+    await _pump(tester, _AccountSource(null, const []), const SettingsScreen());
+
+    await tester.scrollUntilVisible(
+      find.text('Add library'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Signed in on this device'), findsNothing);
+  });
+
+  testWidgets('the explore page keeps the account shelves, not its numbers', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _AccountSource(
+        const LibraryDigest(sourceId: 'apple-1', libraryTracks: 604),
         [
           LandingShelf(
             title: 'Stations for you',
@@ -101,21 +138,14 @@ void main() {
           ),
         ],
       ),
+      const ExploreScreen(),
     );
 
-    // The account's own numbers, and the shelf the provider curated: both
-    // live on the explore page, which is the mixed home of what to play next.
-    expect(find.text('libraryAccountDashboard'.tr()), findsOneWidget);
-    expect(find.textContaining('604'), findsOneWidget);
     expect(find.text('Stations for you'), findsOneWidget);
     expect(find.text('Mirror Mirror Radio'), findsOneWidget);
-    // The card names the count of stations the page is actually showing.
-    expect(find.textContaining('1 station'), findsOneWidget);
-  });
-
-  testWidgets('a server library renders no account card', (tester) async {
-    await _pump(tester, _AccountSource(null, const []));
-
-    expect(find.text('libraryAccountDashboard'.tr()), findsNothing);
+    // No digest card: the landing page is for playing, the library row is for
+    // the connection's own numbers.
+    expect(find.textContaining('604'), findsNothing);
+    expect(find.textContaining('libraryAccountLabel'.tr()), findsNothing);
   });
 }

@@ -204,8 +204,8 @@ class LandingShelves extends AsyncNotifier<List<LandingShelf>> {
   }
 }
 
-/// What each connected account says about itself, for the landing page's
-/// header card. Empty when no source has anything of its own to report.
+/// What each connected account says about itself, for the row that manages
+/// that connection. Empty when no source has anything of its own to report.
 @Riverpod(keepAlive: true)
 class LibraryDigests extends AsyncNotifier<List<LibraryDigest>> {
   @override

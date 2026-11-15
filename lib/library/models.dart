@@ -258,29 +258,22 @@ class LandingShelf {
   bool get isEmpty => songs.isEmpty;
 }
 
-/// What a source says about itself on the landing page.
+/// What an account-backed source says about itself, in the row that manages
+/// its connection.
 ///
 /// Only a source that owns a whole cloud account has anything of its own to
 /// report; a server library's numbers are the app's, not the server's.
 class LibraryDigest {
   final String sourceId;
 
-  /// The account's own line, e.g. the Apple Music name, or null when the API
-  /// does not expose one.
-  final String? subtitle;
-
   /// How many tracks the account holds. The account's *curation* is not
-  /// counted here: those numbers are the shelves the page actually renders,
+  /// counted here: those numbers are the shelves the landing page renders,
   /// and counting them twice would let the two disagree.
   final int? libraryTracks;
 
-  const LibraryDigest({
-    required this.sourceId,
-    this.subtitle,
-    this.libraryTracks,
-  });
+  const LibraryDigest({required this.sourceId, this.libraryTracks});
 
-  bool get isEmpty => subtitle == null && libraryTracks == null;
+  bool get isEmpty => libraryTracks == null;
 }
 
 /// One library's copy of a canonical track.

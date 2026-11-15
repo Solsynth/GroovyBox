@@ -496,7 +496,7 @@ class NeteaseSource extends LibrarySource
     return shelves;
   }
 
-  /// What the account has, for the landing page's header card.
+  /// What the account has, for the row that manages this connection.
   @override
   Future<LibraryDigest?> digest() async {
     try {
@@ -511,7 +511,6 @@ class NeteaseSource extends LibrarySource
           : const <Map>[];
       return LibraryDigest(
         sourceId: id,
-        subtitle: displayName,
         libraryTracks: own.isEmpty
             ? null
             : own.fold<int>(

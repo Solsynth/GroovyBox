@@ -297,8 +297,9 @@ abstract interface class CuratedSource implements LibrarySource {
   /// The shelves this source wants on the landing page, in display order.
   Future<List<LandingShelf>> landingShelves();
 
-  /// What the source wants to say about itself on the landing page: a line
-  /// and a few numbers. Null when there is nothing to say.
+  /// What the source wants to say about itself where its connection is
+  /// managed: who is signed in, and how many tracks the account holds. Null
+  /// when there is nothing to say.
   Future<LibraryDigest?> digest();
 }
 
