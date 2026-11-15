@@ -24,6 +24,7 @@ dependencies:
 
   # Desktop window
   window_manager: ^0.6.0
+  desktop_multi_window: ^0.3.1
   shared_preferences: ^2.5.6
 
   # Library + playback

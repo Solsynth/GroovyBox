@@ -2,6 +2,7 @@
 
 #include <optional>
 
+#include "desktop_multi_window/desktop_multi_window_plugin.h"
 #include "flutter/generated_plugin_registrant.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
@@ -35,6 +36,13 @@ bool FlutterWindow::OnCreate() {
   // registered. The following call ensures a frame is pending to ensure the
   // window is shown. It is a no-op if the first frame hasn't completed yet.
   flutter_controller_->ForceRedraw();
+
+  DesktopMultiWindowSetWindowCreatedCallback([](void *controller) {
+    auto *flutter_view_controller =
+        reinterpret_cast<flutter::FlutterViewController *>(controller);
+    auto *registry = flutter_view_controller->engine();
+    RegisterPlugins(registry);
+  });
 
   return true;
 }

@@ -186,6 +186,8 @@
   "playerQueueHide": "隐藏队列",
   "playerLyricsShow": "显示歌词",
   "playerLyricsHide": "隐藏歌词",
+  "playerMiniShow": "打开迷你播放器",
+  "playerMiniClose": "关闭迷你播放器",
   "playerShuffle": "随机播放",
   "playerPrevious": "上一首",
   "playerPlay": "播放",

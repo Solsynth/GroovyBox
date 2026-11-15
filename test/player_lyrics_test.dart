@@ -188,7 +188,10 @@ void main() {
       matching: find.byType(ListView),
     );
     expect(
-      find.descendant(of: list, matching: find.byType(TrackRow)).first.hitTestable(),
+      find
+          .descendant(of: list, matching: find.byType(TrackRow))
+          .first
+          .hitTestable(),
       findsOneWidget,
     );
 
@@ -249,7 +252,10 @@ void main() {
     final endRect = tester.getRect(foregroundArt);
     expect(endRect.width, moreOrLessEquals(44, epsilon: 0.5));
     expect(endRect.height, moreOrLessEquals(44, epsilon: 0.5));
-    expect(endRect.left, moreOrLessEquals(SolSpace.xl + SolSpace.md, epsilon: 0.5));
+    expect(
+      endRect.left,
+      moreOrLessEquals(SolSpace.xl + SolSpace.md, epsilon: 0.5),
+    );
 
     // Switching to queue leaves the hero where it landed: the bar is docked
     // and does not move between the panes.

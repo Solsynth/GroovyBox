@@ -55,11 +55,25 @@ final class PulsarClientProvider
 String _$pulsarClientHash() => r'058da766c8a97d138e6dba2a277055d55576d658';
 
 /// The signed-in session or null, unwrapped once for every Pulsar call.
+///
+/// Watches the session's state, not its notifier: the notifier's own `build`
+/// is a future, so a first read of it is `AsyncLoading` and [validSession]
+/// answers null from that. Watched that way the answer was captured once by
+/// this `keepAlive` provider and stayed "signed out" for the rest of the
+/// process — including right after a successful login — which is why a
+/// logged-in user was still told to log in.
 
 @ProviderFor(pulsarSession)
 final pulsarSessionProvider = PulsarSessionProvider._();
 
 /// The signed-in session or null, unwrapped once for every Pulsar call.
+///
+/// Watches the session's state, not its notifier: the notifier's own `build`
+/// is a future, so a first read of it is `AsyncLoading` and [validSession]
+/// answers null from that. Watched that way the answer was captured once by
+/// this `keepAlive` provider and stayed "signed out" for the rest of the
+/// process — including right after a successful login — which is why a
+/// logged-in user was still told to log in.
 
 final class PulsarSessionProvider
     extends
@@ -70,6 +84,13 @@ final class PulsarSessionProvider
         >
     with $FutureModifier<OAuthSession?>, $FutureProvider<OAuthSession?> {
   /// The signed-in session or null, unwrapped once for every Pulsar call.
+  ///
+  /// Watches the session's state, not its notifier: the notifier's own `build`
+  /// is a future, so a first read of it is `AsyncLoading` and [validSession]
+  /// answers null from that. Watched that way the answer was captured once by
+  /// this `keepAlive` provider and stayed "signed out" for the rest of the
+  /// process — including right after a successful login — which is why a
+  /// logged-in user was still told to log in.
   PulsarSessionProvider._()
     : super(
         from: null,
@@ -96,7 +117,7 @@ final class PulsarSessionProvider
   }
 }
 
-String _$pulsarSessionHash() => r'3404d122a8a1be026b9544e8b50b9765b62c5b01';
+String _$pulsarSessionHash() => r'0f47f92904600208e14dfb12761846b9ae929966';
 
 /// The account's playlists, as Pulsar holds them. Empty without a session:
 /// a signed-out window has no cloud playlists and that is not an error.

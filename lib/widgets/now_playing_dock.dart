@@ -388,16 +388,6 @@ class _NowPlayingDockState extends ConsumerState<NowPlayingDock>
                                             // mark where the kind has one: a
                                             // whole library name beside a
                                             // title costs the title its room.
-                                            if (playingSourceMark(ref, song)
-                                                case final mark?) ...[
-                                              Icon(
-                                                mark,
-                                                size: 12,
-                                                color: colorScheme
-                                                    .onSurfaceVariant,
-                                              ),
-                                              const SizedBox(width: 4),
-                                            ],
                                             Expanded(
                                               child: Text(
                                                 switch (_shownSheet) {

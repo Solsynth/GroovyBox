@@ -186,6 +186,8 @@
   "playerQueueHide": "Hide queue",
   "playerLyricsShow": "Show lyrics",
   "playerLyricsHide": "Hide lyrics",
+  "playerMiniShow": "Open mini player",
+  "playerMiniClose": "Close mini player",
   "playerShuffle": "Shuffle",
   "playerPrevious": "Previous",
   "playerPlay": "Play",

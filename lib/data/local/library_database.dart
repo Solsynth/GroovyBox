@@ -329,6 +329,11 @@ class LibraryDatabase extends _$LibraryDatabase {
         await directory.create(recursive: true);
         return p.join(directory.path, '$databaseName.sqlite');
       },
+      // The mini player's engine opens this same file while the main window
+      // is writing to it. WAL lets one writer and any number of readers share
+      // the database; without it, the second engine's open raced the first's
+      // writes and corrupted the shared page cache on macOS.
+      setup: (db) => db.execute('PRAGMA journal_mode=WAL'),
     ),
     web: DriftWebOptions(
       sqlite3Wasm: Uri.parse('sqlite3.wasm'),

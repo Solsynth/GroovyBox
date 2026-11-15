@@ -427,8 +427,13 @@ class SongLyricsPane extends ConsumerWidget {
             ],
             if (retry || rescue) ...[
               const SizedBox(height: SolSpace.md),
-              Row(
-                mainAxisSize: MainAxisSize.min,
+              // Wraps rather than runs off the edge: the mini player gives
+              // the pane 300-odd pixels, and two buttons plus their labels do
+              // not fit on one line there.
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: SolSpace.sm,
+                runSpacing: SolSpace.xs,
                 children: [
                   if (retry)
                     TextButton.icon(
@@ -443,8 +448,7 @@ class SongLyricsPane extends ConsumerWidget {
                       icon: const Icon(Symbols.refresh_rounded, size: 18),
                       label: Text('lyricsAskAgain'.tr()),
                     ),
-                  if (rescue) ...[
-                    if (retry) const SizedBox(width: SolSpace.sm),
+                  if (rescue)
                     FilledButton.tonalIcon(
                       onPressed: song == null
                           ? null
@@ -452,7 +456,6 @@ class SongLyricsPane extends ConsumerWidget {
                       icon: const Icon(Symbols.edit_note_rounded, size: 18),
                       label: Text('lyricsRescue'.tr()),
                     ),
-                  ],
                 ],
               ),
             ],

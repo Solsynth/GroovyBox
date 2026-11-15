@@ -10,7 +10,9 @@ import 'package:groovy_box/core/glass.dart';
 import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/core/router.gr.dart';
+import 'package:groovy_box/desktop/mini_player/mini_player_bridge.dart';
 import 'package:groovy_box/library/models.dart';
+import 'package:groovy_box/shell/window_frame.dart';
 import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
@@ -656,6 +658,18 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              // A second window onto the same transport: it
+                              // sits with the way out because both are window
+                              // actions rather than views of this page.
+                              if (DesktopWindowFrame.isPlatformDesktop)
+                                IconButton(
+                                  tooltip: 'playerMiniShow'.tr(),
+                                  onPressed: () =>
+                                      unawaited(openMiniPlayer(ref)),
+                                  icon: const Icon(
+                                    Symbols.picture_in_picture_rounded,
+                                  ),
+                                ),
                               IconButton(
                                 tooltip: 'playerClose'.tr(),
                                 onPressed: () => context.router.maybePop(),
@@ -715,6 +729,18 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
+                                  // Same second window, in the compact row:
+                                  // beside the way out, away from the pair of
+                                  // view toggles on the trailing edge.
+                                  if (DesktopWindowFrame.isPlatformDesktop)
+                                    IconButton(
+                                      tooltip: 'playerMiniShow'.tr(),
+                                      onPressed: () =>
+                                          unawaited(openMiniPlayer(ref)),
+                                      icon: const Icon(
+                                        Symbols.picture_in_picture_rounded,
+                                      ),
+                                    ),
                                   IconButton(
                                     tooltip: 'playerClose'.tr(),
                                     onPressed: () => context.router.maybePop(),
@@ -1316,10 +1342,7 @@ class _WidePlayerBody extends StatelessWidget {
                           duration: const Duration(milliseconds: 240),
                           curve: Curves.easeOutCubic,
                           child: Center(
-                            child: AspectRatio(
-                              aspectRatio: 1,
-                              child: cover,
-                            ),
+                            child: AspectRatio(aspectRatio: 1, child: cover),
                           ),
                         ),
                         if (leftControls > 0)

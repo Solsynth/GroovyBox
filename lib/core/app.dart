@@ -8,6 +8,35 @@ import 'theme.dart';
 
 part 'app.g.dart';
 
+/// Translations live in `assets/i18n/<language>-<COUNTRY>.json`, one file per
+/// locale, matching the path declared under `flutter.assets` in pubspec.yaml.
+///
+/// Declared here rather than beside `main()`'s window setup because the mini
+/// window boots its own engine and must be configured identically.
+const kTranslationsPath = 'assets/i18n';
+const kSupportedLocales = [Locale('en', 'US'), Locale('zh', 'CN')];
+const kFallbackLocale = Locale('en', 'US');
+
+
+/// The compact bar's default geometry.
+///
+/// A bar is one header row, the scrubber and the transport: the artwork lives
+/// as a sleeve beside the title, not as a page-sized cover, which is what
+/// keeps this window from being a second copy of the player page.
+const kMiniPlayerBarWidth = 340.0;
+const kMiniPlayerBarHeight = 190.0;
+
+/// Extra height the window takes when the queue or the lyrics open. The pane
+/// fills exactly this, so a bar and a pane are one window in two shapes
+/// rather than two layouts.
+const kMiniPlayerPaneHeight = 300.0;
+
+/// Bounds the window can be dragged to: narrow enough for a desktop corner,
+/// wide enough for a queue row.
+const kMiniPlayerMinWidth = 300.0;
+const kMiniPlayerMaxWidth = 480.0;
+
+
 /// The platform prefs store, opened in `main` and injected into the container.
 ///
 /// Overriding it (instead of calling `getInstance` inside providers) keeps the
@@ -60,10 +89,7 @@ ThemeSet appTheme(Ref ref) {
       ? ref.watch(coverSeedProvider).value
       : null;
   final seed = cover ?? kDefaultSeedColor;
-  return _themeSets.putIfAbsent(
-    seed,
-    () => createAppThemeSet(seedColor: seed),
-  );
+  return _themeSets.putIfAbsent(seed, () => createAppThemeSet(seedColor: seed));
 }
 
 final _themeSets = <Color, ThemeSet>{};

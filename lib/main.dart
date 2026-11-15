@@ -1,16 +1,22 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
+import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:groovy_box/core/app.dart';
+import 'package:groovy_box/desktop/mini_player/link.dart';
+import 'package:groovy_box/desktop/mini_player/mini_playback.dart';
+import 'package:groovy_box/desktop/mini_player/mini_player_app.dart';
 import 'package:groovy_box/core/glass.dart';
 import 'package:groovy_box/core/router.dart';
 import 'package:groovy_box/data/local/library_database.dart';
 import 'package:groovy_box/library/local_import.dart';
 import 'package:groovy_box/library/providers.dart';
+import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/player/session.dart';
 import 'package:groovy_box/shell/window_frame.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -32,6 +38,27 @@ const kMinimumWindowSize = Size(380, 620);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // The mini player runs a second Flutter engine in its own window. This
+  // engine boots through the same `main`, so detect it before any heavy init:
+  // the guest never constructs a Player, registers no audio session, and
+  // opens no media session — it renders what the host publishes and forwards
+  // transport commands to it.
+  if (!kIsWeb && DesktopWindowFrame.isPlatformDesktop) {
+    try {
+      final controller = await WindowController.fromCurrentEngine();
+      final raw = controller.arguments;
+      if (raw.isNotEmpty &&
+          jsonDecode(raw) is Map &&
+          (jsonDecode(raw) as Map)['kind'] == 'miniPlayer') {
+        await _runMiniPlayer();
+        return;
+      }
+    } catch (_) {
+      // Not a secondary engine — continue with normal startup. Any platform
+      // without the plugin lands here too; the mini player is desktop-only.
+    }
+  }
 
   // Reads the saved locale and the device locale from prefs before the first
   // frame, so the first frame is already in the user's language.
@@ -132,6 +159,9 @@ Future<void> main() async {
         audioHandlerProvider.overrideWithValue(audioHandler),
         libraryDatabaseProvider.overrideWithValue(library),
         localLibraryPathProvider.overrideWithValue(localLibraryPath),
+        // The host half of the mini player's channel: created here so the
+        // command handler is registered before the second engine launches.
+        miniPlayerLinkProvider.overrideWithValue(MiniPlayerLink.host()),
       ],
       child: EasyLocalization(
         supportedLocales: kSupportedLocales,
@@ -139,6 +169,88 @@ Future<void> main() async {
         fallbackLocale: kFallbackLocale,
         useFallbackTranslations: true,
         child: const GroovyBoxApp(),
+      ),
+    ),
+  );
+}
+
+
+/// Boots the secondary engine that renders the mini player window.
+///
+/// Deliberately minimal: no MediaKit, no AudioService, no AudioSession — the
+/// guest never constructs a `Player`, so loading libmpv here would only waste
+/// startup time and memory. What it does read is the library database and the
+/// local music directory, both with the same failure posture as the main path:
+/// a machine that refuses them still shows a mini player, just without local
+/// artwork or cached lyrics.
+Future<void> _runMiniPlayer() async {
+  await EasyLocalization.ensureInitialized();
+
+  // The guest engine manages its own window: small, always on top, and
+  // hiding instead of closing so reopening is instant.
+  await windowManager.ensureInitialized();
+  // The guest engine registers only the multi-window channel natively (see
+  // MainFlutterWindow.swift): registering platform plugins into a second
+  // engine initializes their native singletons twice in one process and
+  // corrupts the Dart heap. So the guest reads no prefs — it runs on defaults
+  // and reflects whatever the host publishes.
+  const savedWidth = kMiniPlayerBarWidth;
+  await windowManager.waitUntilReadyToShow(
+    WindowOptions(
+      // Height is not restored: the window opens as a bar and grows when a
+      // pane opens, so a saved pane height would only open it wrong.
+      size: Size(savedWidth, kMiniPlayerBarHeight),
+      minimumSize: const Size(kMiniPlayerMinWidth, kMiniPlayerBarHeight),
+      maximumSize: const Size(
+        kMiniPlayerMaxWidth,
+        kMiniPlayerBarHeight + kMiniPlayerPaneHeight,
+      ),
+      center: true,
+      alwaysOnTop: true,
+      backgroundColor: Colors.transparent,
+      title: 'GroovyBox Mini',
+      skipTaskbar: false,
+      // Transparent, frameless windows are only reliable on macOS; Windows
+      // and Linux keep the native frame, or the secondary engine can stay a
+      // gray undecorated surface before the first Flutter frame.
+      titleBarStyle: Platform.isMacOS
+          ? TitleBarStyle.hidden
+          : TitleBarStyle.normal,
+      windowButtonVisibility: Platform.isMacOS,
+    ),
+    () async {
+      await windowManager.show();
+      await windowManager.setAlwaysOnTop(true);
+    },
+  );
+  await windowManager.setPreventClose(true);
+
+  // The guest never opens the library database. Even with WAL, a second
+  // engine opening the same SQLite file while the main engine holds a write
+  // connection corrupted the Dart heap on macOS: two drift instances, two
+  // page caches, one file. The guest renders what the host publishes; the
+  // lyrics pane falls back to the network resolver when the cache is out of
+  // reach.
+  const libraryDatabase = null;
+  const localLibraryPath = null;
+
+  final link = MiniPlayerLink.guest();
+  await link.startGuest();
+
+  runApp(
+    ProviderScope(
+      overrides: [
+        libraryDatabaseProvider.overrideWithValue(libraryDatabase),
+        localLibraryPathProvider.overrideWithValue(localLibraryPath),
+        miniPlayerLinkProvider.overrideWithValue(link),
+        playbackProvider.overrideWith(MiniPlayback.new),
+      ],
+      child: EasyLocalization(
+        supportedLocales: kSupportedLocales,
+        path: kTranslationsPath,
+        fallbackLocale: kFallbackLocale,
+        useFallbackTranslations: true,
+        child: const MiniPlayerApp(),
       ),
     ),
   );
