@@ -398,6 +398,22 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     }
   }
 
+  /// Releases the app's own audio session.
+  ///
+  /// The platform player (MusicKit) configures and activates the audio
+  /// session for its playback itself; the app's session left active on top
+  /// of it is the duplicate the two fight over. Handing playback over
+  /// retires ours until a streamed track needs it again.
+  Future<void> _deactivateAudioSession() async {
+    if (_audioSession != null) {
+      try {
+        await _audioSession!.setActive(false);
+      } catch (e) {
+        debugPrint('[Playback] AudioSession deactivation error: $e');
+      }
+    }
+  }
+
   /// Replaces the queue with [songs] and starts at [startIndex].
   Future<void> playQueue(List<LibrarySong> songs, {int startIndex = 0}) async {
     if (songs.isEmpty || startIndex < 0 || startIndex >= songs.length) return;
@@ -771,6 +787,9 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       }
       _appleMode = true;
       state = state.copyWith(volumeIsSystemControlled: true);
+      // MusicKit runs the audio session for its own player; the app's
+      // session left active under it is the duplicate the two fight over.
+      await _deactivateAudioSession();
       _apple ??= ApplePlayer(
         ref.read(musicKitClientProvider),
         onStatus: (status) {
@@ -813,6 +832,10 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       return;
     }
 
+    // A hand-over from the platform player lands here with the app's session
+    // already deactivated; a streamed track needs it active again before it
+    // can sound. Activating an already-active session is a no-op.
+    await _activateAudioSession();
     try {
       await _player.open(Media(source.streamUri(toPlay).toString()));
     } catch (_) {
