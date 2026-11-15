@@ -205,8 +205,9 @@ class LibrarySyncAuto {
     });
     // Coming back to the window is the moment a device is most likely to be
     // behind: the other one played something while this one was in the
-    // background.
+    // background. Launch is the same question asked once more.
     _lifecycle = AppLifecycleListener(onResume: () => _run('focus'));
+    _run('focus');
   }
 
   /// Runs a sync unless one just ran or the user turned it off.

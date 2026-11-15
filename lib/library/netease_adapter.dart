@@ -572,6 +572,26 @@ class NeteaseSource extends LibrarySource
     _likedIds = null;
   }
 
+  /// The red-heart list, resolved to songs in one `/song/detail` read.
+  ///
+  /// `/likelist` answers ids only, so the ids are handed to the detail
+  /// endpoint in batches: a per-id read would be one request per heart.
+  @override
+  Future<List<LibrarySong>> favouriteSongs() async {
+    final ids = (await _likes()).toList();
+    if (ids.isEmpty) return const [];
+    final songs = <LibrarySong>[];
+    for (var start = 0; start < ids.length; start += 100) {
+      final batch = ids.sublist(
+        start,
+        start + 100 > ids.length ? ids.length : start + 100,
+      );
+      final body = await _call('/song/detail', query: {'ids': batch.join(',')});
+      songs.addAll(_songs(body['songs']));
+    }
+    return songs;
+  }
+
   // ---- playback ------------------------------------------------------------
 
   /// The playback URL, minted per request by the bridge.

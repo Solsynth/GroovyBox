@@ -597,34 +597,100 @@ abstract class _$PulsarFavourites extends $AsyncNotifier<List<PlaylistItem>> {
   }
 }
 
-/// Whether Pulsar knows [song] as one of the account's favourites.
+/// The account's favourite recordings, as the source-scoped keys every Solar
+/// write spells a track with. One key set is what the heart reads, so the
+/// question costs no request per redraw.
 
-@ProviderFor(pulsarFavouriteState)
-final pulsarFavouriteStateProvider = PulsarFavouriteStateFamily._();
+@ProviderFor(solarFavouriteKeys)
+final solarFavouriteKeysProvider = SolarFavouriteKeysProvider._();
 
-/// Whether Pulsar knows [song] as one of the account's favourites.
+/// The account's favourite recordings, as the source-scoped keys every Solar
+/// write spells a track with. One key set is what the heart reads, so the
+/// question costs no request per redraw.
 
-final class PulsarFavouriteStateProvider
+final class SolarFavouriteKeysProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<Set<String>>,
+          Set<String>,
+          FutureOr<Set<String>>
+        >
+    with $FutureModifier<Set<String>>, $FutureProvider<Set<String>> {
+  /// The account's favourite recordings, as the source-scoped keys every Solar
+  /// write spells a track with. One key set is what the heart reads, so the
+  /// question costs no request per redraw.
+  SolarFavouriteKeysProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'solarFavouriteKeysProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$solarFavouriteKeysHash();
+
+  @$internal
+  @override
+  $FutureProviderElement<Set<String>> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<Set<String>> create(Ref ref) {
+    return solarFavouriteKeys(ref);
+  }
+}
+
+String _$solarFavouriteKeysHash() =>
+    r'0ffdc913996c2a1832d3760833c03e0db826a049';
+
+/// Whether the account holds [song] as a favourite.
+///
+/// Solar Network is the record when this device is signed in: a heart set on
+/// any device, or imported from another provider, is the answer every surface
+/// draws. Signed out there is no account to ask, so the device's own record
+/// answers instead of the heart going blank.
+
+@ProviderFor(solarFavouriteState)
+final solarFavouriteStateProvider = SolarFavouriteStateFamily._();
+
+/// Whether the account holds [song] as a favourite.
+///
+/// Solar Network is the record when this device is signed in: a heart set on
+/// any device, or imported from another provider, is the answer every surface
+/// draws. Signed out there is no account to ask, so the device's own record
+/// answers instead of the heart going blank.
+
+final class SolarFavouriteStateProvider
     extends $FunctionalProvider<AsyncValue<bool>, bool, FutureOr<bool>>
     with $FutureModifier<bool>, $FutureProvider<bool> {
-  /// Whether Pulsar knows [song] as one of the account's favourites.
-  PulsarFavouriteStateProvider._({
-    required PulsarFavouriteStateFamily super.from,
+  /// Whether the account holds [song] as a favourite.
+  ///
+  /// Solar Network is the record when this device is signed in: a heart set on
+  /// any device, or imported from another provider, is the answer every surface
+  /// draws. Signed out there is no account to ask, so the device's own record
+  /// answers instead of the heart going blank.
+  SolarFavouriteStateProvider._({
+    required SolarFavouriteStateFamily super.from,
     required LibrarySong super.argument,
   }) : super(
          retry: null,
-         name: r'pulsarFavouriteStateProvider',
+         name: r'solarFavouriteStateProvider',
          isAutoDispose: true,
          dependencies: null,
          $allTransitiveDependencies: null,
        );
 
   @override
-  String debugGetCreateSourceHash() => _$pulsarFavouriteStateHash();
+  String debugGetCreateSourceHash() => _$solarFavouriteStateHash();
 
   @override
   String toString() {
-    return r'pulsarFavouriteStateProvider'
+    return r'solarFavouriteStateProvider'
         ''
         '($argument)';
   }
@@ -637,12 +703,12 @@ final class PulsarFavouriteStateProvider
   @override
   FutureOr<bool> create(Ref ref) {
     final argument = this.argument as LibrarySong;
-    return pulsarFavouriteState(ref, argument);
+    return solarFavouriteState(ref, argument);
   }
 
   @override
   bool operator ==(Object other) {
-    return other is PulsarFavouriteStateProvider && other.argument == argument;
+    return other is SolarFavouriteStateProvider && other.argument == argument;
   }
 
   @override
@@ -651,30 +717,99 @@ final class PulsarFavouriteStateProvider
   }
 }
 
-String _$pulsarFavouriteStateHash() =>
-    r'10d2d2ea21861919bcc447228626aa96ca159127';
+String _$solarFavouriteStateHash() =>
+    r'9477f186fc6bcc0ce1de7cdab706621d05264d50';
 
-/// Whether Pulsar knows [song] as one of the account's favourites.
+/// Whether the account holds [song] as a favourite.
+///
+/// Solar Network is the record when this device is signed in: a heart set on
+/// any device, or imported from another provider, is the answer every surface
+/// draws. Signed out there is no account to ask, so the device's own record
+/// answers instead of the heart going blank.
 
-final class PulsarFavouriteStateFamily extends $Family
+final class SolarFavouriteStateFamily extends $Family
     with $FunctionalFamilyOverride<FutureOr<bool>, LibrarySong> {
-  PulsarFavouriteStateFamily._()
+  SolarFavouriteStateFamily._()
     : super(
         retry: null,
-        name: r'pulsarFavouriteStateProvider',
+        name: r'solarFavouriteStateProvider',
         dependencies: null,
         $allTransitiveDependencies: null,
         isAutoDispose: true,
       );
 
-  /// Whether Pulsar knows [song] as one of the account's favourites.
+  /// Whether the account holds [song] as a favourite.
+  ///
+  /// Solar Network is the record when this device is signed in: a heart set on
+  /// any device, or imported from another provider, is the answer every surface
+  /// draws. Signed out there is no account to ask, so the device's own record
+  /// answers instead of the heart going blank.
 
-  PulsarFavouriteStateProvider call(LibrarySong song) =>
-      PulsarFavouriteStateProvider._(argument: song, from: this);
+  SolarFavouriteStateProvider call(LibrarySong song) =>
+      SolarFavouriteStateProvider._(argument: song, from: this);
 
   @override
-  String toString() => r'pulsarFavouriteStateProvider';
+  String toString() => r'solarFavouriteStateProvider';
 }
+
+/// The account's favourites, resolved to the copies this device can play.
+///
+/// Index-aligned with [pulsarFavouritesProvider]: null where no connected
+/// library holds the recording. Dropping the entry instead would shift every
+/// row after it onto the wrong track, and the account's order is the truth.
+
+@ProviderFor(solarFavouriteSongs)
+final solarFavouriteSongsProvider = SolarFavouriteSongsProvider._();
+
+/// The account's favourites, resolved to the copies this device can play.
+///
+/// Index-aligned with [pulsarFavouritesProvider]: null where no connected
+/// library holds the recording. Dropping the entry instead would shift every
+/// row after it onto the wrong track, and the account's order is the truth.
+
+final class SolarFavouriteSongsProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<List<LibrarySong?>>,
+          List<LibrarySong?>,
+          FutureOr<List<LibrarySong?>>
+        >
+    with
+        $FutureModifier<List<LibrarySong?>>,
+        $FutureProvider<List<LibrarySong?>> {
+  /// The account's favourites, resolved to the copies this device can play.
+  ///
+  /// Index-aligned with [pulsarFavouritesProvider]: null where no connected
+  /// library holds the recording. Dropping the entry instead would shift every
+  /// row after it onto the wrong track, and the account's order is the truth.
+  SolarFavouriteSongsProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'solarFavouriteSongsProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$solarFavouriteSongsHash();
+
+  @$internal
+  @override
+  $FutureProviderElement<List<LibrarySong?>> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<List<LibrarySong?>> create(Ref ref) {
+    return solarFavouriteSongs(ref);
+  }
+}
+
+String _$solarFavouriteSongsHash() =>
+    r'392572d8a485ef28983f32c0e3ca6228d517b575';
 
 /// The fleet's view of [name]. Null when signed out, when nothing matches,
 /// or when the fleet is unreachable — each a reason the section stays quiet,

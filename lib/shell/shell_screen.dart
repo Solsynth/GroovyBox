@@ -12,6 +12,9 @@ import '../solarpass/providers.dart';
 import '../widgets/now_playing_dock.dart';
 import 'tab_destinations.dart';
 import 'window_frame.dart';
+import 'package:groovy_box/player/player.dart';
+import 'package:groovy_box/library_sync/providers.dart';
+import 'package:groovy_box/pulsar/favourites.dart';
 
 /// Shell that hosts the root tabs: explore, search, the collection, the play
 /// history, and settings.
@@ -40,6 +43,12 @@ class ShellScreen extends StatelessWidget {
         // rebuilt.
         ref.read(playbackProvider);
         ref.read(solarpassScrobblerProvider);
+        // Both syncs travel between devices without being asked: the library
+        // mirror because play history is worthless a day late, and the
+        // favourites because the account is where a heart lives. Session-level
+        // listeners are what keep both alive across tab switches.
+        ref.read(librarySyncAutoProvider);
+        ref.read(solarFavouritesAutoProvider);
 
         return AutoTabsRouter(
           // Each tab is an `AutoRouter` with its own stack, so pushing an

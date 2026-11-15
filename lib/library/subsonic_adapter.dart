@@ -336,6 +336,22 @@ class SubsonicSource extends LibrarySource implements RatedSource {
     }
   }
 
+  /// The server's starred songs, as `getStarred2` lists them.
+  ///
+  /// The endpoint is the list `setFavourite` feeds: Navidrome and Gonic both
+  /// answer it, and a server that does not is reported rather than read as an
+  /// empty account — the import would otherwise erase every heart it holds.
+  @override
+  Future<List<LibrarySong>> favouriteSongs() async {
+    final body = await _request('getStarred2');
+    final starred = body['starred2'];
+    if (starred is! Map || starred['song'] is! List) return const [];
+    return [
+      for (final song in starred['song'] as List)
+        if (song is Map) _songFromJson(_stringKeyed(song)),
+    ];
+  }
+
   /// OpenSubsonic's timed endpoint first, then the older plain-text one.
   ///
   /// A server that predates `songLyrics` answers the first call with an error

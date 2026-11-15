@@ -471,6 +471,81 @@ extension FavouritesAndPlaylists on LibraryCatalog {
     );
   }
 
+  /// The song one source's item is, built from what the catalog already
+  /// knows. Null when this device has never seen that item.
+  ///
+  /// The account's own favourites name a recording by a source-scoped key,
+  /// not by a library row: this turns the key back into something the
+  /// transport can play, without asking the source again.
+  Future<LibrarySong?> songForLink(String sourceId, String externalId) async {
+    final trackId = await _db.trackIdForLink(sourceId, externalId);
+    if (trackId == null) return null;
+    final track = await (_db.select(
+      _db.tracks,
+    )..where((row) => row.id.equals(trackId))).getSingleOrNull();
+    if (track == null) return null;
+    final link = (await _db.linksOf(trackId))
+        .where(
+          (row) => row.sourceId == sourceId && row.externalId == externalId,
+        )
+        .firstOrNull;
+    return LibrarySong(
+      sourceId: sourceId,
+      id: externalId,
+      title: track.title,
+      artist: track.artist,
+      album: track.album,
+      albumId: link?.albumExternalId,
+      artistId: link?.artistExternalId,
+      artId: link?.artId,
+      duration: Duration(milliseconds: track.durationMs),
+      track: track.trackNumber,
+      discNumber: track.discNumber,
+      year: track.year,
+      genre: track.genre,
+      mbid: track.mbid,
+    );
+  }
+
+  /// The song this device already knows under [identity], with one of its
+  /// links that a connected source can still serve.
+  ///
+  /// Used when an account names a recording without a key this device
+  /// minted: the canonical row is the same match a pull would make, and its
+  /// link is what makes the result playable instead of a label.
+  Future<LibrarySong?> songForIdentity(
+    TrackIdentity identity, {
+    Set<String>? connectedSourceIds,
+  }) async {
+    final matched = await _db.findMatchingTrack(identity);
+    if (matched == null) return null;
+    final links = await _db.linksOf(matched.id);
+    final link = links
+        .where(
+          (row) =>
+              connectedSourceIds == null ||
+              connectedSourceIds.contains(row.sourceId),
+        )
+        .firstOrNull;
+    if (link == null) return null;
+    return LibrarySong(
+      sourceId: link.sourceId,
+      id: link.externalId,
+      title: matched.title,
+      artist: matched.artist,
+      album: matched.album,
+      albumId: link.albumExternalId,
+      artistId: link.artistExternalId,
+      artId: link.artId,
+      duration: Duration(milliseconds: matched.durationMs),
+      track: matched.trackNumber,
+      discNumber: matched.discNumber,
+      year: matched.year,
+      genre: matched.genre,
+      mbid: matched.mbid,
+    );
+  }
+
   /// Creates a device-owned playlist and returns it.
   Future<OwnedPlaylist> createPlaylist(String name) async {
     final id = await _db.createPlaylist(name);

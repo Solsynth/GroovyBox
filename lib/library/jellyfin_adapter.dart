@@ -393,6 +393,19 @@ class JellyfinSource extends LibrarySource implements RatedSource {
     }
   }
 
+  /// The account's favourite tracks, as Jellyfin's own favourites view lists
+  /// them: `IsFavorite` on every audio item the user has flagged.
+  @override
+  Future<List<LibrarySong>> favouriteSongs() async {
+    final items = await _items({
+      'IncludeItemTypes': 'Audio',
+      'Filters': 'IsFavorite',
+      'Recursive': true,
+      'Fields': 'Genres,AlbumArtists,ArtistItems',
+    });
+    return [for (final item in items) _song(item)];
+  }
+
   /// `/Audio/{id}/Lyrics`; 404 means the item has no lyrics at all.
   ///
   /// Jellyfin stores every line's start in ticks (100 ns), and reports 0 for

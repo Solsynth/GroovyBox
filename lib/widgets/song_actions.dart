@@ -169,9 +169,13 @@ class _SongActionBarState extends ConsumerState<SongActionBar> {
       if (mounted) setState(() => _favourite = null);
       return;
     }
-    // The device's record first, the source only when it has none: the heart
-    // is the user's opinion, and it must not depend on a round trip.
-    final value = await ref.read(favouritesProvider).read(widget.song);
+    // The account's record first: Solar Network is where a heart set on any
+    // device — or imported from another provider — is visible, so that is the
+    // answer this surface draws. Signed out it falls back to the device's own
+    // row, which is why the provider answers instead of a local read here.
+    final value = await ref.read(
+      solarFavouriteStateProvider(widget.song).future,
+    );
     if (!mounted || _key != _keyOf(widget.song)) return;
     setState(() => _favourite = value);
   }
@@ -194,6 +198,10 @@ class _SongActionBarState extends ConsumerState<SongActionBar> {
     // undoes the tap — the device already agrees with the user.
     final fleetError = await _pushFavouriteToFleet(widget.song, next);
     if (!mounted) return;
+    // The account's key set changed by one entry: dropping the family entries
+    // is what turns the player page's prefix heart with this bar's.
+    ref.invalidate(favouriteStateProvider(widget.song));
+    ref.invalidate(solarFavouriteStateProvider(widget.song));
     setState(() => _busy = false);
     if (error != null) _report(error);
     if (fleetError != null) _report(fleetError);
@@ -397,8 +405,12 @@ abstract final class SongActionsRunner {
     if (!actions.canFavourite || !context.mounted) return;
     final container = ProviderScope.containerOf(context, listen: false);
     final favourites = container.read(favouritesProvider);
-    final value = await favourites.read(actions.song);
-    final next = !(value ?? false);
+    // Solar Network answers first, exactly as the bar reads it: the menu and
+    // the bar must never disagree about a heart.
+    final value = await container.read(
+      solarFavouriteStateProvider(actions.song).future,
+    );
+    final next = !value;
     final error = await favourites.set(actions.song, value: next);
     // The fleet copy, same as the bar's: the two surfaces answer a tap
     // identically, so neither may be the one that forgets the account.
@@ -417,6 +429,7 @@ abstract final class SongActionsRunner {
     // The state is the provider, not any widget's field: dropping the family
     // entry is what turns the prefix heart and the menu item together.
     container.invalidate(favouriteStateProvider(actions.song));
+    container.invalidate(solarFavouriteStateProvider(actions.song));
     if (error != null) _report(context, error);
     if (fleetError != null) _report(context, fleetError);
   }

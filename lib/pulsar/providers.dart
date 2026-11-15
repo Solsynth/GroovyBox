@@ -12,6 +12,7 @@ import '../library/models.dart';
 import '../library/providers.dart';
 import '../solarpass/providers.dart';
 import 'client.dart';
+import 'favourites.dart';
 import 'links.dart';
 import 'models.dart';
 
@@ -355,14 +356,64 @@ class PulsarFavourites extends AsyncNotifier<List<PlaylistItem>> {
   }
 }
 
-/// Whether Pulsar knows [song] as one of the account's favourites.
-@riverpod
-Future<bool> pulsarFavouriteState(Ref ref, LibrarySong song) async {
+/// The account's favourite recordings, as the source-scoped keys every Solar
+/// write spells a track with. One key set is what the heart reads, so the
+/// question costs no request per redraw.
+@Riverpod(keepAlive: true)
+Future<Set<String>> solarFavouriteKeys(Ref ref) async {
   final session = ref.watch(pulsarSessionProvider).value;
-  if (session == null) return false;
+  if (session == null) return const {};
   final favourites = await ref.watch(pulsarFavouritesProvider.future);
-  final key = pulsarTrackKey(song);
-  return favourites.any((item) => item.catalogItem?.providerKey == key);
+  return {
+    for (final item in favourites) ?item.catalogItem?.providerKey,
+  };
+}
+
+/// Whether the account holds [song] as a favourite.
+///
+/// Solar Network is the record when this device is signed in: a heart set on
+/// any device, or imported from another provider, is the answer every surface
+/// draws. Signed out there is no account to ask, so the device's own record
+/// answers instead of the heart going blank.
+@riverpod
+Future<bool> solarFavouriteState(Ref ref, LibrarySong song) async {
+  final session = ref.watch(pulsarSessionProvider).value;
+  if (session == null) {
+    return await ref.watch(favouriteStateProvider(song).future);
+  }
+  final keys = await ref.watch(solarFavouriteKeysProvider.future);
+  return keys.contains(pulsarTrackKey(song));
+}
+
+/// The account's favourites, resolved to the copies this device can play.
+///
+/// Index-aligned with [pulsarFavouritesProvider]: null where no connected
+/// library holds the recording. Dropping the entry instead would shift every
+/// row after it onto the wrong track, and the account's order is the truth.
+@riverpod
+Future<List<LibrarySong?>> solarFavouriteSongs(Ref ref) async {
+  final items = await ref.watch(pulsarFavouritesProvider.future);
+  final resolver = ref.watch(solarFavouriteResolverProvider);
+  final connected = ref.watch(librarySourceByIdProvider).keys.toSet();
+  var searches = 0;
+  final songs = <LibrarySong?>[];
+  for (final item in items) {
+    final track = item.catalogItem;
+    if (track == null) {
+      songs.add(null);
+      continue;
+    }
+    final search = searches < solarFavouriteSearchBudget;
+    final song = await resolver.resolve(track, search: search);
+    if (song == null) {
+      if (search) searches++;
+      songs.add(null);
+      continue;
+    }
+    if (!connected.contains(song.sourceId)) searches++;
+    songs.add(song);
+  }
+  return songs;
 }
 
 

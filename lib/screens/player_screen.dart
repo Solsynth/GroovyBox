@@ -15,6 +15,7 @@ import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/shell/window_frame.dart';
 import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/library/providers.dart';
+import 'package:groovy_box/pulsar/providers.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/lyrics_view.dart';
@@ -1973,7 +1974,7 @@ class _SongActionsMenuItems extends ConsumerWidget {
     // The menu item and the prefix heart both read the same provider, so a
     // write through either one turns both surfaces together.
     final favourited = ref.watch(
-      favouriteStateProvider(song).select((value) => value.value ?? false),
+      solarFavouriteStateProvider(song).select((value) => value.value ?? false),
     );
     final source = ref.watch(
       librarySourceByIdProvider.select((sources) => sources[song.sourceId]),
@@ -2033,10 +2034,13 @@ class _FavouriteMark extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final song = ref.watch(playbackProvider.select((state) => state.current));
+    // The same provider the bar and the menu read: Solar Network answers
+    // while signed in, the device's record otherwise, so the three surfaces
+    // never disagree.
     final favourited = song == null
         ? false
         : ref.watch(
-            favouriteStateProvider(song)
+            solarFavouriteStateProvider(song)
                 .select((value) => value.value ?? false),
           );
     final colorScheme = Theme.of(context).colorScheme;

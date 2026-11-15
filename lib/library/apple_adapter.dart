@@ -601,6 +601,54 @@ class AppleMusicSource extends LibrarySource
     );
   }
 
+  /// Every song this account rated a like, in library order.
+  ///
+  /// Apple has no "list my ratings" endpoint, so the library is paged and
+  /// each page's ids are asked for in one batched ratings read. The rating is
+  /// keyed by *library* id here — unlike the single-song read, which needs
+  /// the catalog id — so a track that only exists in the account's library
+  /// still counts.
+  @override
+  Future<List<LibrarySong>> favouriteSongs() async {
+    const page = 100;
+    final songs = <LibrarySong>[];
+    var offset = 0;
+    while (true) {
+      final body = await _get(
+        '/v1/me/library/songs',
+        query: {'limit': page, 'offset': offset},
+      );
+      final items = _resources(body);
+      if (items.isEmpty) break;
+      final ids = [for (final item in items) '${item['id']}'];
+      try {
+        final ratings = await _get(
+          '/v1/me/ratings/library-songs',
+          query: {'ids': ids.join(',')},
+        );
+        final liked = {
+          for (final rating in _resources(ratings))
+            if ((_attributes(rating)['value'] as num?)?.toInt() == 1)
+              '${rating['id']}',
+        };
+        for (final item in items) {
+          if (liked.contains('${item['id']}')) songs.add(_song(item));
+        }
+      } on LibraryException catch (error) {
+        // A refused ratings read must not pass as "nothing liked": the import
+        // would then push an empty opinion over the account's real one.
+        if (error.code == 404) return songs;
+        rethrow;
+      }
+      offset += items.length;
+      final meta = body['meta'];
+      final total = meta is Map ? (meta['total'] as num?)?.toInt() : null;
+      if (items.length < page) break;
+      if (total != null && offset >= total) break;
+    }
+    return songs;
+  }
+
   /// The account's playlists it can still add to.
   ///
   /// `canEdit` is the service's own answer and the only reliable one: the

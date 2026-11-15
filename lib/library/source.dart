@@ -210,6 +210,15 @@ abstract interface class RatedSource implements LibrarySource {
   /// Sets or clears [song]'s favourite. A write, so it is never done by a
   /// read or a play. Throws [LibraryException] when the service refuses it.
   Future<void> setFavourite(LibrarySong song, {required bool value});
+
+  /// Every track the account has favourited, as this source describes them.
+  ///
+  /// This is the import half of the capability: Solar Network is where the
+  /// app keeps its own hearts, so a provider whose account already has them
+  /// (Apple Music's ratings, a Navidrome server's stars) must be able to hand
+  /// them over in one read rather than one `isFavourite` call per track.
+  /// Throws [LibraryException] when the service refuses the read.
+  Future<List<LibrarySong>> favouriteSongs();
 }
 
 /// A stream URL that has to be fetched before it exists.

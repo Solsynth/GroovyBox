@@ -392,7 +392,7 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const SolarpassSettingsSection(),
             const LibrarySyncSection(),
-            const PulsarCloudSection(),
+            const SolarFavouritesSection(),
             SectionLabel('settingsSectionData'.tr()),
             IslandCard(
               margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
