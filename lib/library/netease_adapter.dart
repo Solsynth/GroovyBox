@@ -244,7 +244,8 @@ class _NeteaseHttp {
 /// setup row that names it.
 class NeteaseSource extends LibrarySource
     implements RatedSource, CuratedSource, ResolvedStreamSource {
-  NeteaseSource(this.config) : _http = _NeteaseHttp(config.baseUrl, cookie: config.auth['cookie']);
+  NeteaseSource(this.config)
+    : _http = _NeteaseHttp(config.baseUrl, cookie: config.auth['cookie']);
 
   @override
   final SourceConfig config;
@@ -392,13 +393,9 @@ class NeteaseSource extends LibrarySource
   Future<List<LibrarySong>> randomSongs({int size = 40}) async {
     // No random endpoint; the personalised new-song feed is the closest
     // thing the service curates itself.
-    final body = await _call(
-      '/personalized/newsong',
-      query: {'limit': size},
-    );
+    final body = await _call('/personalized/newsong', query: {'limit': size});
     final result = body['result'];
-    return _songs(result is Map ? result['songs'] : null)
-      ..shuffle();
+    return _songs(result is Map ? result['songs'] : null)..shuffle();
   }
 
   /// The daily mix, as the landing page's own shelf.
@@ -408,9 +405,7 @@ class NeteaseSource extends LibrarySource
     try {
       final daily = await _call('/recommend/songs');
       final data = daily['data'];
-      final songs = _songs(
-        data is Map ? data['dailySongs'] : null,
-      );
+      final songs = _songs(data is Map ? data['dailySongs'] : null);
       if (songs.isNotEmpty) {
         shelves.add(
           LandingShelf(
@@ -447,7 +442,8 @@ class NeteaseSource extends LibrarySource
             ? null
             : own.fold<int>(
                 0,
-                (total, item) => total + ((item['trackCount'] as num?)?.toInt() ?? 0),
+                (total, item) =>
+                    total + ((item['trackCount'] as num?)?.toInt() ?? 0),
               ),
       );
     } on LibraryException {
@@ -534,7 +530,10 @@ class NeteaseSource extends LibrarySource
     final uri = Uri.parse(url);
     // The minted URL is short-lived; ten minutes keeps one queue position
     // from re-asking during a long listen without outliving the token.
-    _streamCache[song.id] = (uri, DateTime.now().add(const Duration(minutes: 10)));
+    _streamCache[song.id] = (
+      uri,
+      DateTime.now().add(const Duration(minutes: 10)),
+    );
     return uri;
   }
 
@@ -665,7 +664,10 @@ class NeteaseSource extends LibrarySource
 
   /// The cover URL, whichever of the shapes the endpoints answer with.
   static String? _picUrl(Map<String, dynamic> json) {
-    final url = json['picUrl'] ?? json['coverImgUrl'] ?? json['pic_str'] ??
+    final url =
+        json['picUrl'] ??
+        json['coverImgUrl'] ??
+        json['pic_str'] ??
         json['picUrl_str'];
     return url is String && url.isNotEmpty ? url : null;
   }
