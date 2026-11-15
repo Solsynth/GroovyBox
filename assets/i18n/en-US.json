@@ -20,7 +20,10 @@
   "libraryArtists": "Artists",
   "artistsEyebrow": "Artist",
   "artistsTopTracks": "Top tracks",
-  "artistsAlbums": "{'one': '{} album', 'other': '{} albums'}",
+  "artistsAlbums": {
+    "one": "{} album",
+    "other": "{} albums"
+  },
   "artistsPlayTop": "Play top tracks",
   "artistsEmptyTitle": "No artists yet",
   "artistsEmptyMessage": "Artists your libraries list show up here.",

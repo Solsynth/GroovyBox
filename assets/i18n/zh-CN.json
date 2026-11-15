@@ -20,7 +20,9 @@
   "libraryArtists": "艺术家",
   "artistsEyebrow": "艺术家",
   "artistsTopTracks": "热门歌曲",
-  "artistsAlbums": "{'other': '{} 张专辑'}",
+  "artistsAlbums": {
+    "other": "{} 张专辑"
+  },
   "artistsPlayTop": "播放热门歌曲",
   "artistsEmptyTitle": "还没有艺术家",
   "artistsEmptyMessage": "你连接的媒体库列出的艺术家会显示在这里。",

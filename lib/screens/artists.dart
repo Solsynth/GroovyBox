@@ -313,11 +313,9 @@ class _FleetSection extends ConsumerWidget {
                     0,
                   ),
                   child: Text(
-                    'artistsFleetRoles'
-                        .plural(metadata.roles.length)
-                        // The plural handles the count wrapper; the roles
-                        // themselves are joined by the app, not by ICU.
-                        .replaceFirst('{}', metadata.roles.join(', ')),
+                    'artistsFleetRoles'.tr(
+                      args: [metadata.roles.join(', ')],
+                    ),
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
