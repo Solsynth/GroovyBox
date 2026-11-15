@@ -127,7 +127,7 @@ class Lrclib {
       if (best == null) {
         return LrclibLookup(result: null, settled: exact.settled && search.settled);
       }
-      return LrclibLookup(result: _toResult(best), settled: true);
+      return LrclibLookup(result: await _toResult(best), settled: true);
     });
   }
 
@@ -149,7 +149,7 @@ class Lrclib {
       final candidates = <LrclibCandidate>[];
       for (final entry in body) {
         if (entry is! Map || entry['instrumental'] == true) continue;
-        final result = _toResult(entry);
+        final result = await _toResult(entry);
         if (result == null) continue;
         final seconds = (entry['duration'] as num?)?.toDouble();
         candidates.add(LrclibCandidate(
@@ -208,7 +208,7 @@ class Lrclib {
     if (response.statusCode != 200) return LrclibLookup.missing;
     final body = response.data;
     if (body is! Map) return LrclibLookup.unknown;
-    final result = _toResult(body);
+    final result = await _toResult(body);
     // An instrumental is a real answer: LRCLIB knows the track has no words.
     return result == null
         ? LrclibLookup.missing
@@ -284,13 +284,17 @@ class Lrclib {
   }
 
   /// Maps one record onto [Lyrics]; timed text wins over plain.
-  LrclibResult? _toResult(Map row) {
+  ///
+  /// The parse is awaited because a large timed lyric is parsed off the UI
+  /// isolate — the search path maps up to twenty records in one go, and each
+  /// is a regex over several hundred lines.
+  Future<LrclibResult?> _toResult(Map row) async {
     if (row['instrumental'] == true) return null;
     final id = (row['id'] as num?)?.toInt() ?? 0;
 
     final timed = _text(row['syncedLyrics']);
     if (timed != null) {
-      final lyrics = parseLrc(timed);
+      final lyrics = await parseLrcAsync(timed);
       if (!lyrics.isEmpty) return LrclibResult(lyrics: lyrics, id: id);
     }
     final plain = _text(row['plainLyrics']);

@@ -81,15 +81,19 @@ class _LyricsPickerSheetState extends ConsumerState<LyricsPickerSheet> {
   }
 
   /// Adopts [lyrics] for the playing track and closes the sheet.
+  ///
+  /// The pane's provider is kept for the session, so the new lyric must be
+  /// pushed into it: without the invalidate the words on screen stay whatever
+  /// the failed fetch had left there, and the rescue reads as doing nothing.
   Future<void> _adopt(Lyrics lyrics) async {
     // Read before the await: a context use must not cross an async gap.
     final languageCode = Localizations.localeOf(context).languageCode;
+    final request = LyricsRequest.of(widget.song);
     final resolver = await ref.read(lyricsResolverProvider.future);
-    await resolver.adopt(
-      LyricsRequest.of(widget.song),
-      lyrics,
-      languageCode: languageCode,
-    );
+    await resolver.adopt(request, lyrics, languageCode: languageCode);
+    ref
+      ..invalidate(songLyricsProvider(request, languageCode: languageCode))
+      ..invalidate(storedLyricsProvider);
     if (!mounted) return;
     Navigator.of(context).maybePop();
   }
@@ -113,7 +117,7 @@ class _LyricsPickerSheetState extends ConsumerState<LyricsPickerSheet> {
         await file.readAsBytes(),
         allowMalformed: true,
       );
-      final parsed = parseLrc(raw);
+      final parsed = await parseLrcAsync(raw);
       final lyrics = parsed.lines.isNotEmpty
           ? parsed
           : Lyrics(

@@ -366,7 +366,7 @@ class SubsonicSource extends LibrarySource implements RatedSource {
       final value = lyrics is Map ? lyrics['value'] : null;
       if (value is String && value.trim().isNotEmpty) {
         // Some servers store LRC in `value` even on the classic endpoint.
-        return parseLrc(value);
+        return await parseLrcAsync(value);
       }
     } on LibraryException {
       // Unsupported endpoint or no lyrics; both read as "none" here.

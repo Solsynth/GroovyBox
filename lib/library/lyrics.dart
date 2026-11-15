@@ -8,6 +8,7 @@
 library;
 
 import 'dart:convert';
+import 'dart:isolate';
 
 import 'models.dart';
 
@@ -237,3 +238,17 @@ Lyrics parseLrc(String raw) {
   lines.sort((a, b) => a.at.compareTo(b.at));
   return Lyrics(lines: lines, synced: synced);
 }
+
+/// Past this much raw LRC text the parse moves to a background isolate.
+///
+/// The grammar is a regex over every line, and a karaoke file can carry
+/// several hundred of them: parsing one on the UI isolate costs frames while
+/// the lyric pane is animating. Below the threshold the copy out to the
+/// isolate and the spawn would cost more than the parse itself.
+const int _kParseIsolateThreshold = 8 * 1024;
+
+/// [parseLrc], off the UI isolate when [raw] is big enough to be worth it.
+Future<Lyrics> parseLrcAsync(String raw) =>
+    raw.length > _kParseIsolateThreshold
+    ? Isolate.run(() => parseLrc(raw))
+    : Future.value(parseLrc(raw));

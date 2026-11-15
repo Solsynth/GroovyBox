@@ -3,7 +3,7 @@
 library;
 
 import 'dart:convert';
-
+import 'dart:isolate';
 import 'package:drift/drift.dart';
 
 import '../data/local/library_database.dart';
@@ -99,7 +99,7 @@ class LyricsStore {
 
     return CachedLyrics(
       lyrics: Lyrics(
-        lines: _decodeLines(row.lines),
+        lines: await _decodeLines(row.lines),
         synced: row.synced,
         language: row.language,
         translationLanguage: row.translationLanguage,
@@ -116,20 +116,23 @@ class LyricsStore {
     Lyrics lyrics, {
     required LyricsOrigin origin,
     int? remoteId,
-  }) => _db
-      .into(_db.lyricsEntries)
-      .insertOnConflictUpdate(
-        LyricsEntriesCompanion.insert(
-          trackId: Value(trackId),
-          lines: _encodeLines(lyrics.lines),
-          synced: lyrics.synced,
-          language: Value(lyrics.language),
-          translationLanguage: Value(lyrics.translationLanguage),
-          origin: origin.name,
-          remoteId: Value(remoteId),
-          fetchedAt: _clock(),
-        ),
-      );
+  }) async {
+    final lines = await _encodeLines(lyrics.lines);
+    await _db
+        .into(_db.lyricsEntries)
+        .insertOnConflictUpdate(
+          LyricsEntriesCompanion.insert(
+            trackId: Value(trackId),
+            lines: lines,
+            synced: lyrics.synced,
+            language: Value(lyrics.language),
+            translationLanguage: Value(lyrics.translationLanguage),
+            origin: origin.name,
+            remoteId: Value(remoteId),
+            fetchedAt: _clock(),
+          ),
+        );
+  }
 
   /// Drops one track's answer, so the next play asks again.
   ///
@@ -163,7 +166,18 @@ class LyricsStore {
   /// Lines are stored as JSON rather than as LRC text: the library's structured
   /// response carries romanization and translation layers that LRC cannot
   /// express, and re-rendering them to text would throw those away.
-  static String _encodeLines(List<LyricLine> lines) => jsonEncode([
+  ///
+  /// A cached karaoke page is hundreds of lines: past a page's worth the
+  /// conversion runs on a background isolate, so a lyric pane opening never
+  /// holds the UI isolate mid-frame.
+  static const _kIsolateThreshold = 256;
+
+  Future<String> _encodeLines(List<LyricLine> lines) async =>
+      lines.length > _kIsolateThreshold
+      ? await Isolate.run(() => _encodeSync(lines))
+      : _encodeSync(lines);
+
+  static String _encodeSync(List<LyricLine> lines) => jsonEncode([
     for (final line in lines)
       {
         'at': line.at.inMilliseconds,
@@ -173,7 +187,12 @@ class LyricsStore {
       },
   ]);
 
-  static List<LyricLine> _decodeLines(String raw) {
+  Future<List<LyricLine>> _decodeLines(String raw) async {
+    if (raw.length < _kIsolateThreshold) return _decodeSync(raw);
+    return await Isolate.run(() => _decodeSync(raw));
+  }
+
+  static List<LyricLine> _decodeSync(String raw) {
     final decoded = jsonDecode(raw);
     if (decoded is! List) return const [];
     return [
