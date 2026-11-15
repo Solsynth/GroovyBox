@@ -9,6 +9,7 @@ import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:window_manager/window_manager.dart';
 
 part 'mini_player_bridge.g.dart';
 
@@ -189,7 +190,13 @@ Future<void> openMiniPlayer(WidgetRef ref) async {
     _controller = await WindowController.create(
       WindowConfiguration(
         hiddenAtLaunch: true,
-        arguments: jsonEncode({'kind': 'miniPlayer'}),
+        // The guest cannot ask nativeapi for "its own" window — that query
+        // answers the app's main window inside any engine — so the host
+        // names itself and the guest takes the other one.
+        arguments: jsonEncode({
+          'kind': 'miniPlayer',
+          'mainWindowId': WindowManager.instance.getCurrent()?.id,
+        }),
       ),
     );
     await _controller!.show();

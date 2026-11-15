@@ -62,7 +62,7 @@ final class MiniPlayerBridgeProvider
   }
 }
 
-String _$miniPlayerBridgeHash() => r'a890ee078341dd8a61df42f5f869fde839d4ac48';
+String _$miniPlayerBridgeHash() => r'7eaeb9281e4eedd70d2775796fc8df4409c4ee8a';
 
 /// Publishes the main engine's playback state to the mini player window and
 /// answers its transport commands.
