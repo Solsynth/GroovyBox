@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:groovy_box/desktop/mini_player/link.dart';
+import 'package:groovy_box/library/lyrics.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/player/player.dart';
 
@@ -94,6 +95,55 @@ void main() {
         state,
       ),
       isTrue,
+    );
+  });
+
+  test('a lyric and its layers survive the hop', () {
+    const lyrics = Lyrics(
+      lines: [
+        LyricLine(
+          Duration(milliseconds: 3200),
+          'ハロ',
+          pronunciation: 'haro',
+          translation: 'hello',
+        ),
+        LyricLine(Duration(milliseconds: 9100), 'plain'),
+      ],
+      synced: true,
+      language: 'jpn',
+      translationLanguage: 'en-US',
+    );
+
+    final decoded = decodeLyrics(encodeLyrics(lyrics));
+
+    expect(decoded.synced, isTrue);
+    expect(decoded.language, 'jpn');
+    expect(decoded.translationLanguage, 'en-US');
+    expect(decoded.lines.first.at, const Duration(milliseconds: 3200));
+    expect(decoded.lines.first.text, 'ハロ');
+    expect(decoded.lines.first.pronunciation, 'haro');
+    expect(decoded.lines.first.translation, 'hello');
+    expect(decoded.lines.last.pronunciation, isNull);
+  });
+
+  test('a lyrics request round-trips the identity the cache keys on', () {
+    const request = LyricsRequest(
+      sourceId: 'a',
+      id: 's1',
+      title: 'ハロ／ハワユ',
+      artist: 'Kano',
+      album: 'rye',
+      duration: Duration(seconds: 208),
+    );
+
+    final decoded = decodeLyricsRequest(
+      encodeLyricsRequest(request, languageCode: 'zh-CN'),
+    );
+
+    expect(decoded, request);
+    expect(
+      encodeLyricsRequest(request, languageCode: 'zh-CN')['languageCode'],
+      'zh-CN',
     );
   });
 

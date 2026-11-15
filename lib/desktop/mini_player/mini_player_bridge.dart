@@ -5,6 +5,7 @@ import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/services.dart';
 import 'package:groovy_box/desktop/mini_player/link.dart';
 import 'package:groovy_box/library/models.dart';
+import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -43,7 +44,7 @@ class MiniPlayerBridge extends Notifier<void> {
     final link = ref.read(miniPlayerLinkProvider);
     // Registered before the window is created, so the guest's first command
     // (it starts asking as soon as it mounts) finds a listener.
-    unawaited(link.start(_onCommand));
+    unawaited(link.start((call) async => _onCommand(call)));
 
     _subscription = ref.listen(playbackProvider, (_, next) {
       _publish(next);
@@ -60,7 +61,7 @@ class MiniPlayerBridge extends Notifier<void> {
     ensureStarted();
   }
 
-  Future<void> _onCommand(MethodCall call) async {
+  Future<Object?> _onCommand(MethodCall call) async {
     final controller = ref.read(playbackProvider.notifier);
     switch (call.method) {
       // A window that just opened asks for the current state: the host only
@@ -68,6 +69,9 @@ class MiniPlayerBridge extends Notifier<void> {
       // otherwise leave it blank until something moved.
       case 'requestSnapshot':
         _send(ref.read(playbackProvider));
+        // Answered explicitly: the guest keeps asking until a request lands,
+        // and a null reply cannot be told apart from "no host yet".
+        return true;
       case 'play':
         await controller.play();
       case 'pause':
@@ -94,7 +98,39 @@ class MiniPlayerBridge extends Notifier<void> {
           for (final song in args['songs'] as List<dynamic>)
             LibrarySong.fromJson(Map<String, dynamic>.from(song as Map)),
         ], startIndex: args['startIndex'] as int? ?? 0);
+      // The guest has no database, so its lyrics pane answers from here: the
+      // host owns the cache, the library credentials and the enricher.
+      case 'resolveLyrics':
+        final args = Map<String, dynamic>.from(call.arguments as Map);
+        final resolver = await ref.read(lyricsResolverProvider.future);
+        final lyrics = await resolver.resolve(
+          decodeLyricsRequest(args),
+          refresh: args['refresh'] as bool? ?? false,
+          languageCode: args['languageCode'] as String?,
+        );
+        return encodeLyrics(lyrics);
+      case 'forgetLyrics':
+        final args = Map<String, dynamic>.from(call.arguments as Map);
+        final resolver = await ref.read(lyricsResolverProvider.future);
+        await resolver.forget(decodeLyricsRequest(args));
+      case 'adoptLyrics':
+        final args = Map<String, dynamic>.from(call.arguments as Map);
+        final request = decodeLyricsRequest(
+          Map<String, dynamic>.from(args['request'] as Map),
+        );
+        final resolver = await ref.read(lyricsResolverProvider.future);
+        final stored = await resolver.adopt(
+          request,
+          decodeLyrics(Map<String, dynamic>.from(args['lyrics'] as Map)),
+          languageCode: args['languageCode'] as String?,
+        );
+        // The host's own pane is showing the family entry for this track, so
+        // it is the host that rebuilds it; the guest does the same locally.
+        ref.invalidate(songLyricsProvider(request));
+        ref.invalidate(storedLyricsProvider);
+        return encodeLyrics(stored);
     }
+    return null;
   }
 
   void _publish(PlaybackState state) {

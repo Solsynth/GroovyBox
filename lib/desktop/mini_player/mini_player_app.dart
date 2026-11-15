@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:easy_localization/easy_localization.dart';
@@ -92,9 +91,12 @@ void _applyBounds(Window window, {required bool expanded}) {
           ? kMiniPlayerBarHeight + kMiniPlayerPaneMinHeight
           : kMiniPlayerBarHeight,
     ).toNative()
-    ..maximumSize = const Size(
+    // Each shape has its own ceiling. The bar stops at
+    // [kMiniPlayerBarMaxHeight] — a little taller for a bigger sleeve, not a
+    // half-empty window — while a pane keeps the full range.
+    ..maximumSize = Size(
       kMiniPlayerMaxWidth,
-      kMiniPlayerMaxHeight,
+      expanded ? kMiniPlayerMaxHeight : kMiniPlayerBarMaxHeight,
     ).toNative();
 }
 
@@ -179,20 +181,24 @@ class MiniPlayerView extends ConsumerStatefulWidget {
 }
 
 class _MiniPlayerViewState extends ConsumerState<MiniPlayerView> {
-  /// Grows or shrinks the window to fit the pane that is on show.
+  /// Resizes the window for the shape that is about to be shown.
   ///
-  /// Only the height changes, and only to the shape's opening height: a user
-  /// who dragged the window taller keeps their height when a pane opens — the
-  /// pane takes the room that is already there — and only a window too short
-  /// for the pane is grown.
+  /// A height the user dragged to is theirs and survives a pane opening or
+  /// closing; only a window that is too short for what it must now show is
+  /// grown, and only a bar taller than the bar ceiling is pulled back to it.
   void _fitWindow(MiniPane? pane) {
     final window = WindowManager.instance.getCurrent();
     if (window == null) return;
     _applyBounds(window, expanded: pane != null);
 
-    final target =
-        kMiniPlayerBarHeight + (pane == null ? 0 : kMiniPlayerPaneHeight);
-    final height = pane == null ? target : math.max(window.size.height, target);
+    final floor = pane == null
+        ? kMiniPlayerBarHeight
+        : kMiniPlayerBarHeight + kMiniPlayerPaneMinHeight;
+    final ceiling = pane == null
+        ? kMiniPlayerBarMaxHeight
+        : kMiniPlayerMaxHeight;
+    final height = window.size.height.clamp(floor, ceiling).toDouble();
+    if (height == window.size.height && pane != null) return;
     window.setSize(
       Size(window.size.width, height).toNative(),
       // Animated on macOS; other platforms apply it at once.
@@ -222,6 +228,11 @@ class _MiniPlayerViewState extends ConsumerState<MiniPlayerView> {
           // way Apple Music's mini player does. A pane opens over the same
           // field, blurred harder so the pane's text still reads.
           _ArtworkField(song: shown, paneOpen: pane != null),
+          // One column, top to bottom: header, the pane if one is open,
+          // then the scrubber and the transport. The pane takes the space
+          // that is left instead of being positioned over the furniture
+          // below it — a positioned pane drew its first lyric line behind
+          // the scrubber.
           Column(
             children: [
               _Header(
@@ -388,12 +399,12 @@ class _Header extends StatelessWidget {
       ],
     );
 
-    if (!compact) {
-      body = Padding(
-        padding: const EdgeInsets.symmetric(horizontal: SolSpace.lg),
-        child: body,
-      );
-    }
+    // Both shapes keep the same side margin; the compact stripe used to go
+    // full-bleed and read as a different control set than the bar's.
+    body = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: SolSpace.lg),
+      child: body,
+    );
 
     return DragToMoveArea(child: SizedBox(height: 72, child: body));
   }

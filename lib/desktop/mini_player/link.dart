@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/services.dart';
+import 'package:groovy_box/library/lyrics.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -46,6 +47,66 @@ Map<String, dynamic> encodeTick(PlaybackState state) => {
   'durationMs': state.duration.inMilliseconds,
   'playing': state.playing,
 };
+
+/// Lines and their layers, for the cross-engine lyrics hop.
+///
+/// The mini window has no database (a second drift instance on the same file
+/// corrupted the heap on macOS), so every lyric it shows is the host's, and
+/// every lyric the user picks there is written by the host.
+Map<String, dynamic> encodeLyrics(Lyrics lyrics) => {
+  'synced': lyrics.synced,
+  'language': lyrics.language,
+  'translationLanguage': lyrics.translationLanguage,
+  'lines': [
+    for (final line in lyrics.lines)
+      {
+        'at': line.at.inMilliseconds,
+        'text': line.text,
+        if (line.pronunciation != null) 'pronunciation': line.pronunciation,
+        if (line.translation != null) 'translation': line.translation,
+      },
+  ],
+};
+
+/// Rebuilds [Lyrics] from [encodeLyrics]'s output.
+Lyrics decodeLyrics(Map<String, dynamic> json) => Lyrics(
+  synced: json['synced'] as bool? ?? false,
+  language: json['language'] as String?,
+  translationLanguage: json['translationLanguage'] as String?,
+  lines: [
+    for (final line in (json['lines'] as List<dynamic>? ?? const []))
+      LyricLine(
+        Duration(milliseconds: (line as Map)['at'] as int? ?? 0),
+        line['text'] as String? ?? '',
+        pronunciation: line['pronunciation'] as String?,
+        translation: line['translation'] as String?,
+      ),
+  ],
+);
+/// A [LyricsRequest] on the wire: the mini window has no catalog to key a
+/// lookup with, so it sends the fields the host's resolver matches on.
+Map<String, dynamic> encodeLyricsRequest(
+  LyricsRequest song, {
+  String? languageCode,
+}) => {
+  'sourceId': song.sourceId,
+  'id': song.id,
+  'title': song.title,
+  'artist': ?song.artist,
+  'album': ?song.album,
+  'durationMs': song.duration.inMilliseconds,
+  'languageCode': ?languageCode,
+};
+
+/// Rebuilds a [LyricsRequest]; see [encodeLyricsRequest].
+LyricsRequest decodeLyricsRequest(Map<String, dynamic> json) => LyricsRequest(
+  sourceId: json['sourceId'] as String,
+  id: json['id'] as String,
+  title: json['title'] as String? ?? '',
+  artist: json['artist'] as String?,
+  album: json['album'] as String?,
+  duration: Duration(milliseconds: json['durationMs'] as int? ?? 0),
+);
 
 /// Rebuilds a [PlaybackState] from [encodeSnapshot]'s output.
 ///

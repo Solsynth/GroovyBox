@@ -24,7 +24,22 @@ const kFallbackLocale = Locale('en', 'US');
 /// as a sleeve beside the title, not as a page-sized cover, which is what
 /// keeps this window from being a second copy of the player page.
 const kMiniPlayerBarWidth = 340.0;
-const kMiniPlayerBarHeight = 190.0;
+
+/// Window height of the bar shape, chrome included.
+///
+/// The window is frameless and [DesktopWindowFrame] draws a 32px title band
+/// inside it, so the height the user sees is band + content. Setting this to
+/// the content height alone is what made the overlay column overflow by
+/// exactly that band.
+const kMiniPlayerBarContentHeight = 190.0;
+const kMiniPlayerBarHeight = kMiniPlayerBarContentHeight + 32.0;
+
+/// Tallest the bar may be dragged to.
+///
+/// The bar has no list to fill: past this the extra height is empty blurred
+/// artwork, so the drag stops while the window still looks like a bar. Panes
+/// get [kMiniPlayerMaxHeight] instead — that room is what a queue is for.
+const kMiniPlayerBarMaxHeight = kMiniPlayerBarHeight + 120.0;
 
 /// Extra height the window takes when the queue or the lyrics open. The pane
 /// fills exactly this, so a bar and a pane are one window in two shapes

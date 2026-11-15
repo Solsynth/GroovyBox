@@ -8,6 +8,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/foundation.dart';
 import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/desktop/mini_player/link.dart';
+import 'package:groovy_box/desktop/mini_player/mini_lyrics.dart';
 import 'package:groovy_box/desktop/mini_player/mini_playback.dart';
 import 'package:groovy_box/desktop/mini_player/mini_player_app.dart';
 import 'package:groovy_box/core/glass.dart';
@@ -245,6 +246,11 @@ Future<void> _runMiniPlayer() async {
         localLibraryPathProvider.overrideWithValue(localLibraryPath),
         miniPlayerLinkProvider.overrideWithValue(link),
         playbackProvider.overrideWith(MiniPlayback.new),
+        // The guest has no database, so every lyric it shows is the host's:
+        // the resolver is the link, not a local chain over an absent cache.
+        lyricsResolverProvider.overrideWith(
+          (ref) async => HostLyricsResolver(link),
+        ),
       ],
       child: EasyLocalization(
         supportedLocales: kSupportedLocales,

@@ -25,15 +25,47 @@ class MiniPlayback extends Playback {
   /// The host publishes on change, so a window opening between two changes
   /// would otherwise sit empty until something moved. Asking once on attach is
   /// what makes opening the window itself enough to fill it.
+  ///
+  /// Retried until answered: the guest's engine boots before the host has
+  /// registered its handler (the window is created first, then shown), and a
+  /// single fire-and-forget ask that lost that race left the window blank
+  /// until the next track change — the "it cannot read state when music was
+  /// already playing" report.
   void attach(MiniPlayerLink link) {
     this.link = link;
     link.onSnapshot = applySnapshot;
     link.onTick = applyTick;
-    unawaited(link.command<void>('requestSnapshot'));
+    _hasSnapshot = false;
+    _askGeneration++;
+    final generation = _askGeneration;
+    var attempts = 0;
+    Future<void> ask() async {
+      while (generation == _askGeneration && !_hasSnapshot) {
+        final answered = await link.command<bool>('requestSnapshot');
+        if (answered != true) {
+          // No host handler yet. Keep trying briefly; the window is shown as
+          // soon as the engine boots, so this is a startup race, not an
+          // outage.
+          if (++attempts > 20) return;
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+          continue;
+        }
+        return;
+      }
+    }
+
+    unawaited(ask());
   }
+
+  /// Bumped by every [attach]; an older loop stops asking once it moves.
+  int _askGeneration = 0;
+
+  /// Whether the host has answered at least once.
+  bool _hasSnapshot = false;
 
   /// Applies a full snapshot from the host.
   void applySnapshot(Map<String, dynamic> json) {
+    _hasSnapshot = true;
     state = decodeSnapshot(json);
   }
 
