@@ -1764,6 +1764,11 @@ class _MarqueeTitle extends StatelessWidget {
         painter.dispose();
         if (!overflows) return Center(child: text);
         return Marqueer(
+          // Keyed by the title: a direct track switch keeps this State alive,
+          // and a marquee parked at the far end of the previous title would
+          // then open onto blank space wherever the new one is shorter.
+          // Remounting restarts the pass from the beginning.
+          key: ValueKey(title),
           // Left to right is the reading direction, and a title that starts
           // off screen is a title nobody reads from the beginning.
           direction: MarqueerDirection.ltr,
@@ -1874,6 +1879,38 @@ class _TrackMoreMenu extends ConsumerWidget {
         icon: const Icon(Symbols.more_horiz_rounded),
       ),
       menuChildren: [
+        // The credits, as navigation. In the menu rather than on the copy:
+        // they are two of nine words that are links, and on the page one that
+        // shouts would be noise — here a menu item is allowed to say where it
+        // goes. Disabled when the track carries no id: a radio track or an
+        // unmapped server has no page to go to, and guessing one by name
+        // would forge a page the source never described.
+        MenuItemButton(
+          leadingIcon: const Icon(Symbols.person_rounded),
+          onPressed: song.playing.artistId == null || song.isRadio
+              ? null
+              : () => context.router.push(
+                  ArtistDetailRoute(
+                    sourceId: song.sourceId,
+                    artistId: song.playing.artistId!,
+                    artistName: song.playing.artist ?? song.playing.subtitle,
+                  ),
+                ),
+          child: Text('playerGoToArtist'.tr()),
+        ),
+        MenuItemButton(
+          leadingIcon: const Icon(Symbols.album_rounded),
+          onPressed: song.playing.albumId == null || song.isRadio
+              ? null
+              : () => context.router.push(
+                  AlbumDetailRoute(
+                    sourceId: song.sourceId,
+                    albumId: song.playing.albumId!,
+                    albumName: song.playing.album,
+                  ),
+                ),
+          child: Text('playerGoToAlbum'.tr()),
+        ),
         MenuItemButton(
           leadingIcon: const Icon(Symbols.info_rounded),
           onPressed: () => PlaybackInfoSheet.show(context, song),
