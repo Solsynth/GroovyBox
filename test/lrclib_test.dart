@@ -119,7 +119,7 @@ void main() {
 
   test('an exact hit returns the timed lyric and skips the search', () async {
     fake.exact = _record(synced: '[00:19.16] Look at the stars\n[00:24.09] You');
-    final lookup = await (await _client(fake)).find(_song);
+    final lookup = await (await _client(fake)).findLyrics(_song);
 
     expect(lookup.settled, isTrue);
     expect(lookup.result!.id, 1);
@@ -140,7 +140,7 @@ void main() {
       _record(id: 7, track: 'Yellow', duration: 200, synced: '[00:01.00] live'),
       _record(id: 8, track: 'Yellow', duration: 266, synced: '[00:01.00] yes'),
     ];
-    final lookup = await (await _client(fake)).find(_song);
+    final lookup = await (await _client(fake)).findLyrics(_song);
 
     expect(lookup.result!.id, 8);
     expect(fake.requests.map((uri) => uri.path), ['/api/get', '/api/search']);
@@ -150,7 +150,7 @@ void main() {
     fake.searchResults = [
       _record(id: 7, duration: 200, synced: '[00:01.00] a different take'),
     ];
-    final lookup = await (await _client(fake)).find(_song);
+    final lookup = await (await _client(fake)).findLyrics(_song);
 
     expect(lookup.result, isNull);
     expect(lookup.settled, isTrue);
@@ -161,7 +161,7 @@ void main() {
       _record(id: 1, duration: 266, plain: 'plain words'),
       _record(id: 2, duration: 267, synced: '[00:01.00] timed words'),
     ];
-    final lookup = await (await _client(fake)).find(_song);
+    final lookup = await (await _client(fake)).findLyrics(_song);
 
     expect(lookup.result!.lyrics.synced, isTrue);
     expect(lookup.result!.lyrics.lines.single.text, 'timed words');
@@ -169,7 +169,7 @@ void main() {
 
   test('an instrumental is an answer, not a failure', () async {
     fake.exact = _record(instrumental: true);
-    final lookup = await (await _client(fake)).find(_song);
+    final lookup = await (await _client(fake)).findLyrics(_song);
 
     expect(lookup.result, isNull);
     expect(lookup.settled, isTrue);
@@ -177,7 +177,7 @@ void main() {
 
   test('a plain-only record becomes an unsynced lyric with its breaks', () async {
     fake.exact = _record(plain: 'First verse\n\nSecond verse\n\n');
-    final lookup = await (await _client(fake)).find(_song);
+    final lookup = await (await _client(fake)).findLyrics(_song);
 
     expect(lookup.result!.lyrics.synced, isFalse);
     expect(
@@ -188,7 +188,7 @@ void main() {
 
   test('a timeout is unsettled, so it is not cached as a miss', () async {
     fake.offline = true;
-    final lookup = await (await _client(fake)).find(_song);
+    final lookup = await (await _client(fake)).findLyrics(_song);
 
     expect(lookup.result, isNull);
     expect(lookup.settled, isFalse);
@@ -199,14 +199,14 @@ void main() {
     fake.rateLimitSeconds = 30;
     final lrclib = await _client(fake);
 
-    final first = await lrclib.find(_song);
+    final first = await lrclib.findLyrics(_song);
     expect(first.settled, isFalse);
     expect(fake.requests, hasLength(1));
 
     // While the window is still open nothing is sent, and the caller is told
     // the answer is unknown rather than missing.
     fake.rateLimitSeconds = null;
-    final second = await lrclib.find(_song);
+    final second = await lrclib.findLyrics(_song);
     expect(second.settled, isFalse);
     expect(fake.requests, hasLength(1));
 
@@ -215,7 +215,7 @@ void main() {
   });
 
   test('a song without an artist is not asked about', () async {
-    final lookup = await (await _client(fake)).find(
+    final lookup = await (await _client(fake)).findLyrics(
       const LyricsRequest(sourceId: 'a', id: 's1', title: 'Untitled'),
     );
 
@@ -228,8 +228,8 @@ void main() {
     final lrclib = await _client(fake);
 
     final watch = Stopwatch()..start();
-    await lrclib.find(_song);
-    await lrclib.find(
+    await lrclib.findLyrics(_song);
+    await lrclib.findLyrics(
       const LyricsRequest(
         sourceId: 'a',
         id: 's2',

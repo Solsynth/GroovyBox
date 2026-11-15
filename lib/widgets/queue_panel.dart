@@ -246,13 +246,8 @@ class PlaybackInfoSheet extends ConsumerWidget {
     // anything. An unstored track reads as having no lyrics yet — which is
     // the same thing the lyrics pane would go check on demand.
     final lyricsOrigin = ref.watch(lyricsOriginProvider(song)).value;
-    final lyricsOriginLabel = switch (lyricsOrigin) {
-      LyricsOrigin.library => 'lyricsOriginLibrary'.tr(),
-      LyricsOrigin.file => 'lyricsOriginFile'.tr(),
-      LyricsOrigin.lrclib => 'lyricsOriginLrclib'.tr(),
-      LyricsOrigin.manual => 'lyricsOriginManual'.tr(),
-      _ => 'lyricsOriginNone'.tr(),
-    };
+    final lyricsOriginLabel =
+        (lyricsOrigin ?? LyricsOrigin.none).labelKey.tr();
     final rows = <(IconData, String, String)>[
       (
         Symbols.music_note_rounded,

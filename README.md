@@ -58,7 +58,11 @@ than block you behind a form.
   token.
   Reads map `ar`/`al`/`dt` onto the neutral models; the red-heart list is
   `RatedSource`, the daily mix is a `CuratedSource` shelf, and lyrics merge
-  `tlyric` as a translation layer. Playback URLs are minted per request by
+  `tlyric` as a translation layer. It is also a `LyricsQuerySource`: a
+  signed-in account can find words for a song it does not hold — a local file,
+  a Subsonic track — by searching its catalogue and reading the matching row's
+  `/lyric`, so it joins LRCLIB in the resolver's chain and in the manual
+  picker. Playback URLs are minted per request by
   `song/url/v1`, which is `ResolvedStreamSource` — the transport asks that
   capability before falling back to `streamUri`, so a refused mint falls
   through the cross-library fallback like a dead URL.

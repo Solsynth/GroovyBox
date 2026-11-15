@@ -17,9 +17,9 @@
 library;
 
 import 'catalog.dart';
-import 'lrclib.dart';
 import 'lyrics.dart';
 import 'lyrics_enricher.dart';
+import 'lyrics_query.dart';
 import 'lyrics_store.dart';
 import 'source.dart';
 
@@ -32,7 +32,7 @@ class LyricsResolver {
   LyricsResolver({
     required this.catalog,
     required this.store,
-    required this.lrclib,
+    required this.queries,
     this.sourceFor,
     LyricsEnricher? enricher,
   }) : enricher = enricher ?? LyricsEnricher();
@@ -41,7 +41,15 @@ class LyricsResolver {
   /// they are simply fetched again on every play.
   final LibraryCatalog? catalog;
   final LyricsStore? store;
-  final Lrclib lrclib;
+
+  /// Services that can find words for a song they do not hold, asked in order
+  /// after the library. LRCLIB is always first; a connected account that can
+  /// answer the same question follows it, so a NetEase-only listener still
+  /// gets lyrics for a local file.
+  ///
+  /// Called per lookup rather than captured: an account connected mid-session
+  /// must join the chain without the long-lived resolver being rebuilt.
+  final List<LyricsQuerySource> Function() queries;
   final LibrarySource? Function(String sourceId)? sourceFor;
   final LyricsEnricher enricher;
 
@@ -128,21 +136,40 @@ class LyricsResolver {
       return enriched;
     }
 
-    final found = await lrclib.find(song);
-    final remote = found.result?.lyrics;
+    // Each service is asked in turn and the first timed answer wins: a lookup
+    // is a network round trip, and a later service having the same words adds
+    // nothing. A plain block is kept as a fallback, so a service that only has
+    // unsynced text still beats having nothing.
+    LyricsHit? timedHit;
+    LyricsHit? plainHit;
+    var allSettled = true;
+    final sources = queries();
+    for (final query in sources) {
+      final found = await query.findLyrics(song);
+      if (!found.settled) allSettled = false;
+      final hit = found.result;
+      if (hit == null) continue;
+      if (hit.lyrics.synced) {
+        timedHit = hit;
+        break;
+      }
+      plainHit ??= hit;
+    }
+
+    final remote = timedHit ?? plainHit;
     if (remote != null) {
-      // A plain block from the library is still a lyric worth keeping; LRCLIB
-      // only wins because its version is timed.
-      final useRemote = remote.synced || library == null;
-      final lyrics = useRemote ? remote : library;
+      // A plain block from the library is still a lyric worth keeping; a timed
+      // answer from a service only wins because its version follows the audio.
+      final useRemote = remote.lyrics.synced || library == null;
+      final lyrics = useRemote ? remote.lyrics : library;
       final enriched = await enricher.enrich(
         lyrics,
         targetLanguage: targetLang,
       );
       await remember(
         enriched,
-        useRemote ? LyricsOrigin.lrclib : LyricsOrigin.library,
-        remoteId: useRemote ? found.result?.id : null,
+        useRemote ? remote.origin : LyricsOrigin.library,
+        remoteId: useRemote ? remote.id : null,
       );
       return enriched;
     }
@@ -156,9 +183,11 @@ class LyricsResolver {
       return enriched;
     }
 
-    // Only a miss the service confirmed is worth remembering; an offline
-    // answer must be asked again on the next play.
-    if (found.settled) await remember(Lyrics.empty, LyricsOrigin.none);
+    // Only a miss every service confirmed is worth remembering; one that could
+    // not be reached must be asked again on the next play.
+    if (allSettled && sources.isNotEmpty) {
+      await remember(Lyrics.empty, LyricsOrigin.none);
+    }
     return Lyrics.empty;
   }
 

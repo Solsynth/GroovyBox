@@ -19,12 +19,26 @@ enum LyricsOrigin {
   /// Downloaded from LRCLIB.
   lrclib,
 
+  /// Downloaded from a connected account's catalogue (NetEase).
+  netease,
+
   /// Chosen by hand: picked from LRCLIB in the lyrics picker, or imported
   /// from a file. Never re-asked and never displaced by an automatic fetch.
   manual,
 
   /// Both asked, neither had it. Kept so a replay does not ask again.
-  none,
+  none;
+
+  /// Translation key naming this origin in the UI, resolved on read: the enum
+  /// is `const`, so the text cannot be translated at definition time.
+  String get labelKey => switch (this) {
+    LyricsOrigin.library => 'lyricsOriginLibrary',
+    LyricsOrigin.file => 'lyricsOriginFile',
+    LyricsOrigin.lrclib => 'lyricsOriginLrclib',
+    LyricsOrigin.netease => 'lyricsOriginNetease',
+    LyricsOrigin.manual => 'lyricsOriginManual',
+    LyricsOrigin.none => 'lyricsOriginNone',
+  };
 }
 
 /// One cached answer.

@@ -10,9 +10,11 @@ import 'catalog.dart';
 import 'local_library.dart';
 import 'lrclib.dart';
 import 'lyrics.dart';
+import 'lyrics_query.dart';
 import 'lyrics_resolver.dart';
 import 'lyrics_store.dart';
 import 'models.dart';
+import 'netease_adapter.dart';
 import 'source.dart';
 import '../library_sync/queue.dart';
 import 'store.dart';
@@ -465,12 +467,30 @@ LyricsStore? lyricsStore(Ref ref) {
 @Riverpod(keepAlive: true)
 Lrclib lrclib(Ref ref) => Lrclib();
 
-/// Resolves lyrics: stored answer first, then the library, then LRCLIB.
+/// Every service that can find a song's words by title and artist, in the
+/// order they are asked.
+///
+/// LRCLIB first: it is vetted, keyed by recording, and needs no account. A
+/// signed-in NetEase account follows, because its catalogue is far larger than
+/// that account's own library — this is what gives a local file or a Subsonic
+/// track words when only NetEase knows them. Adding a service here is what
+/// puts it in the chain; the resolver never names one.
+@Riverpod(keepAlive: true)
+List<LyricsQuerySource> lyricsQuerySources(Ref ref) => [
+  ref.watch(lrclibProvider),
+  for (final source in ref.watch(librarySourcesProvider))
+    if (source is NeteaseSource && source.canQueryLyrics) source,
+];
+
+/// Resolves lyrics: stored answer first, then the library, then the query
+/// sources.
 @Riverpod(keepAlive: true)
 Future<LyricsResolver> lyricsResolver(Ref ref) async => LyricsResolver(
   catalog: ref.watch(libraryCatalogProvider),
   store: ref.watch(lyricsStoreProvider),
-  lrclib: ref.watch(lrclibProvider),
+  // Called per lookup, so a service connected mid-session joins the chain
+  // without the long-lived resolver being rebuilt.
+  queries: () => ref.read(lyricsQuerySourcesProvider),
   // Read, not watch: the resolver is long-lived and must see the library list
   // as it is at the moment of a lookup, including one added mid-session.
   sourceFor: (sourceId) => ref.read(librarySourceByIdProvider)[sourceId],

@@ -4,8 +4,11 @@ import 'package:dio/dio.dart';
 
 import 'http.dart';
 import 'lyrics.dart';
+import 'lyrics_query.dart';
+import 'lyrics_store.dart';
 import 'models.dart';
 import 'source.dart';
+import 'track_identity.dart';
 
 /// NetEase Cloud Music, read through a self-hosted NeteaseCloudMusicApi server.
 ///
@@ -107,6 +110,15 @@ class NeteaseAdapter implements InteractiveLoginAdapter {
             );
             final code = (check['code'] as num?)?.toInt();
             if (code == null) continue;
+            // 803 is the answer that *carries* the session, so the cookie is
+            // stored before the state is emitted: the screen reacts to 803 by
+            // completing the login, and an event that arrived before the
+            // cookie would complete it with nothing to store.
+            if (code == 803) {
+              _cookie = _cookieFrom(check, http.lastSetCookie);
+              yield code;
+              return;
+            }
             yield code;
             if (code == 800) {
               throw LibraryException(
@@ -114,15 +126,24 @@ class NeteaseAdapter implements InteractiveLoginAdapter {
                 messageKey: 'libraryNeteaseQrExpired',
               );
             }
-            if (code == 803) {
-              final cookie = check['cookie'];
-              _cookie = cookie is String && cookie.isNotEmpty ? cookie : null;
-              return;
-            }
           }
         },
       ),
     ];
+  }
+
+  /// The session the 803 handed back.
+  ///
+  /// The bridge states it twice — `cookie` in the body, and as `Set-Cookie`
+  /// headers — and different builds populate one, the other, or both. The body
+  /// wins (it is the one the bridge documents); the headers are the fallback.
+  static String? _cookieFrom(Map<String, dynamic> body, String? setCookie) {
+    final bodyCookie = body['cookie'];
+    if (bodyCookie is String && bodyCookie.trim().isNotEmpty) {
+      return bodyCookie.trim();
+    }
+    final header = setCookie?.trim();
+    return header == null || header.isEmpty ? null : header;
   }
 
   String? _cookie;
@@ -171,6 +192,12 @@ class _NeteaseHttp {
 
   final String baseUrl;
   final String? cookie;
+
+  /// The `Set-Cookie` pairs the last answer carried, as one `Cookie` header
+  /// value. Login hands the session back this way on builds whose module
+  /// returns cookies as headers instead of a body field; every other call
+  /// ignores it.
+  String? lastSetCookie;
   late final Dio _dio = Dio(
     BaseOptions(
       connectTimeout: const Duration(seconds: 12),
@@ -241,6 +268,7 @@ class _NeteaseHttp {
         messageKey: 'libraryNeteaseNotApi',
       );
     }
+    lastSetCookie = _cookieHeader(response.headers);
     final data = response.data;
     if (data is! Map) {
       throw const LibraryException(
@@ -249,6 +277,25 @@ class _NeteaseHttp {
       );
     }
     return Map<String, dynamic>.from(data);
+  }
+
+  /// The `Set-Cookie` headers of one answer, as the `Cookie` header a later
+  /// request would send: name=value pairs, attributes dropped.
+  static String? _cookieHeader(Headers headers) {
+    final raw = headers.map['set-cookie'];
+    if (raw == null || raw.isEmpty) return null;
+    final pairs = <String>[];
+    for (final entry in raw) {
+      for (final cookie in entry.split(',')) {
+        // Everything after the first `;` is an attribute (`Path`, `HttpOnly`,
+        // `Expires`) and is not part of what a later request sends.
+        final pair = cookie.split(';').first.trim();
+        final eq = pair.indexOf('=');
+        if (eq <= 0 || eq == pair.length - 1) continue;
+        pairs.add(pair);
+      }
+    }
+    return pairs.isEmpty ? null : pairs.join('; ');
   }
 
   /// The bridge answers `code: 200` for success and carries a `body` that is
@@ -266,7 +313,11 @@ class _NeteaseHttp {
 /// models; nothing in the app knows this source came from NetEase except the
 /// setup row that names it.
 class NeteaseSource extends LibrarySource
-    implements RatedSource, CuratedSource, ResolvedStreamSource {
+    implements
+        RatedSource,
+        CuratedSource,
+        ResolvedStreamSource,
+        LyricsQuerySource {
   NeteaseSource(this.config)
     : _http = _NeteaseHttp(config.baseUrl, cookie: config.auth['cookie']);
 
@@ -586,6 +637,115 @@ class NeteaseSource extends LibrarySource
     if (translationRaw is! String || translationRaw.isEmpty) return main;
     final translation = await parseLrcAsync(translationRaw);
     return mergeLyricLayers(main: main, translation: translation);
+  }
+
+  // ---- lyrics lookup -------------------------------------------------------
+
+  /// Whether this source can answer lyrics questions at all.
+  ///
+  /// A signed-out bridge still answers `/lyric` for any id, but searching a
+  /// catalogue without a session is what NetEase rate-limits and eventually
+  /// refuses, so an account that is not signed in does not offer the
+  /// capability: the resolver falls through to the services that still can.
+  bool get canQueryLyrics => (config.auth['cookie'] ?? '').isNotEmpty;
+
+  /// Finds words for a song this account does not necessarily hold.
+  ///
+  /// The catalogue is searched by title and artist (the bridge's
+  /// `/cloudsearch`), the best-matching row is chosen with the same identity
+  /// rules the rest of the app uses, and its `/lyric` is read. A miss the
+  /// service confirmed is [LyricsLookup.missing]; a session that has expired
+  /// is *not* settled, because the same song would be found next time.
+  @override
+  Future<LyricsLookup> findLyrics(LyricsRequest song) async {
+    if (!canQueryLyrics) return LyricsLookup.unknown;
+    final query = [song.artist, song.title]
+        .whereType<String>()
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .join(' ');
+    if (query.isEmpty) return LyricsLookup.missing;
+
+    final List<LibrarySong> candidates;
+    try {
+      candidates = await search(query, limit: 10);
+    } on LibraryException {
+      // An expired session or a refusal is "could not ask", not "no such
+      // lyric": caching it would blank every matching track.
+      return LyricsLookup.unknown;
+    }
+    final identity = TrackIdentity.ofRequest(
+      title: song.title,
+      artist: song.artist,
+      duration: song.duration,
+    );
+    LibrarySong? best;
+    for (final candidate in candidates) {
+      if (!identity.matches(TrackIdentity.of(candidate))) continue;
+      // A timed lyric is not knowable before the fetch, so the first row that
+      // is the same recording wins: the service already ranked by relevance.
+      best = candidate;
+      break;
+    }
+    best ??= candidates.length == 1 ? candidates.single : null;
+    if (best == null) return LyricsLookup.missing;
+
+    try {
+      final found = await lyrics(best);
+      return found.isEmpty
+          ? LyricsLookup.missing
+          : LyricsLookup(
+              result: LyricsHit(
+                lyrics: found,
+                origin: LyricsOrigin.netease,
+                id: int.tryParse(best.id),
+              ),
+              settled: true,
+            );
+    } on LibraryException {
+      return LyricsLookup.unknown;
+    }
+  }
+
+  /// Free-text search over the catalogue, for the manual picker.
+  ///
+  /// The bridge has no lyric-full-text endpoint, so the search is over songs
+  /// and each hit's words are fetched: a picker row is a song whose lyrics
+  /// the user is about to adopt, and offering one that cannot be fetched would
+  /// be a dead row.
+  @override
+  Future<List<LyricsCandidate>?> searchLyrics(String query) async {
+    if (!canQueryLyrics) return null;
+    final term = query.trim();
+    if (term.isEmpty) return const [];
+    final List<LibrarySong> songs;
+    try {
+      songs = await search(term, limit: 12);
+    } on LibraryException {
+      return null;
+    }
+    final candidates = <LyricsCandidate>[];
+    for (final song in songs) {
+      try {
+        final found = await lyrics(song);
+        if (found.isEmpty) continue;
+        candidates.add(
+          LyricsCandidate(
+            id: int.tryParse(song.id),
+            title: song.title,
+            artistName: song.artist,
+            albumName: song.album,
+            origin: LyricsOrigin.netease,
+            duration: song.duration == Duration.zero ? null : song.duration,
+            lyrics: found,
+          ),
+        );
+      } on LibraryException {
+        // One unreadable row must not sink the whole search.
+        continue;
+      }
+    }
+    return candidates;
   }
 
   // ---- artwork ---------------------------------------------------------------

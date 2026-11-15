@@ -3,7 +3,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/lyrics.dart';
-import 'package:groovy_box/library/lrclib.dart';
+import 'package:groovy_box/library/lyrics_query.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/widgets/common.dart';
@@ -58,7 +58,7 @@ class _LyricsPickerSheetState extends ConsumerState<LyricsPickerSheet> {
 
   /// Null means the answer could not be had — a rate limit or a dead
   /// network — which reads differently from an honest empty page.
-  AsyncValue<List<LrclibCandidate>?> _results = const AsyncValue.data(null);
+  AsyncValue<List<LyricsCandidate>?> _results = const AsyncValue.data(null);
   bool _importing = false;
 
   @override
@@ -68,15 +68,28 @@ class _LyricsPickerSheetState extends ConsumerState<LyricsPickerSheet> {
     super.dispose();
   }
 
-  /// Searches LRCLIB with whatever the field holds. The field is prefilled
-  /// with the playing track's tags, so a mistagged title is exactly the case
-  /// where the user edits it before submitting.
+  /// Searches every lyrics service with whatever the field holds. The field
+  /// is prefilled with the playing track's tags, so a mistagged title is
+  /// exactly the case where the user edits it before submitting.
+  ///
+  /// The services are asked in parallel and the answers concatenated in the
+  /// chain's order: a slow account must not hold back the results that came
+  /// back, and one that answers `null` (unreachable) does not make the whole
+  /// search a failure — it only contributes nothing.
   Future<void> _search() async {
     final query = _query.text.trim();
     if (query.isEmpty) return;
     setState(() => _results = const AsyncValue.loading());
-    final found = await ref.read(lrclibProvider).search(query);
+    final sources = ref.read(lyricsQuerySourcesProvider);
+    final answers = await Future.wait([
+      for (final source in sources) source.searchLyrics(query),
+    ]);
     if (!mounted) return;
+    // All unreachable is a failure the retry button is for; a partial answer
+    // is still a list to pick from.
+    final found = answers.every((rows) => rows == null)
+        ? null
+        : [for (final rows in answers) ...?rows];
     setState(() => _results = AsyncValue.data(found));
   }
 
@@ -152,6 +165,7 @@ class _LyricsPickerSheetState extends ConsumerState<LyricsPickerSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final sourceCount = ref.watch(lyricsQuerySourcesProvider).length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -207,7 +221,7 @@ class _LyricsPickerSheetState extends ConsumerState<LyricsPickerSheet> {
             ),
           ),
         ),
-        Expanded(child: _resultsList(theme)),
+        Expanded(child: _resultsList(theme, sourceCount: sourceCount)),
         Padding(
           padding: const EdgeInsets.fromLTRB(SolSpace.xl, 0, SolSpace.xl, SolSpace.md),
           child: OutlinedButton.icon(
@@ -226,7 +240,7 @@ class _LyricsPickerSheetState extends ConsumerState<LyricsPickerSheet> {
     );
   }
 
-  Widget _resultsList(ThemeData theme) {
+  Widget _resultsList(ThemeData theme, {required int sourceCount}) {
     final colorScheme = theme.colorScheme;
     return _results.when(
       skipLoadingOnRefresh: true,
@@ -283,6 +297,9 @@ class _LyricsPickerSheetState extends ConsumerState<LyricsPickerSheet> {
                 if (candidate.albumName != null) candidate.albumName!,
                 ?lengthNote,
                 timed ? 'lyricsPickerSynced'.tr() : 'lyricsPickerPlain'.tr(),
+                // Which service offered the row, when more than one answered:
+                // the same song exists in several and their words differ.
+                if (sourceCount > 1) candidate.origin.labelKey.tr(),
               ].join('  ·  '),
               trailing: drift != null && drift > const Duration(seconds: 5)
                   ? 'lyricsPickerDrift'.tr()

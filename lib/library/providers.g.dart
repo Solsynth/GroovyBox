@@ -1679,12 +1679,88 @@ final class LrclibProvider extends $FunctionalProvider<Lrclib, Lrclib, Lrclib>
 
 String _$lrclibHash() => r'2be44ac976f498e84546d0f61047ca77fda7de3e';
 
-/// Resolves lyrics: stored answer first, then the library, then LRCLIB.
+/// Every service that can find a song's words by title and artist, in the
+/// order they are asked.
+///
+/// LRCLIB first: it is vetted, keyed by recording, and needs no account. A
+/// signed-in NetEase account follows, because its catalogue is far larger than
+/// that account's own library — this is what gives a local file or a Subsonic
+/// track words when only NetEase knows them. Adding a service here is what
+/// puts it in the chain; the resolver never names one.
+
+@ProviderFor(lyricsQuerySources)
+final lyricsQuerySourcesProvider = LyricsQuerySourcesProvider._();
+
+/// Every service that can find a song's words by title and artist, in the
+/// order they are asked.
+///
+/// LRCLIB first: it is vetted, keyed by recording, and needs no account. A
+/// signed-in NetEase account follows, because its catalogue is far larger than
+/// that account's own library — this is what gives a local file or a Subsonic
+/// track words when only NetEase knows them. Adding a service here is what
+/// puts it in the chain; the resolver never names one.
+
+final class LyricsQuerySourcesProvider
+    extends
+        $FunctionalProvider<
+          List<LyricsQuerySource>,
+          List<LyricsQuerySource>,
+          List<LyricsQuerySource>
+        >
+    with $Provider<List<LyricsQuerySource>> {
+  /// Every service that can find a song's words by title and artist, in the
+  /// order they are asked.
+  ///
+  /// LRCLIB first: it is vetted, keyed by recording, and needs no account. A
+  /// signed-in NetEase account follows, because its catalogue is far larger than
+  /// that account's own library — this is what gives a local file or a Subsonic
+  /// track words when only NetEase knows them. Adding a service here is what
+  /// puts it in the chain; the resolver never names one.
+  LyricsQuerySourcesProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'lyricsQuerySourcesProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$lyricsQuerySourcesHash();
+
+  @$internal
+  @override
+  $ProviderElement<List<LyricsQuerySource>> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  List<LyricsQuerySource> create(Ref ref) {
+    return lyricsQuerySources(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(List<LyricsQuerySource> value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<List<LyricsQuerySource>>(value),
+    );
+  }
+}
+
+String _$lyricsQuerySourcesHash() =>
+    r'2b42428f2041def046f69edcd073dcfaea523328';
+
+/// Resolves lyrics: stored answer first, then the library, then the query
+/// sources.
 
 @ProviderFor(lyricsResolver)
 final lyricsResolverProvider = LyricsResolverProvider._();
 
-/// Resolves lyrics: stored answer first, then the library, then LRCLIB.
+/// Resolves lyrics: stored answer first, then the library, then the query
+/// sources.
 
 final class LyricsResolverProvider
     extends
@@ -1694,7 +1770,8 @@ final class LyricsResolverProvider
           FutureOr<LyricsResolver>
         >
     with $FutureModifier<LyricsResolver>, $FutureProvider<LyricsResolver> {
-  /// Resolves lyrics: stored answer first, then the library, then LRCLIB.
+  /// Resolves lyrics: stored answer first, then the library, then the query
+  /// sources.
   LyricsResolverProvider._()
     : super(
         from: null,
@@ -1721,7 +1798,7 @@ final class LyricsResolverProvider
   }
 }
 
-String _$lyricsResolverHash() => r'515bb0a65e677a7a600483106f87ef8e229f219e';
+String _$lyricsResolverHash() => r'db718b125d8054a2549232105e508cf996682e6b';
 
 /// Lyrics of one song, from the local library or the network.
 ///

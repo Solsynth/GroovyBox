@@ -1,10 +1,10 @@
 /// LRCLIB: a community lyrics database with a plain HTTP API.
 ///
-/// Used when the library has nothing for a track, and preferred over the
-/// library when the library only has an unsynced block and LRCLIB has a timed
-/// one. The API needs no key; the client identifies itself and keeps to one
-/// request at a time with a short gap, because LRCLIB is a free service shared
-/// by everyone.
+/// One [LyricsQuerySource] among several — a connected account that can find
+/// words for songs it does not hold joins it — and preferred over a library's
+/// unsynced block when LRCLIB has a timed one. The API needs no key; the
+/// client identifies itself and keeps to one request at a time with a short
+/// gap, because LRCLIB is a free service shared by everyone.
 library;
 
 import 'dart:async';
@@ -14,57 +14,11 @@ import 'package:dio/dio.dart';
 
 import '../core/identity.dart';
 import 'lyrics.dart';
-
-/// A resolved lyric from LRCLIB.
-class LrclibResult {
-  final Lyrics lyrics;
-
-  /// LRCLIB's record id, for naming the row a lyric came from.
-  final int id;
-
-  const LrclibResult({required this.lyrics, required this.id});
-}
-
-/// One lookup's outcome.
-///
-/// [settled] separates "there is no such lyric" from "we could not find out":
-/// a timeout or a rate limit must not be cached as an answer, or a track that
-/// LRCLIB does have would stay blank until the entry expired.
-class LrclibLookup {
-  final LrclibResult? result;
-  final bool settled;
-
-  const LrclibLookup({required this.result, required this.settled});
-
-  static const unknown = LrclibLookup(result: null, settled: false);
-  static const missing = LrclibLookup(result: null, settled: true);
-}
-/// One row of a manual search, as the lyrics picker shows it.
-///
-/// The words are already parsed, so picking a row is writing it, not asking
-/// for it a second time.
-class LrclibCandidate {
-  final int id;
-  final String title;
-  final String? artistName;
-  final String? albumName;
-
-  /// The row's own runtime, which may disagree with the playing track's.
-  final Duration? duration;
-  final Lyrics lyrics;
-
-  const LrclibCandidate({
-    required this.id,
-    required this.title,
-    required this.lyrics,
-    this.artistName,
-    this.albumName,
-    this.duration,
-  });
-}
+import 'lyrics_query.dart';
+import 'lyrics_store.dart';
 
 /// Client for `https://lrclib.net`.
-class Lrclib {
+class Lrclib implements LyricsQuerySource {
   Lrclib({Dio? dio, this.identity = defaultIdentity})
     : _dio =
           dio ??
@@ -108,14 +62,15 @@ class Lrclib {
   DateTime? _blockedUntil;
 
   /// Looks up one song.
-  Future<LrclibLookup> find(LyricsRequest song) {
+  @override
+  Future<LyricsLookup> findLyrics(LyricsRequest song) {
     final title = song.title.trim();
     final artist = song.artist?.trim();
     if (title.isEmpty || artist == null || artist.isEmpty) {
-      return Future.value(LrclibLookup.missing);
+      return Future.value(LyricsLookup.missing);
     }
 
-    return _serialized(LrclibLookup.unknown, () async {
+    return _serialized(LyricsLookup.unknown, () async {
       final exact = await _get(song);
       if (exact.result != null) return exact;
 
@@ -125,9 +80,12 @@ class Lrclib {
       final search = await _search(title, artist);
       final best = _best(search.rows, song.duration);
       if (best == null) {
-        return LrclibLookup(result: null, settled: exact.settled && search.settled);
+        return LyricsLookup(
+          result: null,
+          settled: exact.settled && search.settled,
+        );
       }
-      return LrclibLookup(result: await _toResult(best), settled: true);
+      return LyricsLookup(result: await _toHit(best), settled: true);
     });
   }
 
@@ -137,7 +95,8 @@ class Lrclib {
   /// Null when the answer could not be had — a rate limit or a dead network —
   /// so the picker can offer a retry instead of claiming there is nothing.
   /// Instrumental rows are dropped: they have no words to adopt.
-  Future<List<LrclibCandidate>?> search(String query) async {
+  @override
+  Future<List<LyricsCandidate>?> searchLyrics(String query) async {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return const [];
     return _serialized(null, () async {
@@ -146,21 +105,22 @@ class Lrclib {
       if (response.statusCode != 200) return const [];
       final body = response.data;
       if (body is! List) return null;
-      final candidates = <LrclibCandidate>[];
+      final candidates = <LyricsCandidate>[];
       for (final entry in body) {
         if (entry is! Map || entry['instrumental'] == true) continue;
-        final result = await _toResult(entry);
-        if (result == null) continue;
+        final hit = await _toHit(entry);
+        if (hit == null) continue;
         final seconds = (entry['duration'] as num?)?.toDouble();
-        candidates.add(LrclibCandidate(
-          id: result.id,
+        candidates.add(LyricsCandidate(
+          origin: LyricsOrigin.lrclib,
+          id: hit.id,
           title: _text(entry['trackName']) ?? trimmed,
           artistName: _text(entry['artistName']),
           albumName: _text(entry['albumName']),
           duration: seconds == null
               ? null
               : Duration(milliseconds: (seconds * 1000).round()),
-          lyrics: result.lyrics,
+          lyrics: hit.lyrics,
         ));
       }
       return candidates;
@@ -191,7 +151,7 @@ class Lrclib {
   }
 
   /// `/api/get` — the exact-signature lookup.
-  Future<LrclibLookup> _get(LyricsRequest song) async {
+  Future<LyricsLookup> _get(LyricsRequest song) async {
     final seconds = _seconds(song.duration);
     final album = song.album?.trim();
     final response = await _send('/api/get', {
@@ -203,16 +163,16 @@ class Lrclib {
     // A rate limit is not an answer: LRCLIB may well have this lyric, it just
     // would not tell us now, so the caller must not cache a miss.
     if (response == null || response.statusCode == 429) {
-      return LrclibLookup.unknown;
+      return LyricsLookup.unknown;
     }
-    if (response.statusCode != 200) return LrclibLookup.missing;
+    if (response.statusCode != 200) return LyricsLookup.missing;
     final body = response.data;
-    if (body is! Map) return LrclibLookup.unknown;
-    final result = await _toResult(body);
+    if (body is! Map) return LyricsLookup.unknown;
+    final hit = await _toHit(body);
     // An instrumental is a real answer: LRCLIB knows the track has no words.
-    return result == null
-        ? LrclibLookup.missing
-        : LrclibLookup(result: result, settled: true);
+    return hit == null
+        ? LyricsLookup.missing
+        : LyricsLookup(result: hit, settled: true);
   }
 
   /// `/api/search` — keywords, then a local pick. At most 20 rows, no paging.
@@ -288,19 +248,23 @@ class Lrclib {
   /// The parse is awaited because a large timed lyric is parsed off the UI
   /// isolate — the search path maps up to twenty records in one go, and each
   /// is a regex over several hundred lines.
-  Future<LrclibResult?> _toResult(Map row) async {
+  Future<LyricsHit?> _toHit(Map row) async {
     if (row['instrumental'] == true) return null;
     final id = (row['id'] as num?)?.toInt() ?? 0;
 
     final timed = _text(row['syncedLyrics']);
     if (timed != null) {
       final lyrics = await parseLrcAsync(timed);
-      if (!lyrics.isEmpty) return LrclibResult(lyrics: lyrics, id: id);
+      if (!lyrics.isEmpty) {
+        return LyricsHit(lyrics: lyrics, origin: LyricsOrigin.lrclib, id: id);
+      }
     }
     final plain = _text(row['plainLyrics']);
     if (plain != null) {
       final lyrics = _plain(plain);
-      if (!lyrics.isEmpty) return LrclibResult(lyrics: lyrics, id: id);
+      if (!lyrics.isEmpty) {
+        return LyricsHit(lyrics: lyrics, origin: LyricsOrigin.lrclib, id: id);
+      }
     }
     return null;
   }

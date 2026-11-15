@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:groovy_box/data/local/library_database.dart';
 import 'package:groovy_box/library/catalog.dart';
 import 'package:groovy_box/library/lrclib.dart';
+import 'package:groovy_box/library/lyrics_query.dart';
 import 'package:groovy_box/library/lyrics.dart';
 import 'package:groovy_box/library/lyrics_resolver.dart';
 import 'package:groovy_box/library/lyrics_store.dart';
@@ -49,14 +50,35 @@ class _Library extends LibrarySource {
 class _FakeLrclib extends Lrclib {
   _FakeLrclib(this.lookup);
 
-  final LrclibLookup lookup;
+  final LyricsLookup lookup;
   int calls = 0;
 
   @override
-  Future<LrclibLookup> find(LyricsRequest song) async {
+  Future<LyricsLookup> findLyrics(LyricsRequest song) async {
     calls++;
     return lookup;
   }
+
+  @override
+  Future<List<LyricsCandidate>?> searchLyrics(String query) async => const [];
+}
+
+/// A second query source, so the chain's order and its "first timed answer
+/// wins" rule can be tested without NetEase or a network.
+class _SecondQuery implements LyricsQuerySource {
+  _SecondQuery(this.lookup, this.origin);
+  final LyricsLookup lookup;
+  final LyricsOrigin origin;
+  int calls = 0;
+
+  @override
+  Future<LyricsLookup> findLyrics(LyricsRequest song) async {
+    calls++;
+    return lookup;
+  }
+
+  @override
+  Future<List<LyricsCandidate>?> searchLyrics(String query) async => const [];
 }
 
 const _song = LyricsRequest(
@@ -87,8 +109,12 @@ const _remotePlain = Lyrics(
   synced: false,
 );
 
-LrclibLookup _found(Lyrics lyrics) => LrclibLookup(
-  result: LrclibResult(lyrics: lyrics, id: 1),
+LyricsLookup _found(Lyrics lyrics) => LyricsLookup(
+  result: LyricsHit(
+    lyrics: lyrics,
+    origin: LyricsOrigin.lrclib,
+    id: 1,
+  ),
   settled: true,
 );
 
@@ -120,16 +146,17 @@ void main() {
   Future<Lyrics> resolve(
     _FakeLrclib lrclib, {
     bool refresh = false,
+    List<LyricsQuerySource>? extra,
   }) => LyricsResolver(
     catalog: catalog,
     store: cache,
-    lrclib: lrclib,
+    queries: () => [lrclib, ...?extra],
     sourceFor: (_) => library,
   ).resolve(_song, refresh: refresh);
 
   test('a timed library lyric wins and is stored', () async {
     library.answer = _libraryTimed;
-    final lrclib = _FakeLrclib(LrclibLookup.missing);
+    final lrclib = _FakeLrclib(LyricsLookup.missing);
 
     final lyrics = await resolve(lrclib);
 
@@ -170,7 +197,7 @@ void main() {
 
   test('the stored answer is used without touching the network', () async {
     library.answer = _libraryTimed;
-    await resolve(_FakeLrclib(LrclibLookup.missing));
+    await resolve(_FakeLrclib(LyricsLookup.missing));
 
     library.answer = null;
     final lrclib = _FakeLrclib(_found(_remoteTimed));
@@ -183,7 +210,7 @@ void main() {
 
   test('a refresh ignores the stored answer and asks again', () async {
     library.answer = _libraryTimed;
-    await resolve(_FakeLrclib(LrclibLookup.missing));
+    await resolve(_FakeLrclib(LyricsLookup.missing));
     await cache.remove(await _trackOf(catalog));
 
     library.answer = null;
@@ -195,7 +222,7 @@ void main() {
   });
 
   test('a confirmed miss is stored; an unanswered one is not', () async {
-    await resolve(_FakeLrclib(LrclibLookup.missing));
+    await resolve(_FakeLrclib(LyricsLookup.missing));
     expect((await cache.read(await _trackOf(catalog)))!.origin, LyricsOrigin.none);
   });
 
@@ -206,7 +233,7 @@ void main() {
     final resolver = LyricsResolver(
       catalog: catalog,
       store: cache,
-      lrclib: lrclib,
+      queries: () => [lrclib],
       sourceFor: (_) => library,
     );
 
@@ -234,7 +261,7 @@ void main() {
   });
 
   test('an unanswered miss is not stored', () async {
-    await resolve(_FakeLrclib(LrclibLookup.unknown));
+    await resolve(_FakeLrclib(LyricsLookup.unknown));
     expect(
       await cache.read(await _trackOf(catalog)),
       isNull,
@@ -242,9 +269,74 @@ void main() {
     );
   });
 
+  test('a later query source answers when the first has nothing', () async {
+    // The chain exists for exactly this: LRCLIB has no row for the song, but a
+    // connected account can still find it.
+    final second = _SecondQuery(
+      LyricsLookup(result: LyricsHit(
+        lyrics: _remoteTimed,
+        origin: LyricsOrigin.netease,
+        id: 9,
+      ), settled: true),
+      LyricsOrigin.netease,
+    );
+
+    final lyrics = await resolve(
+      _FakeLrclib(LyricsLookup.missing),
+      extra: [second],
+    );
+
+    expect(lyrics.lines.single.text, 'remote line');
+    expect(second.calls, 1);
+    // The stored row says where the words really came from.
+    expect(
+      (await cache.read(await _trackOf(catalog)))!.origin,
+      LyricsOrigin.netease,
+    );
+  });
+
+  test('a timed answer stops the chain; a plain one does not', () async {
+    final plain = _SecondQuery(
+      LyricsLookup(result: LyricsHit(
+        lyrics: _remotePlain,
+        origin: LyricsOrigin.netease,
+      ), settled: true),
+      LyricsOrigin.netease,
+    );
+    final timed = _SecondQuery(
+      LyricsLookup(result: LyricsHit(
+        lyrics: _remoteTimed,
+        origin: LyricsOrigin.netease,
+      ), settled: true),
+      LyricsOrigin.netease,
+    );
+
+    await resolve(_FakeLrclib(LyricsLookup.missing), extra: [plain, timed]);
+
+    // The plain row was kept as a fallback, so the timed row behind it was
+    // still asked — and won.
+    expect(plain.calls, 1);
+    expect(timed.calls, 1);
+    expect(
+      (await cache.read(await _trackOf(catalog)))!.lyrics.synced,
+      isTrue,
+    );
+  });
+
+  test('a miss is only cached when every service confirmed it', () async {
+    final unreachable = _SecondQuery(LyricsLookup.unknown, LyricsOrigin.netease);
+    await resolve(_FakeLrclib(LyricsLookup.missing), extra: [unreachable]);
+
+    expect(
+      await cache.read(await _trackOf(catalog)),
+      isNull,
+      reason: 'one service could not answer, so the song may still have words',
+    );
+  });
+
   test('removing a source unlinks its songs but keeps their words', () async {
     library.answer = _libraryTimed;
-    await resolve(_FakeLrclib(LrclibLookup.missing));
+    await resolve(_FakeLrclib(LyricsLookup.missing));
     final trackId = await _trackOf(catalog);
 
     await catalog.forgetSource('a');
