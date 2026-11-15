@@ -1,5 +1,4 @@
 import 'package:groovy_box/desktop/mini_player/link.dart';
-import 'package:groovy_box/library/lrclib.dart';
 import 'package:groovy_box/library/lyrics.dart';
 import 'package:groovy_box/library/lyrics_resolver.dart';
 
@@ -20,7 +19,8 @@ class HostLyricsResolver extends LyricsResolver {
   /// [command] is the link's request/response call; injectable so the codec
   /// hops can be tested without two engines.
   HostLyricsResolver.withCommand(this._command)
-    : super(catalog: null, store: null, lrclib: Lrclib());
+    // No local cache, no local services: every lookup is the host's.
+    : super(catalog: null, store: null, queries: () => const []);
 
   final Future<Object?> Function(String method, [Object? arguments]) _command;
 

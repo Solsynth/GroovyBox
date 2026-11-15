@@ -11,6 +11,7 @@ import 'package:groovy_box/desktop/mini_player/link.dart';
 import 'package:groovy_box/desktop/mini_player/mini_lyrics.dart';
 import 'package:groovy_box/desktop/mini_player/mini_playback.dart';
 import 'package:groovy_box/desktop/mini_player/mini_player_app.dart';
+import 'package:groovy_box/desktop/mini_player/window.dart';
 import 'package:groovy_box/core/glass.dart';
 import 'package:groovy_box/core/router.dart';
 import 'package:groovy_box/data/local/library_database.dart';
@@ -49,10 +50,9 @@ Future<void> main() async {
     try {
       final controller = await WindowController.fromCurrentEngine();
       final raw = controller.arguments;
-      if (raw.isNotEmpty &&
-          jsonDecode(raw) is Map &&
-          (jsonDecode(raw) as Map)['kind'] == 'miniPlayer') {
-        await _runMiniPlayer();
+      final args = raw.isEmpty ? null : jsonDecode(raw);
+      if (args is Map && args['kind'] == 'miniPlayer') {
+        await _runMiniPlayer(args['mainWindowId'] as int?);
         return;
       }
     } catch (_) {
@@ -185,27 +185,34 @@ Future<void> main() async {
 /// local music directory, both with the same failure posture as the main path:
 /// a machine that refuses them still shows a mini player, just without local
 /// artwork or cached lyrics.
-Future<void> _runMiniPlayer() async {
+Future<void> _runMiniPlayer(int? mainWindowId) async {
   await EasyLocalization.ensureInitialized();
 
   // The guest engine manages its own window: small, always on top, and
-  // hiding instead of closing so reopening is instant. `getCurrent` answers
-  // this engine's window — nativeapi reads the app's focused window, and the
-  // secondary engine's window is the one that exists here.
-  final window = WindowManager.instance.getCurrent();
+  // hiding instead of closing so reopening is instant.
+  //
+  // `getCurrent` is not usable here: nativeapi answers it from the app's
+  // window list, not from this engine, so it returns the main window and
+  // every "mini player" operation would act on the app. The host passes its
+  // own window id in the launch arguments, and the one that is not it is
+  // this engine's window.
+  setMainWindowId(mainWindowId);
+  final window = miniPlayerWindow();
   if (window != null) {
     // The window is frameless like the main one, so [DesktopWindowFrame]
     // draws the title bar and the window controls for both: one chrome, one
     // place to change it. macOS keeps its traffic lights on the hidden bar.
     window
       ..title = 'GroovyBox Mini'
+      // The bar shape is one fixed size: it opens at exactly the height its
+      // overlay fits. Panes relax the ceiling when they open.
       ..minimumSize = const Size(
         kMiniPlayerMinWidth,
         kMiniPlayerBarHeight,
       ).toNative()
       ..maximumSize = const Size(
         kMiniPlayerMaxWidth,
-        kMiniPlayerMaxHeight,
+        kMiniPlayerBarHeight,
       ).toNative()
       ..isAlwaysOnTop = true
       ..backgroundColor = Colors.transparent.toNative()

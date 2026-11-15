@@ -10,6 +10,8 @@ import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/lyrics_view.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:flutter/gestures.dart';
+import 'package:groovy_box/widgets/queue_panel.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:groovy_box/library/lyrics.dart';
@@ -105,6 +107,63 @@ void main() {
     });
   }
 
+  testWidgets('the pane footer slides away when idle and returns on hover', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(340, 490);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    miniPlayerPane.value = MiniPane.queue;
+    addTearDown(() => miniPlayerPane.value = null);
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          librarySourcesProvider.overrideWithValue([_Source()]),
+          libraryDatabaseProvider.overrideWithValue(null),
+          playbackProvider.overrideWith(_Mini.new),
+        ],
+        child: MaterialApp(
+          theme: createAppThemeSet().light,
+          home: Scaffold(
+            body: Builder(
+              builder: (context) {
+                final song = ProviderScope.containerOf(
+                  context,
+                ).read(playbackProvider).current!;
+                return MiniPlayerView(song: song);
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // The footer is the only fading row in the view.
+    double footerOpacity() =>
+        tester.widget<AnimatedOpacity>(find.byType(AnimatedOpacity)).opacity;
+
+    // Just opened: the controls are there.
+    expect(footerOpacity(), 1);
+
+    // Idle past the hide delay: the footer is transparent (and untouchable).
+    await tester.pump(const Duration(milliseconds: 2400));
+    await tester.pumpAndSettle();
+    expect(footerOpacity(), 0);
+
+    // A hover brings it straight back.
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: tester.getCenter(find.byType(QueuePanel)));
+    await tester.pump();
+    await gesture.moveBy(const Offset(2, 2));
+    await tester.pumpAndSettle();
+    expect(footerOpacity(), 1);
+    await gesture.removePointer();
+  });
+
   testWidgets('an open pane sits between the header and the transport', (
     tester,
   ) async {
@@ -158,5 +217,10 @@ void main() {
     // test exists to catch.
     expect(pane.top, greaterThanOrEqualTo(header.bottom));
     expect(pane.bottom, lessThanOrEqualTo(scrubber.top));
+    // The words keep the page's gutter rather than hugging the edge.
+    expect(
+      tester.getRect(find.text('first line')).left,
+      greaterThanOrEqualTo(SolSpace.xl),
+    );
   });
 }

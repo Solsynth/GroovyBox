@@ -6,6 +6,7 @@ import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/desktop/mini_player/link.dart';
 import 'package:groovy_box/desktop/mini_player/mini_playback.dart';
+import 'package:groovy_box/desktop/mini_player/window.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/shell/window_frame.dart';
@@ -68,7 +69,7 @@ final miniPlayerPane = ValueNotifier<MiniPane?>(null);
 /// would come back as a queue over a blank bar.
 Future<void> hideMiniPlayer() async {
   miniPlayerPane.value = null;
-  final window = WindowManager.instance.getCurrent();
+  final window = miniPlayerWindow();
   if (window == null) return;
   _applyBounds(window, expanded: false);
   window.setSize(
@@ -91,12 +92,11 @@ void _applyBounds(Window window, {required bool expanded}) {
           ? kMiniPlayerBarHeight + kMiniPlayerPaneMinHeight
           : kMiniPlayerBarHeight,
     ).toNative()
-    // Each shape has its own ceiling. The bar stops at
-    // [kMiniPlayerBarMaxHeight] — a little taller for a bigger sleeve, not a
-    // half-empty window — while a pane keeps the full range.
+    // The bar is a fixed height: with no pane there is nothing a taller
+    // window would show, so the drag cannot make one. Panes get the range.
     ..maximumSize = Size(
       kMiniPlayerMaxWidth,
-      expanded ? kMiniPlayerMaxHeight : kMiniPlayerBarMaxHeight,
+      expanded ? kMiniPlayerMaxHeight : kMiniPlayerBarHeight,
     ).toNative();
 }
 
@@ -120,7 +120,7 @@ class _MiniPlayerHomeState extends ConsumerState<MiniPlayerHome> {
     super.initState();
     // The window's controls close it. Closing hides rather than destroys:
     // the engine stays alive and reopening is instant.
-    final window = WindowManager.instance.getCurrent();
+    final window = miniPlayerWindow();
     if (window != null) {
       _closeListener = window.addListener((event) async {
         if (event is WindowCloseRequestedEvent) {
@@ -142,7 +142,7 @@ class _MiniPlayerHomeState extends ConsumerState<MiniPlayerHome> {
   void dispose() {
     final listenerId = _closeListener;
     if (listenerId != null) {
-      WindowManager.instance.getCurrent()?.removeListener(listenerId);
+      miniPlayerWindow()?.removeListener(listenerId);
     }
     super.dispose();
   }
@@ -151,8 +151,15 @@ class _MiniPlayerHomeState extends ConsumerState<MiniPlayerHome> {
   Widget build(BuildContext context) {
     final song = ref.watch(playbackProvider.select((state) => state.current));
 
+    final window = miniPlayerWindow();
     return DesktopWindowFrame(
       isDesktopPlatform: true,
+      // This engine's own window, not the app's: `getCurrent` answers the
+      // main window from inside a secondary engine.
+      window: window,
+      // The artwork runs behind the drag band and the traffic lights; the
+      // band stays a hit area, and the content starts below it.
+      overlayTitleBar: true,
       // Closing hides this window, keeping the engine alive: the event
       // listener in `initState` cancels the real close, so this button is
       // the same path.
@@ -181,22 +188,44 @@ class MiniPlayerView extends ConsumerStatefulWidget {
 }
 
 class _MiniPlayerViewState extends ConsumerState<MiniPlayerView> {
+  /// Whether the footer controls are showing.
+  ///
+  /// With a pane open the footer floats over the lyrics or the queue, so it
+  /// gets out of the way: it appears on hover or on a transport key, and
+  /// fades back out once the pointer has been still for a moment. The bar
+  /// shape always shows it — there is nothing else in that window.
+  bool _controlsVisible = true;
+  Timer? _hideTimer;
+
+  void _revealControls() {
+    _hideTimer?.cancel();
+    if (!_controlsVisible) setState(() => _controlsVisible = true);
+    _hideTimer = Timer(const Duration(milliseconds: 2200), () {
+      if (!mounted || miniPlayerPane.value == null) return;
+      setState(() => _controlsVisible = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _hideTimer?.cancel();
+    super.dispose();
+  }
+
   /// Resizes the window for the shape that is about to be shown.
   ///
   /// A height the user dragged to is theirs and survives a pane opening or
   /// closing; only a window that is too short for what it must now show is
   /// grown, and only a bar taller than the bar ceiling is pulled back to it.
   void _fitWindow(MiniPane? pane) {
-    final window = WindowManager.instance.getCurrent();
+    final window = miniPlayerWindow();
     if (window == null) return;
     _applyBounds(window, expanded: pane != null);
 
     final floor = pane == null
         ? kMiniPlayerBarHeight
         : kMiniPlayerBarHeight + kMiniPlayerPaneMinHeight;
-    final ceiling = pane == null
-        ? kMiniPlayerBarMaxHeight
-        : kMiniPlayerMaxHeight;
+    final ceiling = pane == null ? kMiniPlayerBarHeight : kMiniPlayerMaxHeight;
     final height = window.size.height.clamp(floor, ceiling).toDouble();
     if (height == window.size.height && pane != null) return;
     window.setSize(
@@ -210,6 +239,15 @@ class _MiniPlayerViewState extends ConsumerState<MiniPlayerView> {
     final pane = miniPlayerPane.value == next ? null : next;
     miniPlayerPane.value = pane;
     _fitWindow(pane);
+    if (pane == null) {
+      // Back to the bar: the footer is the only content and stays put.
+      _hideTimer?.cancel();
+      _hideTimer = null;
+      if (!_controlsVisible) setState(() => _controlsVisible = true);
+      return;
+    }
+    // A pane opens with its controls showing, then they get out of the way.
+    _revealControls();
   }
 
   @override
@@ -221,46 +259,85 @@ class _MiniPlayerViewState extends ConsumerState<MiniPlayerView> {
 
     return ValueListenableBuilder<MiniPane?>(
       valueListenable: miniPlayerPane,
-      builder: (context, pane, _) => Stack(
-        fit: StackFit.expand,
-        children: [
-          // The cover fills the window and everything floats over it, the
-          // way Apple Music's mini player does. A pane opens over the same
-          // field, blurred harder so the pane's text still reads.
-          _ArtworkField(song: shown, paneOpen: pane != null),
-          // One column, top to bottom: header, the pane if one is open,
-          // then the scrubber and the transport. The pane takes the space
-          // that is left instead of being positioned over the furniture
-          // below it — a positioned pane drew its first lyric line behind
-          // the scrubber.
-          Column(
+      builder: (context, pane, _) {
+        // A window that opens with its pane already showing has never been
+        // hovered, so nothing has armed the hide timer: arm it here.
+        if (pane != null && _hideTimer == null && _controlsVisible) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && miniPlayerPane.value != null) _revealControls();
+          });
+        }
+        return MouseRegion(
+          // Any pointer movement over the window brings the footer back; a
+          // pane is the only surface that hides it.
+          onHover: pane != null ? (_) => _revealControls() : null,
+          child: Stack(
+            fit: StackFit.expand,
             children: [
-              _Header(
-                song: shown,
-                pane: pane,
-                onPick: _pick,
-                compact: pane != null,
-              ),
-              if (pane != null)
-                Expanded(
-                  child: switch (pane) {
-                    MiniPane.lyrics => SongLyricsPane(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: SolSpace.sm,
-                      ),
-                      fade: true,
+              // The cover fills the window and everything floats over it, the
+              // way Apple Music's mini player does. A pane opens over the same
+              // field, blurred harder so the pane's text still reads.
+              _ArtworkField(song: shown, paneOpen: pane != null),
+              // Header, pane, footer. The pane takes the space that is left
+              // instead of being positioned over the furniture below it — a
+              // positioned pane drew its first lyric line behind the scrubber.
+              Column(
+                children: [
+                  // The frame's title band is an overlay, so the artwork can
+                  // run behind the traffic lights while the header still
+                  // starts below them.
+                  const SizedBox(height: DesktopWindowFrame.titleBarHeight),
+                  _Header(
+                    song: shown,
+                    pane: pane,
+                    onPick: _pick,
+                    compact: pane != null,
+                  ),
+                  if (pane != null)
+                    Expanded(
+                      child: switch (pane) {
+                        MiniPane.lyrics => const SongLyricsPane(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: SolSpace.xl,
+                          ),
+                          fade: true,
+                        ),
+                        MiniPane.queue => const QueuePanel(),
+                      },
                     ),
-                    MiniPane.queue => const QueuePanel(),
-                  },
-                )
-              else
-                const Spacer(),
-              if (!shown.isRadio) const _Scrubber(),
-              const _TransportRow(),
+                  // No Spacer: the bar is exactly the height its stack is,
+                  // and a bar-shaped window that is taller than the stack
+                  // would have nothing to put in the difference.
+                  if (pane == null) const SizedBox(height: SolSpace.md),
+                  // A pane's footer floats over its content, so it slides
+                  // away when idle; the bar shape keeps it in place.
+                  AnimatedSlide(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    offset: pane != null && !_controlsVisible
+                        ? const Offset(0, 1)
+                        : Offset.zero,
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 220),
+                      opacity: pane != null && !_controlsVisible ? 0 : 1,
+                      child: IgnorePointer(
+                        ignoring: pane != null && !_controlsVisible,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (!shown.isRadio) const _Scrubber(),
+                            const _TransportRow(),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

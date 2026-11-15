@@ -24,6 +24,21 @@ class DesktopWindowFrame extends HookWidget {
   final VoidCallback? onClose;
   final bool isDesktopPlatform;
 
+  /// Draws the title band over [child] instead of above it.
+  ///
+  /// The main window's pages want a solid band; a player whose artwork fills
+  /// the window wants the art to run behind the drag strip and the traffic
+  /// lights, with the band only a hit area. Either way the band stays a
+  /// [DragToMoveArea] of [titleBarHeight].
+  final bool overlayTitleBar;
+
+  /// The window the chrome acts on.
+  ///
+  /// `WindowManager.instance.getCurrent()` answers the app's main window from
+  /// inside a secondary engine, so a guest window (the mini player) must pass
+  /// its own here or every button would act on the main window.
+  final Window? window;
+
   const DesktopWindowFrame({
     super.key,
     required this.child,
@@ -31,6 +46,8 @@ class DesktopWindowFrame extends HookWidget {
     this.overlays = const [],
     this.onClose,
     this.isDesktopPlatform = false,
+    this.overlayTitleBar = false,
+    this.window,
   });
 
   static bool get isPlatformDesktop =>
@@ -55,7 +72,7 @@ class DesktopWindowFrame extends HookWidget {
     useEffect(() {
       if (!isDesktopPlatform) return null;
 
-      final window = WindowManager.instance.getCurrent();
+      final window = this.window ?? WindowManager.instance.getCurrent();
       if (window == null) return null;
 
       isMaximized.value = window.isMaximized;
@@ -81,18 +98,35 @@ class DesktopWindowFrame extends HookWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                Column(
-                  crossAxisAlignment: .stretch,
-                  children: [
-                    DragToMoveArea(
-                      child: Material(
-                        color: Theme.of(context).colorScheme.surfaceContainer,
-                        child: _buildTitleBar(context, isMaximized),
-                      ),
+                if (overlayTitleBar) ...[
+                  // The band is a hit area over the content, not a row above
+                  // it: the artwork runs behind the traffic lights and the
+                  // content's own top padding starts at [titleBarHeight].
+                  child,
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: titleBarHeight,
+                    child: DragToMoveArea(
+                      child: _buildTitleBar(context, isMaximized),
                     ),
-                    Expanded(child: child),
-                  ],
-                ),
+                  ),
+                ] else
+                  Column(
+                    crossAxisAlignment: .stretch,
+                    children: [
+                      DragToMoveArea(
+                        child: Material(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.surfaceContainer,
+                          child: _buildTitleBar(context, isMaximized),
+                        ),
+                      ),
+                      Expanded(child: child),
+                    ],
+                  ),
                 ...overlays,
               ],
             ),
@@ -121,7 +155,7 @@ class DesktopWindowFrame extends HookWidget {
 
   Widget _buildTitleBar(BuildContext context, ValueNotifier<bool> isMaximized) {
     // One lookup per build: the window exists for this engine's lifetime.
-    final window = WindowManager.instance.getCurrent();
+    final window = this.window ?? WindowManager.instance.getCurrent();
     final bar = SizedBox(
       height: titleBarHeight,
       child: Stack(alignment: Alignment.center, children: [?title]),
