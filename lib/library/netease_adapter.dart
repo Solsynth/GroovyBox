@@ -1,0 +1,631 @@
+import 'package:easy_localization/easy_localization.dart';
+
+import 'package:dio/dio.dart';
+
+import 'http.dart';
+import 'lyrics.dart';
+import 'models.dart';
+import 'source.dart';
+
+/// NetEase Cloud Music, read through a self-hosted NeteaseCloudMusicApi server.
+///
+/// The server is the user's own deployment of the open-source API bridge
+/// (typically one `docker run` of NeteaseCloudMusicApi); GroovyBox ships no
+/// address and no bundled service. The bridge speaks plain JSON over HTTP and
+/// carries the login state as a cookie, which the app stores in
+/// [SourceConfig.auth] like any other session token.
+///
+/// Capabilities, chosen by what the service can do rather than by kind:
+/// [RatedSource] (the red-heart list), [CuratedSource] (daily recommendations
+/// and personalised playlists) and [ResolvedStreamSource], because the
+/// playback URL is minted per request by `song/url/v1` instead of being
+/// derivable from the item.
+class NeteaseAdapter implements LibraryAdapter {
+  @override
+  LibraryKind get kind => LibraryKind.netease;
+
+  /// Runs anywhere with a network.
+  @override
+  bool get isAvailable => true;
+
+  /// Server address, account and password are exactly what the bridge needs:
+  /// the account is a NetEase phone number or 163 email, and the password is
+  /// what the account signs in with.
+  @override
+  bool get needsCredentials => true;
+
+  @override
+  Future<SourceConfig> connect({
+    required String baseUrl,
+    required String username,
+    required String password,
+  }) async {
+    final normalized = normalizeBaseUrl(baseUrl);
+    final client = _NeteaseHttp(normalized, cookie: null);
+    try {
+      final account = await _login(client, username, password);
+      return SourceConfig(
+        id: newSourceId(LibraryKind.netease),
+        kind: LibraryKind.netease,
+        baseUrl: normalized,
+        displayName: account.nickname,
+        auth: {'cookie': account.cookie},
+      );
+    } finally {
+      client.close();
+    }
+  }
+
+  @override
+  LibrarySource sourceFor(SourceConfig config) => NeteaseSource(config);
+
+  /// [username] is a phone number (an optional `+`-prefixed country code, as
+  /// in `+1 5550100`) or a 163 email, told apart by the `@` every email has.
+  Future<_NeteaseAccount> _login(
+    _NeteaseHttp http,
+    String username,
+    String password,
+  ) async {
+    final isEmail = username.contains('@');
+    final isPhoneWithCode = !isEmail && username.startsWith('+');
+    final countryCode = isPhoneWithCode
+        ? username.substring(1).split(' ').first
+        : null;
+    final account = isPhoneWithCode
+        ? username.substring(1 + (countryCode?.length ?? 0)).trim()
+        : username;
+
+    final body = await http.post(
+      isEmail ? '/login' : '/login/cellphone',
+      query: isEmail
+          ? {'email': account, 'password': password}
+          : {
+              'phone': account,
+              'password': password,
+              'countrycode': ?countryCode,
+            },
+    );
+    final code = (body['code'] as num?)?.toInt();
+    if (code != 200) {
+      throw LibraryException(
+        '${body['msg'] ?? body['message'] ?? 'Sign-in failed'}',
+        code: code,
+        messageKey: 'libraryNeteaseLoginFailed',
+      );
+    }
+    final cookie = body['cookie'];
+    if (cookie is! String || cookie.isEmpty) {
+      throw const LibraryException(
+        'The server did not return a login session.',
+        messageKey: 'libraryNeteaseNoCookie',
+      );
+    }
+    final profile = body['profile'];
+    final nickname = profile is Map
+        ? (profile['nickname'] as String?) ?? displayNameHost(body)
+        : displayNameHost(body);
+    return _NeteaseAccount(cookie: cookie, nickname: nickname);
+  }
+
+  static String displayNameHost(Map<String, dynamic> body) {
+    final account = body['account'];
+    final id = account is Map ? account['id'] : null;
+    return id == null ? 'NetEase Cloud Music' : 'NetEase $id';
+  }
+}
+
+class _NeteaseAccount {
+  final String cookie;
+  final String nickname;
+  const _NeteaseAccount({required this.cookie, required this.nickname});
+}
+
+/// The HTTP half of the bridge: every endpoint is a GET with query
+/// parameters, the login cookie rides along as the `cookie` query parameter
+/// the bridge documents, and errors come back as `{code, msg}` with HTTP 200
+/// more often than not.
+class _NeteaseHttp {
+  _NeteaseHttp(this.baseUrl, {required this.cookie});
+
+  final String baseUrl;
+  final String? cookie;
+  late final Dio _dio = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 12),
+      receiveTimeout: const Duration(seconds: 25),
+      responseType: ResponseType.json,
+    ),
+  );
+
+  void close() => _dio.close();
+
+  /// One call to the bridge. Returns the body map, or throws
+  /// [LibraryException] with the bridge's own words when it refuses.
+  Future<Map<String, dynamic>> get(
+    String path, {
+    Map<String, dynamic>? query,
+  }) => _send(path, query: query);
+
+  /// The login endpoints are POSTs in the bridge's own examples, but the
+  /// server accepts both; POST keeps passwords out of server access logs.
+  Future<Map<String, dynamic>> post(
+    String path, {
+    Map<String, dynamic>? query,
+  }) => _send(path, query: query, method: 'post');
+
+  Future<Map<String, dynamic>> _send(
+    String path, {
+    Map<String, dynamic>? query,
+    String method = 'get',
+  }) async {
+    final fullQuery = <String, dynamic>{...?query};
+    // The bridge takes the session as a `cookie` parameter (URL-encoded) —
+    // sending it on every call is what keeps a stateless client signed in.
+    if (cookie != null) fullQuery['cookie'] = cookie;
+    final Response<dynamic> response;
+    try {
+      response = method == 'post'
+          ? await _dio.post<dynamic>(
+              '$baseUrl$path',
+              queryParameters: fullQuery,
+            )
+          : await _dio.get<dynamic>(
+              '$baseUrl$path',
+              queryParameters: fullQuery,
+            );
+    } on DioException catch (error) {
+      throw describeDioError(error);
+    }
+    final data = response.data;
+    if (data is! Map) {
+      throw const LibraryException(
+        'Malformed NetEase response.',
+        messageKey: 'libraryMalformedResponse',
+      );
+    }
+    return Map<String, dynamic>.from(data);
+  }
+
+  /// The bridge answers `code: 200` for success and carries a `body` that is
+  /// itself the payload; anything else is the failure the UI should show.
+  LibraryException errorOf(Map<String, dynamic> body) => LibraryException(
+    '${body['msg'] ?? body['message'] ?? 'NetEase refused the request.'}',
+    code: (body['code'] as num?)?.toInt(),
+    messageKey: 'libraryNeteaseRequestFailed',
+  );
+}
+
+/// One signed-in NetEase Cloud Music account, via the user's own bridge.
+///
+/// Every read the merged library performs is answered in the app's neutral
+/// models; nothing in the app knows this source came from NetEase except the
+/// setup row that names it.
+class NeteaseSource extends LibrarySource
+    implements RatedSource, CuratedSource, ResolvedStreamSource {
+  NeteaseSource(this.config) : _http = _NeteaseHttp(config.baseUrl, cookie: config.auth['cookie']);
+
+  @override
+  final SourceConfig config;
+
+  final _NeteaseHttp _http;
+
+  /// The user id the session belongs to. Most reads take `uid`; the account
+  /// endpoint states it once and the source keeps it.
+  int? _userId;
+
+  static const _malformed = LibraryException(
+    'Malformed NetEase response.',
+    messageKey: 'libraryMalformedResponse',
+  );
+
+  /// Guards every read: a session the bridge no longer recognises must not
+  /// surface as a generic HTTP failure, but as "sign in again".
+  Future<Map<String, dynamic>> _call(
+    String path, {
+    Map<String, dynamic>? query,
+  }) async {
+    final body = await _http.get(path, query: query);
+    final code = (body['code'] as num?)?.toInt();
+    if (code == 301) {
+      throw const LibraryException(
+        'This NetEase account is not signed in. Connect it again from Settings.',
+        messageKey: 'libraryNeteaseSignedOut',
+      );
+    }
+    return body;
+  }
+
+  Future<int> _uid() async {
+    final known = _userId;
+    if (known != null) return known;
+    final body = await _call('/user/account');
+    final account = body['profile'] ?? body['account'];
+    if (account is! Map) throw _malformed;
+    final id = (account['userId'] as num?)?.toInt();
+    if (id == null) throw _malformed;
+    return _userId = id;
+  }
+
+  // ---- library reads -------------------------------------------------------
+
+  /// The account's playlists, the ones it owns first.
+  ///
+  /// `/user/playlist` lists every playlist the account can see, created and
+  /// collected alike; the own ones are the rows whose creator is this user,
+  /// and they come first in the answer.
+  @override
+  Future<List<LibraryPlaylist>> playlists() async {
+    final uid = await _uid();
+    final body = await _call('/user/playlist', query: {'uid': uid});
+    final list = body['playlist'];
+    if (list is! List) return const [];
+    return [
+      for (final item in list)
+        if (item is Map) _playlist(Map<String, dynamic>.from(item)),
+    ];
+  }
+
+  @override
+  Future<List<LibrarySong>> playlistSongs(String playlistId) async {
+    final body = await _call(
+      '/playlist/track/all',
+      query: {'id': playlistId, 'limit': 1000},
+    );
+    return _songs(body['songs']);
+  }
+
+  /// The album list is the collected-album endpoint: NetEase has no "my
+  /// albums" other than the ones the account subscribed to, and that is what
+  /// a library page shows.
+  @override
+  Future<List<LibraryAlbum>> albums({int limit = 60, int offset = 0}) async {
+    final body = await _call(
+      '/album/sublist',
+      query: {'limit': limit, 'offset': offset},
+    );
+    return _albums(body['data']);
+  }
+
+  @override
+  Future<LibraryAlbum?> album(String albumId) async {
+    final body = await _call('/album', query: {'id': albumId});
+    final album = body['album'];
+    return album is Map ? _album(Map<String, dynamic>.from(album)) : null;
+  }
+
+  @override
+  Future<List<LibrarySong>> albumSongs(String albumId) async {
+    final body = await _call('/album', query: {'id': albumId});
+    final album = body['album'];
+    final songs = album is Map ? album['songs'] : null;
+    return _songs(songs);
+  }
+
+  @override
+  Future<List<LibraryAlbum>> recentlyAdded({int limit = 50}) async {
+    // The subscription list has no "added at"; the newest row the service
+    // offers is what the merged library's newest shelf wants, in its order.
+    return albums(limit: limit);
+  }
+
+  /// The artists the account follows. NetEase does not keep a "my artists"
+  /// beyond follows, so this is the honest answer.
+  @override
+  Future<List<LibraryArtist>> artists() async {
+    final body = await _call('/artist/sublist', query: {'limit': 200});
+    return _artists(body['data']);
+  }
+
+  @override
+  Future<List<LibraryAlbum>> artistAlbums(String artistId) async {
+    final body = await _call(
+      '/artist/album',
+      query: {'id': artistId, 'limit': 100},
+    );
+    return _albums(body['hotAlbums']);
+  }
+
+  @override
+  Future<List<LibrarySong>> search(String query, {int limit = 40}) async {
+    final term = query.trim();
+    if (term.isEmpty) return const [];
+    final body = await _call(
+      '/cloudsearch',
+      query: {'keywords': term, 'type': 1, 'limit': limit},
+    );
+    final result = body['result'];
+    return _songs(result is Map ? result['songs'] : null);
+  }
+
+  @override
+  Future<List<LibrarySong>> randomSongs({int size = 40}) async {
+    // No random endpoint; the personalised new-song feed is the closest
+    // thing the service curates itself.
+    final body = await _call(
+      '/personalized/newsong',
+      query: {'limit': size},
+    );
+    final result = body['result'];
+    return _songs(result is Map ? result['songs'] : null)
+      ..shuffle();
+  }
+
+  /// The daily mix, as the landing page's own shelf.
+  @override
+  Future<List<LandingShelf>> landingShelves() async {
+    final shelves = <LandingShelf>[];
+    try {
+      final daily = await _call('/recommend/songs');
+      final data = daily['data'];
+      final songs = _songs(
+        data is Map ? data['dailySongs'] : null,
+      );
+      if (songs.isNotEmpty) {
+        shelves.add(
+          LandingShelf(
+            title: 'shelfNeteaseDaily'.tr(),
+            sourceId: id,
+            songs: songs,
+          ),
+        );
+      }
+    } on LibraryException {
+      // A signed-out recommendation must not blank the whole page; the other
+      // shelves still count.
+    }
+    return shelves;
+  }
+
+  /// What the account has, for the landing page's header card.
+  @override
+  Future<LibraryDigest?> digest() async {
+    try {
+      final uid = await _uid();
+      final body = await _call('/user/playlist', query: {'uid': uid});
+      final list = body['playlist'];
+      final own = list is List
+          ? list
+                .whereType<Map>()
+                .where((item) => item['userId'] == uid)
+                .toList()
+          : const <Map>[];
+      return LibraryDigest(
+        sourceId: id,
+        subtitle: displayName,
+        libraryTracks: own.isEmpty
+            ? null
+            : own.fold<int>(
+                0,
+                (total, item) => total + ((item['trackCount'] as num?)?.toInt() ?? 0),
+              ),
+      );
+    } on LibraryException {
+      return null;
+    }
+  }
+
+  // ---- favourites ----------------------------------------------------------
+
+  /// The red-heart list, answered as a set of ids.
+  ///
+  /// `/likelist` returns ids only, so whether one song is in it costs one
+  /// read of the whole list. It is cached for a short window: the heart on
+  /// one row does not need the service asked again for each redraw.
+  Set<String>? _likedIds;
+  DateTime _likedAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  Future<Set<String>> _likes() async {
+    final cached = _likedIds;
+    if (cached != null &&
+        DateTime.now().difference(_likedAt) < const Duration(seconds: 30)) {
+      return cached;
+    }
+    final uid = await _uid();
+    final body = await _call('/likelist', query: {'uid': uid});
+    final ids = body['ids'];
+    final liked = ids is List
+        ? {for (final id in ids) '$id'}
+        : const <String>{};
+    _likedIds = liked;
+    _likedAt = DateTime.now();
+    return liked;
+  }
+
+  @override
+  Future<bool> isFavourite(LibrarySong song) async {
+    try {
+      return (await _likes()).contains(song.id);
+    } on LibraryException {
+      return false;
+    }
+  }
+
+  @override
+  Future<void> setFavourite(LibrarySong song, {required bool value}) async {
+    final body = await _call('/like', query: {'id': song.id, 'like': value});
+    final code = (body['code'] as num?)?.toInt();
+    if (code != 200) {
+      throw _http.errorOf(body);
+    }
+    // The cached list is now wrong by one entry; the next read within the
+    // window must not answer the old state.
+    _likedIds = null;
+  }
+
+  // ---- playback ------------------------------------------------------------
+
+  /// The playback URL, minted per request by the bridge.
+  ///
+  /// `/song/url/v1` answers `{data: [{url, ...}]}`; a `null` url means the
+  /// account cannot hear the track (no entitlement, or no licence in the
+  /// region), which is a refusal the UI can explain, not a network failure.
+  final Map<String, (Uri, DateTime)> _streamCache = {};
+
+  @override
+  Future<Uri> resolveStreamUri(LibrarySong song) async {
+    final cached = _streamCache[song.id];
+    if (cached != null && DateTime.now().isBefore(cached.$2)) {
+      return cached.$1;
+    }
+    final body = await _call(
+      '/song/url/v1',
+      query: {'id': song.id, 'level': 'exhigh'},
+    );
+    final data = body['data'];
+    final first = data is List && data.isNotEmpty ? data.first : null;
+    final url = first is Map ? first['url'] : null;
+    if (url is! String || url.isEmpty) {
+      throw const LibraryException(
+        'This track cannot be played with the current account.',
+        messageKey: 'libraryNeteaseUnavailable',
+      );
+    }
+    final uri = Uri.parse(url);
+    // The minted URL is short-lived; ten minutes keeps one queue position
+    // from re-asking during a long listen without outliving the token.
+    _streamCache[song.id] = (uri, DateTime.now().add(const Duration(minutes: 10)));
+    return uri;
+  }
+
+  /// Never called on this source: [Playback] asks [resolveStreamUri] first
+  /// because the source has the capability.
+  @override
+  Uri streamUri(LibrarySong song) => throw const LibraryException(
+    'NetEase tracks are streamed through a resolved URL.',
+    messageKey: 'libraryNeteaseNoStream',
+  );
+
+  // ---- lyrics --------------------------------------------------------------
+
+  /// The service's own lyrics, plain or synced.
+  ///
+  /// `/lyric` answers `lrc` (synced) and `tlyric` (translation) as LRC text;
+  /// an empty answer means the song has none, which is not an error.
+  @override
+  Future<Lyrics> lyrics(LibrarySong song) async {
+    final body = await _call('/lyric', query: {'id': song.id});
+    final lrc = body['lrc'];
+    final raw = lrc is Map ? lrc['lyric'] : null;
+    if (raw is! String || raw.isEmpty) return Lyrics.empty;
+    final main = await parseLrcAsync(raw);
+    final tlyric = body['tlyric'];
+    final translationRaw = tlyric is Map ? tlyric['lyric'] : null;
+    if (translationRaw is! String || translationRaw.isEmpty) return main;
+    final translation = await parseLrcAsync(translationRaw);
+    return mergeLyricLayers(main: main, translation: translation);
+  }
+
+  // ---- artwork ---------------------------------------------------------------
+
+  @override
+  Uri? artworkUri(String? artId, {int size = 600}) {
+    if (artId == null || artId.isEmpty) return null;
+    if (!artId.startsWith('http')) return null;
+    // NetEase covers are served at a fixed size; `?param=WxH` asks the CDN
+    // for a resize instead of downloading the original every time.
+    return Uri.parse('$artId?param=${size}y$size');
+  }
+
+  // ---- mapping -------------------------------------------------------------
+
+  LibrarySong _song(Map<String, dynamic> json) {
+    final artists = json['ar'] ?? json['artists'];
+    final first = artists is List && artists.isNotEmpty
+        ? Map<String, dynamic>.from(artists.first as Map)
+        : null;
+    final album = json['al'] ?? json['album'];
+    final albumMap = album is Map ? Map<String, dynamic>.from(album) : null;
+    return LibrarySong(
+      sourceId: id,
+      id: '${json['id']}',
+      title: json['name'] as String? ?? 'Untitled',
+      artist: first?['name'] as String?,
+      artistId: first?['id']?.toString(),
+      album: albumMap?['name'] as String?,
+      albumId: albumMap?['id']?.toString(),
+      artId: albumMap != null ? _picUrl(albumMap) : null,
+      duration: Duration(
+        milliseconds: (json['dt'] ?? json['duration'] as num?)?.toInt() ?? 0,
+      ),
+      track: (json['no'] as num?)?.toInt(),
+      discNumber: (json['cd'] is num) ? (json['cd'] as num).toInt() : null,
+      year: _year(json),
+      // Fee 1 is VIP-only, 4 is a paid album, 8 is a low-quality free trial;
+      // none of these change what the row shows, so they are not kept.
+    );
+  }
+
+  List<LibrarySong> _songs(Object? raw) => raw is List
+      ? [
+          for (final item in raw)
+            if (item is Map) _song(Map<String, dynamic>.from(item)),
+        ]
+      : const [];
+
+  LibraryAlbum _album(Map<String, dynamic> json) {
+    final artist = json['artist'] ?? json['ar'];
+    final artistMap = artist is Map ? Map<String, dynamic>.from(artist) : null;
+    return LibraryAlbum(
+      sourceId: id,
+      id: '${json['id']}',
+      name: json['name'] as String? ?? 'Untitled',
+      artist: artistMap?['name'] as String?,
+      artistId: artistMap?['id']?.toString(),
+      artId: _picUrl(json),
+      songCount: (json['size'] as num?)?.toInt(),
+      duration: Duration.zero,
+      year: _publishTime(json),
+      genre: null,
+    );
+  }
+
+  List<LibraryAlbum> _albums(Object? raw) => raw is List
+      ? [
+          for (final item in raw)
+            if (item is Map) _album(Map<String, dynamic>.from(item)),
+        ]
+      : const [];
+
+  LibraryArtist _artist(Map<String, dynamic> json) => LibraryArtist(
+    sourceId: id,
+    id: '${json['id']}',
+    name: json['name'] as String? ?? 'Unknown artist',
+    artId: _picUrl(json),
+  );
+
+  List<LibraryArtist> _artists(Object? raw) => raw is List
+      ? [
+          for (final item in raw)
+            if (item is Map) _artist(Map<String, dynamic>.from(item)),
+        ]
+      : const [];
+
+  LibraryPlaylist _playlist(Map<String, dynamic> json) => LibraryPlaylist(
+    sourceId: id,
+    id: '${json['id']}',
+    name: json['name'] as String? ?? 'Untitled playlist',
+    owner: json['creator'] is Map
+        ? ((json['creator'] as Map)['nickname'] as String?)
+        : null,
+    songCount: (json['trackCount'] as num?)?.toInt(),
+    duration: Duration.zero,
+    artId: _picUrl(json),
+  );
+
+  /// The cover URL, whichever of the shapes the endpoints answer with.
+  static String? _picUrl(Map<String, dynamic> json) {
+    final url = json['picUrl'] ?? json['coverImgUrl'] ?? json['pic_str'] ??
+        json['picUrl_str'];
+    return url is String && url.isNotEmpty ? url : null;
+  }
+
+  static int? _year(Map<String, dynamic> json) {
+    final publish = json['publishTime'];
+    if (publish is num && publish > 0) {
+      return DateTime.fromMillisecondsSinceEpoch(publish.toInt()).year;
+    }
+    return null;
+  }
+
+  static int? _publishTime(Map<String, dynamic> json) => _year(json);
+}

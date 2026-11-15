@@ -7,9 +7,11 @@ import 'jellyfin_adapter.dart';
 import 'lyrics.dart';
 import 'models.dart';
 import 'subsonic_adapter.dart';
+import 'netease_adapter.dart';
 
 /// The kinds of library GroovyBox can talk to.
 enum LibraryKind {
+  netease('libraryKindNetease', 'libraryAddressNetease'),
   subsonic('libraryKindSubsonic', 'libraryAddressSubsonic'),
   jellyfin('libraryKindJellyfin', 'libraryAddressJellyfin'),
 
@@ -43,7 +45,7 @@ enum LibraryKind {
     // own mark for an account-backed library.
     LibraryKind.appleMusic => Symbols.cloud_rounded,
     LibraryKind.local => Symbols.smartphone_rounded,
-    LibraryKind.subsonic || LibraryKind.jellyfin => null,
+    LibraryKind.netease || LibraryKind.subsonic || LibraryKind.jellyfin => null,
   };
 
   /// Setup field placeholder.
@@ -210,6 +212,22 @@ abstract interface class RatedSource implements LibrarySource {
   Future<void> setFavourite(LibrarySong song, {required bool value});
 }
 
+/// A stream URL that has to be fetched before it exists.
+///
+/// Subsonic and Jellyfin answer [LibrarySource.streamUri] from the item they
+/// already described; a provider that mints per-request playback URLs has to
+/// be *asked* first. The transport awaits this when the source has it and
+/// falls back to the plain URL when it does not, so adding a minting provider
+/// touches nothing but the source itself.
+abstract interface class ResolvedStreamSource implements LibrarySource {
+  /// The playback URL for [song], resolved now.
+  ///
+  /// Minted URLs expire, so implementations cache against their own TTL.
+  /// Throws [LibraryException] when the provider refuses the track (no
+  /// entitlement, or the region has no licence).
+  Future<Uri> resolveStreamUri(LibrarySong song);
+}
+
 /// A library backed by a store the user can browse and add from.
 ///
 /// Apple Music's account library is a subset of a much larger catalog: the
@@ -320,6 +338,7 @@ abstract interface class LibraryAdapter {
 final Map<LibraryKind, LibraryAdapter> libraryAdapters = {
   LibraryKind.subsonic: SubsonicAdapter(),
   LibraryKind.jellyfin: JellyfinAdapter(),
+  LibraryKind.netease: NeteaseAdapter(),
   LibraryKind.appleMusic: AppleMusicAdapter(),
 };
 

@@ -836,9 +836,16 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     // already deactivated; a streamed track needs it active again before it
     // can sound. Activating an already-active session is a no-op.
     await _activateAudioSession();
+    // A minted URL (per-request playback links) has to be asked for first;
+    // everything else opens straight from the item's own address. The
+    // resolution sits inside the try below: a refusal (expired session, no
+    // entitlement) is answered by the fallback path with another library's
+    // copy, exactly like a dead URL.
     try {
-      await _player.open(Media(source.streamUri(toPlay).toString()));
-    } catch (_) {
+      final streamUri = source is ResolvedStreamSource
+          ? await source.resolveStreamUri(toPlay)
+          : source.streamUri(toPlay);
+      await _player.open(Media(streamUri.toString()));
       final catalog = ref.read(libraryCatalogProvider);
       if (catalog != null) {
         final links = await catalog.linksOfSong(song);
