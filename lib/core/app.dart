@@ -31,6 +31,14 @@ const kMiniPlayerBarHeight = 190.0;
 /// rather than two layouts.
 const kMiniPlayerPaneHeight = 300.0;
 
+/// Floor for an open pane: enough lyrics or queue to be usable before the user
+/// drags the window taller.
+const kMiniPlayerPaneMinHeight = 200.0;
+
+/// Tallest either shape can be dragged to. A floating player that can grow
+/// into a full page is the player page with extra steps.
+const kMiniPlayerMaxHeight = 720.0;
+
 /// Bounds the window can be dragged to: narrow enough for a desktop corner,
 /// wide enough for a queue row.
 const kMiniPlayerMinWidth = 300.0;

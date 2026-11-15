@@ -193,8 +193,10 @@ Future<void> _runMiniPlayer() async {
   // secondary engine's window is the one that exists here.
   final window = WindowManager.instance.getCurrent();
   if (window != null) {
-    // Height is not restored: the window opens as a bar and grows when a
-    // pane opens, so a saved pane height would only open it wrong.
+    // A real title bar on every platform, not a frameless surface: the
+    // window's own buttons are what close it, and a floating player without
+    // them reads as a panel that cannot be dismissed. It also means nothing
+    // drawn inside has to dodge the traffic lights.
     window
       ..title = 'GroovyBox Mini'
       ..minimumSize = const Size(
@@ -203,31 +205,19 @@ Future<void> _runMiniPlayer() async {
       ).toNative()
       ..maximumSize = const Size(
         kMiniPlayerMaxWidth,
-        kMiniPlayerBarHeight + kMiniPlayerPaneHeight,
+        kMiniPlayerMaxHeight,
       ).toNative()
       ..isAlwaysOnTop = true
-      ..backgroundColor = Colors.transparent.toNative()
-      // Transparent, frameless windows are only reliable on macOS; Windows
-      // and Linux keep the native frame, or the secondary engine can stay a
-      // gray undecorated surface before the first Flutter frame.
-      ..titleBarStyle = Platform.isMacOS
-          ? TitleBarStyle.hidden
-          : TitleBarStyle.normal
-      ..isWindowControlButtonsVisible = Platform.isMacOS;
+      // A native frame, so the surface stays opaque: a transparent one would
+      // show the desktop through a window that looks like a system window.
+      ..titleBarStyle = TitleBarStyle.normal
+      ..isWindowControlButtonsVisible = true;
     window.setSize(
       const Size(kMiniPlayerBarWidth, kMiniPlayerBarHeight).toNative(),
       false,
     );
     window.center();
     window.show();
-    // Close intercepts in the app layer: the widget tree answers the
-    // `closeRequested` event with hide instead of an accepted request.
-    window.addListener((event) async {
-      if (event is WindowCloseRequestedEvent) {
-        event.request.cancel();
-        await hideMiniPlayer();
-      }
-    });
   }
 
   // The guest never opens the library database. Even with WAL, a second
