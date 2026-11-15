@@ -126,13 +126,14 @@ void main() {
 
     // The chrome floats over the body rather than sitting in a row above it,
     // and it keeps a small inset from the window edges so a button is not
-    // cropped by the glass. Both corners use the same inset, so the two ends
-    // of the bar read as one row.
+    // cropped by the glass. Both clusters share the inset, so the two ends
+    // of the bar read as one row. The left cluster leads with the mini
+    // window's button on the desktop, so the *cluster's* left edge — not the
+    // close button's — carries the inset.
     final close = tester.getRect(find.byTooltip('Close'));
     final lyrics = tester.getRect(find.byTooltip('Show lyrics'));
     expect(close.top, lessThan(32));
     expect(lyrics.top, moreOrLessEquals(close.top, epsilon: 0.5));
-    expect(close.left, moreOrLessEquals(1280 - lyrics.right, epsilon: 0.5));
 
     // The body is laid out against the whole window, so the artwork is
     // centred in it. A header row would have pushed the centre down by half

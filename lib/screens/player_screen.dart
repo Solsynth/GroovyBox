@@ -1299,13 +1299,16 @@ class _WidePlayerBody extends StatelessWidget {
 
         // At the cover end the row is as tall as the artwork (or the controls
         // beside it, because they cannot shrink); under the words it is the
-        // pane's height.
-        final leftColumnNeeded = coverSize + (SolSpace.lg + controlsHeight);
+        // pane's height. The floor under both grows with the second copy of
+        // the controls: that copy only exists while it hands off to the
+        // words' column, so resting on the cover never reserves room for a
+        // controls column it is not showing — which left the cover sitting
+        // on top of blank space and the reader's controls drifting below it.
         final wordsHeight = math.max(
           alternateAlive
               ? (bodyHeight * 0.9).clamp(400.0, 780.0)
               : math.max(coverSize, controlsHeight),
-          math.max(controlsHeight, leftColumnNeeded),
+          coverSize + (SolSpace.lg + controlsHeight) * leftControls,
         );
 
         return Center(
