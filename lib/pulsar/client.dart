@@ -295,6 +295,7 @@ class PulsarClient {
     String? artworkUrl,
     int? durationSeconds,
     String? trackKey,
+    List<PulsarCreatorCredit>? creators,
   }) async {
     final data = await _send<Map<String, dynamic>>(
       () => dio.post<Map<String, dynamic>>(
@@ -309,6 +310,11 @@ class PulsarClient {
           if (artworkUrl != null && artworkUrl.isNotEmpty)
             'artwork_url': artworkUrl,
           'duration_seconds': durationSeconds,
+          if (creators != null && creators.isNotEmpty)
+            'creators': [
+              for (final credit in creators)
+                {'name': credit.name, 'role': credit.role},
+            ],
         },
         options: Options(headers: _headers(session)),
       ),
@@ -319,13 +325,212 @@ class PulsarClient {
     return MusicShare(item: item, shareUrl: '$_shareBase/m/${item.id}');
   }
 
-  // ── Transport ──────────────────────────────────────────────────────────
+  // ── Reviews ────────────────────────────────────────────────────────────
+
+  /// Headers for the endpoints Pulsar serves without an account. When a
+  /// session exists it is spread over these, adding `Authorization`.
+  Map<String, String> get _publicHeaders => {
+    'Accept': 'application/json',
+    'Content-Type': 'application/json',
+    'User-Agent': appUserAgent,
+  };
+
+  /// The reviews on one catalog item, newest first. Public: no session
+  /// needed. The response is a bare array with the total in `X-Total`.
+  Future<List<PulsarReview>> reviews(
+    String catalogId, {
+    OAuthSession? session,
+  }) async {
+    final data = await _send<List<dynamic>>(
+      () => dio.get<List<dynamic>>(
+        '$_basePath/reviews',
+        queryParameters: {'catalog_id': catalogId},
+        options: Options(
+          headers: {
+            ..._publicHeaders,
+            if (session != null) ..._headers(session),
+          },
+        ),
+      ),
+    );
+    return [
+      for (final entry in data ?? const [])
+        if (entry is Map<String, dynamic>) PulsarReview.fromJson(entry),
+    ];
+  }
+
+  /// The rating average and count for one item. Public. Comment-only
+  /// reviews are not counted — they have nothing to average.
+  Future<PulsarReviewStats> reviewStats(String catalogId) async {
+    final data = await _send<Map<String, dynamic>>(
+      () => dio.get<Map<String, dynamic>>(
+        '$_basePath/reviews/stats',
+        queryParameters: {'catalog_id': catalogId},
+        options: Options(headers: _publicHeaders),
+      ),
+    );
+    return PulsarReviewStats.fromJson(data ?? const {});
+  }
+
+  /// The signed-in account's own review on one item, or null when the
+  /// account has not reviewed it (the server answers 404).
+  Future<PulsarReview?> myReview(
+    OAuthSession session,
+    String catalogId,
+  ) async {
+    try {
+      final data = await _send<Map<String, dynamic>>(
+        () => dio.get<Map<String, dynamic>>(
+          '$_basePath/reviews/me',
+          queryParameters: {'catalog_id': catalogId},
+          options: Options(headers: _headers(session)),
+        ),
+      );
+      return data == null ? null : PulsarReview.fromJson(data);
+    } on PulsarException catch (error) {
+      if (error.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  /// Writes the account's review on one item. 201 the first time, 200 on
+  /// update — one review per account per item, so re-sending edits in place.
+  /// Returns true when the review was created, false when it was updated.
+  Future<bool> putReview(OAuthSession session, PulsarReviewPayload payload) {
+    assert(payload.isValid, 'A review needs a 1-10 rating, a body, or both.');
+    return _sendWithStatus<Map<String, dynamic>>(
+      () => dio.put<Map<String, dynamic>>(
+        '$_basePath/reviews',
+        data: payload.toJson(),
+        options: Options(headers: _headers(session)),
+      ),
+    ).then((response) => response.statusCode == 201);
+  }
+
+  /// Deletes the account's review. Owner only; the server answers 204.
+  Future<void> deleteReview(OAuthSession session, String reviewId) async {
+    await _send<Object?>(
+      () => dio.delete<Object?>(
+        '$_basePath/reviews/$reviewId',
+        options: Options(headers: _headers(session)),
+      ),
+    );
+  }
+
+  // ── Status marking ─────────────────────────────────────────────────────
+
+  /// Moves one collection item's status, rating or note in place. Only the
+  /// fields [patch] names change; the rest keep their server values, so no
+  /// whole-list `PUT` is needed.
+  Future<void> patchCollectionItem(
+    OAuthSession session, {
+    required String collectionId,
+    required String itemId,
+    required PulsarItemPatch patch,
+  }) async {
+    assert(patch.validStatus, 'Unknown status: ${patch.status}');
+    assert(!patch.isEmpty, 'A patch must name at least one field.');
+    await _send<Map<String, dynamic>>(
+      () => dio.patch<Map<String, dynamic>>(
+        '$_basePath/collections/$collectionId/items/$itemId',
+        data: patch.toJson(),
+        options: Options(headers: _headers(session)),
+      ),
+    );
+  }
+
+  // ── Creators ───────────────────────────────────────────────────────────
+
+  /// The creators matching an optional name filter and domain, alphabetical.
+  /// The same name in two domains is two creators; [domain] narrows to one.
+  Future<List<PulsarCreator>> creators({
+    String? query,
+    String? domain,
+    OAuthSession? session,
+  }) async {
+    final data = await _send<List<dynamic>>(
+      () => dio.get<List<dynamic>>(
+        '$_basePath/creators',
+        queryParameters: {
+          if (query != null && query.isNotEmpty) 'q': query,
+          if (domain != null && domain.isNotEmpty) 'domain': domain,
+        },
+        options: Options(
+          headers: {
+            ..._publicHeaders,
+            if (session != null) ..._headers(session),
+          },
+        ),
+      ),
+    );
+    return [
+      for (final entry in data ?? const [])
+        if (entry is Map<String, dynamic>) PulsarCreator.fromJson(entry),
+    ];
+  }
+
+  /// One creator with its item count. Throws [PulsarException] 404 when the
+  /// id is unknown.
+  Future<PulsarCreator> creator(String id, {OAuthSession? session}) async {
+    final data = await _send<Map<String, dynamic>>(
+      () => dio.get<Map<String, dynamic>>(
+        '$_basePath/creators/$id',
+        options: Options(
+          headers: {
+            ..._publicHeaders,
+            if (session != null) ..._headers(session),
+          },
+        ),
+      ),
+    );
+    return PulsarCreator.fromJson(data ?? const {});
+  }
+
+  /// The catalog items one creator is credited on — "everything by X".
+  /// Bare array, newest-not-guaranteed; [domain] narrows the filter.
+  Future<List<CatalogItem>> creatorCatalog(
+    String creatorId, {
+    String? domain,
+    OAuthSession? session,
+  }) async {
+    final data = await _send<List<dynamic>>(
+      () => dio.get<List<dynamic>>(
+        '$_basePath/catalog',
+        queryParameters: {
+          'creator_id': creatorId,
+          if (domain != null && domain.isNotEmpty) 'domain': domain,
+        },
+        options: Options(
+          headers: {
+            ..._publicHeaders,
+            if (session != null) ..._headers(session),
+          },
+        ),
+      ),
+    );
+    return [
+      for (final entry in data ?? const [])
+        if (entry is Map<String, dynamic>) CatalogItem.fromJson(entry),
+    ];
+  }
 
   /// Runs one request and maps a fleet ApiError onto a typed exception.
   Future<T?> _send<T>(Future<Response<T>> Function() request) async {
     try {
       final response = await request();
       return response.data;
+    } on DioException catch (error) {
+      throw _exceptionOf(error);
+    }
+  }
+
+  /// [_send] plus the status code, for the one endpoint where 201 vs 200 is
+  /// the answer: `PUT /reviews` creates the first time and updates after.
+  Future<Response<T>> _sendWithStatus<T>(
+    Future<Response<T>> Function() request,
+  ) async {
+    try {
+      return await request();
     } on DioException catch (error) {
       throw _exceptionOf(error);
     }

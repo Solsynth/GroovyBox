@@ -262,4 +262,254 @@ void main() {
       expect(recorded!.path, endsWith('/collections/favourites/cat-1'));
     });
   });
+
+  group('reviews', () {
+    test('reviews reads the bare array without auth', () async {
+      RequestOptions? recorded;
+      final dio = Dio();
+      dio.httpClientAdapter = _MockDioAdapter((options) async {
+        recorded = options;
+        return ResponseBody.fromString(
+          '[{"id":"rev-1","account_id":"acc-1","catalog_id":"cat-1",'
+          '"rating":8,"body":"Held up on re-listen.",'
+          '"created_at":"2026-01-02T03:04:05Z",'
+          '"updated_at":"2026-01-03T03:04:05Z"},'
+          '{"id":"rev-2","account_id":"acc-2","catalog_id":"cat-1",'
+          '"body":"Comment only, no rating."}]',
+          200,
+          headers: {
+            Headers.contentTypeHeader: [Headers.jsonContentType],
+            'x-total': ['2'],
+          },
+        );
+      });
+      final client = PulsarClient(dio: dio, baseUrl: 'https://fleet.example');
+
+      final list = await client.reviews('cat-1');
+
+      expect(recorded!.method, 'GET');
+      expect(recorded!.path, contains('/reviews'));
+      expect(recorded!.queryParameters['catalog_id'], 'cat-1');
+      expect(recorded!.headers.containsKey('Authorization'), isFalse);
+      expect(list, hasLength(2));
+      expect(list.first.rating, 8);
+      expect(list.first.createdAt, DateTime.utc(2026, 1, 2, 3, 4, 5));
+      expect(list.last.rating, isNull);
+      expect(list.last.body, 'Comment only, no rating.');
+    });
+
+    test('reviewStats reads average and count', () async {
+      RequestOptions? recorded;
+      final dio = Dio();
+      dio.httpClientAdapter = _MockDioAdapter((options) async {
+        recorded = options;
+        return _MockDioAdapter.json('{"average":7.5,"count":4}', 200);
+      });
+      final client = PulsarClient(dio: dio, baseUrl: 'https://fleet.example');
+
+      final stats = await client.reviewStats('cat-1');
+
+      expect(recorded!.path, contains('/reviews/stats'));
+      expect(stats.average, 7.5);
+      expect(stats.count, 4);
+    });
+
+    test('myReview maps the 404 of a missing review to null', () async {
+      final dio = Dio();
+      dio.httpClientAdapter = _MockDioAdapter(
+        (options) async => _MockDioAdapter.json(
+          '{"code":"REVIEW_NOT_FOUND","message":"no review"}',
+          404,
+        ),
+      );
+      final client = PulsarClient(dio: dio, baseUrl: 'https://fleet.example');
+
+      final review = await client.myReview(_session, 'cat-1');
+
+      expect(review, isNull);
+    });
+
+    test('myReview reads the own review when it exists', () async {
+      final dio = Dio();
+      dio.httpClientAdapter = _MockDioAdapter((options) async {
+        return _MockDioAdapter.json(
+          '{"id":"rev-9","account_id":"acc-me","catalog_id":"cat-1",'
+          '"rating":9}',
+          200,
+        );
+      });
+      final client = PulsarClient(dio: dio, baseUrl: 'https://fleet.example');
+
+      final review = await client.myReview(_session, 'cat-1');
+
+      expect(review?.rating, 9);
+    });
+
+    test('putReview reports created on 201 and updated on 200', () async {
+      var status = 201;
+      final dio = Dio();
+      dio.httpClientAdapter = _MockDioAdapter((options) async {
+        return _MockDioAdapter.json('{"id":"rev-1"}', status);
+      });
+      final client = PulsarClient(dio: dio, baseUrl: 'https://fleet.example');
+      const payload = PulsarReviewPayload(catalogId: 'cat-1', rating: 7);
+
+      expect(await client.putReview(_session, payload), isTrue);
+
+      status = 200;
+      expect(await client.putReview(_session, payload), isFalse);
+    });
+
+    test('putReview sends catalog_id, rating and body as given', () async {
+      RequestOptions? recorded;
+      final dio = Dio();
+      dio.httpClientAdapter = _MockDioAdapter((options) async {
+        recorded = options;
+        return _MockDioAdapter.json('{"id":"rev-1"}', 201);
+      });
+      final client = PulsarClient(dio: dio, baseUrl: 'https://fleet.example');
+
+      await client.putReview(
+        _session,
+        const PulsarReviewPayload(catalogId: 'cat-1', body: 'Great.'),
+      );
+
+      expect(recorded!.method, 'PUT');
+      expect(recorded!.path, endsWith('/reviews'));
+      final data = recorded!.data as Map<String, dynamic>;
+      expect(data['catalog_id'], 'cat-1');
+      expect(data.containsKey('rating'), isFalse);
+      expect(data['body'], 'Great.');
+    });
+
+    test('deleteReview DELETEs by review id', () async {
+      RequestOptions? recorded;
+      final dio = Dio();
+      dio.httpClientAdapter = _MockDioAdapter((options) async {
+        recorded = options;
+        return ResponseBody.fromString('', 204);
+      });
+      final client = PulsarClient(dio: dio, baseUrl: 'https://fleet.example');
+
+      await client.deleteReview(_session, 'rev-1');
+
+      expect(recorded!.method, 'DELETE');
+      expect(recorded!.path, endsWith('/reviews/rev-1'));
+    });
+  });
+
+  group('status marking', () {
+    test('patchCollectionItem PATCHes only the sent fields', () async {
+      RequestOptions? recorded;
+      final dio = Dio();
+      dio.httpClientAdapter = _MockDioAdapter((options) async {
+        recorded = options;
+        return _MockDioAdapter.json('{"id":"item-1"}', 200);
+      });
+      final client = PulsarClient(dio: dio, baseUrl: 'https://fleet.example');
+
+      await client.patchCollectionItem(
+        _session,
+        collectionId: 'col-1',
+        itemId: 'item-1',
+        patch: const PulsarItemPatch(status: 'completed', rating: 9),
+      );
+
+      expect(recorded!.method, 'PATCH');
+      expect(recorded!.path, contains('/collections/col-1/items/item-1'));
+      final data = recorded!.data as Map<String, dynamic>;
+      expect(data['status'], 'completed');
+      expect(data['rating'], 9);
+      expect(data.containsKey('note'), isFalse);
+    });
+  });
+
+  group('creators', () {
+    test('creators sends q and domain only when given', () async {
+      RequestOptions? recorded;
+      final dio = Dio();
+      dio.httpClientAdapter = _MockDioAdapter((options) async {
+        recorded = options;
+        return _MockDioAdapter.json(
+          '[{"id":"cr-1","domain":"music","name":"Aoi Tada",'
+          '"item_count":12}]',
+          200,
+        );
+      });
+      final client = PulsarClient(dio: dio, baseUrl: 'https://fleet.example');
+
+      final list = await client.creators(query: 'aoi', domain: 'music');
+
+      expect(recorded!.queryParameters['q'], 'aoi');
+      expect(recorded!.queryParameters['domain'], 'music');
+      expect(list, hasLength(1));
+      expect(list.first.name, 'Aoi Tada');
+      expect(list.first.itemCount, 12);
+    });
+
+    test('creator reads one creator by id', () async {
+      RequestOptions? recorded;
+      final dio = Dio();
+      dio.httpClientAdapter = _MockDioAdapter((options) async {
+        recorded = options;
+        return _MockDioAdapter.json(
+          '{"id":"cr-1","domain":"music","name":"Aoi Tada",'
+          '"item_count":12}',
+          200,
+        );
+      });
+      final client = PulsarClient(dio: dio, baseUrl: 'https://fleet.example');
+
+      final creator = await client.creator('cr-1');
+
+      expect(recorded!.path, endsWith('/creators/cr-1'));
+      expect(creator.name, 'Aoi Tada');
+    });
+
+    test('creatorCatalog filters by creator id', () async {
+      RequestOptions? recorded;
+      final dio = Dio();
+      dio.httpClientAdapter = _MockDioAdapter((options) async {
+        recorded = options;
+        return _MockDioAdapter.json(
+          '[{"id":"cat-1","domain":"music","provider":"groovybox",'
+          '"title":"Brave Song","creators":[{"name":"Aoi Tada",'
+          '"role":"artist"}]}]',
+          200,
+        );
+      });
+      final client = PulsarClient(dio: dio, baseUrl: 'https://fleet.example');
+
+      final items = await client.creatorCatalog('cr-1', domain: 'music');
+
+      expect(recorded!.queryParameters['creator_id'], 'cr-1');
+      expect(recorded!.queryParameters['domain'], 'music');
+      expect(items, hasLength(1));
+      expect(items.first.title, 'Brave Song');
+      expect(items.first.creators.single.role, 'artist');
+    });
+
+    test('shareTrack forwards creator credits to POST /catalog', () async {
+      RequestOptions? recorded;
+      final dio = Dio();
+      dio.httpClientAdapter = _MockDioAdapter((options) async {
+        recorded = options;
+        return _MockDioAdapter.json('{"id":"cat-1"}', 201);
+      });
+      final client = PulsarClient(dio: dio, baseUrl: 'https://fleet.example');
+
+      await client.shareTrack(
+        _session,
+        title: 'Brave Song',
+        creators: const [
+          PulsarCreatorCredit(name: 'Aoi Tada', role: 'artist'),
+        ],
+      );
+
+      final data = recorded!.data as Map<String, dynamic>;
+      expect(data['creators'], [
+        {'name': 'Aoi Tada', 'role': 'artist'},
+      ]);
+    });
+  });
 }

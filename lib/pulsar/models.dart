@@ -1,10 +1,18 @@
 /// Pulsar wire models, hand-mirrored from LightHouse's
 /// `internal/pulsar/model/models.go` and the `collections`, `sessions`,
-/// `scrobbles`, `catalog` and `metadata` modules' request/response shapes.
+/// `scrobbles`, `catalog`, `metadata`, `reviews` and `creators` modules'
+/// request/response shapes.
 ///
 /// The same rule as `library_sync/models.dart` holds: snake_case keys exactly
 /// as the Go JSON tags spell them, no screen ever sees a Pulsar field name.
 library;
+
+/// Parses an ISO-8601 timestamp the way every Pulsar model does: absent or
+/// malformed stays null, never throws.
+DateTime? _parseTime(Object? raw) {
+  if (raw is String && raw.isNotEmpty) return DateTime.tryParse(raw);
+  return null;
+}
 
 /// A fleet [ApiError] surfaced as a typed exception.
 class PulsarException implements Exception {
@@ -104,6 +112,7 @@ class CatalogItem {
     this.subtitle,
     this.artworkUrl,
     this.durationSeconds,
+    this.creators = const [],
   });
 
   final String id;
@@ -114,6 +123,10 @@ class CatalogItem {
   final String? subtitle;
   final String? artworkUrl;
   final int? durationSeconds;
+
+  /// The resolved creators, as `/metadata` resolve and search spell them.
+  /// Empty when the endpoint predates creators or none resolved.
+  final List<PulsarCreatorCredit> creators;
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -135,6 +148,7 @@ class CatalogItem {
     subtitle: json['subtitle'] as String?,
     artworkUrl: json['artwork_url'] as String?,
     durationSeconds: (json['duration_seconds'] as num?)?.toInt(),
+    creators: PulsarCreatorCredit.listOf(json['creators']),
   );
 }
 
@@ -393,4 +407,156 @@ class PulsarMediaStats {
         topCreators: _topItems(json['top_creators']),
         daysActive: (json['days_active'] as num?)?.toInt() ?? 0,
       );
+}
+
+/// One creator credit as `/metadata` resolve and search spell it: just the
+/// name and role, no id — the server dedupes to a [PulsarCreator] later.
+class PulsarCreatorCredit {
+  const PulsarCreatorCredit({required this.name, required this.role});
+
+  final String name;
+  final String role;
+
+  static List<PulsarCreatorCredit> listOf(Object? raw) => [
+    for (final entry in (raw as List<dynamic>? ?? const []))
+      if (entry is Map<String, dynamic>)
+        PulsarCreatorCredit(
+          name: entry['name'] as String? ?? '',
+          role: entry['role'] as String? ?? '',
+        ),
+  ];
+}
+
+/// A Pulsar creator: one name in one domain. The same name in two domains is
+/// two creators — roles are per-domain, so "Aoi Tada" the singer and any
+/// same-named voice actor never share an id.
+class PulsarCreator {
+  const PulsarCreator({
+    required this.id,
+    required this.domain,
+    required this.name,
+    required this.itemCount,
+  });
+
+  final String id;
+  final String domain;
+  final String name;
+
+  /// How many catalog items credit this creator.
+  final int itemCount;
+
+  factory PulsarCreator.fromJson(Map<String, dynamic> json) => PulsarCreator(
+    id: json['id']?.toString() ?? '',
+    domain: json['domain'] as String? ?? 'music',
+    name: json['name'] as String? ?? '',
+    itemCount: (json['item_count'] as num?)?.toInt() ?? 0,
+  );
+}
+
+/// One review on a catalog item, from Pulsar's review endpoints.
+///
+/// The server keeps rating and body independently: either can be absent, so
+/// a comment-only review has no [rating] and a bare star row has no [body].
+class PulsarReview {
+  const PulsarReview({
+    required this.id,
+    required this.accountId,
+    required this.catalogId,
+    this.rating,
+    this.body,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  final String id;
+  final String accountId;
+  final String catalogId;
+
+  /// 1–10. Null on a comment-only review.
+  final int? rating;
+  final String? body;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  factory PulsarReview.fromJson(Map<String, dynamic> json) => PulsarReview(
+    id: json['id']?.toString() ?? '',
+    accountId: json['account_id']?.toString() ?? '',
+    catalogId: json['catalog_id']?.toString() ?? '',
+    rating: (json['rating'] as num?)?.toInt(),
+    body: json['body'] as String?,
+    createdAt: _parseTime(json['created_at']),
+    updatedAt: _parseTime(json['updated_at']),
+  );
+}
+
+/// `GET /reviews/stats`: the rating average and how many ratings it counts.
+/// Comment-only reviews raise neither — they have nothing to average.
+class PulsarReviewStats {
+  const PulsarReviewStats({required this.average, required this.count});
+
+  final double average;
+  final int count;
+
+  factory PulsarReviewStats.fromJson(Map<String, dynamic> json) =>
+      PulsarReviewStats(
+        average: (json['average'] as num?)?.toDouble() ?? 0,
+        count: (json['count'] as num?)?.toInt() ?? 0,
+      );
+}
+
+/// The body of `PATCH /collections/:id/items/:itemId`: only the fields the
+/// caller names move; the rest keep their server values.
+class PulsarItemPatch {
+  const PulsarItemPatch({this.status, this.rating, this.note});
+
+  /// One of `plan_to_watch` / `watching` / `completed` / `on_hold` /
+  /// `dropped`. Anything else the server answers 400 to, so [validStatus]
+  /// is the gate before a call is spent.
+  final String? status;
+
+  /// 1–10, the same scale reviews use.
+  final int? rating;
+  final String? note;
+
+  static const statuses = {
+    'plan_to_watch',
+    'watching',
+    'completed',
+    'on_hold',
+    'dropped',
+  };
+
+  bool get validStatus => status == null || statuses.contains(status);
+
+  /// True when nothing was named: a no-op patch the server would still
+  /// round-trip, but the caller should never send.
+  bool get isEmpty => status == null && rating == null && note == null;
+
+  Map<String, dynamic> toJson() => {
+    'status': ?status,
+    'rating': ?rating,
+    'note': ?note,
+  };
+}
+
+/// The body of `PUT /reviews`: at least one of rating or body, rating 1–10.
+/// Sending it again updates in place — one review per account per item.
+class PulsarReviewPayload {
+  const PulsarReviewPayload({required this.catalogId, this.rating, this.body});
+
+  final String catalogId;
+
+  /// 1–10. Null on a comment-only review.
+  final int? rating;
+  final String? body;
+
+  bool get isValid =>
+      (rating != null || (body != null && body!.isNotEmpty)) &&
+      (rating == null || (rating! >= 1 && rating! <= 10));
+
+  Map<String, dynamic> toJson() => {
+    'catalog_id': catalogId,
+    'rating': ?rating,
+    'body': ?body,
+  };
 }
