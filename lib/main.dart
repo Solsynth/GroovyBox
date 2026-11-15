@@ -23,6 +23,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 import 'package:window_manager/legacy.dart';
 
 /// Translations live in `assets/i18n/<language>-<COUNTRY>.json`, one file per
@@ -192,8 +193,12 @@ Future<void> _runMiniPlayer() async {
   // The guest engine registers only the multi-window channel natively (see
   // MainFlutterWindow.swift): registering platform plugins into a second
   // engine initializes their native singletons twice in one process and
-  // corrupts the Dart heap. So the guest reads no prefs — it runs on defaults
-  // and reflects whatever the host publishes.
+  // corrupts the Dart heap. So the guest backs SharedPreferences with an
+  // in-memory store instead of the platform plugin: the provider tree reads
+  // it exactly as the host does, the values are defaults and last for the
+  // window's lifetime, and no native code runs twice.
+  SharedPreferencesStorePlatform.instance = InMemorySharedPreferencesStore.empty();
+  final prefs = await SharedPreferences.getInstance();
   const savedWidth = kMiniPlayerBarWidth;
   await windowManager.waitUntilReadyToShow(
     WindowOptions(
@@ -240,6 +245,7 @@ Future<void> _runMiniPlayer() async {
   runApp(
     ProviderScope(
       overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
         libraryDatabaseProvider.overrideWithValue(libraryDatabase),
         localLibraryPathProvider.overrideWithValue(localLibraryPath),
         miniPlayerLinkProvider.overrideWithValue(link),
