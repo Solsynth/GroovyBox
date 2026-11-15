@@ -411,6 +411,8 @@
   "libraryNeteaseUnavailable": "This track cannot be played with the current account.",
   "libraryNeteaseNoStream": "NetEase tracks are streamed through a resolved URL.",
   "libraryNeteaseQrExpired": "The sign-in code expired. Start again.",
+  "libraryNeteaseNotFound": "That address has no API. Use the address the API server listens on: no path after the host, not its documentation page.",
+  "libraryNeteaseNotApi": "That address serves a web page, not the API. Use the address the API server itself listens on.",
   "shelfNeteaseDaily": "Daily recommendations",
   "setupNeteaseScanQr": "Scan the code with the NetEase Cloud Music app to sign in.",
   "setupQrScanned": "Scanned. Confirm the sign-in on your phone.",

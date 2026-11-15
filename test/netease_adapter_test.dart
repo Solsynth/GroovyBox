@@ -42,14 +42,30 @@ class _FakeNetease {
 
   String get baseUrl => 'http://127.0.0.1:${_server.port}';
 
+  /// An address shaped like the project's docs site: it answers every path
+  /// with an HTML page, which is what makes it a wrong address rather than a
+  /// broken response.
+  String get docsUrl => '$baseUrl/docs';
+
   Future<void> close() => _server.close(force: true);
+
+  /// Whether the request is for the docs-shaped address (any path under
+  /// `/docs`), answered as a web page instead of the bridge's JSON.
+  static bool _isDocs(HttpRequest request) =>
+      request.uri.path.startsWith('/docs');
 
   Future<void> _handle(HttpRequest request) async {
     final path = request.uri.path;
     lastQuery[path] = request.uri.queryParameters;
     final response = request.response;
+    // A docs site answers any path with a page; a bridge answers JSON.
+    if (_isDocs(request)) {
+      response.headers.contentType = ContentType.html;
+      response.write('<!DOCTYPE html><title>Docs</title>');
+      await response.close();
+      return;
+    }
     response.headers.contentType = ContentType.json;
-
     switch (path) {
       case '/login/qr/key':
         response.write(
@@ -126,12 +142,7 @@ class _FakeNetease {
                 'coverImgUrl': 'https://p.example/cover.jpg',
                 'creator': {'nickname': 'Someone'},
               },
-              {
-                'id': 2,
-                'name': 'Collected',
-                'userId': 99,
-                'trackCount': 5,
-              },
+              {'id': 2, 'name': 'Collected', 'userId': 99, 'trackCount': 5},
             ],
           }),
         );
@@ -207,12 +218,17 @@ class _FakeNetease {
         response.write(
           jsonEncode({
             'code': 200,
-            'result': {'songs': [_song(101, 'Song One')]},
+            'result': {
+              'songs': [_song(101, 'Song One')],
+            },
           }),
         );
       case '/likelist':
         response.write(
-          jsonEncode({'code': 200, 'ids': [101, 102]}),
+          jsonEncode({
+            'code': 200,
+            'ids': [101, 102],
+          }),
         );
       case '/like':
         response.write(jsonEncode({'code': 200}));
@@ -228,9 +244,7 @@ class _FakeNetease {
             'data': [
               {
                 'id': 101,
-                'url': trackPlayable
-                    ? 'http://m.example/stream/101.mp3'
-                    : null,
+                'url': trackPlayable ? 'http://m.example/stream/101.mp3' : null,
                 'level': request.uri.queryParameters['level'],
               },
             ],
@@ -248,7 +262,9 @@ class _FakeNetease {
         response.write(
           jsonEncode({
             'code': 200,
-            'data': {'dailySongs': [_song(301, 'Daily Pick')]},
+            'data': {
+              'dailySongs': [_song(301, 'Daily Pick')],
+            },
           }),
         );
       case '/personalized':
@@ -478,6 +494,47 @@ void main() {
     expect(lyrics.lines.first.text, 'First line');
     expect(lyrics.lines.first.translation, '第一行');
   });
+
+  test(
+    'a path after the host is diagnosed, not reported as HTTP 404',
+    () async {
+      // The bridge mounts its routes at the root; a prefix like the `/api` a
+      // proxy layout teaches reaches the server and answers 404.
+      final adapter = NeteaseAdapter();
+      final qr =
+          adapter.loginSteps('${server.baseUrl}/api').single as QrLoginStep;
+      await expectLater(
+        qr.prepare(),
+        throwsA(
+          isA<LibraryException>().having(
+            (e) => e.messageKey,
+            'messageKey',
+            'libraryNeteaseNotFound',
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'an address that serves a web page is diagnosed as not the API',
+    () async {
+      // The docs site answers 200 to every path, so the HTML content type is
+      // what separates it from a bridge.
+      final adapter = NeteaseAdapter();
+      final qr = adapter.loginSteps(server.docsUrl).single as QrLoginStep;
+      await expectLater(
+        qr.prepare(),
+        throwsA(
+          isA<LibraryException>().having(
+            (e) => e.messageKey,
+            'messageKey',
+            'libraryNeteaseNotApi',
+          ),
+        ),
+      );
+    },
+  );
 
   test('an expired session answers as signed-out', () async {
     final source = NeteaseAdapter().sourceFor(config('MUSIC_U=stale'));

@@ -216,7 +216,30 @@ class _NeteaseHttp {
               queryParameters: fullQuery,
             );
     } on DioException catch (error) {
+      // A 404 means the request reached *something* but not the bridge's
+      // route: the address carries a path prefix the bridge does not mount
+      // under, or points at a host that is not an API at all. Saying "HTTP
+      // 404" leaves the user with nowhere to go, so name the likely cause.
+      if (error.response?.statusCode == 404) {
+        throw const LibraryException(
+          'The address answered 404. It must be the API server itself: no '
+          'path after the host, and not its documentation page.',
+          code: 404,
+          messageKey: 'libraryNeteaseNotFound',
+        );
+      }
       throw describeDioError(error);
+    }
+    // A bridge answers JSON on every route. HTML means the address is a web
+    // page — typically the project's docs site, which answers 200 to any
+    // path — so the failure is the address, not a broken response.
+    final contentType = response.headers.value('content-type') ?? '';
+    if (contentType.contains('text/html')) {
+      throw const LibraryException(
+        'That address serves a web page, not the API. Use the address the '
+        'API server itself listens on.',
+        messageKey: 'libraryNeteaseNotApi',
+      );
     }
     final data = response.data;
     if (data is! Map) {

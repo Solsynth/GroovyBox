@@ -46,11 +46,16 @@ than block you behind a form.
   `ApplicationMusicPlayer` does not exist.
 - **NetEase Cloud Music** — the same provider-neutral layer, against a
   self-hosted [NeteaseCloudMusicApi](https://github.com/Binaryify/NeteaseCloudMusicApi)
-  bridge the user runs themselves; no address is shipped or defaulted. Sign-in
-  is the bridge's QR flow (mint a unikey, render the code, poll `801 → 802 →
-  803`): it is expressed as `InteractiveLoginAdapter` steps, so the setup
-  screen renders whatever steps an adapter hands it and never asks the kind.
-  The session cookie lives in `SourceConfig.auth` like every other token.
+  bridge the user runs themselves; no address is shipped or defaulted. The
+  address is the API server's own root (`http://host:3000`), not a path in
+  front of it and not the project's docs site: the two wrong shapes are
+  diagnosed by what the address answers — a 404 for a prefix the bridge does
+  not mount, HTML for a web page — instead of surfacing as a bare HTTP error.
+  Sign-in is the bridge's QR flow (mint a unikey, render the code, poll
+  `801 → 802 → 803`): it is expressed as `InteractiveLoginAdapter` steps, so
+  the setup screen renders whatever steps an adapter hands it and never asks
+  the kind. The session cookie lives in `SourceConfig.auth` like every other
+  token.
   Reads map `ar`/`al`/`dt` onto the neutral models; the red-heart list is
   `RatedSource`, the daily mix is a `CuratedSource` shelf, and lyrics merge
   `tlyric` as a translation layer. Playback URLs are minted per request by
