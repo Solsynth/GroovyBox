@@ -1766,27 +1766,43 @@ class _MarqueeTitle extends StatelessWidget {
         final overflows = painter.width > constraints.maxWidth;
         painter.dispose();
         if (!overflows) return Center(child: text);
-        return Marqueer(
-          // Keyed by the title: a direct track switch keeps this State alive,
-          // and a marquee parked at the far end of the previous title would
-          // then open onto blank space wherever the new one is shorter.
-          // Remounting restarts the pass from the beginning.
-          key: ValueKey(title),
-          // Left to right is the reading direction, and a title that starts
-          // off screen is a title nobody reads from the beginning.
-          direction: MarqueerDirection.ltr,
-          // Slow enough to read: this is the page's headline, not a ticker
-          // across the bottom of a broadcast.
-          pps: 40,
-          // One pass and then rest at the end. A headline that loops forever
-          // makes a page at rest look busy.
-          infinity: false,
-          edgeDuration: const Duration(seconds: 2),
-          // A horizontal viewport expands across its own axis, and the row's
-          // height is not bounded: the marquee measures the title's line
-          // instead of claiming the whole column.
-          intrinsicCrossAxisSize: true,
-          child: text,
+        // The mask is alpha only — `dstOut` erases by the mask's own alpha —
+        // so the headline's colour and any emphasis survive untouched, and
+        // the fade itself never paints a pixel of its own.
+        const fade = Color(0xFF000000);
+        const clear = Color(0x00000000);
+        return ShaderMask(
+          blendMode: BlendMode.dstOut,
+          shaderCallback: (bounds) {
+            // A third of the box on each side, clamped so a narrow row keeps
+            // a middle wide enough to read through the fade.
+            final span = math.max(bounds.width, 1.0);
+            final edge = math.min(bounds.width / 3, 24.0) / span;
+            return LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: const [fade, clear, clear, fade],
+              stops: [0, edge, 1 - edge, 1],
+            ).createShader(bounds);
+          },
+          child: Marqueer(
+            key: ValueKey(title),
+            // Left to right is the reading direction, and a title that
+            // starts off screen is a title nobody reads from the beginning.
+            direction: MarqueerDirection.ltr,
+            // Slow enough to read: this is the page's headline, not a ticker
+            // across the bottom of a broadcast.
+            pps: 40,
+            // One pass and then rest at the end. A headline that loops
+            // forever makes a page at rest look busy.
+            infinity: false,
+            edgeDuration: const Duration(seconds: 2),
+            // A horizontal viewport expands across its own axis, and the
+            // row's height is not bounded: the marquee measures the title's
+            // line instead of claiming the whole column.
+            intrinsicCrossAxisSize: true,
+            child: text,
+          ),
         );
       },
     );
