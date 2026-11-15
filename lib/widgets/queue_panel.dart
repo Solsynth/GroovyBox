@@ -27,7 +27,13 @@ import 'package:material_ui/material_ui.dart';
 /// make the capsule's `AnimatedSize` chase its own output, so the header is
 /// fixed and the rows take the rest.
 class QueuePanel extends ConsumerWidget {
-  const QueuePanel({super.key});
+  /// Extra room under the last row.
+  ///
+  /// Zero in a pane that sizes the list itself; a floating footer passes its
+  /// own height so the last row can still be scrolled clear of it.
+  final double bottomInset;
+
+  const QueuePanel({super.key, this.bottomInset = 0});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -168,8 +174,11 @@ class QueuePanel extends ConsumerWidget {
                   )
                 : ListView.builder(
                     // Room under the last row, so a short pane does not end
-                    // with a row flush against its bottom edge.
-                    padding: const EdgeInsets.only(bottom: SolSpace.sm),
+                    // with a row flush against its bottom edge, plus whatever
+                    // floats over the bottom of this pane.
+                    padding: EdgeInsets.only(
+                      bottom: SolSpace.sm + bottomInset,
+                    ),
                     itemCount: rows.length,
                     itemBuilder: (context, index) {
                       final song = rows[index];

@@ -52,6 +52,12 @@ class MiniPlayerApp extends ConsumerWidget {
   }
 }
 
+/// Height the floating footer occupies at the bottom of a pane.
+///
+/// The bar shape lays the footer out inline, so this is only used to keep a
+/// pane's last row scrollable clear of it.
+const double _kFooterHeight = 132;
+
 /// The pane the window grows for, if any.
 enum MiniPane { lyrics, queue }
 
@@ -278,9 +284,6 @@ class _MiniPlayerViewState extends ConsumerState<MiniPlayerView> {
               // way Apple Music's mini player does. A pane opens over the same
               // field, blurred harder so the pane's text still reads.
               _ArtworkField(song: shown, paneOpen: pane != null),
-              // Header, pane, footer. The pane takes the space that is left
-              // instead of being positioned over the furniture below it — a
-              // positioned pane drew its first lyric line behind the scrubber.
               Column(
                 children: [
                   // The frame's title band is an overlay, so the artwork can
@@ -294,34 +297,61 @@ class _MiniPlayerViewState extends ConsumerState<MiniPlayerView> {
                     compact: pane != null,
                   ),
                   if (pane != null)
+                    // The pane runs all the way down: the footer floats over
+                    // it and slides away, so the rows behind it are still a
+                    // full pane's worth of content rather than a column with
+                    // a reserved strip cut off the bottom.
                     Expanded(
                       child: switch (pane) {
+                        // The bottom inset is the floating footer's height:
+                        // the column can still scroll every line clear of it
+                        // instead of ending underneath the buttons.
                         MiniPane.lyrics => const SongLyricsPane(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: SolSpace.xl,
+                          padding: EdgeInsets.fromLTRB(
+                            SolSpace.xl,
+                            0,
+                            SolSpace.xl,
+                            _kFooterHeight,
                           ),
                           fade: true,
                         ),
-                        MiniPane.queue => const QueuePanel(),
+                        MiniPane.queue => const QueuePanel(
+                          bottomInset: _kFooterHeight,
+                        ),
                       },
+                    )
+                  else
+                    // The bar shape lays the footer inline: it is the whole
+                    // lower half of that window, not an overlay.
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // A station has no length to scrub: its rows report
+                        // track changes, not a clock.
+                        if (!shown.isRadio) const _Scrubber(),
+                        const _TransportRow(),
+                      ],
                     ),
-                  // No Spacer: the bar is exactly the height its stack is,
-                  // and a bar-shaped window that is taller than the stack
-                  // would have nothing to put in the difference.
-                  if (pane == null) const SizedBox(height: SolSpace.md),
-                  // A pane's footer floats over its content, so it slides
-                  // away when idle; the bar shape keeps it in place.
-                  AnimatedSlide(
+                ],
+              ),
+              // A pane's footer is an overlay: it fades and slides away when
+              // idle instead of holding a strip of the pane's height.
+              if (pane != null)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: AnimatedSlide(
                     duration: const Duration(milliseconds: 220),
                     curve: Curves.easeOutCubic,
-                    offset: pane != null && !_controlsVisible
-                        ? const Offset(0, 1)
-                        : Offset.zero,
+                    offset: _controlsVisible
+                        ? Offset.zero
+                        : const Offset(0, 1),
                     child: AnimatedOpacity(
                       duration: const Duration(milliseconds: 220),
-                      opacity: pane != null && !_controlsVisible ? 0 : 1,
+                      opacity: _controlsVisible ? 1 : 0,
                       child: IgnorePointer(
-                        ignoring: pane != null && !_controlsVisible,
+                        ignoring: !_controlsVisible,
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -332,8 +362,7 @@ class _MiniPlayerViewState extends ConsumerState<MiniPlayerView> {
                       ),
                     ),
                   ),
-                ],
-              ),
+                ),
             ],
           ),
         );
@@ -420,7 +449,7 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final art = compact ? 36.0 : 64.0;
+    final art = compact ? 36.0 : 56.0;
 
     Widget body = Row(
       children: [
@@ -483,7 +512,7 @@ class _Header extends StatelessWidget {
       child: body,
     );
 
-    return DragToMoveArea(child: SizedBox(height: 72, child: body));
+    return DragToMoveArea(child: SizedBox(height: compact ? 56 : 64, child: body));
   }
 }
 
@@ -572,7 +601,7 @@ class _TransportRow extends ConsumerWidget {
         SolSpace.lg,
         0,
         SolSpace.lg,
-        SolSpace.md,
+        SolSpace.sm,
       ),
       child: Row(
         children: [

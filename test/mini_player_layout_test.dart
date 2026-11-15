@@ -11,6 +11,7 @@ import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/lyrics_view.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/rendering.dart';
 import 'package:groovy_box/widgets/queue_panel.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -65,7 +66,8 @@ void main() {
   });
 
   for (final size in const [
-    // Body sizes, i.e. window minus the frame's 32px title band.
+    // Body sizes: the view fills the window below the frame's title band,
+    // which the probe does not draw.
     Size(340, kMiniPlayerBarContentHeight),
     Size(300, kMiniPlayerBarContentHeight),
     Size(480, 228),
@@ -164,7 +166,7 @@ void main() {
     await gesture.removePointer();
   });
 
-  testWidgets('an open pane sits between the header and the transport', (
+  testWidgets('a pane runs under the floating footer', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(340, 490);
@@ -212,11 +214,15 @@ void main() {
     final header = tester.getRect(find.text('Wah Wah World'));
 
     expect(tester.takeException(), isNull);
-    // The pane starts below the header and ends above the scrubber: anything
-    // else draws lyric lines behind the transport, which is the overlap this
-    // test exists to catch.
+    // The pane starts below the header and runs to the bottom: the footer is
+    // an overlay that slides away, so it must not steal a strip of the pane's
+    // height. A pane that stopped above the scrubber would be the reserved
+    // strip this layout exists to avoid.
     expect(pane.top, greaterThanOrEqualTo(header.bottom));
-    expect(pane.bottom, lessThanOrEqualTo(scrubber.top));
+    expect(pane.bottom, closeTo(490, 0.5));
+    // …and the footer floats inside that area, below the words.
+    expect(scrubber.top, greaterThan(pane.top));
+    expect(scrubber.bottom, lessThanOrEqualTo(pane.bottom));
     // The words keep the page's gutter rather than hugging the edge.
     expect(
       tester.getRect(find.text('first line')).left,

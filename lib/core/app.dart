@@ -31,7 +31,11 @@ const kMiniPlayerBarWidth = 340.0;
 /// inside it, so the height the user sees is band + content. Setting this to
 /// the content height alone is what made the overlay column overflow by
 /// exactly that band.
-const kMiniPlayerBarContentHeight = 220.0;
+///
+/// 196 is the stack measured in a widget test — header, scrubber, transport —
+/// plus a 4px cushion; anything larger is the empty strip at the bottom of
+/// the window that read as a padding bug.
+const kMiniPlayerBarContentHeight = 196.0;
 const kMiniPlayerBarHeight = kMiniPlayerBarContentHeight + 32.0;
 
 /// Extra height the window takes when the queue or the lyrics open. The pane
