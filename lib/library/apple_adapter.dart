@@ -449,6 +449,14 @@ class AppleMusicSource extends LibrarySource
   @override
   Map<String, dynamic> platformResource(LibrarySong song) {
     if (!song.isRadio) {
+      // A copy resolved out of the local library carries only the link's id,
+      // and that id is the one place the distinction survives: the store's
+      // ids are bare digits while the account's own are dotted local names
+      // (`i.…`). Reading it here means a favourite replayed from the catalog
+      // still says "store" and a library track says "library", whoever built
+      // the song.
+      final catalogId =
+          song.catalogId ?? (_isCatalogId(song.id) ? song.id : null);
       return {
         'id': song.id,
         'type': 'songs',
@@ -457,14 +465,14 @@ class AppleMusicSource extends LibrarySource
           if (song.artist != null) 'artistName': song.artist,
           if (song.album != null) 'albumName': song.album,
           'durationInMillis': song.duration.inMilliseconds,
-          // A catalog track (catalogId set) is resolved in the store;
-          // claiming `isLibrary` on a catalog id makes the system player look
-          // the track up in the account's library and fail with
-          // MPMusicPlayerControllerErrorDomain 6.
+          // Resolved in the store, the item must not claim `isLibrary`: the
+          // system player would look a store id up in the account's library
+          // and fail with MPMusicPlayerControllerErrorDomain 6 — the error
+          // that reads as "this track will not play".
           'playParams': {
             'id': song.id,
             'kind': 'song',
-            if (song.catalogId == null) 'isLibrary': true,
+            if (catalogId == null) 'isLibrary': true,
           },
         },
       };

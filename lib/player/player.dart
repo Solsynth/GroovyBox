@@ -290,16 +290,15 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
 
   /// One position update, whichever player produced it: the state, the play
   /// history and the saved session all follow the same rules.
-  /// Whether the system player has another entry to move to by itself: the
-  /// run it was given was not cut short by the end of the queue.
+  /// Whether the system player holds another entry to move to by itself: the
+  /// run it was given was not cut short, either by the end of the app's queue
+  /// or by a row it cannot resolve.
   bool get _appleHasNext {
     final apple = _apple;
     if (apple == null || !apple.isLoaded) return false;
     final index = state.currentIndex;
     if (index == null) return false;
-    final base = apple.base;
-    final played = index - base;
-    return base + played < state.queue.length - 1;
+    return index + 1 < apple.base + apple.length;
   }
 
   void _onPosition(Duration position) {

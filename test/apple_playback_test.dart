@@ -275,6 +275,25 @@ void main() {
     expect(player.opened, isEmpty);
   });
 
+  test('a run stops at the first track the system cannot resolve', () async {
+    // A favourite list built from two libraries is the real case: the Apple
+    // items are playable, a Subsonic copy is not, and the whole run used to be
+    // handed over anyway — which fails as MPMusicPlayerControllerErrorDomain 6.
+    await container.read(playbackProvider.notifier).playQueue([
+      song,
+      const LibrarySong(
+        sourceId: 'subsonic-1',
+        id: 's.1',
+        title: 'Streamed',
+        duration: Duration(minutes: 2),
+      ),
+    ]);
+    await pumpEventQueue();
+
+    expect(kit.queues.single.map((item) => item['id']), ['i.1']);
+    expect(kit.calls, contains('play'));
+  });
+
   test('leaving a streamed track for the platform stops media-kit', () async {
     // A streamed song is loaded first, so there is something sounding.
     await container.read(playbackProvider.notifier).playQueue([

@@ -75,8 +75,14 @@ class ApplePlayer {
   Future<void> open(List<LibrarySong> queue, int startingAt) async {
     if (queue.isEmpty || startingAt < 0 || startingAt >= queue.length) return;
     _listen();
-    _started = true;
     await _pushQueue(queue, startingAt);
+    // Nothing the system player can resolve: `play()` on an empty queue is
+    // the platform error this bridge exists to avoid, so it is not attempted.
+    if (_length == 0) {
+      _started = false;
+      return;
+    }
+    _started = true;
     await _client.play();
     _startClock();
   }
@@ -150,28 +156,48 @@ class ApplePlayer {
   ///
   /// Items are converted by the source that owns them: a radio station is
   /// not a track, and the platform player resolves it from its own shape.
+  ///
+  /// The run stops at the first item whose source cannot spell it. A queue
+  /// that mixes Apple Music with a provider the system player knows nothing
+  /// about — a favourite list built from another library, say — otherwise
+  /// hands it a resource it cannot resolve, and `play()` then fails as a
+  /// whole (MPMusicPlayerControllerErrorDomain 6) instead of playing the
+  /// part that can be played.
   Future<void> _pushQueue(List<LibrarySong> queue, int startingAt) async {
     // The app's queue and the system's are the same order from this point:
     // system index 0 is app index [startingAt], and the system reports its
     // index, so an automatic advance is one addition.
-    _base = startingAt;
-    _systemIndex = 0;
     final songs = queue.sublist(startingAt);
     // The *source* knows how its items are spelled for the platform player;
     // this bridge only knows it is talking to one.
     final source = sourceFor?.call(songs.first);
-    if (source == null) return;
+    if (source == null) {
+      _base = startingAt;
+      _systemIndex = 0;
+      _length = 0;
+      return;
+    }
+    final sourceId = songs.first.sourceId;
     // A station is queued alone: the system generates the station's own
     // endless run, and handing it a second item would cut that run short.
     final radio = songs.first.isRadio;
-    final items = radio
-        ? [source.platformResource(songs.first)]
-        : [for (final song in songs) source.platformResource(song)];
+    final run = radio
+        ? [songs.first]
+        : songs.takeWhile((song) => song.sourceId == sourceId).toList();
+    _base = startingAt;
+    _systemIndex = 0;
+    _length = run.length;
     await _client.setQueue(
-      items,
+      [for (final song in run) source.platformResource(song)],
       itemType: source.platformItemType(songs.first),
     );
   }
+
+  /// How many app-queue rows the system player currently holds. The rest of
+  /// the app's queue is played by the app itself: it hands the system the
+  /// next run when this one ends.
+  int get length => _length;
+  int _length = 0;
 
   /// The app-queue index that the system queue's first entry stands for.
   int get base => _base;

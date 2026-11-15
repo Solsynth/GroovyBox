@@ -523,6 +523,27 @@ void main() {
     },
   );
 
+  test(
+    'a replayed copy keeps saying store, whoever built the song',
+    () async {
+      final source = AppleMusicSource(connected());
+      // What the catalog hands back for a favourite: a song rebuilt from the
+      // stored link, which carries the store id but no `catalogId` field.
+      final replayed = const LibrarySong(
+        sourceId: 'apple-1',
+        id: '1745015575',
+        title: 'Daytona Sand',
+        duration: Duration(minutes: 3),
+      );
+      final playParams =
+          (source.platformResource(replayed)['attributes']
+              as Map)['playParams'] as Map;
+      // Claiming isLibrary on a store id is what made a replayed favourite
+      // fail with MPMusicPlayerControllerErrorDomain 6.
+      expect(playParams['isLibrary'], isNull);
+    },
+  );
+
 
   test('the player bridge hands the run to the system player', () async {
     final songs = [
