@@ -9,7 +9,6 @@ import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/library/store.dart';
 import 'package:groovy_box/widgets/common.dart';
-import 'package:groovy_box/widgets/pill_app_bar.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
