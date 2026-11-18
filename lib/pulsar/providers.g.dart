@@ -268,6 +268,77 @@ final class PulsarPlaylistDetailFamily extends $Family
   String toString() => r'pulsarPlaylistDetailProvider';
 }
 
+/// One cover URL per cloud playlist, for lists that draw the item.
+///
+/// A collection record carries `artwork_url` only when someone set it, and a
+/// playlist made by uploading tracks never did: the list response is a bare
+/// array with no items, so the row had nothing to draw and every Solar
+/// playlist read as a grey cloud. The cover a playlist actually shows is its
+/// first track's artwork, which only the detail read knows — so the ones
+/// missing a cover ask for it once, and a failure costs a cover, never the
+/// list.
+
+@ProviderFor(pulsarPlaylistCovers)
+final pulsarPlaylistCoversProvider = PulsarPlaylistCoversProvider._();
+
+/// One cover URL per cloud playlist, for lists that draw the item.
+///
+/// A collection record carries `artwork_url` only when someone set it, and a
+/// playlist made by uploading tracks never did: the list response is a bare
+/// array with no items, so the row had nothing to draw and every Solar
+/// playlist read as a grey cloud. The cover a playlist actually shows is its
+/// first track's artwork, which only the detail read knows — so the ones
+/// missing a cover ask for it once, and a failure costs a cover, never the
+/// list.
+
+final class PulsarPlaylistCoversProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<Map<String, String>>,
+          Map<String, String>,
+          FutureOr<Map<String, String>>
+        >
+    with
+        $FutureModifier<Map<String, String>>,
+        $FutureProvider<Map<String, String>> {
+  /// One cover URL per cloud playlist, for lists that draw the item.
+  ///
+  /// A collection record carries `artwork_url` only when someone set it, and a
+  /// playlist made by uploading tracks never did: the list response is a bare
+  /// array with no items, so the row had nothing to draw and every Solar
+  /// playlist read as a grey cloud. The cover a playlist actually shows is its
+  /// first track's artwork, which only the detail read knows — so the ones
+  /// missing a cover ask for it once, and a failure costs a cover, never the
+  /// list.
+  PulsarPlaylistCoversProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'pulsarPlaylistCoversProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$pulsarPlaylistCoversHash();
+
+  @$internal
+  @override
+  $FutureProviderElement<Map<String, String>> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<Map<String, String>> create(Ref ref) {
+    return pulsarPlaylistCovers(ref);
+  }
+}
+
+String _$pulsarPlaylistCoversHash() =>
+    r'db26680b9f905bb873dcc5d35a50b1bbae9e5247';
+
 /// The songs of one Pulsar playlist, resolved against the connected library
 /// sources. A catalog entry is a record of a track, not a playable stream:
 /// matching is on title + artist, which is how the server dedupes too.
@@ -646,7 +717,7 @@ final class SolarFavouriteKeysProvider
 }
 
 String _$solarFavouriteKeysHash() =>
-    r'0ffdc913996c2a1832d3760833c03e0db826a049';
+    r'4e228d6ff278d6a76863ff0e4e6ac50af29289d3';
 
 /// Whether the account holds [song] as a favourite.
 ///
