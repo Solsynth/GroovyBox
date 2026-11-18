@@ -1,20 +1,19 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
-import '../core/glass.dart';
-import '../core/router.gr.dart';
-import '../core/responsive.dart';
-import '../core/theme.dart';
-import '../player/player.dart';
-import '../solarpass/providers.dart';
-import '../widgets/now_playing_dock.dart';
-import 'tab_destinations.dart';
-import 'window_frame.dart';
+import 'package:groovy_box/core/glass.dart';
+import 'package:groovy_box/core/router.gr.dart';
+import 'package:groovy_box/core/responsive.dart';
+import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/library_sync/providers.dart';
 import 'package:groovy_box/pulsar/favourites.dart';
+import 'package:groovy_box/shell/tab_destinations.dart';
+import 'package:groovy_box/shell/window_frame.dart';
+import 'package:groovy_box/solarpass/providers.dart';
+import 'package:groovy_box/widgets/brand_mark.dart';
+import 'package:groovy_box/widgets/now_playing_dock.dart';
 
 /// Shell that hosts the root tabs: explore, search, the collection, the play
 /// history, and settings.
@@ -232,16 +231,15 @@ class _WideRail extends StatelessWidget {
   }
 }
 
+/// The app's mark at the top of the rail: the icon itself, at the size a
+/// column can carry. It is the only place the brand is drawn in the shell, so
+/// the icon — not a glyph from an icon font — has to be what says it.
 class _RailWordmark extends StatelessWidget {
   const _RailWordmark();
 
   @override
   Widget build(BuildContext context) {
-    return Icon(
-      Symbols.graphic_eq_rounded,
-      size: 26,
-      color: Theme.of(context).colorScheme.primary,
-    );
+    return const BrandMark(size: 28);
   }
 }
 

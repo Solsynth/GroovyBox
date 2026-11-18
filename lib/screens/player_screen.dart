@@ -78,7 +78,7 @@ const double _kDockPad = SolSpace.md;
 /// Gap the docked bar keeps under itself, on top of the page's own margin: a
 /// capsule on the page's last pixel reads as the floor rather than as a bar
 /// floating above it.
-const double _kDockMargin = SolSpace.md;
+const double _kDockMargin = SolSpace.xl;
 
 /// Height the bar's track row takes at the default type size: the sleeve is
 /// the tallest thing in it.

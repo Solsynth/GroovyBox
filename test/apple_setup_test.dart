@@ -10,6 +10,15 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Picks a provider from the page's dropdown the way a person does: open the
+/// menu, then tap the row.
+Future<void> pickKind(WidgetTester tester, LibraryKind kind) async {
+  await tester.tap(find.byType(DropdownButtonFormField<LibraryKind>));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(kind.label).last);
+  await tester.pumpAndSettle();
+}
+
 class _Fake extends LibrarySource {
   _Fake(this.id);
   @override
@@ -61,20 +70,24 @@ void main() {
     // local library is not a connection, so it is never in the picker at all.
     final expected = [
       for (final entry in libraryAdapters.entries)
-        if (entry.value.isAvailable) entry.key.label,
+        if (entry.value.isAvailable) entry.key,
     ];
-    final segments = tester
-        .widget<SegmentedButton<LibraryKind>>(
-          find.byType(SegmentedButton<LibraryKind>),
-        )
-        .segments
-        .map((segment) => (segment.label as Text).data)
-        .toList();
 
-    expect(segments, expected);
-    expect(segments, isNot(contains(LibraryKind.local.label)));
+    await tester.tap(find.byType(DropdownButtonFormField<LibraryKind>));
+    await tester.pumpAndSettle();
+
+    // The menu is open: every runnable adapter is offered, and the local
+    // library — not a connection — is not.
+    for (final kind in expected) {
+      expect(
+        find.text(kind.label),
+        findsWidgets,
+        reason: '${kind.name} should be offered on this platform',
+      );
+    }
+    expect(find.text(LibraryKind.local.label), findsNothing);
     // Apple Music is in the picker on macOS 14+, which is what CI runs on.
-    expect(segments, contains(LibraryKind.appleMusic.label));
+    expect(find.text(LibraryKind.appleMusic.label), findsWidgets);
   });
 
   testWidgets('picking Apple Music hides the server fields', (tester) async {
@@ -84,8 +97,7 @@ void main() {
     expect(find.byType(TextFormField), findsNWidgets(3));
     expect(find.text('setupTestConnection'.tr()), findsOneWidget);
 
-    await tester.tap(find.text(LibraryKind.appleMusic.label));
-    await tester.pumpAndSettle();
+    await pickKind(tester, LibraryKind.appleMusic);
 
     // Apple Music has nothing to type: the account is the system's.
     expect(find.byType(TextFormField), findsNothing);
@@ -95,8 +107,7 @@ void main() {
     expect(find.text('setupConnect'.tr()), findsOneWidget);
 
     // Switching back restores the form.
-    await tester.tap(find.text(LibraryKind.subsonic.label));
-    await tester.pumpAndSettle();
+    await pickKind(tester, LibraryKind.subsonic);
     expect(find.byType(TextFormField), findsNWidgets(3));
   });
 }

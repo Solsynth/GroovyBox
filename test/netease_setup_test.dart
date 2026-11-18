@@ -115,6 +115,15 @@ Future<void> _pump(WidgetTester tester) async {
   await tester.pump();
 }
 
+/// Picks a provider from the page's dropdown the way a person does: open the
+/// menu, then tap the row.
+Future<void> pickKind(WidgetTester tester, LibraryKind kind) async {
+  await tester.tap(find.byType(DropdownButtonFormField<LibraryKind>));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(kind.label).last);
+  await tester.pumpAndSettle();
+}
+
 void main() {
   late _FakeInteractive fake;
   late LibraryAdapter original;
@@ -129,8 +138,7 @@ void main() {
   testWidgets('picking NetEase asks for an address only', (tester) async {
     await _pump(tester);
 
-    await tester.tap(find.text(LibraryKind.netease.label));
-    await tester.pumpAndSettle();
+    await pickKind(tester, LibraryKind.netease);
 
     // One field: the bridge address. No username, no password: the account
     // signs in by scanning.
@@ -145,8 +153,7 @@ void main() {
     tester,
   ) async {
     await _pump(tester);
-    await tester.tap(find.text(LibraryKind.netease.label));
-    await tester.pumpAndSettle();
+    await pickKind(tester, LibraryKind.netease);
 
     await tester.enterText(find.byType(TextFormField), 'bridge.example.com');
     await tester.tap(find.text('setupStartLogin'.tr()));
@@ -176,8 +183,7 @@ void main() {
     tester,
   ) async {
     await _pump(tester);
-    await tester.tap(find.text(LibraryKind.netease.label));
-    await tester.pumpAndSettle();
+    await pickKind(tester, LibraryKind.netease);
 
     // No address: the form refuses, and no code is minted.
     await tester.tap(find.text('setupStartLogin'.tr()));

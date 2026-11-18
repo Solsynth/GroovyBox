@@ -4,20 +4,26 @@ import 'dart:convert';
 import 'package:auto_route/auto_route.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/services.dart';
+import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/library/store.dart';
 import 'package:groovy_box/widgets/common.dart';
+import 'package:groovy_box/widgets/pill_app_bar.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// Adding a library.
 ///
-/// Pushed from settings and from the browse page's nudge; it is never the app's
-/// root any more, so it always has somewhere to go back to. "Test connection"
-/// and "Connect" run the same adapter call; the test button exists so the user
-/// can validate an address without committing to it.
+/// Pushed from settings and from the explore page's nudge; it is never the
+/// app's root any more, so it always has somewhere to go back to.
+///
+/// One provider is chosen from a dropdown rather than a row of segments: the
+/// set of kinds grows (and shrinks per platform), and a menu holds six names
+/// where segments hold three. "Test connection" and "Connect" run the same
+/// adapter call; the test exists so an address can be checked without
+/// committing to it.
 @RoutePage()
 class SetupScreen extends ConsumerStatefulWidget {
   const SetupScreen({super.key});
@@ -53,13 +59,37 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   /// The adapter of the kind currently picked in the picker.
   LibraryAdapter get adapter => libraryAdapters[_kind]!;
 
+  /// The kinds this platform can actually run, in adapter order. The local
+  /// library is not a connection and never appears.
+  List<LibraryKind> get _kinds => [
+    for (final entry in libraryAdapters.entries)
+      if (entry.value.isAvailable) entry.key,
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    // A verdict belongs to the address it was about; editing the address
+    // retires it instead of leaving a stale banner under a new host.
+    _serverController.addListener(_clearOutcome);
+  }
+
   @override
   void dispose() {
+    _serverController.removeListener(_clearOutcome);
     _serverController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
     _qrPoll?.cancel();
     super.dispose();
+  }
+
+  void _clearOutcome() {
+    if (_error == null && _success == null) return;
+    setState(() {
+      _error = null;
+      _success = null;
+    });
   }
 
   void _leave() {
@@ -69,6 +99,22 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     } else {
       Navigator.maybePop(context);
     }
+  }
+
+  void _pickKind(LibraryKind? kind) {
+    if (kind == null || kind == _kind) return;
+    setState(() {
+      _kind = kind;
+      _error = null;
+      _success = null;
+      // A half-finished interactive login belongs to the kind that started it.
+      _qrPoll?.cancel();
+      _qrPoll = null;
+      _loginSteps = null;
+      _qrCode = null;
+      _qrState = null;
+      _busy = false;
+    });
   }
 
   @override
@@ -90,247 +136,210 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
         child: FocusScope(
           child: Scaffold(
             backgroundColor: Colors.transparent,
-            body: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(SolSpace.xxxl),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 460),
-                  child: IslandCard(
-                    cornerRadius: SolRadius.xxl,
-                    padding: const EdgeInsets.all(SolSpace.xxl),
-                    emphasised: true,
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (canLeave) ...[
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: IconButton(
-                                icon: const Icon(Symbols.arrow_back_rounded),
-                                tooltip: 'commonBack'.tr(),
-                                onPressed: _busy ? null : _leave,
-                              ),
-                            ),
-                            const SizedBox(height: SolSpace.xs),
-                          ],
-                          Icon(
-                            Symbols.graphic_eq_rounded,
-                            size: 44,
-                            color: colorScheme.primary,
+            body: ContentFrame(
+              maxWidth: kReadingMaxWidth,
+              child: Column(
+                children: [
+                  PillHeader(
+                    title: 'setupTitle'.tr(),
+                    leading: canLeave
+                        ? IconButton(
+                            tooltip: 'commonBack'.tr(),
+                            onPressed: _busy ? null : _leave,
+                            icon: const Icon(Symbols.arrow_back_rounded),
+                          )
+                        : null,
+                  ),
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(
+                        SolSpace.xl,
+                        0,
+                        SolSpace.xl,
+                        SolSpace.xxxl,
+                      ),
+                      children: [
+                        Text(
+                          'setupSubtitle'.tr(),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            height: 1.5,
                           ),
+                        ),
+                        const SizedBox(height: SolSpace.xl),
+                        Form(
+                          key: _formKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _ProviderPicker(
+                                kind: _kind,
+                                kinds: _kinds,
+                                enabled: !_busy,
+                                onChanged: _pickKind,
+                              ),
+                              const SizedBox(height: SolSpace.lg),
+                              ..._formFields(),
+                              if (_error != null) ...[
+                                const SizedBox(height: SolSpace.lg),
+                                _Banner(
+                                  icon: Symbols.error_rounded,
+                                  message: _error!,
+                                  color: colorScheme.error,
+                                ),
+                              ],
+                              if (_success != null) ...[
+                                const SizedBox(height: SolSpace.lg),
+                                _Banner(
+                                  icon: Symbols.check_circle_rounded,
+                                  message: _success!,
+                                  color: colorScheme.primary,
+                                ),
+                              ],
+                              const SizedBox(height: SolSpace.xl),
+                              _actions(canLeave: canLeave),
+                            ],
+                          ),
+                        ),
+                        if (adapter.needsCredentials) ...[
                           const SizedBox(height: SolSpace.lg),
                           Text(
-                            'setupTitle'.tr(),
+                            'setupSecurityNote'.tr(),
                             textAlign: TextAlign.center,
-                            style: theme.textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: SolSpace.sm),
-                          Text(
-                            'setupSubtitle'.tr(),
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.bodySmall?.copyWith(
+                            style: theme.textTheme.labelSmall?.copyWith(
                               color: colorScheme.onSurfaceVariant,
                               height: 1.5,
                             ),
                           ),
-                          const SizedBox(height: SolSpace.xl),
-                          SegmentedButton<LibraryKind>(
-                            segments: [
-                              // Only kinds this platform can run: the local
-                              // library is not a connection and has nothing to
-                              // set up, and Apple Music needs iOS or macOS 14.
-                              for (final entry in libraryAdapters.entries)
-                                if (entry.value.isAvailable)
-                                  ButtonSegment(
-                                    value: entry.key,
-                                    label: Text(entry.key.label),
-                                  ),
-                            ],
-                            selected: {_kind},
-                            onSelectionChanged: (selection) => setState(() {
-                              _kind = selection.first;
-                              _error = null;
-                              _success = null;
-                              // A half-finished interactive login belongs to
-                              // the kind that started it.
-                              _qrPoll?.cancel();
-                              _qrPoll = null;
-                              _loginSteps = null;
-                              _qrCode = null;
-                              _qrState = null;
-                              _busy = false;
-                            }),
-                          ),
-                          const SizedBox(height: SolSpace.lg),
-                          // An interactive adapter (QR sign-in) draws the
-                          // address field plus its steps once started; a
-                          // credential one draws the three-field form.
-                          // Apple Music signs in through the system: a note
-                          // instead of fields.
-                          if (_isInteractive) ...[
-                            TextFormField(
-                              controller: _serverController,
-                              autofocus: true,
-                              keyboardType: TextInputType.url,
-                              textInputAction: TextInputAction.done,
-                              onFieldSubmitted: (_) => _startInteractive(),
-                              decoration: InputDecoration(
-                                labelText: 'setupServerAddress'.tr(),
-                                hintText: _kind.addressHint,
-                                prefixIcon: const Icon(Symbols.dns_rounded),
-                              ),
-                              validator: (value) {
-                                final text = value?.trim() ?? '';
-                                if (text.isEmpty) {
-                                  return 'setupServerAddressError'.tr();
-                                }
-                                final uri = Uri.tryParse(
-                                  text.contains('://') ? text : 'https://$text',
-                                );
-                                if (uri == null || uri.host.isEmpty) {
-                                  return 'setupServerAddressInvalid'.tr();
-                                }
-                                return null;
-                              },
-                            ),
-                            ...?_loginSteps?.map(_stepWidget),
-                          ] else if (!adapter.needsCredentials) ...[
-                            Text(
-                              'setupAppleMusicNote'.tr(),
-                              textAlign: TextAlign.center,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                                height: 1.5,
-                              ),
-                            ),
-                          ] else ...[
-                            TextFormField(
-                              controller: _serverController,
-                              autofocus: true,
-                              keyboardType: TextInputType.url,
-                              textInputAction: TextInputAction.next,
-                              decoration: InputDecoration(
-                                labelText: 'setupServerAddress'.tr(),
-                                hintText: _kind.addressHint,
-                                prefixIcon: const Icon(Symbols.dns_rounded),
-                              ),
-                              validator: (value) {
-                                final text = value?.trim() ?? '';
-                                if (text.isEmpty) {
-                                  return 'setupServerAddressError'.tr();
-                                }
-                                final uri = Uri.tryParse(
-                                  text.contains('://') ? text : 'https://$text',
-                                );
-                                if (uri == null || uri.host.isEmpty) {
-                                  return 'setupServerAddressInvalid'.tr();
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: SolSpace.md),
-                            TextFormField(
-                              controller: _usernameController,
-                              textInputAction: TextInputAction.next,
-                              decoration: InputDecoration(
-                                labelText: 'setupUsername'.tr(),
-                                prefixIcon: const Icon(Symbols.person_rounded),
-                              ),
-                              validator: (value) =>
-                                  (value?.trim().isEmpty ?? true)
-                                  ? 'setupUsernameError'.tr()
-                                  : null,
-                            ),
-                            const SizedBox(height: SolSpace.md),
-                            TextFormField(
-                              controller: _passwordController,
-                              obscureText: true,
-                              onFieldSubmitted: (_) => _connect(),
-                              decoration: InputDecoration(
-                                labelText: 'setupPassword'.tr(),
-                                prefixIcon: const Icon(Symbols.lock_rounded),
-                              ),
-                              validator: (value) => (value?.isEmpty ?? true)
-                                  ? 'setupPasswordError'.tr()
-                                  : null,
-                            ),
-                          ],
-                          if (_error != null) ...[
-                            const SizedBox(height: SolSpace.lg),
-                            _Banner(
-                              icon: Symbols.error_rounded,
-                              message: _error!,
-                              color: colorScheme.error,
-                            ),
-                          ],
-                          if (_success != null) ...[
-                            const SizedBox(height: SolSpace.lg),
-                            _Banner(
-                              icon: Symbols.check_circle_rounded,
-                              message: _success!,
-                              color: colorScheme.primary,
-                            ),
-                          ],
-                          const SizedBox(height: SolSpace.xl),
-                          if (!_isInteractive || _loginSteps == null)
-                            FilledButton(
-                              onPressed: _busy
-                                  ? null
-                                  : _isInteractive
-                                  ? _startInteractive
-                                  : _connect,
-                              child: _busy
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : Text(
-                                      _isInteractive
-                                          ? 'setupStartLogin'.tr()
-                                          : 'setupConnect'.tr(),
-                                    ),
-                            ),
-                          if (adapter.needsCredentials) ...[
-                            const SizedBox(height: SolSpace.sm),
-                            TextButton(
-                              onPressed: _busy ? null : _test,
-                              child: Text('setupTestConnection'.tr()),
-                            ),
-                          ],
-                          if (canLeave) ...[
-                            const SizedBox(height: SolSpace.xs),
-                            TextButton(
-                              onPressed: _busy ? null : _leave,
-                              child: Text('commonCancel'.tr()),
-                            ),
-                          ],
-                          const SizedBox(height: SolSpace.lg),
-                          if (adapter.needsCredentials)
-                            Text(
-                              'setupSecurityNote'.tr(),
-                              textAlign: TextAlign.center,
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                                height: 1.5,
-                              ),
-                            ),
                         ],
-                      ),
+                      ],
                     ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  /// The address, and the credentials when the adapter takes them.
+  ///
+  /// Three shapes, one per capability the adapter declares: an interactive
+  /// login (address plus its steps), a system account (a note, no fields), or
+  /// address + username + password.
+  List<Widget> _formFields() {
+    final addressField = TextFormField(
+      controller: _serverController,
+      autofocus: true,
+      keyboardType: TextInputType.url,
+      textInputAction: _isInteractive
+          ? TextInputAction.done
+          : TextInputAction.next,
+      onFieldSubmitted: _isInteractive ? (_) => _startInteractive() : null,
+      decoration: InputDecoration(
+        labelText: 'setupServerAddress'.tr(),
+        hintText: _kind.addressHint,
+        prefixIcon: const Icon(Symbols.dns_rounded),
+      ),
+      validator: (value) {
+        final text = value?.trim() ?? '';
+        if (text.isEmpty) return 'setupServerAddressError'.tr();
+        final uri = Uri.tryParse(text.contains('://') ? text : 'https://$text');
+        if (uri == null || uri.host.isEmpty) {
+          return 'setupServerAddressInvalid'.tr();
+        }
+        return null;
+      },
+    );
+
+    if (_isInteractive) {
+      return [addressField, ...?_loginSteps?.map(_stepWidget)];
+    }
+    if (!adapter.needsCredentials) {
+      return [
+        Text(
+          'setupAppleMusicNote'.tr(),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            height: 1.5,
+          ),
+        ),
+      ];
+    }
+    return [
+      addressField,
+      const SizedBox(height: SolSpace.md),
+      TextFormField(
+        controller: _usernameController,
+        textInputAction: TextInputAction.next,
+        decoration: InputDecoration(
+          labelText: 'setupUsername'.tr(),
+          prefixIcon: const Icon(Symbols.person_rounded),
+        ),
+        validator: (value) =>
+            (value?.trim().isEmpty ?? true) ? 'setupUsernameError'.tr() : null,
+      ),
+      const SizedBox(height: SolSpace.md),
+      TextFormField(
+        controller: _passwordController,
+        obscureText: true,
+        onFieldSubmitted: (_) => _connect(),
+        decoration: InputDecoration(
+          labelText: 'setupPassword'.tr(),
+          prefixIcon: const Icon(Symbols.lock_rounded),
+        ),
+        validator: (value) =>
+            (value?.isEmpty ?? true) ? 'setupPasswordError'.tr() : null,
+      ),
+    ];
+  }
+
+  /// Connect, and the two ways not to: try the address first, or leave.
+  ///
+  /// Cancel is here as well as Back in the header: the header is the window's
+  /// habit, while an escape under the form, after the primary action, is the
+  /// one a form user looks for.
+  Widget _actions({required bool canLeave}) {
+    final hasPrimary = !_isInteractive || _loginSteps == null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (hasPrimary)
+          FilledButton(
+            onPressed: _busy
+                ? null
+                : _isInteractive
+                ? _startInteractive
+                : _connect,
+            child: _busy
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(
+                    _isInteractive
+                        ? 'setupStartLogin'.tr()
+                        : 'setupConnect'.tr(),
+                  ),
+          ),
+        if (adapter.needsCredentials) ...[
+          const SizedBox(height: SolSpace.sm),
+          TextButton(
+            onPressed: _busy ? null : _test,
+            child: Text('setupTestConnection'.tr()),
+          ),
+        ],
+        if (canLeave) ...[
+          const SizedBox(height: SolSpace.xs),
+          TextButton(
+            onPressed: _busy ? null : _leave,
+            child: Text('commonCancel'.tr()),
+          ),
+        ],
+      ],
     );
   }
 
@@ -399,16 +408,25 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       QrLoginStep() => Column(
         children: [
           const SizedBox(height: SolSpace.lg),
-          SizedBox(
-            width: 200,
-            height: 200,
-            child: switch (_qrCode) {
-              final String code when code.startsWith('data:') => Image.memory(
-                base64Decode(code.split(',').last),
-              ),
-              final String code => Image.network(code),
-              _ => const Center(child: CircularProgressIndicator()),
-            },
+          // A still, light mat whatever the theme: cameras do not read an
+          // inverted code, so the QR keeps a white field of its own.
+          Container(
+            padding: const EdgeInsets.all(SolSpace.md),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFFFFF),
+              borderRadius: BorderRadius.circular(SolRadius.md),
+            ),
+            child: SizedBox(
+              width: 200,
+              height: 200,
+              child: switch (_qrCode) {
+                final String code when code.startsWith('data:') => Image.memory(
+                  base64Decode(code.split(',').last),
+                ),
+                final String code => Image.network(code),
+                _ => const Center(child: CircularProgressIndicator()),
+              },
+            ),
           ),
           const SizedBox(height: SolSpace.md),
           Text(
@@ -520,6 +538,70 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+}
+
+/// The provider menu: one labelled control, named after the services a person
+/// recognises rather than after the protocol behind them.
+class _ProviderPicker extends StatelessWidget {
+  final LibraryKind kind;
+  final List<LibraryKind> kinds;
+  final bool enabled;
+  final ValueChanged<LibraryKind?> onChanged;
+
+  const _ProviderPicker({
+    required this.kind,
+    required this.kinds,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return DropdownButtonFormField<LibraryKind>(
+      // The form field owns the value once it has been built; `initialValue`
+      // is what a rebuild passes back, and a new pick is reported through
+      // [onChanged] to the screen's own state.
+      initialValue: kind,
+      isExpanded: true,
+      enabled: enabled,
+      itemHeight: 56,
+      borderRadius: SolRadius.menuRadius,
+      menuMaxHeight: 320,
+      icon: const Icon(Symbols.unfold_more_rounded),
+      decoration: InputDecoration(labelText: 'setupProvider'.tr()),
+      style: theme.textTheme.titleSmall?.copyWith(
+        color: theme.colorScheme.onSurface,
+        fontWeight: FontWeight.w600,
+      ),
+      items: [
+        for (final option in kinds)
+          DropdownMenuItem(
+            value: option,
+            child: Row(
+              children: [
+                Icon(
+                  option.pickerIcon,
+                  size: 20,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: SolSpace.md),
+                Expanded(
+                  child: Text(
+                    option.label,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+      onChanged: enabled ? onChanged : null,
+    );
   }
 }
 

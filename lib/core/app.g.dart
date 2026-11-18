@@ -484,7 +484,7 @@ abstract class _$InfinitePlaybackEnabled extends $Notifier<bool> {
 /// Whether the playing track's cover colours the window.
 ///
 /// On by default: it is what makes the player feel like it belongs to the
-/// album. Off restores the app's own violet seed everywhere.
+/// album. Off restores the app's own teal seed everywhere.
 
 @ProviderFor(DynamicColorEnabled)
 final dynamicColorEnabledProvider = DynamicColorEnabledProvider._();
@@ -492,13 +492,13 @@ final dynamicColorEnabledProvider = DynamicColorEnabledProvider._();
 /// Whether the playing track's cover colours the window.
 ///
 /// On by default: it is what makes the player feel like it belongs to the
-/// album. Off restores the app's own violet seed everywhere.
+/// album. Off restores the app's own teal seed everywhere.
 final class DynamicColorEnabledProvider
     extends $NotifierProvider<DynamicColorEnabled, bool> {
   /// Whether the playing track's cover colours the window.
   ///
   /// On by default: it is what makes the player feel like it belongs to the
-  /// album. Off restores the app's own violet seed everywhere.
+  /// album. Off restores the app's own teal seed everywhere.
   DynamicColorEnabledProvider._()
     : super(
         from: null,
@@ -532,7 +532,7 @@ String _$dynamicColorEnabledHash() =>
 /// Whether the playing track's cover colours the window.
 ///
 /// On by default: it is what makes the player feel like it belongs to the
-/// album. Off restores the app's own violet seed everywhere.
+/// album. Off restores the app's own teal seed everywhere.
 
 abstract class _$DynamicColorEnabled extends $Notifier<bool> {
   bool build();

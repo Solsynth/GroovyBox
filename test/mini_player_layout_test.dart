@@ -11,7 +11,6 @@ import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/lyrics_view.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/rendering.dart';
 import 'package:groovy_box/widgets/queue_panel.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';

@@ -48,6 +48,19 @@ enum LibraryKind {
     LibraryKind.netease || LibraryKind.subsonic || LibraryKind.jellyfin => null,
   };
 
+  /// The glyph beside this kind's name in the setup menu.
+  ///
+  /// Unlike [mark] this is always set: inside a menu every row has room for a
+  /// small symbol, and a row with an icon next to one without reads as a
+  /// rendering bug rather than as a distinction.
+  IconData get pickerIcon => switch (this) {
+    LibraryKind.netease => Symbols.music_note_rounded,
+    LibraryKind.subsonic => Symbols.dns_rounded,
+    LibraryKind.jellyfin => Symbols.movie_rounded,
+    LibraryKind.appleMusic => Symbols.cloud_rounded,
+    LibraryKind.local => Symbols.smartphone_rounded,
+  };
+
   /// Setup field placeholder.
   String get addressHint => addressHintKey.tr();
 }

@@ -192,7 +192,7 @@ class InfinitePlaybackEnabled extends Notifier<bool> {
 /// Whether the playing track's cover colours the window.
 ///
 /// On by default: it is what makes the player feel like it belongs to the
-/// album. Off restores the app's own violet seed everywhere.
+/// album. Off restores the app's own teal seed everywhere.
 @Riverpod(keepAlive: true)
 class DynamicColorEnabled extends Notifier<bool> {
   @override

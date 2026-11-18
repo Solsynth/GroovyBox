@@ -38,7 +38,7 @@ class ContentFrame extends StatelessWidget {
   }
 }
 
-/// The card primitive: a tonal island of the same warm paper, no border, no
+/// The card primitive: a tonal island of the same paper, no border, no
 /// glass. Same tone family as Solian's `ExploreCard`, so the two apps' cards
 /// read as one system.
 ///

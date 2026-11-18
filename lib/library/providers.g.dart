@@ -642,18 +642,18 @@ abstract class _$LandingShelves extends $AsyncNotifier<List<LandingShelf>> {
   }
 }
 
-/// What each connected account says about itself, for the landing page's
-/// header card. Empty when no source has anything of its own to report.
+/// What each connected account says about itself, for the row that manages
+/// that connection. Empty when no source has anything of its own to report.
 
 @ProviderFor(LibraryDigests)
 final libraryDigestsProvider = LibraryDigestsProvider._();
 
-/// What each connected account says about itself, for the landing page's
-/// header card. Empty when no source has anything of its own to report.
+/// What each connected account says about itself, for the row that manages
+/// that connection. Empty when no source has anything of its own to report.
 final class LibraryDigestsProvider
     extends $AsyncNotifierProvider<LibraryDigests, List<LibraryDigest>> {
-  /// What each connected account says about itself, for the landing page's
-  /// header card. Empty when no source has anything of its own to report.
+  /// What each connected account says about itself, for the row that manages
+  /// that connection. Empty when no source has anything of its own to report.
   LibraryDigestsProvider._()
     : super(
         from: null,
@@ -675,8 +675,8 @@ final class LibraryDigestsProvider
 
 String _$libraryDigestsHash() => r'927e5f34009f4e92403dda5730b824f5913a69b8';
 
-/// What each connected account says about itself, for the landing page's
-/// header card. Empty when no source has anything of its own to report.
+/// What each connected account says about itself, for the row that manages
+/// that connection. Empty when no source has anything of its own to report.
 
 abstract class _$LibraryDigests extends $AsyncNotifier<List<LibraryDigest>> {
   FutureOr<List<LibraryDigest>> build();

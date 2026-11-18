@@ -3,9 +3,9 @@
     "short_name": "GroovyBox",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#ffffff",
-    "theme_color": "#2eb0c7",
-    "description": "A new Flutter project.",
+    "background_color": "#F5FAFC",
+    "theme_color": "#2EB0C7",
+    "description": "A music player for your own library: streams from Subsonic, Jellyfin, Apple Music and NetEase Cloud Music, and plays files on the device.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

@@ -16,13 +16,13 @@ than block you behind a form.
 
 - **Window shell** — frameless desktop chrome ported from Solian
   (`lib/shell/window_frame.dart`), a responsive shell built from floating
-  chrome, and the same design tokens (spacing, radii, warm-paper color ramp) in
-  `lib/core/theme.dart`.
+  chrome, and the same design tokens (spacing, radii, glacier-paper color
+  ramp) in `lib/core/theme.dart`.
 - **Dynamic color** — the palette follows the music. With the setting on
   (Settings → Appearance, on by default) the playing track's cover is decoded
   at 128 px, its dominant usable colour is scored by Material Color Utilities,
   and that colour seeds the whole scheme (`lib/core/dynamic_color.dart`). A
-  coverless or grayscale cover leaves the app's own violet seed in place.
+  coverless or grayscale cover leaves the app's own teal seed in place.
 - **Server layer** — `lib/library/` maps Subsonic, Jellyfin, Apple Music and
   NetEase Cloud Music onto one provider-neutral model. Subsonic uses salted
   token auth (never the password); Jellyfin signs in with the

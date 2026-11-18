@@ -1,35 +1,34 @@
 import 'package:flutter/material.dart';
 
-/// The GroovyBox mark: the app icon itself, scaled to the slot that asked for
-/// it.
+/// The app's mark, drawn from the icon itself.
 ///
-/// The icon is one idea — a white tile on the brand teal with the note cut out
-/// of it — so the app draws that artwork instead of approximating it with a
-/// glyph from an icon font. At 18 px in a row it still reads as the app; at
-/// 44 px in a header it carries the brand. Cropping and rounding are the
-/// caller's job ([clipBehavior]); the mark never invents a tile of its own.
+/// `assets/images/icon-rounded.png` is the identity: a white tile on the brand
+/// teal with the eighth note cut out of it. The app shows that artwork wherever
+/// it needs to say who it is, instead of a glyph borrowed from an icon font —
+/// a music-note symbol from a general-purpose set says "music", not
+/// "GroovyBox".
+///
+/// The image is cropped by the caller ([ClipRRect] or a size that matches the
+/// slot); the mark never re-rounds the tile, because the tile is the artwork.
 class BrandMark extends StatelessWidget {
   final double size;
 
-  /// Set false inside text that already names the app; the artwork then
-  /// carries no announcement of its own.
+  /// Set false inside a line that already names the app, so assistive
+  /// technology does not hear the name twice.
   final bool semantic;
 
   const BrandMark({super.key, this.size = 24, this.semantic = true});
 
   @override
   Widget build(BuildContext context) {
-    final image = Image.asset(
+    final mark = Image.asset(
       'assets/images/icon-rounded.png',
       width: size,
       height: size,
       filterQuality: FilterQuality.medium,
-      // The mark is decoration in an interface that already loads instantly;
-      // a fade would only make the brand blink in after the page.
       excludeFromSemantics: true,
     );
-    return semantic
-        ? Semantics(label: 'GroovyBox', image: true, child: image)
-        : image;
+    if (!semantic) return mark;
+    return Semantics(label: 'GroovyBox', image: true, child: mark);
   }
 }
