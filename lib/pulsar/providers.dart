@@ -205,6 +205,51 @@ Future<PulsarPlaylist> pulsarPlaylistDetail(Ref ref, String playlistId) async {
   return ref.watch(pulsarClientProvider).getPlaylist(session, playlistId);
 }
 
+/// One cover URL per cloud playlist, for lists that draw the item.
+///
+/// A collection record carries `artwork_url` only when someone set it, and a
+/// playlist made by uploading tracks never did: the list response is a bare
+/// array with no items, so the row had nothing to draw and every Solar
+/// playlist read as a grey cloud. The cover a playlist actually shows is its
+/// first track's artwork, which only the detail read knows — so the ones
+/// missing a cover ask for it once, and a failure costs a cover, never the
+/// list.
+@Riverpod(keepAlive: true)
+Future<Map<String, String>> pulsarPlaylistCovers(Ref ref) async {
+  final session = ref.watch(pulsarSessionProvider).value;
+  if (session == null) return const {};
+  final playlists = await ref.watch(pulsarPlaylistsProvider.future);
+  final client = ref.read(pulsarClientProvider);
+
+  final covers = <String, String>{};
+  final missing = <PulsarPlaylist>[];
+  for (final playlist in playlists) {
+    final art = playlist.artworkUrl;
+    if (art != null && art.isNotEmpty) {
+      covers[playlist.id] = art;
+    } else {
+      missing.add(playlist);
+    }
+  }
+  if (missing.isEmpty) return covers;
+
+  // A handful of playlists, one request each, in parallel: the page can draw
+  // every row the moment this answers, and a row without a cover falls back
+  // to its own monogram.
+  final details = await Future.wait([
+    for (final playlist in missing)
+      client
+          .getPlaylist(session, playlist.id)
+          .then<CatalogItem?>((detail) => detail.items.firstOrNull?.catalogItem)
+          .catchError((Object _) => null),
+  ]);
+  for (var i = 0; i < missing.length; i++) {
+    final artwork = details[i]?.artworkUrl;
+    if (artwork != null && artwork.isNotEmpty) covers[missing[i].id] = artwork;
+  }
+  return covers;
+}
+
 /// The songs of one Pulsar playlist, resolved against the connected library
 /// sources. A catalog entry is a record of a track, not a playable stream:
 /// matching is on title + artist, which is how the server dedupes too.

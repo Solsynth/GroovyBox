@@ -237,6 +237,85 @@ class SectionLabel extends StatelessWidget {
     );
   }
 }
+/// The page's name in the content, not a bar pinned over it.
+///
+/// Tab roots name themselves here and keep any page-level action beside the
+/// headline; a pushed page opens with [BackButtonRow] and lets its hero say
+/// the rest. The headline scrolls with the page, so it is part of the page
+/// rather than chrome floating over it — a page whose name is already in its
+/// hero never draws this at all.
+class PageHeadline extends StatelessWidget {
+  final String title;
+  final Widget? trailing;
+
+  /// A control before the title — the back affordance on a pushed page with
+  /// no hero to carry it.
+  final Widget? leading;
+
+  const PageHeadline({
+    super.key,
+    required this.title,
+    this.trailing,
+    this.leading,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        SolSpace.xxl,
+        SolSpace.xl,
+        SolSpace.xxl,
+        SolSpace.sm,
+      ),
+      child: Row(
+        children: [
+          ?leading,
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          ?trailing,
+        ],
+      ),
+    );
+  }
+}
+
+/// The one control a pushed page keeps from its old header: the way back.
+///
+/// A full capsule repeating the hero's name was chrome the page already
+/// answers — the hero's eyebrow and meta say what this is — and only the way
+/// out was missing. One button, in the page's own padding, scrolls with the
+/// content like everything else on it.
+class BackButtonRow extends StatelessWidget {
+  final VoidCallback onBack;
+
+  const BackButtonRow({super.key, required this.onBack});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        SolSpace.md,
+        SolSpace.md,
+        SolSpace.md,
+        0,
+      ),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: HeaderBackButton(onPressed: onBack),
+      ),
+    );
+  }
+}
 
 /// Album/track list rows share one shape: an optional leading slot, cover,
 /// two lines, trailing text.

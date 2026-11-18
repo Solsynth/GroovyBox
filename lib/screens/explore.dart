@@ -12,7 +12,6 @@ import 'package:groovy_box/screens/albums.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/friends_listening.dart';
 import 'package:groovy_box/widgets/common.dart';
-import 'package:groovy_box/widgets/pill_app_bar.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
@@ -69,15 +68,15 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
         child: ContentFrame(
           child: CustomScrollView(
             slivers: [
-              SliverPillHeader(
-                title: 'exploreTitle'.tr(),
-                actions: [
-                  IconButton(
+              SliverToBoxAdapter(
+                child: PageHeadline(
+                  title: 'exploreTitle'.tr(),
+                  trailing: IconButton(
                     tooltip: 'commonRefresh'.tr(),
                     onPressed: refreshAll,
                     icon: const Icon(Symbols.refresh_rounded),
                   ),
-                ],
+                ),
               ),
               if (servers.isEmpty)
                 const SliverToBoxAdapter(child: AddSourceCard()),

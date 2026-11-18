@@ -6,7 +6,6 @@ import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/collection_hero.dart';
 import 'package:groovy_box/widgets/common.dart';
-import 'package:groovy_box/widgets/pill_app_bar.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:groovy_box/widgets/playlist_name_dialog.dart';
 import 'package:groovy_box/pulsar/links.dart';
@@ -92,90 +91,88 @@ class OwnedPlaylistDetailScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: ContentFrame(
-        child: Column(
-          children: [
-            PillHeader(
-              title:
-                  playlist?.name ??
-                  playlistName ??
-                  'playlistsDetailTitleFallback'.tr(),
-              leading: HeaderBackButton(
-                onPressed: () => context.router.maybePop(),
-              ),
-
-              actions: [
-                PulsarUploadButton(
-                  localKey: PulsarPlaylistLinks.deviceKey(playlistId),
-                  suggestedName: playlist?.name ?? playlistName ?? '',
-                  songs: (ref) => PulsarUpload.deviceSongs(ref, playlistId),
-                ),
-                IconButton(
-                  tooltip: 'ownedPlaylistRename'.tr(),
-                  icon: const Icon(Symbols.edit_rounded),
-                  onPressed: playlist == null
-                      ? null
-                      : () => _rename(context, ref, playlist.name),
-                ),
-                IconButton(
-                  tooltip: 'commonDelete'.tr(),
-                  icon: const Icon(Symbols.delete_rounded),
-                  onPressed: () => _confirmDelete(context, ref),
-                ),
-                const SizedBox(width: SolSpace.sm),
-              ],
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: BackButtonRow(onBack: () => context.router.maybePop()),
             ),
-            Expanded(
-              child: entries.when(
-                data: (list) {
-                  final trackList = [for (final e in list) e.song];
-                  if (list.isEmpty) {
-                    return EmptyState(
-                      icon: Symbols.playlist_play,
-                      title: 'ownedPlaylistEmptyTitle'.tr(),
-                      message: 'ownedPlaylistEmptyMessage'.tr(),
-                    );
-                  }
-                  return ListView.builder(
-                    padding: EdgeInsets.only(bottom: bottomInset),
-                    itemCount: list.length + 1,
+            ...entries.when(
+              data: (list) {
+                final trackList = [for (final e in list) e.song];
+                if (list.isEmpty) {
+                  return [
+                    SliverToBoxAdapter(
+                      child: EmptyState(
+                        icon: Symbols.playlist_play,
+                        title: 'ownedPlaylistEmptyTitle'.tr(),
+                        message: 'ownedPlaylistEmptyMessage'.tr(),
+                      ),
+                    ),
+                  ];
+                }
+                return [
+                  SliverToBoxAdapter(
+                    child: CollectionHero(
+                      fallbackIcon: Symbols.playlist_play,
+                      eyebrow: 'ownedPlaylistKind'.tr(),
+                      meta: [
+                        playlist?.name ?? playlistName ?? '',
+                        if (playlist != null)
+                          'ownedPlaylistEdited'.tr(
+                            args: [formatRelativeTime(playlist.updatedAt)],
+                          ),
+                      ].join('  ·  '),
+                      actions: [
+                        FilledButton.icon(
+                          onPressed: () => ref
+                              .read(playbackProvider.notifier)
+                              .playQueue(trackList),
+                          icon: const Icon(
+                            Symbols.play_arrow_rounded,
+                            size: 20,
+                          ),
+                          label: Text('commonPlay'.tr()),
+                        ),
+                        IconButton.filledTonal(
+                          tooltip: 'libraryShuffle'.tr(),
+                          onPressed: () {
+                            final notifier = ref.read(
+                              playbackProvider.notifier,
+                            );
+                            notifier.playQueue(trackList);
+                            notifier.setShuffle(true);
+                          },
+                          icon: const Icon(Symbols.shuffle_rounded),
+                        ),
+                        // Editing lives beside the thing it edits, not in a
+                        // bar above it: rename, delete and the cloud push all
+                        // act on this one playlist.
+                        IconButton(
+                          tooltip: 'ownedPlaylistRename'.tr(),
+                          onPressed: playlist == null
+                              ? null
+                              : () => _rename(context, ref, playlist.name),
+                          icon: const Icon(Symbols.edit_rounded),
+                        ),
+                        IconButton(
+                          tooltip: 'commonDelete'.tr(),
+                          onPressed: () => _confirmDelete(context, ref),
+                          icon: const Icon(Symbols.delete_rounded),
+                        ),
+                        PulsarUploadButton(
+                          localKey: PulsarPlaylistLinks.deviceKey(playlistId),
+                          suggestedName:
+                              playlist?.name ?? playlistName ?? '',
+                          songs: (ref) =>
+                              PulsarUpload.deviceSongs(ref, playlistId),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SliverList.builder(
+                    itemCount: list.length,
                     itemBuilder: (context, index) {
-                      if (index == 0) {
-                        return CollectionHero(
-                          fallbackIcon: Symbols.playlist_play,
-                          eyebrow: 'ownedPlaylistKind'.tr(),
-                          meta: [
-                            playlist?.name ?? playlistName ?? '',
-                            if (playlist != null)
-                              'ownedPlaylistEdited'.tr(
-                                args: [formatRelativeTime(playlist.updatedAt)],
-                              ),
-                          ].join('  ·  '),
-                          actions: [
-                            FilledButton.icon(
-                              onPressed: () => ref
-                                  .read(playbackProvider.notifier)
-                                  .playQueue(trackList),
-                              icon: const Icon(
-                                Symbols.play_arrow_rounded,
-                                size: 20,
-                              ),
-                              label: Text('commonPlay'.tr()),
-                            ),
-                            IconButton.filledTonal(
-                              tooltip: 'libraryShuffle'.tr(),
-                              onPressed: () {
-                                final notifier = ref.read(
-                                  playbackProvider.notifier,
-                                );
-                                notifier.playQueue(trackList);
-                                notifier.setShuffle(true);
-                              },
-                              icon: const Icon(Symbols.shuffle_rounded),
-                            ),
-                          ],
-                        );
-                      }
-                      final entry = list[index - 1];
+                      final entry = list[index];
                       final song = entry.song;
                       return SongTrackRow(
                         song: song,
@@ -199,23 +196,35 @@ class OwnedPlaylistDetailScreen extends ConsumerWidget {
                         onLongPress: () => _removeEntry(context, ref, entry),
                       );
                     },
-                  );
-                },
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, _) => EmptyState(
-                  icon: Symbols.error_rounded,
-                  title: 'playlistsDetailLoadError'.tr(),
-                  message: describeServerError(error),
-                  iconColor: Theme.of(context).colorScheme.error,
-                  action: FilledButton(
-                    onPressed: () => ref.invalidate(
-                      ownedPlaylistEntriesProvider(playlistId),
-                    ),
-                    child: Text('commonTryAgain'.tr()),
+                  ),
+                ];
+              },
+              loading: () => const [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.all(SolSpace.huge),
+                    child: Center(child: CircularProgressIndicator()),
                   ),
                 ),
-              ),
+              ],
+              error: (error, _) => [
+                SliverToBoxAdapter(
+                  child: EmptyState(
+                    icon: Symbols.error_rounded,
+                    title: 'playlistsDetailLoadError'.tr(),
+                    message: describeServerError(error),
+                    iconColor: Theme.of(context).colorScheme.error,
+                    action: FilledButton(
+                      onPressed: () => ref.invalidate(
+                        ownedPlaylistEntriesProvider(playlistId),
+                      ),
+                      child: Text('commonTryAgain'.tr()),
+                    ),
+                  ),
+                ),
+              ],
             ),
+            SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
           ],
         ),
       ),

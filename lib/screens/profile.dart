@@ -11,7 +11,6 @@ import 'package:groovy_box/solarpass/models.dart';
 import 'package:groovy_box/solarpass/providers.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/common.dart';
-import 'package:groovy_box/widgets/pill_app_bar.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -55,20 +54,25 @@ class ProfileScreen extends ConsumerWidget {
           child: ListView(
             padding: EdgeInsets.only(bottom: bottomInset),
             children: [
-              PillHeader(
-                title: 'profileTitle'.tr(),
-                actions: [
-                  IconButton(
-                    tooltip: 'commonRefresh'.tr(),
-                    onPressed: () {
-                      ref.invalidate(listeningStatsProvider);
-                      ref.invalidate(pulsarTasteProvider);
-                    },
-                    icon: const Icon(Symbols.refresh_rounded),
-                  ),
-                ],
+              // The account block is the page's name: an avatar, a display
+              // name and a handle say "this is you" better than the word
+              // Profile over them. The refresh action rides at its start,
+              // where a header's trailing control used to sit.
+              const SizedBox(height: SolSpace.lg),
+              _Identity(
+                account: account,
+                trailing: IconButton(
+                  tooltip: 'commonRefresh'.tr(),
+                  onPressed: () {
+                    ref.invalidate(listeningStatsProvider);
+                    ref.invalidate(pulsarTasteProvider);
+                    if (account.value != null) {
+                      ref.read(solarpassAccountProvider.notifier).refresh();
+                    }
+                  },
+                  icon: const Icon(Symbols.refresh_rounded),
+                ),
               ),
-              _Identity(account: account),
               // Taste is account-scoped, so it sits under the identity: the
               // windows switch together, and a signed-out page has neither.
               ..._taste(context, ref),
@@ -173,10 +177,15 @@ class _WindowSwitch extends ConsumerWidget {
 
 /// The identity block: avatar, handle, bio. Solian leads with the same three,
 /// minus the header image this app has no use for.
+///
+/// It is also the page's opening: a tab root has no bar to carry the account,
+/// so the account itself is what the page starts with, and [trailing] holds
+/// the one page-level action at the far end of that row.
 class _Identity extends StatelessWidget {
   final AsyncValue<SolarpassAccount?> account;
+  final Widget? trailing;
 
-  const _Identity({required this.account});
+  const _Identity({required this.account, this.trailing});
 
   @override
   Widget build(BuildContext context) {
@@ -185,80 +194,90 @@ class _Identity extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(
         SolSpace.xxl,
         SolSpace.md,
-        SolSpace.xxl,
-        SolSpace.sm,
+        SolSpace.md,
+        SolSpace.lg,
       ),
-      child: switch (account) {
-        AsyncValue(:final value?) => Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          spacing: SolSpace.lg,
-          children: [
-            _Avatar(avatarUrl: value.avatarUrl, name: value.displayName),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    value.displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  Text(
-                    '@${value.name}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  if (value.bio != null && value.bio!.trim().isNotEmpty) ...[
-                    const SizedBox(height: SolSpace.xs),
-                    Text(
-                      value.bio!.trim(),
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-        AsyncValue(hasError: true) => Text(
-          'profileAccountError'.tr(),
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        _ => const Row(
-          spacing: SolSpace.lg,
-          children: [
-            _Avatar(name: '?'),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                spacing: SolSpace.xs,
-                children: [
-                  // Static skeleton bars, not progress indicators: the
-                  // account fetch either lands or fails, and a pulse that
-                  // never stops reads as a hung page.
-                  _SkeletonBar(width: 120, height: 18),
-                  _SkeletonBar(width: 80, height: 12),
-                ],
-              ),
-            ),
-          ],
-        ),
-      },
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: _body(context, theme)),
+          ?trailing,
+        ],
+      ),
     );
+  }
+
+  Widget _body(BuildContext context, ThemeData theme) {
+    return switch (account) {
+      AsyncValue(:final value?) => Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        spacing: SolSpace.lg,
+        children: [
+          _Avatar(avatarUrl: value.avatarUrl, name: value.displayName),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  value.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  '@${value.name}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                if (value.bio != null && value.bio!.trim().isNotEmpty) ...[
+                  const SizedBox(height: SolSpace.xs),
+                  Text(
+                    value.bio!.trim(),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+      AsyncValue(hasError: true) => Text(
+        'profileAccountError'.tr(),
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+      _ => const Row(
+        spacing: SolSpace.lg,
+        children: [
+          _Avatar(name: '?'),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              spacing: SolSpace.xs,
+              children: [
+                // Static skeleton bars, not progress indicators: the account
+                // fetch either lands or fails, and a pulse that never stops
+                // reads as a hung page.
+                _SkeletonBar(width: 120, height: 18),
+                _SkeletonBar(width: 80, height: 12),
+              ],
+            ),
+          ),
+        ],
+      ),
+    };
   }
 }
 

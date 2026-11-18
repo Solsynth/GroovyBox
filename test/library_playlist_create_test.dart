@@ -39,10 +39,8 @@ Future<void> _pump(WidgetTester tester, LibraryCatalog catalog) async {
     ),
   );
   await tester.pumpAndSettle();
-  // Playlists are a view of the same collection, one switch away.
-  await tester.tap(find.text('libraryPlaylists'.tr()));
-  await tester.pumpAndSettle();
 }
+
 
 void main() {
   testWidgets('device playlists are listed and can be started from the library', (

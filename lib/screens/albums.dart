@@ -8,7 +8,6 @@ import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/collection_hero.dart';
 import 'package:groovy_box/widgets/common.dart';
-import 'package:groovy_box/widgets/pill_app_bar.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -136,66 +135,66 @@ class AlbumDetailScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: ContentFrame(
-        child: Column(
-          children: [
-            PillHeader(
-              title: albumName ?? 'albumsDetailTitleFallback'.tr(),
-              leading: HeaderBackButton(
-                onPressed: () => context.router.maybePop(),
-              ),
+        child: CustomScrollView(
+          slivers: [
+            // The way back is the only chrome an album keeps: the hero below
+            // names the record, its artist and its year, so a bar repeating
+            // one of those three was the page's own name drawn twice.
+            SliverToBoxAdapter(
+              child: BackButtonRow(onBack: () => context.router.maybePop()),
             ),
-            Expanded(
-              child: songs.when(
-                data: (list) => list.isEmpty
-                    ? EmptyState(
-                        icon: Symbols.album,
-                        title: 'albumsDetailEmptyTitle'.tr(),
-                        message: 'albumsDetailEmptyMessage'.tr(),
-                      )
-                    : ListView.builder(
-                        padding: EdgeInsets.only(bottom: bottomInset),
-                        itemCount: list.length + 1,
+            ...songs.when(
+              data: (list) => list.isEmpty
+                  ? const [
+                      SliverToBoxAdapter(
+                        child: EmptyState(
+                          icon: Symbols.album,
+                          title: 'albumsDetailEmptyTitle',
+                        ),
+                      ),
+                    ]
+                  : [
+                      SliverToBoxAdapter(
+                        child: CollectionHero(
+                          sourceId: list.first.sourceId,
+                          artId: list.first.artId,
+                          eyebrow: 'albumsEyebrow'.tr(),
+                          meta: [
+                            list.first.artist ?? 'commonUnknownArtist'.tr(),
+                            if (list.first.year != null) '${list.first.year}',
+                            if (list.first.albumArtist != null &&
+                                list.first.albumArtist != list.first.artist)
+                              list.first.albumArtist!,
+                          ].join('  ·  '),
+                          actions: [
+                            FilledButton.icon(
+                              onPressed: () => ref
+                                  .read(playbackProvider.notifier)
+                                  .playQueue(list),
+                              icon: const Icon(
+                                Symbols.play_arrow_rounded,
+                                size: 20,
+                              ),
+                              label: Text('albumsPlayAlbum'.tr()),
+                            ),
+                            IconButton.filledTonal(
+                              tooltip: 'libraryShuffle'.tr(),
+                              onPressed: () {
+                                final notifier = ref.read(
+                                  playbackProvider.notifier,
+                                );
+                                notifier.playQueue(list);
+                                notifier.setShuffle(true);
+                              },
+                              icon: const Icon(Symbols.shuffle_rounded),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SliverList.builder(
+                        itemCount: list.length,
                         itemBuilder: (context, index) {
-                          if (index == 0) {
-                            final first = list.first;
-                            return CollectionHero(
-                              sourceId: first.sourceId,
-                              artId: first.artId,
-                              eyebrow: 'albumsEyebrow'.tr(),
-                              meta: [
-                                first.artist ?? 'commonUnknownArtist'.tr(),
-                                if (first.year != null) '${first.year}',
-                                if (first.albumArtist != null &&
-                                    first.albumArtist != first.artist)
-                                  first.albumArtist!,
-                              ].join('  ·  '),
-                              actions: [
-                                FilledButton.icon(
-                                  onPressed: () => ref
-                                      .read(playbackProvider.notifier)
-                                      .playQueue(list),
-                                  icon: const Icon(
-                                    Symbols.play_arrow_rounded,
-                                    size: 20,
-                                  ),
-                                  label: Text('albumsPlayAlbum'.tr()),
-                                ),
-                                IconButton.filledTonal(
-                                  tooltip: 'libraryShuffle'.tr(),
-                                  onPressed: () {
-                                    final notifier = ref.read(
-                                      playbackProvider.notifier,
-                                    );
-                                    notifier.playQueue(list);
-                                    notifier.setShuffle(true);
-                                  },
-                                  icon: const Icon(Symbols.shuffle_rounded),
-                                ),
-                              ],
-                            );
-                          }
-
-                          final song = list[index - 1];
+                          final song = list[index];
                           return SongTrackRow(
                             song: song,
                             // An album is a sequence: the number is the
@@ -203,7 +202,7 @@ class AlbumDetailScreen extends ConsumerWidget {
                             // not carry. The cover would be the same square
                             // twelve times, so the number takes its place.
                             leading: Text(
-                              '${song.track ?? index}',
+                              '${song.track ?? index + 1}',
                               style: Theme.of(context).textTheme.labelMedium
                                   ?.copyWith(
                                     color: Theme.of(context)
@@ -218,25 +217,37 @@ class AlbumDetailScreen extends ConsumerWidget {
                             trailing: formatDuration(song.duration),
                             onTap: () => ref
                                 .read(playbackProvider.notifier)
-                                .playQueue(list, startIndex: index - 1),
+                                .playQueue(list, startIndex: index),
                           );
                         },
                       ),
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, _) => EmptyState(
-                  icon: Symbols.error_rounded,
-                  title: 'albumsDetailLoadError'.tr(),
-                  message: describeServerError(error),
-                  iconColor: Theme.of(context).colorScheme.error,
-                  action: FilledButton(
-                    onPressed: () => ref.invalidate(
-                      albumSongsProvider((sourceId: sourceId, id: albumId)),
-                    ),
-                    child: Text('commonTryAgain'.tr()),
+                    ],
+              loading: () => const [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.all(SolSpace.huge),
+                    child: Center(child: CircularProgressIndicator()),
                   ),
                 ),
-              ),
+              ],
+              error: (error, _) => [
+                SliverToBoxAdapter(
+                  child: EmptyState(
+                    icon: Symbols.error_rounded,
+                    title: 'albumsDetailLoadError'.tr(),
+                    message: describeServerError(error),
+                    iconColor: Theme.of(context).colorScheme.error,
+                    action: FilledButton(
+                      onPressed: () => ref.invalidate(
+                        albumSongsProvider((sourceId: sourceId, id: albumId)),
+                      ),
+                      child: Text('commonTryAgain'.tr()),
+                    ),
+                  ),
+                ),
+              ],
             ),
+            SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
           ],
         ),
       ),

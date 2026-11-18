@@ -138,27 +138,30 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
             backgroundColor: Colors.transparent,
             body: ContentFrame(
               maxWidth: kReadingMaxWidth,
-              child: Column(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(
+                  SolSpace.xl,
+                  SolSpace.md,
+                  SolSpace.xl,
+                  SolSpace.xxxl,
+                ),
                 children: [
-                  PillHeader(
+                  // The page names itself and carries the only control that
+                  // is not part of the form: the way back, disabled while a
+                  // connection attempt is in flight.
+                  PageHeadline(
                     title: 'setupTitle'.tr(),
                     leading: canLeave
-                        ? IconButton(
-                            tooltip: 'commonBack'.tr(),
-                            onPressed: _busy ? null : _leave,
-                            icon: const Icon(Symbols.arrow_back_rounded),
+                        ? Padding(
+                            padding: const EdgeInsets.only(right: SolSpace.sm),
+                            child: IconButton(
+                              tooltip: 'commonBack'.tr(),
+                              onPressed: _busy ? null : _leave,
+                              icon: const Icon(Symbols.arrow_back_rounded),
+                            ),
                           )
                         : null,
                   ),
-                  Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(
-                        SolSpace.xl,
-                        0,
-                        SolSpace.xl,
-                        SolSpace.xxxl,
-                      ),
-                      children: [
                         Text(
                           'setupSubtitle'.tr(),
                           style: theme.textTheme.bodySmall?.copyWith(
@@ -212,9 +215,6 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                             ),
                           ),
                         ],
-                      ],
-                    ),
-                  ),
                 ],
               ),
             ),

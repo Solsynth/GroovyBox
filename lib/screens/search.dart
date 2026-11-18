@@ -12,7 +12,6 @@ import 'package:groovy_box/library/track_identity.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/common.dart';
-import 'package:groovy_box/widgets/pill_app_bar.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -89,25 +88,35 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       body: ContentFrame(
         child: CustomScrollView(
           slivers: [
-            SliverPillHeader(
-              title: '',
-              child: SearchBar(
-                controller: _controller,
-                hintText: 'searchPlaceholder'.tr(),
-                leading: const Icon(Symbols.search_rounded),
-                constraints: const BoxConstraints(minHeight: 40, maxHeight: 40),
-                trailing: [
-                  if (_draft.isNotEmpty)
-                    IconButton(
-                      tooltip: 'commonClear'.tr(),
-                      onPressed: () {
-                        _controller.clear();
-                        _onChanged('');
-                      },
-                      icon: const Icon(Symbols.close_rounded),
-                    ),
-                ],
-                onChanged: _onChanged,
+            // The field is the page, not a control on a bar: a search page
+            // whose header is its own query box should open with the box at
+            // the top of the content, scrolling with the results under it.
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  SolSpace.xl,
+                  SolSpace.xl,
+                  SolSpace.xl,
+                  SolSpace.sm,
+                ),
+                child: SearchBar(
+                  controller: _controller,
+                  hintText: 'searchPlaceholder'.tr(),
+                  leading: const Icon(Symbols.search_rounded),
+                  constraints: const BoxConstraints(minHeight: 52, maxHeight: 52),
+                  trailing: [
+                    if (_draft.isNotEmpty)
+                      IconButton(
+                        tooltip: 'commonClear'.tr(),
+                        onPressed: () {
+                          _controller.clear();
+                          _onChanged('');
+                        },
+                        icon: const Icon(Symbols.close_rounded),
+                      ),
+                  ],
+                  onChanged: _onChanged,
+                ),
               ),
             ),
             if (sources.isEmpty)

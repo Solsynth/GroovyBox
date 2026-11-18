@@ -9,7 +9,6 @@ import 'package:groovy_box/pulsar/providers.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/collection_hero.dart';
 import 'package:groovy_box/widgets/common.dart';
-import 'package:groovy_box/widgets/pill_app_bar.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:groovy_box/widgets/playlist_name_dialog.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -150,100 +149,103 @@ class PulsarPlaylistDetailScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: ContentFrame(
-        child: Column(
-          children: [
-            PillHeader(
-              title:
-                  detail.value?.name ??
-                  playlistName ??
-                  'playlistsDetailTitleFallback'.tr(),
-              leading: HeaderBackButton(
-                onPressed: () => context.router.maybePop(),
-              ),
-              actions: [
-                IconButton(
-                  tooltip: 'ownedPlaylistRename'.tr(),
-                  icon: const Icon(Symbols.edit_rounded),
-                  onPressed: detail.value == null
-                      ? null
-                      : () => _rename(context, ref, detail.value!.name),
-                ),
-                IconButton(
-                  tooltip: 'commonDelete'.tr(),
-                  icon: const Icon(Symbols.delete_rounded),
-                  onPressed: () => _confirmDelete(context, ref),
-                ),
-                const SizedBox(width: SolSpace.sm),
-              ],
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: BackButtonRow(onBack: () => context.router.maybePop()),
             ),
-            Expanded(
-              child: detail.when(
-                data: (playlist) => ref
-                    .watch(pulsarPlaylistSongsProvider(playlist))
-                    .when(
-                      data: (list) {
-                        if (playlist.items.isEmpty) {
-                          return EmptyState(
-                            icon: Symbols.cloud_rounded,
-                            title: 'pulsarPlaylistEmptyTitle'.tr(),
-                            message: 'pulsarPlaylistEmptyMessage'.tr(),
-                          );
-                        }
-                        // The resolver is index-aligned with the items, so
-                        // a track the libraries cannot name keeps its row
-                        // instead of shifting the ones after it.
-                        final pairs = [
-                          for (var i = 0; i < playlist.items.length; i++)
-                            (playlist.items[i], list[i]),
+            ...detail.when(
+              data: (playlist) => ref
+                  .watch(pulsarPlaylistSongsProvider(playlist))
+                  .when(
+                    data: (list) {
+                      if (playlist.items.isEmpty) {
+                        return [
+                          SliverToBoxAdapter(
+                            child: EmptyState(
+                              icon: Symbols.cloud_rounded,
+                              title: 'pulsarPlaylistEmptyTitle'.tr(),
+                              message: 'pulsarPlaylistEmptyMessage'.tr(),
+                            ),
+                          ),
                         ];
-                        final playable = [for (final (_, song) in pairs) ?song];
-                        return ListView.builder(
-                          padding: EdgeInsets.only(bottom: bottomInset),
-                          itemCount: pairs.length + 1,
+                      }
+                      // The resolver is index-aligned with the items, so a
+                      // track the libraries cannot name keeps its row instead
+                      // of shifting the ones after it.
+                      final pairs = [
+                        for (var i = 0; i < playlist.items.length; i++)
+                          (playlist.items[i], list[i]),
+                      ];
+                      final playable = [for (final (_, song) in pairs) ?song];
+                      // The collection's own cover, or its first named track's
+                      // when the cloud record has none: a playlist filled by
+                      // uploading tracks never had an artwork_url of its own.
+                      final cover =
+                          playlist.artworkUrl ??
+                          pairs
+                              .map((pair) => pair.$1.catalogItem?.artworkUrl)
+                              .whereType<String>()
+                              .where((url) => url.isNotEmpty)
+                              .firstOrNull;
+                      return [
+                        SliverToBoxAdapter(
+                          child: CollectionHero(
+                            artworkUrl: cover,
+                            eyebrow: 'pulsarPlaylistKind'.tr(),
+                            meta: [
+                              if (playlist.description != null &&
+                                  playlist.description!.isNotEmpty)
+                                playlist.description!,
+                              'playlistsTrackCount'.plural(
+                                playlist.items.length,
+                              ),
+                            ].join('  ·  '),
+                            fallbackIcon: Symbols.cloud_rounded,
+                            actions: [
+                              FilledButton.icon(
+                                onPressed: playable.isEmpty
+                                    ? null
+                                    : () => ref
+                                          .read(playbackProvider.notifier)
+                                          .playQueue(playable),
+                                icon: const Icon(
+                                  Symbols.play_arrow_rounded,
+                                  size: 20,
+                                ),
+                                label: Text('commonPlay'.tr()),
+                              ),
+                              IconButton.filledTonal(
+                                tooltip: 'libraryShuffle'.tr(),
+                                onPressed: playable.isEmpty
+                                    ? null
+                                    : () {
+                                        final notifier = ref.read(
+                                          playbackProvider.notifier,
+                                        );
+                                        notifier.playQueue(playable);
+                                        notifier.setShuffle(true);
+                                      },
+                                icon: const Icon(Symbols.shuffle_rounded),
+                              ),
+                              IconButton(
+                                tooltip: 'ownedPlaylistRename'.tr(),
+                                onPressed: () =>
+                                    _rename(context, ref, playlist.name),
+                                icon: const Icon(Symbols.edit_rounded),
+                              ),
+                              IconButton(
+                                tooltip: 'commonDelete'.tr(),
+                                onPressed: () => _confirmDelete(context, ref),
+                                icon: const Icon(Symbols.delete_rounded),
+                              ),
+                            ],
+                          ),
+                        ),
+                        SliverList.builder(
+                          itemCount: pairs.length,
                           itemBuilder: (context, index) {
-                            if (index == 0) {
-                              return CollectionHero(
-                                artId: null,
-                                eyebrow: 'pulsarPlaylistKind'.tr(),
-                                meta: [
-                                  if (playlist.description != null &&
-                                      playlist.description!.isNotEmpty)
-                                    playlist.description!,
-                                  'playlistsTrackCount'.plural(
-                                    playlist.items.length,
-                                  ),
-                                ].join('  ·  '),
-                                fallbackIcon: Symbols.cloud_rounded,
-                                actions: [
-                                  FilledButton.icon(
-                                    onPressed: playable.isEmpty
-                                        ? null
-                                        : () => ref
-                                              .read(playbackProvider.notifier)
-                                              .playQueue(playable),
-                                    icon: const Icon(
-                                      Symbols.play_arrow_rounded,
-                                      size: 20,
-                                    ),
-                                    label: Text('commonPlay'.tr()),
-                                  ),
-                                  IconButton.filledTonal(
-                                    tooltip: 'libraryShuffle'.tr(),
-                                    onPressed: playable.isEmpty
-                                        ? null
-                                        : () {
-                                            final notifier = ref.read(
-                                              playbackProvider.notifier,
-                                            );
-                                            notifier.playQueue(playable);
-                                            notifier.setShuffle(true);
-                                          },
-                                    icon: const Icon(Symbols.shuffle_rounded),
-                                  ),
-                                ],
-                              );
-                            }
-                            final (item, song) = pairs[index - 1];
+                            final (item, song) = pairs[index];
                             final track = item.catalogItem;
                             if (song == null || track == null) {
                               return SongTrackRow(
@@ -291,38 +293,60 @@ class PulsarPlaylistDetailScreen extends ConsumerWidget {
                               ),
                             );
                           },
-                        );
-                      },
-                      loading: () =>
-                          const Center(child: CircularProgressIndicator()),
-                      error: (error, _) => EmptyState(
-                        icon: Symbols.error_rounded,
-                        title: 'playlistsDetailLoadError'.tr(),
-                        message: describeServerError(error),
-                        iconColor: Theme.of(context).colorScheme.error,
-                        action: FilledButton(
-                          onPressed: () => ref.invalidate(
-                            pulsarPlaylistDetailProvider(playlistId),
-                          ),
-                          child: Text('commonTryAgain'.tr()),
+                        ),
+                      ];
+                    },
+                    loading: () => const [
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.all(SolSpace.huge),
+                          child: Center(child: CircularProgressIndicator()),
                         ),
                       ),
-                    ),
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, _) => EmptyState(
-                  icon: Symbols.error_rounded,
-                  title: 'playlistsDetailLoadError'.tr(),
-                  message: describeServerError(error),
-                  iconColor: Theme.of(context).colorScheme.error,
-                  action: FilledButton(
-                    onPressed: () => ref.invalidate(
-                      pulsarPlaylistDetailProvider(playlistId),
-                    ),
-                    child: Text('commonTryAgain'.tr()),
+                    ],
+                    error: (error, _) => [
+                      SliverToBoxAdapter(
+                        child: EmptyState(
+                          icon: Symbols.error_rounded,
+                          title: 'playlistsDetailLoadError'.tr(),
+                          message: describeServerError(error),
+                          iconColor: Theme.of(context).colorScheme.error,
+                          action: FilledButton(
+                            onPressed: () => ref.invalidate(
+                              pulsarPlaylistDetailProvider(playlistId),
+                            ),
+                            child: Text('commonTryAgain'.tr()),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+              loading: () => const [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.all(SolSpace.huge),
+                    child: Center(child: CircularProgressIndicator()),
                   ),
                 ),
-              ),
+              ],
+              error: (error, _) => [
+                SliverToBoxAdapter(
+                  child: EmptyState(
+                    icon: Symbols.error_rounded,
+                    title: 'playlistsDetailLoadError'.tr(),
+                    message: describeServerError(error),
+                    iconColor: Theme.of(context).colorScheme.error,
+                    action: FilledButton(
+                      onPressed: () => ref.invalidate(
+                        pulsarPlaylistDetailProvider(playlistId),
+                      ),
+                      child: Text('commonTryAgain'.tr()),
+                    ),
+                  ),
+                ),
+              ],
             ),
+            SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
           ],
         ),
       ),

@@ -71,7 +71,7 @@ class SettingsScreen extends ConsumerWidget {
         child: ListView(
           padding: EdgeInsets.only(bottom: bottomInset),
           children: [
-            PillHeader(title: 'tabSettings'.tr()),
+            PageHeadline(title: 'tabSettings'.tr()),
             SectionLabel('settingsSectionAppearance'.tr()),
             IslandCard(
               margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),

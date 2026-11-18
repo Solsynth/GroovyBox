@@ -149,16 +149,20 @@ void main() {
       testWidgets('library — $label', (tester) async {
         await _pump(tester, const LibraryScreen(), size: size, dock: true);
         expect(find.text('An album'), findsOneWidget);
-        // The title merged into the switch: the pill's own row carries the
-        // view selector, and nothing under it repeats "Library".
-        expect(find.text('Albums'), findsOneWidget, reason: 'the switch');
-        expect(find.text('Playlists'), findsOneWidget, reason: 'the switch');
+        // One page, no switch: the album grid, the artist shelf and the
+        // playlist lists all live in the same scroll.
+        expect(find.text('Library'), findsOneWidget, reason: 'the headline');
+        expect(find.text('Recently added'), findsOneWidget);
+        expect(find.text('On this device'), findsOneWidget);
+        expect(find.text('A playlist'), findsOneWidget);
         expect(tester.takeException(), isNull);
       });
 
       testWidgets('profile — $label', (tester) async {
         await _pump(tester, const ProfileScreen(), size: size, dock: true);
-        expect(find.text('Profile'), findsOneWidget);
+        // The identity block is the page's opening; there is no title bar
+        // repeating the tab's name.
+        expect(find.text('Profile'), findsNothing);
         expect(find.text('listened'), findsOneWidget);
       });
 

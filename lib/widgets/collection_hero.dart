@@ -21,6 +21,12 @@ class CollectionHero extends StatelessWidget {
   final String? sourceId;
   final String? artId;
 
+  /// A cover that is a URL rather than a library art handle: a cloud
+  /// playlist's own `artwork_url`. Takes precedence over [sourceId]/[artId],
+  /// because a collection that carries a URL has no library to resolve it
+  /// through.
+  final String? artworkUrl;
+
   /// What the collection is, in one small word above the meta line: "ALBUM",
   /// "PLAYLIST", "ON THIS DEVICE". Not a number — a collection is not step
   /// three of anything.
@@ -41,6 +47,7 @@ class CollectionHero extends StatelessWidget {
     this.eyebrow,
     this.sourceId,
     this.artId,
+    this.artworkUrl,
     this.fallbackIcon = Symbols.album,
   });
 
@@ -64,6 +71,7 @@ class CollectionHero extends StatelessWidget {
           _Sleeve(
             sourceId: sourceId,
             artId: artId,
+            artworkUrl: artworkUrl,
             size: coverSize,
             fallbackIcon: fallbackIcon,
           ),
@@ -119,6 +127,7 @@ class CollectionHero extends StatelessWidget {
 class _Sleeve extends StatelessWidget {
   final String? sourceId;
   final String? artId;
+  final String? artworkUrl;
   final double size;
   final IconData fallbackIcon;
 
@@ -127,11 +136,13 @@ class _Sleeve extends StatelessWidget {
     required this.fallbackIcon,
     this.sourceId,
     this.artId,
+    this.artworkUrl,
   });
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final url = artworkUrl;
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(SolRadius.lg),
@@ -143,12 +154,36 @@ class _Sleeve extends StatelessWidget {
           ),
         ],
       ),
-      child: LibraryArtwork(
-        sourceId: sourceId,
-        artId: artId,
-        size: size,
-        radius: SolRadius.lg,
-        fallbackIcon: fallbackIcon,
+      child: url != null && url.isNotEmpty
+          ? ClipRRect(
+              borderRadius: BorderRadius.circular(SolRadius.lg),
+              child: SizedBox.square(
+                dimension: size,
+                child: Image.network(
+                  url,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => _fallback(context),
+                ),
+              ),
+            )
+          : LibraryArtwork(
+              sourceId: sourceId,
+              artId: artId,
+              size: size,
+              radius: SolRadius.lg,
+              fallbackIcon: fallbackIcon,
+            ),
+    );
+  }
+
+  Widget _fallback(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return ColoredBox(
+      color: colorScheme.surfaceContainerHigh,
+      child: Icon(
+        fallbackIcon,
+        size: size * 0.32,
+        color: colorScheme.onSurfaceVariant,
       ),
     );
   }

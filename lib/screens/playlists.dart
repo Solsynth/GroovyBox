@@ -7,7 +7,6 @@ import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/collection_hero.dart';
 import 'package:groovy_box/widgets/common.dart';
-import 'package:groovy_box/widgets/pill_app_bar.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:groovy_box/pulsar/links.dart';
 import 'package:groovy_box/widgets/pulsar_upload.dart';
@@ -48,77 +47,71 @@ class PlaylistDetailScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: ContentFrame(
-        child: Column(
-          children: [
-            PillHeader(
-              title: playlistName ?? 'playlistsDetailTitleFallback'.tr(),
-              leading: HeaderBackButton(
-                onPressed: () => context.router.maybePop(),
-              ),
-              actions: [
-                songs.maybeWhen(
-                  data: (list) => PulsarUploadButton(
-                    localKey: PulsarPlaylistLinks.sourceKey(
-                      sourceId,
-                      playlistId,
-                    ),
-                    suggestedName: playlistName ?? 'playlistsKind'.tr(),
-                    songs: (_) async => list,
-                  ),
-                  orElse: () => const SizedBox.shrink(),
-                ),
-                const SizedBox(width: SolSpace.sm),
-              ],
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: BackButtonRow(onBack: () => context.router.maybePop()),
             ),
-            Expanded(
-              child: songs.when(
-                data: (list) => list.isEmpty
-                    ? EmptyState(
-                        icon: Symbols.playlist_play,
-                        title: 'playlistsDetailEmptyTitle'.tr(),
-                        message: 'playlistsDetailEmptyMessage'.tr(),
-                      )
-                    : ListView.builder(
-                        padding: EdgeInsets.only(bottom: bottomInset),
-                        itemCount: list.length + 1,
+            ...songs.when(
+              data: (list) => list.isEmpty
+                  ? [
+                      SliverToBoxAdapter(
+                        child: EmptyState(
+                          icon: Symbols.playlist_play,
+                          title: 'playlistsDetailEmptyTitle'.tr(),
+                          message: 'playlistsDetailEmptyMessage'.tr(),
+                        ),
+                      ),
+                    ]
+                  : [
+                      SliverToBoxAdapter(
+                        child: CollectionHero(
+                          sourceId: list.first.sourceId,
+                          artId: list.first.artId,
+                          eyebrow: 'playlistsKind'.tr(),
+                          meta: [
+                            list.first.artist ?? 'commonUnknownArtist'.tr(),
+                            'playlistsTrackCount'.plural(list.length),
+                          ].join('  ·  '),
+                          fallbackIcon: Symbols.playlist_play,
+                          actions: [
+                            FilledButton.icon(
+                              onPressed: () => ref
+                                  .read(playbackProvider.notifier)
+                                  .playQueue(list),
+                              icon: const Icon(
+                                Symbols.play_arrow_rounded,
+                                size: 20,
+                              ),
+                              label: Text('commonPlay'.tr()),
+                            ),
+                            IconButton.filledTonal(
+                              tooltip: 'libraryShuffle'.tr(),
+                              onPressed: () {
+                                final notifier = ref.read(
+                                  playbackProvider.notifier,
+                                );
+                                notifier.playQueue(list);
+                                notifier.setShuffle(true);
+                              },
+                              icon: const Icon(Symbols.shuffle_rounded),
+                            ),
+                            PulsarUploadButton(
+                              localKey: PulsarPlaylistLinks.sourceKey(
+                                sourceId,
+                                playlistId,
+                              ),
+                              suggestedName:
+                                  playlistName ?? 'playlistsKind'.tr(),
+                              songs: (_) async => list,
+                            ),
+                          ],
+                        ),
+                      ),
+                      SliverList.builder(
+                        itemCount: list.length,
                         itemBuilder: (context, index) {
-                          if (index == 0) {
-                            final first = list.first;
-                            return CollectionHero(
-                              sourceId: first.sourceId,
-                              artId: first.artId,
-                              eyebrow: 'playlistsKind'.tr(),
-                              meta: [
-                                first.artist ?? 'commonUnknownArtist'.tr(),
-                                'playlistsTrackCount'.plural(list.length),
-                              ].join('  ·  '),
-                              fallbackIcon: Symbols.playlist_play,
-                              actions: [
-                                FilledButton.icon(
-                                  onPressed: () => ref
-                                      .read(playbackProvider.notifier)
-                                      .playQueue(list),
-                                  icon: const Icon(
-                                    Symbols.play_arrow_rounded,
-                                    size: 20,
-                                  ),
-                                  label: Text('commonPlay'.tr()),
-                                ),
-                                IconButton.filledTonal(
-                                  tooltip: 'libraryShuffle'.tr(),
-                                  onPressed: () {
-                                    final notifier = ref.read(
-                                      playbackProvider.notifier,
-                                    );
-                                    notifier.playQueue(list);
-                                    notifier.setShuffle(true);
-                                  },
-                                  icon: const Icon(Symbols.shuffle_rounded),
-                                ),
-                              ],
-                            );
-                          }
-                          final song = list[index - 1];
+                          final song = list[index];
                           return SongTrackRow(
                             song: song,
                             subtitle: songRowSubtitle(ref, song),
@@ -131,28 +124,40 @@ class PlaylistDetailScreen extends ConsumerWidget {
                             ),
                             onTap: () => ref
                                 .read(playbackProvider.notifier)
-                                .playQueue(list, startIndex: index - 1),
+                                .playQueue(list, startIndex: index),
                           );
                         },
                       ),
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, _) => EmptyState(
-                  icon: Symbols.error_rounded,
-                  title: 'playlistsDetailLoadError'.tr(),
-                  message: describeServerError(error),
-                  iconColor: Theme.of(context).colorScheme.error,
-                  action: FilledButton(
-                    onPressed: () => ref.invalidate(
-                      playlistSongsProvider((
-                        sourceId: sourceId,
-                        id: playlistId,
-                      )),
-                    ),
-                    child: Text('commonTryAgain'.tr()),
+                    ],
+              loading: () => const [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.all(SolSpace.huge),
+                    child: Center(child: CircularProgressIndicator()),
                   ),
                 ),
-              ),
+              ],
+              error: (error, _) => [
+                SliverToBoxAdapter(
+                  child: EmptyState(
+                    icon: Symbols.error_rounded,
+                    title: 'playlistsDetailLoadError'.tr(),
+                    message: describeServerError(error),
+                    iconColor: Theme.of(context).colorScheme.error,
+                    action: FilledButton(
+                      onPressed: () => ref.invalidate(
+                        playlistSongsProvider((
+                          sourceId: sourceId,
+                          id: playlistId,
+                        )),
+                      ),
+                      child: Text('commonTryAgain'.tr()),
+                    ),
+                  ),
+                ),
+              ],
             ),
+            SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
           ],
         ),
       ),

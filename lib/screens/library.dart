@@ -12,26 +12,32 @@ import 'package:groovy_box/pulsar/providers.dart';
 import 'package:groovy_box/screens/explore.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/common.dart';
-import 'package:groovy_box/widgets/pill_app_bar.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:groovy_box/widgets/playlist_name_dialog.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// The collection, as an index: every album and every playlist, one switch
-/// between the two shapes.
+/// The collection, as one page: recently added above, the playlist lists
+/// below, artists between them.
 ///
-/// Albums and playlists used to be two tabs, which made the shell say
-/// something untrue: they are not two kinds of thing in the user's head, they
-/// are two shapes of one collection, and someone looking for "the thing I made
-/// last week" had to remember which kind it was before they could look. One
-/// page with a switch keeps that choice visible instead of hiding it behind a
-/// tab.
+/// Albums, artists and playlists used to be three tabs behind a segmented
+/// switch, and the switch made the shell say something untrue — they are not
+/// three kinds of thing in the user's head, they are three shapes of one
+/// collection, and someone looking for "the thing I made last week" had to
+/// remember which shape it was before they could look. One scroll answers
+/// all three, in the order the collection is actually used: new records
+/// first, the people behind them, then every list that plays.
 ///
 /// This is the place you go when you know what you want. What to play next is
-/// the explore page's job, so this page is deliberately a catalogue: a grid of
-/// covers, a list of playlists, and nothing that competes with the shelves.
+/// the explore page's job, so this page is deliberately a catalogue: covers,
+/// rows, and nothing that competes with the shelves.
+///
+/// The remote lists are mixed rather than stacked: the server's playlists and
+/// the account's Solar playlists are one scan of covers, and the Solar
+/// favourites close it as the list that is tracks rather than playlists. One
+/// header says the whole block is from elsewhere; a row's subtitle names
+/// where it lives.
 @RoutePage()
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
@@ -40,17 +46,11 @@ class LibraryScreen extends ConsumerStatefulWidget {
   ConsumerState<LibraryScreen> createState() => _LibraryScreenState();
 }
 
-/// Which half of the collection is on screen.
-enum LibraryView { albums, artists, playlists }
-
 class _LibraryScreenState extends ConsumerState<LibraryScreen> {
-  LibraryView _view = LibraryView.albums;
-
   @override
   Widget build(BuildContext context) {
     final albums = ref.watch(recentAlbumsProvider);
     final artists = ref.watch(libraryArtistsProvider);
-    final playlists = ref.watch(playlistsProvider);
     final hasSong = ref.watch(
       playbackProvider.select((state) => state.current != null),
     );
@@ -66,10 +66,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         child: ContentFrame(
           child: CustomScrollView(
             slivers: [
-              SliverPillHeader(
-                title: '',
-                actions: [
-                  IconButton(
+              // The page's name scrolls with the collection, and the refresh
+              // action lives beside it: nothing floats over the shelves.
+              SliverToBoxAdapter(
+                child: PageHeadline(
+                  title: 'tabAlbums'.tr(),
+                  trailing: IconButton(
                     tooltip: 'commonRefresh'.tr(),
                     onPressed: () {
                       ref.read(recentAlbumsProvider.notifier).refresh();
@@ -77,153 +79,89 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                     },
                     icon: const Icon(Symbols.refresh_rounded),
                   ),
-                ],
-                // The view switch is the header's own content: one row says
-                // where you are and what the page can be, nothing under the
-                // pill repeats it.
-                child: SegmentedButton<LibraryView>(
-                  showSelectedIcon: false,
-                  style: const ButtonStyle(
-                    visualDensity: VisualDensity.compact,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  segments: [
-                    ButtonSegment(
-                      value: LibraryView.albums,
-                      icon: const Icon(Symbols.album_rounded, size: 18),
-                      label: Text('libraryAlbums'.tr()),
-                    ),
-                    ButtonSegment(
-                      value: LibraryView.artists,
-                      icon: const Icon(Symbols.artist, size: 18),
-                      label: Text('libraryArtists'.tr()),
-                    ),
-                    ButtonSegment(
-                      value: LibraryView.playlists,
-                      icon: const Icon(
-                        Symbols.playlist_play_rounded,
-                        size: 18,
-                      ),
-                      label: Text('libraryPlaylists'.tr()),
-                    ),
-                  ],
-                  selected: {_view},
-                  onSelectionChanged: (selection) =>
-                      setState(() => _view = selection.first),
                 ),
               ),
-              ...switch (_view) {
-                LibraryView.albums => albums.when(
-                  data: (list) => list.isEmpty
-                      ? const [_EmptyAlbums()]
-                      : [
-                          SliverPadding(
-                            padding: const EdgeInsets.fromLTRB(
-                              SolSpace.xl,
-                              0,
-                              SolSpace.xl,
-                              0,
-                            ),
-                            sliver: SliverGrid.builder(
-                              gridDelegate:
-                                  const SliverGridDelegateWithMaxCrossAxisExtent(
-                                    maxCrossAxisExtent: 200,
-                                    mainAxisSpacing: SolSpace.md,
-                                    crossAxisSpacing: SolSpace.md,
-                                    childAspectRatio: 0.72,
-                                  ),
-                              itemCount: list.length,
-                              itemBuilder: (context, index) => AlbumCard(
-                                album: list[index],
-                                onTap: () => _openAlbum(context, list[index]),
-                              ),
-                            ),
-                          ),
-                        ],
-                  loading: () => const [_LoadingSliver()],
-                  error: (error, _) => [
-                    _ErrorSliver(
-                      icon: Symbols.album,
-                      title: 'albumsLoadError'.tr(),
-                      error: error,
-                      onRetry: () =>
-                          ref.read(recentAlbumsProvider.notifier).refresh(),
-                    ),
-                  ],
-                ),
-                LibraryView.artists => artists.when(
-                  data: (list) => list.isEmpty
-                      ? const [_EmptyArtists()]
-                      : [
-                          SliverPadding(
-                            padding: const EdgeInsets.fromLTRB(
-                              SolSpace.xl,
-                              0,
-                              SolSpace.xl,
-                              0,
-                            ),
-                            sliver: SliverGrid.builder(
-                              gridDelegate:
-                                  const SliverGridDelegateWithMaxCrossAxisExtent(
-                                    maxCrossAxisExtent: 200,
-                                    mainAxisSpacing: SolSpace.md,
-                                    crossAxisSpacing: SolSpace.md,
-                                    childAspectRatio: 0.72,
-                                  ),
-                              itemCount: list.length,
-                              itemBuilder: (context, index) => ArtistCard(
-                                artist: list[index],
-                                onTap: () => _openArtist(context, list[index]),
-                              ),
-                            ),
-                          ),
-                        ],
-                  loading: () => const [_LoadingSliver()],
-                  error: (error, _) => [
-                    _ErrorSliver(
-                      icon: Symbols.artist,
-                      title: 'artistsLoadError'.tr(),
-                      error: error,
-                      onRetry: () =>
-                          ref.read(libraryArtistsProvider.notifier).refresh(),
-                    ),
-                  ],
-                ),
-                LibraryView.playlists => [
-                  const _OwnedPlaylistsSection(),
-                  ...playlists.when(
-                    data: (list) => [
-                      if (list.isNotEmpty)
+              ...albums.when(
+                data: (list) => list.isEmpty
+                    ? const [_EmptyAlbums()]
+                    : [
                         SliverToBoxAdapter(
                           child: LibrarySectionHeader(
-                            title: 'libraryServerPlaylists'.tr(),
+                            title: 'exploreRecentlyAdded'.tr(),
                           ),
                         ),
-                      if (list.isNotEmpty)
-                        SliverList.builder(
-                          itemCount: list.length,
-                          itemBuilder: (context, index) => PlaylistCard(
-                            playlist: list[index],
-                            onTap: () => _openPlaylist(context, list[index]),
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(
+                            SolSpace.xl,
+                            0,
+                            SolSpace.xl,
+                            0,
+                          ),
+                          sliver: SliverGrid.builder(
+                            gridDelegate:
+                                const SliverGridDelegateWithMaxCrossAxisExtent(
+                                  maxCrossAxisExtent: 200,
+                                  mainAxisSpacing: SolSpace.md,
+                                  crossAxisSpacing: SolSpace.md,
+                                  childAspectRatio: 0.72,
+                                ),
+                            itemCount: list.length,
+                            itemBuilder: (context, index) => AlbumCard(
+                              album: list[index],
+                              onTap: () => _openAlbum(context, list[index]),
+                            ),
                           ),
                         ),
-                      if (list.isEmpty) const _EmptyPlaylists(),
-                    ],
-                    loading: () => const [_LoadingSliver()],
-                    error: (error, _) => [
-                      _ErrorSliver(
-                        icon: Symbols.playlist_play,
-                        title: 'playlistsLoadError'.tr(),
-                        error: error,
-                        onRetry: () =>
-                            ref.read(playlistsProvider.notifier).refresh(),
-                      ),
-                    ],
+                      ],
+                loading: () => const [_LoadingSliver()],
+                error: (error, _) => [
+                  _ErrorSliver(
+                    icon: Symbols.album,
+                    title: 'albumsLoadError'.tr(),
+                    error: error,
+                    onRetry: () =>
+                        ref.read(recentAlbumsProvider.notifier).refresh(),
                   ),
-                  const _CloudPlaylistsSection(),
-                  const _CloudFavouritesSection(),
                 ],
-              },
+              ),
+              ...artists.when(
+                data: (list) => list.isEmpty
+                    ? const []
+                    : [
+                        SliverToBoxAdapter(
+                          child: LibrarySectionHeader(
+                            title: 'libraryArtists'.tr(),
+                          ),
+                        ),
+                        SliverToBoxAdapter(
+                          child: SizedBox(
+                            height: 168,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: SolSpace.xl,
+                              ),
+                              itemCount: list.length,
+                              separatorBuilder: (_, _) =>
+                                  const SizedBox(width: SolSpace.md),
+                              itemBuilder: (context, index) => SizedBox(
+                                width: 132,
+                                child: ArtistCard(
+                                  artist: list[index],
+                                  onTap: () =>
+                                      _openArtist(context, list[index]),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                loading: () => const [],
+                error: (_, _) => const [],
+              ),
+              const _OwnedPlaylistsSection(),
+              const _RemotePlaylistsSection(),
+              const _CloudFavouritesSection(),
               SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
             ],
           ),
@@ -242,15 +180,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     );
   }
 
-  void _openPlaylist(BuildContext context, LibraryPlaylist playlist) {
-    context.router.push(
-      PlaylistDetailRoute(
-        sourceId: playlist.sourceId,
-        playlistId: playlist.id,
-        playlistName: playlist.name,
-      ),
-    );
-  }
 
   void _openArtist(BuildContext context, LibraryArtist artist) {
     context.router.push(
@@ -372,25 +301,8 @@ class _ArtistCardState extends State<ArtistCard> {
   }
 }
 
-/// An empty half is an invitation, not a blank: it says which half is empty
-/// and what would fill it.
-class _EmptyArtists extends StatelessWidget {
-  const _EmptyArtists();
 
-  @override
-  Widget build(BuildContext context) {
-    return SliverToBoxAdapter(
-      child: EmptyState(
-        compact: true,
-        icon: Symbols.artist,
-        title: 'artistsEmptyTitle'.tr(),
-        message: 'artistsEmptyMessage'.tr(),
-      ),
-    );
-  }
-}
-
-/// and what would fill it.
+/// An album-less library is a message, not a hole.
 class _EmptyAlbums extends StatelessWidget {
   const _EmptyAlbums();
 
@@ -407,31 +319,24 @@ class _EmptyAlbums extends StatelessWidget {
   }
 }
 
-class _EmptyPlaylists extends StatelessWidget {
-  const _EmptyPlaylists();
-
-  @override
-  Widget build(BuildContext context) {
-    return SliverToBoxAdapter(
-      child: EmptyState(
-        compact: true,
-        icon: Symbols.playlist_play,
-        title: 'playlistsEmptyTitle'.tr(),
-        message: 'playlistsEmptyMessage'.tr(),
-      ),
-    );
-  }
-}
 
 /// A playlist as a row: cover, name, and what is in it.
 ///
-/// Same rounded hover language as [TrackRow], so the two halves of the
-/// collection read as one family without a divider anywhere.
+/// Same rounded hover language as [TrackRow], so the collection reads as one
+/// family without a divider anywhere. [origin] names the library the list
+/// lives on, which only a merged list needs: a row above it and a row below
+/// it can share a name and belong to two different servers.
 class PlaylistCard extends StatelessWidget {
   final LibraryPlaylist playlist;
   final VoidCallback onTap;
+  final String? origin;
 
-  const PlaylistCard({super.key, required this.playlist, required this.onTap});
+  const PlaylistCard({
+    super.key,
+    required this.playlist,
+    required this.onTap,
+    this.origin,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -440,8 +345,9 @@ class PlaylistCard extends StatelessWidget {
     final subtitle = [
       if (playlist.songCount != null)
         'playlistsTrackCount'.plural(playlist.songCount!),
-      formatDuration(playlist.duration),
+      if (playlist.duration > Duration.zero) formatDuration(playlist.duration),
       if (playlist.owner != null) playlist.owner!,
+      if (origin != null && origin != playlist.owner) origin!,
     ].join('  ·  ');
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: SolSpace.md, vertical: 2),
@@ -773,65 +679,128 @@ class _ErrorSliver extends StatelessWidget {
   }
 }
 
-/// The account's cloud playlists, from Pulsar, under the device's own.
+/// Every playlist that lives somewhere else, in one list.
 ///
-/// They are a different list, not a merged one: a device playlist exists
-/// before any account does, and a cloud playlist follows the account across
-/// devices. One section header keeps the distinction visible without a
-/// second switch, and the header is where a cloud playlist is made.
-class _CloudPlaylistsSection extends ConsumerWidget {
-  const _CloudPlaylistsSection();
+/// The server's playlists and the account's Solar playlists were two stacked
+/// sections, which made the page answer "where does this live" before it
+/// could answer "what is this": the same kind of thing twice, under two
+/// headers, separated by nothing the reader cared about. The question this
+/// page answers is what lists exist, so they are one list — a server
+/// playlist, then a Solar one, each row carrying its own cover and its own
+/// count, and the section header saying only that this block is remote and
+/// where a new Solar playlist is made.
+///
+/// Ordering is by origin, not by name: the server answered first because its
+/// list is the one the user curated there, and Solar's follows because it is
+/// the list that follows the account. Neither group is labelled — the
+/// subtitle says where a list lives when it is opened.
+class _RemotePlaylistsSection extends ConsumerWidget {
+  const _RemotePlaylistsSection();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final server = ref.watch(playlistsProvider);
     final cloud = ref.watch(pulsarPlaylistsProvider);
+    final covers = ref.watch(pulsarPlaylistCoversProvider).value ?? const {};
     final signedIn = ref.watch(
       pulsarSessionProvider.select((session) => session.value != null),
     );
-    return cloud.when(
-      data: (list) => SliverMainAxisGroup(
-        slivers: [
-          if (signedIn)
-            SliverToBoxAdapter(
-              child: LibrarySectionHeader(
-                title: 'libraryCloudPlaylists'.tr(),
-                trailing: TextButton.icon(
-                  onPressed: () => _createCloudPlaylist(context, ref),
-                  icon: const Icon(Symbols.add_rounded, size: 18),
-                  label: Text('libraryNewCloudPlaylist'.tr()),
-                ),
-              ),
-            ),
-          SliverList.builder(
-            itemCount: list.length,
-            itemBuilder: (context, index) {
-              final playlist = list[index];
-              final count = playlist.items.length;
-              return CloudPlaylistCard(
-                name: playlist.name,
-                subtitle: count == 0
-                    ? 'ownedPlaylistEmptyHeader'.tr()
-                    : 'playlistsTrackCount'.plural(count),
-                artworkUrl: playlist.artworkUrl,
+    final sources = ref.watch(librarySourceByIdProvider);
+    final serverList = server.value ?? const <LibraryPlaylist>[];
+    final cloudList = cloud.value ?? const <PulsarPlaylist>[];
+    final serverFailed = server.hasError && serverList.isEmpty;
+    if (serverList.isEmpty &&
+        (!signedIn || cloudList.isEmpty) &&
+        !serverFailed) {
+      return const SliverToBoxAdapter(child: SizedBox.shrink());
+    }
+    return SliverMainAxisGroup(
+      slivers: [
+        SliverToBoxAdapter(
+          child: LibrarySectionHeader(
+            title: 'libraryRemotePlaylists'.tr(),
+            trailing: signedIn
+                ? TextButton.icon(
+                    onPressed: () => _createCloudPlaylist(context, ref),
+                    icon: const Icon(Symbols.add_rounded, size: 18),
+                    label: Text('libraryNewCloudPlaylist'.tr()),
+                  )
+                : null,
+          ),
+        ),
+        SliverList.builder(
+          itemCount: serverList.length + cloudList.length,
+          itemBuilder: (context, index) {
+            if (index < serverList.length) {
+              final playlist = serverList[index];
+              return PlaylistCard(
+                playlist: playlist,
+                // Where it lives is the one thing a merged list cannot show
+                // by its cover: two servers can hold a playlist with the same
+                // name, and the row has to say which one opens.
+                origin: sources[playlist.sourceId]?.displayName,
                 onTap: () => context.router.push(
-                  PulsarPlaylistDetailRoute(
+                  PlaylistDetailRoute(
+                    sourceId: playlist.sourceId,
                     playlistId: playlist.id,
                     playlistName: playlist.name,
                   ),
                 ),
               );
-            },
-          ),
-        ],
-      ),
-      loading: () => const SliverToBoxAdapter(
-        child: Padding(
-          padding: EdgeInsets.all(SolSpace.md),
-          child: Center(child: CircularProgressIndicator()),
+            }
+            final playlist = cloudList[index - serverList.length];
+            final count = playlist.items.length;
+            return CloudPlaylistCard(
+              name: playlist.name,
+              subtitle: [
+                count == 0
+                    ? 'ownedPlaylistEmptyHeader'.tr()
+                    : 'playlistsTrackCount'.plural(count),
+                'pulsarPlaylistKind'.tr(),
+              ].join('  ·  '),
+              artworkUrl: covers[playlist.id] ?? playlist.artworkUrl,
+              onTap: () => context.router.push(
+                PulsarPlaylistDetailRoute(
+                  playlistId: playlist.id,
+                  playlistName: playlist.name,
+                ),
+              ),
+            );
+          },
         ),
-      ),
-      // A signed-out window has no cloud playlists: silence, not an error.
-      error: (_, _) => const SliverToBoxAdapter(child: SizedBox.shrink()),
+        if (serverFailed)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                SolSpace.xxl,
+                SolSpace.sm,
+                SolSpace.xxl,
+                0,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Symbols.error_rounded,
+                    size: 18,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                  const SizedBox(width: SolSpace.sm),
+                  Expanded(
+                    child: Text(
+                      'playlistsLoadError'.tr(),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () =>
+                        ref.read(playlistsProvider.notifier).refresh(),
+                    child: Text('commonRetry'.tr()),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
