@@ -517,5 +517,7 @@
   "settingsSolarImport": "Import favourites from a provider",
   "settingsSolarImportFrom": "Import from {}",
   "settingsSolarImportDone": "Imported favourites from {}: {} found, {} new.",
-  "settingsSolarImportFailed": "Could not read {}’s favourites."
+  "settingsSolarImportFailed": "Could not read {}’s favourites.",
+  "libraryCloudFavouritesEmptyTitle": "No favourites yet",
+  "libraryCloudFavouritesEmptyMessage": "Heart a track on any device and it lands here, ready to play."
 }

@@ -516,5 +516,7 @@
   "settingsSolarImport": "从其他服务导入喜欢",
   "settingsSolarImportFrom": "从 {} 导入",
   "settingsSolarImportDone": "已从 {} 导入喜欢：共 {} 首，新增 {} 首。",
-  "settingsSolarImportFailed": "无法读取 {} 的喜欢列表。"
+  "settingsSolarImportFailed": "无法读取 {} 的喜欢列表。",
+  "libraryCloudFavouritesEmptyTitle": "还没有喜欢的歌曲",
+  "libraryCloudFavouritesEmptyMessage": "在任意设备上收藏一首歌，它就会出现在这里，随时可播。"
 }

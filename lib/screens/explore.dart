@@ -263,29 +263,67 @@ class AddSourceCard extends ConsumerWidget {
 }
 
 /// A section's name, above the shelf it introduces.
+///
+/// When [onToggle] is set the name is also the fold: tapping it collapses the
+/// shelf under it, and the chevron says which way it is about to go. Trailing
+/// actions stay live so "new playlist" still works on a folded section.
 class LibrarySectionHeader extends StatelessWidget {
   final String title;
   final Widget? trailing;
 
-  const LibrarySectionHeader({super.key, required this.title, this.trailing});
+  /// Collapse state, when this header folds its section.
+  final bool collapsed;
+  final VoidCallback? onToggle;
+
+  const LibrarySectionHeader({
+    super.key,
+    required this.title,
+    this.trailing,
+    this.collapsed = false,
+    this.onToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final name = Text(
+      title,
+      style: theme.textTheme.titleMedium?.copyWith(
+        fontWeight: FontWeight.w700,
+      ),
+    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         SolSpace.xxl,
         SolSpace.xl,
-        SolSpace.xxl,
+        SolSpace.lg,
         SolSpace.sm,
       ),
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              title,
-              style: Theme.of(context).textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w700),
-            ),
+            child: onToggle == null
+                ? name
+                : InkWell(
+                    onTap: onToggle,
+                    borderRadius: BorderRadius.circular(SolRadius.sm),
+                    child: Row(
+                      children: [
+                        Flexible(child: name),
+                        const SizedBox(width: SolSpace.xs),
+                        AnimatedRotation(
+                          turns: collapsed ? -0.25 : 0,
+                          duration: const Duration(milliseconds: 180),
+                          curve: Curves.easeOutCubic,
+                          child: Icon(
+                            Symbols.expand_more_rounded,
+                            size: 20,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
           ),
           ?trailing,
         ],

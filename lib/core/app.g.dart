@@ -72,6 +72,89 @@ final class SharedPreferencesProvider
 
 String _$sharedPreferencesHash() => r'202c01c26ca87869b7483dea241401711caea82b';
 
+/// Which collection sections the user has folded away.
+///
+/// The library is one long page of shelves, and someone who came for their
+/// playlists should not have to scroll past every album to reach them. A
+/// folded section keeps its header — so the way back is always visible — and
+/// the set is remembered: folding once is a decision about how this user
+/// reads their own collection, not a gesture repeated every launch.
+
+@ProviderFor(CollapsedLibrarySections)
+final collapsedLibrarySectionsProvider = CollapsedLibrarySectionsProvider._();
+
+/// Which collection sections the user has folded away.
+///
+/// The library is one long page of shelves, and someone who came for their
+/// playlists should not have to scroll past every album to reach them. A
+/// folded section keeps its header — so the way back is always visible — and
+/// the set is remembered: folding once is a decision about how this user
+/// reads their own collection, not a gesture repeated every launch.
+final class CollapsedLibrarySectionsProvider
+    extends $NotifierProvider<CollapsedLibrarySections, Set<String>> {
+  /// Which collection sections the user has folded away.
+  ///
+  /// The library is one long page of shelves, and someone who came for their
+  /// playlists should not have to scroll past every album to reach them. A
+  /// folded section keeps its header — so the way back is always visible — and
+  /// the set is remembered: folding once is a decision about how this user
+  /// reads their own collection, not a gesture repeated every launch.
+  CollapsedLibrarySectionsProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'collapsedLibrarySectionsProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$collapsedLibrarySectionsHash();
+
+  @$internal
+  @override
+  CollapsedLibrarySections create() => CollapsedLibrarySections();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(Set<String> value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<Set<String>>(value),
+    );
+  }
+}
+
+String _$collapsedLibrarySectionsHash() =>
+    r'76c9949afbf38ac02d529874c4b8eea760ebcb24';
+
+/// Which collection sections the user has folded away.
+///
+/// The library is one long page of shelves, and someone who came for their
+/// playlists should not have to scroll past every album to reach them. A
+/// folded section keeps its header — so the way back is always visible — and
+/// the set is remembered: folding once is a decision about how this user
+/// reads their own collection, not a gesture repeated every launch.
+
+abstract class _$CollapsedLibrarySections extends $Notifier<Set<String>> {
+  Set<String> build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<Set<String>, Set<String>>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<Set<String>, Set<String>>,
+              Set<String>,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
 @ProviderFor(ThemeModeNotifier)
 final themeModeProvider = ThemeModeNotifierProvider._();
 

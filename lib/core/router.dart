@@ -27,6 +27,10 @@ List<AutoRoute> _tabChildren(AutoRoute root) => [
     page: OwnedPlaylistDetailRoute.page,
     path: 'owned-playlists/:playlistId',
   ),
+  AutoRoute(
+    page: SolinkFavouritesRoute.page,
+    path: 'solink-favourites',
+  ),
 ];
 
 /// The app's route table.

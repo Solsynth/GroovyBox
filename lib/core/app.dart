@@ -77,6 +77,32 @@ const _kLyricsTranslationKey = 'app_lyrics_translation';
 const _kInfinitePlaybackKey = 'app_infinite_playback';
 const _kDynamicColorKey = 'app_dynamic_color';
 
+/// Which collection sections the user has folded away.
+///
+/// The library is one long page of shelves, and someone who came for their
+/// playlists should not have to scroll past every album to reach them. A
+/// folded section keeps its header — so the way back is always visible — and
+/// the set is remembered: folding once is a decision about how this user
+/// reads their own collection, not a gesture repeated every launch.
+@Riverpod(keepAlive: true)
+class CollapsedLibrarySections extends Notifier<Set<String>> {
+  static const _key = 'app_library_collapsed_sections';
+
+  @override
+  Set<String> build() =>
+      ref.watch(sharedPreferencesProvider).getStringList(_key)?.toSet() ??
+      const {};
+
+  Future<void> toggle(String section) async {
+    final next = {...state};
+    if (!next.remove(section)) next.add(section);
+    state = next;
+    await ref
+        .read(sharedPreferencesProvider)
+        .setStringList(_key, next.toList()..sort());
+  }
+}
+
 @Riverpod(keepAlive: true)
 class ThemeModeNotifier extends Notifier<AppThemeMode> {
   @override
