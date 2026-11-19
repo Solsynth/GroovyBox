@@ -56,6 +56,14 @@ class PlayPauseIcon extends StatelessWidget {
   }
 }
 
+/// Vertical half of the seek bar's tap box.
+///
+/// The slider's own default is the overlay's full radius on every side, which
+/// is what indented the track from the artwork it rules. Padding given, the
+/// slider measures itself by the thumb instead, so the two halves plus the
+/// thumb add up to the same 36 the row was always reserved for.
+const double _kSliderPad = 12;
+
 /// The seek bar and its two clocks.
 ///
 /// Watches the transport itself: position arrives once a second, and only
@@ -113,6 +121,14 @@ class _ScrubberState extends ConsumerState<Scrubber> {
             inactiveTickMarkColor: Colors.transparent,
           ),
           child: Slider(
+            // The thumb's own room at the ends is padding, not track: left
+            // unset it indents the ruler by the overlay's radius on both
+            // sides, so the bar never lines up with the artwork above it.
+            // The vertical half stays, because that is the row's tap box —
+            // and with padding given the slider measures itself by the thumb
+            // rather than the overlay, so it is the pair that adds up to the
+            // height the caller reserved.
+            padding: const EdgeInsets.symmetric(vertical: _kSliderPad),
             value: shownMs,
             max: maxMs <= 0 ? 1 : maxMs,
             onChanged: maxMs <= 0

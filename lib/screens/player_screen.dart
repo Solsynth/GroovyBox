@@ -45,6 +45,15 @@ const double _kPageMargin = SolSpace.xxxl;
 /// than [_kPageMargin] because a button already carries its own tap padding.
 const double _kCornerInset = SolSpace.lg;
 
+/// Room the compact page keeps above its slot for the corner controls.
+///
+/// They float over the body rather than taking a row of their own, so the
+/// page has to leave the row's height free itself: the slot started at the
+/// page's own margin and the artwork ran under the close and view buttons,
+/// which reads as a cropped cover rather than as controls over it. A button's
+/// own box, not its icon, because the tap target is what must clear the art.
+const double _kCompactTopInset = _kCornerInset + 48;
+
 /// Height the column under the cover takes on a wide window at the default
 /// type size: the copy, the scrubber and the transport, plus the gaps
 /// between them.
@@ -849,21 +858,30 @@ class _CompactPlayerBody extends StatelessWidget {
           constraints.maxWidth - SolSpace.xl * 2,
           0.0,
         );
+        // The corner controls float over the body, so the page pays for their
+        // row before anything is measured: the slot starts under them rather
+        // than under the window edge.
+        final topInset = _kCompactTopInset;
         final available = math.max(
-          constraints.maxHeight - _kPageMargin * 2,
+          constraints.maxHeight - topInset - _kPageMargin,
           0.0,
         );
         final coverTail = _coverTail(textScale);
         final dock = _dockMetrics(textScale);
-        final coverSlot = math.max(available - coverTail.total, 0.0);
-        final dockSlot = math.max(available - dock.total, 0.0);
-        // As much of the slot as a square can take, capped so a tall window
-        // does not turn the sleeve into the page. Measured at the cover end:
-        // that is the only state that draws it at this size.
+        // The square a window this size can take, with the tail under it
+        // paid for first. This is a ceiling, not the slot: the slot is the
+        // square itself, so a tall window never grows the empty box around
+        // the cover and leaves the controls hanging on its floor.
         final coverSize = math.min(
-          math.min(coverSlot, contentWidth) * 0.92,
+          math.min(math.max(available - coverTail.total, 0.0), contentWidth) *
+              0.92,
           360.0,
         );
+        // The cover end's slot is the artwork and nothing else. The words and
+        // the queue, whose slot has to be as tall as the page allows, get
+        // theirs from the docked capsule's reservation instead.
+        final coverSlot = coverSize;
+        final dockSlot = math.max(available - dock.total, 0.0);
         // The copy, the seek bar and the transport keep the square's width,
         // so the column reads as one object rather than three rows of
         // different lengths.
@@ -899,24 +917,46 @@ class _CompactPlayerBody extends StatelessWidget {
             final artRect = Rect.lerp(startRect, endRect, t)!;
             final artRadius = lerpDouble(SolRadius.xl, SolRadius.sm, t)!;
             // The copy hands over to the capsule: it fades out as the words
-            // take the slot, and the bar settles in behind them. Two ramps
-            // rather than one so there is no frame where the page has neither
-            // a headline nor a way to seek.
+            // take the slot, and the bar settles in behind them. The ramps
+            // overlap by more than half the morph — the bar is already rising
+            // while the copy is still leaving — because ending one before
+            // starting the other left a stretch of the morph with neither a
+            // headline nor a way to seek: the controls blinked out and back
+            // instead of handing over.
             final copyOut =
-                1 - _eased(Curves.easeInCubic, (t / 0.28).clamp(0.0, 1.0));
+                1 - _eased(Curves.easeInOut, (t / 0.62).clamp(0.0, 1.0));
             final barIn = _eased(
-              Curves.easeOutCubic,
-              ((t - 0.35) / 0.65).clamp(0.0, 1.0),
+              Curves.easeInOut,
+              ((t - 0.20) / 0.80).clamp(0.0, 1.0),
+            );
+            // The page's content is shorter than the window once the slot is
+            // the artwork itself, so the leftover is split above and below
+            // rather than dumped at the floor: a cover pinned to the top with
+            // a void under it reads as a short page, while the same content
+            // centred between the controls row and the page edge reads as the
+            // player. A window too short for the content still scrolls — the
+            // minimum height only ever adds room, never takes it away.
+            final slack = math.max(
+              constraints.maxHeight -
+                  topInset -
+                  _kPageMargin -
+                  slotHeight -
+                  tailHeight,
+              0.0,
             );
             return SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(
-                horizontal: SolSpace.xl,
+              padding: EdgeInsets.fromLTRB(
+                SolSpace.xl,
+                // Room for the corner controls, which float over the body
+                // instead of taking a row: the cover starts under them, plus
+                // half the slack this window has to spare.
+                topInset + slack / 2,
+                SolSpace.xl,
                 // Clear of the phone's own bottom inset, which [SafeArea] has
                 // already applied, and of the window edge: the transport is
                 // the last thing on the page, and a button on the glass edge
-                // reads as clipped rather than placed. The same room at the
-                // top keeps the cover off the window edge.
-                vertical: _kPageMargin,
+                // reads as clipped rather than placed.
+                _kPageMargin + slack / 2,
               ),
               child: Stack(
                 clipBehavior: Clip.none,
