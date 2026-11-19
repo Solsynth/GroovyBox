@@ -192,6 +192,7 @@ class PulsarPlaylistDetailScreen extends ConsumerWidget {
                         SliverToBoxAdapter(
                           child: CollectionHero(
                             artworkUrl: cover,
+                            source: 'settingsSectionSolarNetwork'.tr(),
                             eyebrow: 'pulsarPlaylistKind'.tr(),
                             meta: [
                               if (playlist.description != null &&

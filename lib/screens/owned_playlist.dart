@@ -2,12 +2,14 @@ import 'package:auto_route/auto_route.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/theme.dart';
+import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/collection_hero.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:groovy_box/widgets/playlist_name_dialog.dart';
+import 'package:groovy_box/widgets/section.dart';
 import 'package:groovy_box/pulsar/links.dart';
 import 'package:groovy_box/widgets/pulsar_upload.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -114,6 +116,7 @@ class OwnedPlaylistDetailScreen extends ConsumerWidget {
                   SliverToBoxAdapter(
                     child: CollectionHero(
                       fallbackIcon: Symbols.playlist_play,
+                      source: playlistSourceName(kLocalSourceId, ref),
                       eyebrow: 'ownedPlaylistKind'.tr(),
                       meta: [
                         playlist?.name ?? playlistName ?? '',

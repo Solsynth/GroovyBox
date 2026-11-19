@@ -75,6 +75,7 @@ class SolinkFavouritesScreen extends ConsumerWidget {
                   SliverToBoxAdapter(
                     child: CollectionHero(
                       artworkUrl: cover,
+                      source: 'settingsSectionSolarNetwork'.tr(),
                       eyebrow: 'libraryCloudFavourites'.tr(),
                       meta: 'playlistsTrackCount'.plural(list.length),
                       fallbackIcon: Symbols.favorite_rounded,

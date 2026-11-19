@@ -77,25 +77,43 @@ const _kLyricsTranslationKey = 'app_lyrics_translation';
 const _kInfinitePlaybackKey = 'app_infinite_playback';
 const _kDynamicColorKey = 'app_dynamic_color';
 
-/// Which collection sections the user has folded away.
+/// Which sections the user has folded away, per page.
 ///
-/// The library is one long page of shelves, and someone who came for their
+/// Pages are one long scroll of shelves, and someone who came for their
 /// playlists should not have to scroll past every album to reach them. A
 /// folded section keeps its header — so the way back is always visible — and
 /// the set is remembered: folding once is a decision about how this user
-/// reads their own collection, not a gesture repeated every launch.
+/// reads their own dashboard, not a gesture repeated every launch.
+///
+/// Keys are `page:id` — see [FoldableSection] — so a fold on one page never
+/// moves a section on another. The old library-only set is still read once
+/// and folded in: a user's existing folds are a decision already made.
 @Riverpod(keepAlive: true)
-class CollapsedLibrarySections extends Notifier<Set<String>> {
-  static const _key = 'app_library_collapsed_sections';
+class CollapsedSections extends Notifier<Set<String>> {
+  static const _key = 'app_collapsed_sections';
+  static const _legacyKey = 'app_library_collapsed_sections';
+  static const _legacyPage = 'library';
 
   @override
-  Set<String> build() =>
-      ref.watch(sharedPreferencesProvider).getStringList(_key)?.toSet() ??
-      const {};
+  Set<String> build() {
+    final prefs = ref.watch(sharedPreferencesProvider);
+    final saved = prefs.getStringList(_key);
+    if (saved != null) return saved.toSet();
+    final legacy = prefs.getStringList(_legacyKey);
+    if (legacy == null) return const {};
+    return {
+      for (final section in legacy) '$_legacyPage:$section',
+    };
+  }
 
-  Future<void> toggle(String section) async {
+  Future<void> toggle(String page, String section) async {
+    final key = '$page:$section';
     final next = {...state};
-    if (!next.remove(section)) next.add(section);
+    if (!next.remove(key)) next.add(key);
+    await _save(next);
+  }
+
+  Future<void> _save(Set<String> next) async {
     state = next;
     await ref
         .read(sharedPreferencesProvider)

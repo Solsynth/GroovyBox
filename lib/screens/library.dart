@@ -1,20 +1,20 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/router.gr.dart';
 import 'package:groovy_box/core/theme.dart';
+import 'package:groovy_box/library/catalog.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/screens/albums.dart';
 import 'package:groovy_box/pulsar/models.dart';
 import 'package:groovy_box/pulsar/providers.dart';
-import 'package:groovy_box/screens/explore.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:groovy_box/widgets/playlist_name_dialog.dart';
+import 'package:groovy_box/widgets/section.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
@@ -34,11 +34,11 @@ import 'package:material_ui/material_ui.dart';
 /// the explore page's job, so this page is deliberately a catalogue: covers,
 /// rows, and nothing that competes with the shelves.
 ///
-/// The remote lists are mixed rather than stacked: the server's playlists and
-/// the account's Solar playlists are one scan of covers, and the Solar
-/// favourites close it as the list that is tracks rather than playlists. One
-/// header says the whole block is from elsewhere; a row's subtitle names
-/// where it lives.
+/// Every playlist is one list rather than three: this device's, a server's
+/// and the account's Solink lists are the same kind of thing, so they share
+/// one header and one scan. Where a list lives is said on its detail page
+/// (and in its row's subtitle when two servers could be confused), not by
+/// which section it is filed under.
 @RoutePage()
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
@@ -52,9 +52,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   /// rather than its position: reordering the page never moves a fold.
   static const _albums = 'albums';
   static const _artists = 'artists';
-  static const _owned = 'owned';
-  static const _remote = 'remote';
-  static const _favourites = 'favourites';
+  static const _playlists = 'playlists';
+
+  /// Namespaces the fold keys: the dashboard folds its own sections, and a
+  /// fold on one page must not move a shelf on the other.
+  static const _page = 'library';
 
   @override
   Widget build(BuildContext context) {
@@ -90,7 +92,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                   ),
                 ),
               ),
-              _CollectionSection(
+              FoldableSection(
+                page: _page,
                 id: _albums,
                 title: 'exploreRecentlyAdded'.tr(),
                 builder: () => albums.when(
@@ -132,7 +135,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                   ],
                 ),
               ),
-              _CollectionSection(
+              FoldableSection(
+                page: _page,
                 id: _artists,
                 title: 'libraryArtists'.tr(),
                 builder: () => artists.when(
@@ -166,28 +170,16 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                   error: (_, _) => const [],
                 ),
               ),
-              _CollectionSection(
-                id: _owned,
-                title: 'libraryOwnedPlaylists'.tr(),
-                trailing: TextButton.icon(
-                  onPressed: () => _createOwnedPlaylist(context, ref),
-                  icon: const Icon(Symbols.add_rounded, size: 18),
-                  label: Text('libraryNewPlaylist'.tr()),
-                ),
-                builder: () => [_OwnedPlaylistsList()],
-              ),
-              _CollectionSection(
-                id: _remote,
-                title: 'libraryRemotePlaylists'.tr(),
-                // The create action stays on the header so a folded section
-                // still offers it.
-                trailing: const _NewCloudPlaylistButton(),
-                builder: () => const [_RemotePlaylistsList()],
-              ),
-              _CollectionSection(
-                id: _favourites,
-                title: 'libraryCloudFavourites'.tr(),
-                builder: () => const [_SolinkFavouritesCard()],
+              // One list of every playlist, wherever it lives: a device
+              // playlist, a server's and the account's cloud lists are the
+              // same kind of thing, and a reader asking "what lists do I
+              // have" should not have to look under three headers first.
+              FoldableSection(
+                page: _page,
+                id: _playlists,
+                title: 'libraryPlaylists'.tr(),
+                trailing: const _NewPlaylistButton(),
+                builder: () => const [_PlaylistRows()],
               ),
               SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
             ],
@@ -218,122 +210,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   }
 }
 
-/// Solink favourites as a built-in playlist: one row with the account's cover
-/// and its count, opening into its own page.
-///
-/// The library lists collections, and the account's hearts are a collection
-/// like any other — embedding its tracks here made one list render unlike
-/// every other row on the page and, on a large account, buried the shelves
-/// under a scroll of tracks that could not be folded away.
-class _SolinkFavouritesCard extends ConsumerWidget {
-  const _SolinkFavouritesCard();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final signedIn = ref.watch(
-      pulsarSessionProvider.select((session) => session.value != null),
-    );
-    if (!signedIn) return const SliverToBoxAdapter(child: SizedBox.shrink());
-    final favourites = ref.watch(pulsarFavouritesProvider);
-    return favourites.when(
-      data: (list) {
-        // Signed in with nothing hearted: an empty section says nothing a
-        // first heart would not say better.
-        if (list.isEmpty) {
-          return const SliverToBoxAdapter(child: SizedBox.shrink());
-        }
-        final count = list.length;
-        final cover = list
-            .map((item) => item.catalogItem?.artworkUrl)
-            .whereType<String>()
-            .where((url) => url.isNotEmpty)
-            .firstOrNull;
-        return SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: SolSpace.xs),
-            child: CloudPlaylistCard(
-              name: 'libraryCloudFavourites'.tr(),
-              subtitle: 'playlistsTrackCount'.plural(count),
-              artworkUrl: cover,
-              icon: Symbols.favorite_rounded,
-              onTap: () => context.router.push(const SolinkFavouritesRoute()),
-            ),
-          ),
-        );
-      },
-      loading: () => const SliverToBoxAdapter(
-        child: Padding(
-          padding: EdgeInsets.all(SolSpace.md),
-          child: Center(child: CircularProgressIndicator()),
-        ),
-      ),
-      error: (_, _) => const SliverToBoxAdapter(child: SizedBox.shrink()),
-    );
-  }
-}
-
-/// The header action for a new Solink playlist: hidden when signed out,
-/// because there is nowhere to create one.
-class _NewCloudPlaylistButton extends ConsumerWidget {
-  const _NewCloudPlaylistButton();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final signedIn = ref.watch(
-      pulsarSessionProvider.select((session) => session.value != null),
-    );
-    if (!signedIn) return const SizedBox.shrink();
-    return TextButton.icon(
-      onPressed: () => _createCloudPlaylist(context, ref),
-      icon: const Icon(Symbols.add_rounded, size: 18),
-      label: Text('libraryNewCloudPlaylist'.tr()),
-    );
-  }
-}
-
-/// One foldable shelf of the collection.
-///
-/// The header is always drawn — folding is a way to move down the page, not a
-/// way to lose the way back — and the body is built only while it is open, so
-/// a folded section costs its header and nothing else.
-class _CollectionSection extends ConsumerWidget {
-  /// Stable id for the remembered fold state: the section's name, never its
-  /// position.
-  final String id;
-  final String title;
-  final Widget? trailing;
-
-  /// The shelf's own slivers. Called only while the section is open.
-  final List<Widget> Function() builder;
-
-  const _CollectionSection({
-    required this.id,
-    required this.title,
-    required this.builder,
-    this.trailing,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final collapsed = ref.watch(
-      collapsedLibrarySectionsProvider.select((set) => set.contains(id)),
-    );
-    return SliverMainAxisGroup(
-      slivers: [
-        SliverToBoxAdapter(
-          child: LibrarySectionHeader(
-            title: title,
-            trailing: trailing,
-            collapsed: collapsed,
-            onToggle: () =>
-                ref.read(collapsedLibrarySectionsProvider.notifier).toggle(id),
-          ),
-        ),
-        if (!collapsed) ...builder(),
-      ],
-    );
-  }
-}
 
 /// An artist as a card: the source's art when it has one, a person-shaped
 /// fallback when it does not, and the name under it.
@@ -463,190 +339,171 @@ class _EmptyAlbums extends StatelessWidget {
 }
 
 
-/// A playlist as a row: cover, name, and what is in it.
+/// Where a playlist lives, in one row's terms.
 ///
-/// Same rounded hover language as [TrackRow], so the collection reads as one
-/// family without a divider anywhere. [origin] names the library the list
-/// lives on, which only a merged list needs: a row above it and a row below
-/// it can share a name and belong to two different servers.
-class PlaylistCard extends StatelessWidget {
+/// The list on the library page is one list: this device's playlists, a
+/// server's and the account's Solink lists are the same kind of thing, and a
+/// reader asking "what lists do I have" should not have to know which drawer
+/// each one lives in. The source is said in the subtitle, where it
+/// disambiguates (two servers can hold a playlist with the same name), and on
+/// the detail page itself.
+sealed class PlaylistEntry {
+  const PlaylistEntry();
+
+  String get name;
+  String get subtitle;
+  String? get artworkUrl;
+  IconData get icon;
+  void open(BuildContext context);
+}
+
+class OwnedPlaylistEntry extends PlaylistEntry {
+  final OwnedPlaylist playlist;
+
+  const OwnedPlaylistEntry(this.playlist);
+
+  @override
+  String get name => playlist.name;
+
+  @override
+  String get subtitle => playlist.trackCount == 0
+      ? 'ownedPlaylistEmptyHeader'.tr()
+      : 'playlistsTrackCount'.plural(playlist.trackCount);
+
+  @override
+  String? get artworkUrl => null;
+
+  @override
+  IconData get icon => Symbols.queue_music_rounded;
+
+  @override
+  void open(BuildContext context) => context.router.push(
+    OwnedPlaylistDetailRoute(
+      playlistId: playlist.id,
+      playlistName: playlist.name,
+    ),
+  );
+}
+
+class ServerPlaylistEntry extends PlaylistEntry {
   final LibraryPlaylist playlist;
-  final VoidCallback onTap;
+
+  /// The library's name, for the row that has to say which server it is.
   final String? origin;
 
-  const PlaylistCard({
-    super.key,
-    required this.playlist,
-    required this.onTap,
-    this.origin,
-  });
+  const ServerPlaylistEntry(this.playlist, {this.origin});
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final subtitle = [
-      if (playlist.songCount != null)
-        'playlistsTrackCount'.plural(playlist.songCount!),
-      if (playlist.duration > Duration.zero) formatDuration(playlist.duration),
-      if (playlist.owner != null) playlist.owner!,
-      if (origin != null && origin != playlist.owner) origin!,
-    ].join('  ·  ');
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: SolSpace.md, vertical: 2),
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(SolRadius.md),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: SolSpace.md,
-              vertical: SolSpace.sm,
-            ),
-            child: Row(
-              children: [
-                LibraryArtwork(
-                  sourceId: playlist.sourceId,
-                  artId: playlist.artId,
-                  size: 52,
-                  radius: SolRadius.md,
-                  fallbackIcon: Symbols.playlist_play,
-                ),
-                const SizedBox(width: SolSpace.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        playlist.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(
-                  Symbols.chevron_right_rounded,
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The playlists this device owns, as a bare list: the section above it draws
-/// the name and the create action, so a folded section still offers "new
-/// playlist".
-class _OwnedPlaylistsList extends ConsumerWidget {
-  const _OwnedPlaylistsList();
+  String get name => playlist.name;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final owned = ref.watch(ownedPlaylistsProvider);
-    return owned.when(
-      data: (list) => SliverList.builder(
-        itemCount: list.isEmpty ? 1 : list.length,
-        itemBuilder: (context, index) {
-          if (list.isEmpty) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(
-                SolSpace.xxl,
-                0,
-                SolSpace.xxl,
-                SolSpace.sm,
-              ),
-              child: Text(
-                'libraryOwnedPlaylistsEmpty'.tr(),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  height: 1.5,
-                ),
-              ),
-            );
-          }
-          final playlist = list[index];
-          return PlaylistCard(
-            playlist: LibraryPlaylist(
-              sourceId: kLocalSourceId,
-              id: '${playlist.id}',
-              name: playlist.name,
-              duration: Duration.zero,
-              songCount: playlist.trackCount,
-            ),
-            onTap: () => context.router.push(
-              OwnedPlaylistDetailRoute(
-                playlistId: playlist.id,
-                playlistName: playlist.name,
-              ),
-            ),
-          );
-        },
-      ),
-      loading: () => const SliverToBoxAdapter(
-        child: Padding(
-          padding: EdgeInsets.all(SolSpace.md),
-          child: Center(child: CircularProgressIndicator()),
-        ),
-      ),
-      // A device with no catalog can still browse servers; the section simply
-      // has nothing it could create.
-      error: (_, _) => const SliverToBoxAdapter(child: SizedBox.shrink()),
-    );
-  }
+  String get subtitle => [
+    if (playlist.songCount != null)
+      'playlistsTrackCount'.plural(playlist.songCount!),
+    if (playlist.duration > Duration.zero) formatDuration(playlist.duration),
+    if (playlist.owner != null) playlist.owner!,
+    if (origin != null && origin != playlist.owner) origin!,
+  ].join('  ·  ');
+
+  @override
+  String? get artworkUrl => null;
+
+  @override
+  IconData get icon => Symbols.playlist_play;
+
+  @override
+  void open(BuildContext context) => context.router.push(
+    PlaylistDetailRoute(
+      sourceId: playlist.sourceId,
+      playlistId: playlist.id,
+      playlistName: playlist.name,
+    ),
+  );
 }
 
-/// One row of the cloud playlist list, carrying the server's own artwork.
+class CloudPlaylistEntry extends PlaylistEntry {
+  final PulsarPlaylist playlist;
+  final String? cover;
+
+  const CloudPlaylistEntry(this.playlist, {this.cover});
+
+  @override
+  String get name => playlist.name;
+
+  @override
+  String get subtitle => [
+    playlist.items.isEmpty
+        ? 'ownedPlaylistEmptyHeader'.tr()
+        : 'playlistsTrackCount'.plural(playlist.items.length),
+    'pulsarPlaylistKind'.tr(),
+  ].join('  ·  ');
+
+  @override
+  String? get artworkUrl => cover ?? playlist.artworkUrl;
+
+  @override
+  IconData get icon => Symbols.cloud_rounded;
+
+  @override
+  void open(BuildContext context) => context.router.push(
+    PulsarPlaylistDetailRoute(
+      playlistId: playlist.id,
+      playlistName: playlist.name,
+    ),
+  );
+}
+
+/// The account's hearts, drawn as a playlist row like the lists beside it.
 ///
-/// [PlaylistCard] resolves art through a library source, and a cloud playlist
-/// has none: its cover URL is the playlist's, not a source's, so it is drawn
-/// directly instead of through [LibraryArtwork].
-class CloudPlaylistCard extends StatelessWidget {
-  final String name;
-  final String subtitle;
-  final String? artworkUrl;
-  final VoidCallback onTap;
+/// Solink is the record of what the account likes, so it belongs in the one
+/// list of playlists rather than in a section of its own: it is a collection
+/// with a cover and a count, and it opens into its tracks.
+class CloudFavouritesEntry extends PlaylistEntry {
+  final int count;
+  final String? cover;
 
-  /// The mark drawn when there is no cover: a cloud for a Solink playlist,
-  /// a heart for the account's favourites.
-  final IconData icon;
+  const CloudFavouritesEntry({required this.count, this.cover});
 
-  const CloudPlaylistCard({
-    super.key,
-    required this.name,
-    required this.subtitle,
-    required this.onTap,
-    this.artworkUrl,
-    this.icon = Symbols.cloud_rounded,
-  });
+  @override
+  String get name => 'libraryCloudFavourites'.tr();
+
+  @override
+  String get subtitle => 'playlistsTrackCount'.plural(count);
+
+  @override
+  String? get artworkUrl => cover;
+
+  @override
+  IconData get icon => Symbols.favorite_rounded;
+
+  @override
+  void open(BuildContext context) => context.router.push(
+    const SolinkFavouritesRoute(),
+  );
+}
+
+/// One playlist, as a row: cover, name, and what is in it.
+///
+/// Same rounded hover language as [TrackRow], so the collection reads as one
+/// family without a divider anywhere. A cloud playlist carries a cover URL of
+/// its own, which is drawn directly instead of through [LibraryArtwork]: its
+/// record has no library to resolve an art handle through.
+class PlaylistCard extends StatelessWidget {
+  final PlaylistEntry entry;
+
+  const PlaylistCard({super.key, required this.entry});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final art = artworkUrl;
+    final art = entry.artworkUrl;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: SolSpace.md, vertical: 2),
       child: Material(
         type: MaterialType.transparency,
         child: InkWell(
-          onTap: onTap,
+          onTap: () => entry.open(context),
           borderRadius: BorderRadius.circular(SolRadius.md),
           child: Padding(
             padding: const EdgeInsets.symmetric(
@@ -659,25 +516,22 @@ class CloudPlaylistCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(SolRadius.md),
                   child: SizedBox.square(
                     dimension: 52,
-                    child: art == null || art.isEmpty
-                        ? ColoredBox(
-                            color: colorScheme.surfaceContainerHigh,
-                            child: Icon(
-                              icon,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          )
-                        : Image.network(
-                            art,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => ColoredBox(
-                              color: colorScheme.surfaceContainerHigh,
-                              child: Icon(
-                                icon,
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ),
+                    child: switch (entry) {
+                      ServerPlaylistEntry(:final playlist) => LibraryArtwork(
+                        sourceId: playlist.sourceId,
+                        artId: playlist.artId,
+                        size: 52,
+                        radius: SolRadius.md,
+                        fallbackIcon: Symbols.playlist_play,
+                      ),
+                      _ when art != null && art.isNotEmpty => Image.network(
+                        art,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) =>
+                            _coverFallback(colorScheme, entry.icon),
+                      ),
+                      _ => _coverFallback(colorScheme, entry.icon),
+                    },
                   ),
                 ),
                 const SizedBox(width: SolSpace.md),
@@ -687,16 +541,16 @@ class CloudPlaylistCard extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        name,
+                        entry.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodyLarge?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      if (subtitle.isNotEmpty)
+                      if (entry.subtitle.isNotEmpty)
                         Text(
-                          subtitle,
+                          entry.subtitle,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall?.copyWith(
@@ -714,6 +568,177 @@ class CloudPlaylistCard extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _coverFallback(ColorScheme colorScheme, IconData icon) => ColoredBox(
+    color: colorScheme.surfaceContainerHigh,
+    child: Icon(icon, color: colorScheme.onSurfaceVariant),
+  );
+}
+
+/// Every playlist, wherever it lives, as one list.
+///
+/// Ordering is by origin, not by name: this device's own playlists come first
+/// because they are the ones the app owns and the ones that play without a
+/// server; a server's follow in source order, and the account's Solink lists
+/// close it because they are the lists that follow the account.
+class _PlaylistRows extends ConsumerWidget {
+  const _PlaylistRows();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final owned = ref.watch(ownedPlaylistsProvider);
+    final server = ref.watch(playlistsProvider);
+    final cloud = ref.watch(pulsarPlaylistsProvider);
+    final covers = ref.watch(pulsarPlaylistCoversProvider).value ?? const {};
+    final favourites = ref.watch(pulsarFavouritesProvider);
+    final sources = ref.watch(librarySourceByIdProvider);
+
+    final ownedList = owned.value ?? const <OwnedPlaylist>[];
+    final serverList = server.value ?? const <LibraryPlaylist>[];
+    final cloudList = cloud.value ?? const <PulsarPlaylist>[];
+    final loadError = server.hasError && serverList.isEmpty;
+
+    final entries = <PlaylistEntry>[
+      for (final playlist in ownedList) OwnedPlaylistEntry(playlist),
+      for (final playlist in serverList)
+        ServerPlaylistEntry(
+          playlist,
+          // Where it lives is the one thing a merged list cannot show by its
+          // cover: two servers can hold a playlist with the same name, and
+          // the row has to say which one opens.
+          origin: sources[playlist.sourceId]?.displayName,
+        ),
+      for (final playlist in cloudList)
+        CloudPlaylistEntry(playlist, cover: covers[playlist.id]),
+      // The account's hearts close the list: they follow the account rather
+      // than a library, and they are one collection, not a drawer.
+      if (favourites.value case final list?)
+        if (list.isNotEmpty)
+          CloudFavouritesEntry(
+            count: list.length,
+            cover: list
+                .map((item) => item.catalogItem?.artworkUrl)
+                .whereType<String>()
+                .where((url) => url.isNotEmpty)
+                .firstOrNull,
+          ),
+    ];
+
+    // Every list is still loading: a spinner says more than an empty page
+    final loading =
+        (owned.isLoading && ownedList.isEmpty) &&
+        (server.isLoading && serverList.isEmpty) &&
+        (cloud.isLoading && cloudList.isEmpty);
+    if (loading) {
+      return const SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.all(SolSpace.md),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+
+    return SliverList.builder(
+      itemCount:
+          entries.length + (loadError ? 1 : 0) + (entries.isEmpty ? 1 : 0),
+      itemBuilder: (context, index) {
+        if (index < entries.length) {
+          return PlaylistCard(entry: entries[index]);
+        }
+        if (loadError) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(
+              SolSpace.xxl,
+              SolSpace.sm,
+              SolSpace.xxl,
+              0,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Symbols.error_rounded,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                const SizedBox(width: SolSpace.sm),
+                Expanded(
+                  child: Text(
+                    'playlistsLoadError'.tr(),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () =>
+                      ref.read(playlistsProvider.notifier).refresh(),
+                  child: Text('commonRetry'.tr()),
+                ),
+              ],
+            ),
+          );
+        }
+        // No playlists anywhere: an invitation, not a hole. The action is in
+        // the section header so a folded section still offers it.
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(
+            SolSpace.xxl,
+            0,
+            SolSpace.xxl,
+            SolSpace.sm,
+          ),
+          child: Text(
+            'libraryPlaylistsEmpty'.tr(),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              height: 1.5,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// The header action for a new playlist.
+///
+/// A device playlist is the one the app owns and the one that plays without a
+/// server, so it is the default; the account's cloud list is offered beside
+/// it only when signed in, because signed out there is nowhere to write one.
+class _NewPlaylistButton extends ConsumerWidget {
+  const _NewPlaylistButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final signedIn = ref.watch(
+      pulsarSessionProvider.select((session) => session.value != null),
+    );
+    if (!signedIn) {
+      return TextButton.icon(
+        onPressed: () => _createOwnedPlaylist(context, ref),
+        icon: const Icon(Symbols.add_rounded, size: 18),
+        label: Text('libraryNewPlaylist'.tr()),
+      );
+    }
+    return MenuAnchor(
+      menuChildren: [
+        MenuItemButton(
+          leadingIcon: const Icon(Symbols.queue_music_rounded, size: 18),
+          onPressed: () => _createOwnedPlaylist(context, ref),
+          child: Text('libraryNewPlaylist'.tr()),
+        ),
+        MenuItemButton(
+          leadingIcon: const Icon(Symbols.cloud_rounded, size: 18),
+          onPressed: () => _createCloudPlaylist(context, ref),
+          child: Text('libraryNewCloudPlaylist'.tr()),
+        ),
+      ],
+      builder: (context, controller, _) => TextButton.icon(
+        onPressed: () =>
+            controller.isOpen ? controller.close() : controller.open(),
+        icon: const Icon(Symbols.add_rounded, size: 18),
+        label: Text('libraryNewPlaylist'.tr()),
       ),
     );
   }
@@ -800,110 +825,6 @@ class _ErrorSliver extends StatelessWidget {
           child: Text('commonTryAgain'.tr()),
         ),
       ),
-    );
-  }
-}
-
-/// Every playlist that lives somewhere else, in one list.
-///
-/// The server's playlists and the account's Solink playlists were two stacked
-/// sections, which made the page answer "where does this live" before it
-/// could answer "what is this": the same kind of thing twice, under two
-/// headers, separated by nothing the reader cared about. The question this
-/// page answers is what lists exist, so they are one list — a server
-/// playlist, then a Solink one, each row carrying its own cover and its own
-/// count.
-///
-/// Ordering is by origin, not by name: the server answered first because its
-/// list is the one the user curated there, and Solink's follows because it is
-/// the list that follows the account. Neither group is labelled — the
-/// subtitle says where a list lives when it is opened.
-class _RemotePlaylistsList extends ConsumerWidget {
-  const _RemotePlaylistsList();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final server = ref.watch(playlistsProvider);
-    final cloud = ref.watch(pulsarPlaylistsProvider);
-    final covers = ref.watch(pulsarPlaylistCoversProvider).value ?? const {};
-    final sources = ref.watch(librarySourceByIdProvider);
-    final serverList = server.value ?? const <LibraryPlaylist>[];
-    final cloudList = cloud.value ?? const <PulsarPlaylist>[];
-    final serverFailed = server.hasError && serverList.isEmpty;
-    if (serverList.isEmpty && cloudList.isEmpty && !serverFailed) {
-      return const SliverToBoxAdapter(child: SizedBox.shrink());
-    }
-    return SliverList.builder(
-      itemCount: serverList.length + cloudList.length + (serverFailed ? 1 : 0),
-      itemBuilder: (context, index) {
-        if (index < serverList.length) {
-          final playlist = serverList[index];
-          return PlaylistCard(
-            playlist: playlist,
-            // Where it lives is the one thing a merged list cannot show by
-            // its cover: two servers can hold a playlist with the same name,
-            // and the row has to say which one opens.
-            origin: sources[playlist.sourceId]?.displayName,
-            onTap: () => context.router.push(
-              PlaylistDetailRoute(
-                sourceId: playlist.sourceId,
-                playlistId: playlist.id,
-                playlistName: playlist.name,
-              ),
-            ),
-          );
-        }
-        final cloudIndex = index - serverList.length;
-        if (cloudIndex >= cloudList.length) {
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(
-              SolSpace.xxl,
-              SolSpace.sm,
-              SolSpace.xxl,
-              0,
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Symbols.error_rounded,
-                  size: 18,
-                  color: Theme.of(context).colorScheme.error,
-                ),
-                const SizedBox(width: SolSpace.sm),
-                Expanded(
-                  child: Text(
-                    'playlistsLoadError'.tr(),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-                TextButton(
-                  onPressed: () =>
-                      ref.read(playlistsProvider.notifier).refresh(),
-                  child: Text('commonRetry'.tr()),
-                ),
-              ],
-            ),
-          );
-        }
-        final playlist = cloudList[cloudIndex];
-        final count = playlist.items.length;
-        return CloudPlaylistCard(
-          name: playlist.name,
-          subtitle: [
-            count == 0
-                ? 'ownedPlaylistEmptyHeader'.tr()
-                : 'playlistsTrackCount'.plural(count),
-            'pulsarPlaylistKind'.tr(),
-          ].join('  ·  '),
-          artworkUrl: covers[playlist.id] ?? playlist.artworkUrl,
-          onTap: () => context.router.push(
-            PulsarPlaylistDetailRoute(
-              playlistId: playlist.id,
-              playlistName: playlist.name,
-            ),
-          ),
-        );
-      },
     );
   }
 }

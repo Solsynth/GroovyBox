@@ -8,7 +8,7 @@ import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/pulsar/providers.dart';
 import 'package:groovy_box/screens/albums.dart';
-import 'package:groovy_box/screens/explore.dart';
+import 'package:groovy_box/widgets/section.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:groovy_box/widgets/collection_hero.dart';
 import 'package:groovy_box/widgets/common.dart';
@@ -190,7 +190,7 @@ class _BodyState extends ConsumerState<_Body> {
               else ...[
                 if (topTracks.isNotEmpty)
                   SliverToBoxAdapter(
-                    child: LibrarySectionHeader(title: 'artistsTopTracks'.tr()),
+                    child: SectionHeader(title: 'artistsTopTracks'.tr()),
                   ),
                 if (topTracks.isNotEmpty)
                   SliverList.builder(
@@ -221,7 +221,7 @@ class _BodyState extends ConsumerState<_Body> {
                   ),
                 if (albums.isNotEmpty)
                   SliverToBoxAdapter(
-                    child: LibrarySectionHeader(
+                    child: SectionHeader(
                       title: 'artistsAlbums'.plural(albums.length),
                     ),
                   ),
@@ -299,7 +299,7 @@ class _FleetSection extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              LibrarySectionHeader(title: 'artistsFleetHeader'.tr()),
+              SectionHeader(title: 'artistsFleetHeader'.tr()),
               if (metadata.roles.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(

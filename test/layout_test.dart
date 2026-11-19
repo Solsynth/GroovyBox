@@ -153,7 +153,8 @@ void main() {
         // playlist lists all live in the same scroll.
         expect(find.text('Library'), findsOneWidget, reason: 'the headline');
         expect(find.text('Recently added'), findsOneWidget);
-        expect(find.text('On this device'), findsOneWidget);
+        // Every playlist is one list now, wherever it lives.
+        expect(find.text('Playlists'), findsOneWidget);
         expect(find.text('A playlist'), findsOneWidget);
         expect(tester.takeException(), isNull);
       });

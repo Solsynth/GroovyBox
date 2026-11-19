@@ -53,9 +53,9 @@ void main() {
 
     await _pump(tester, catalog);
 
-    // The device's own list is a section of its own, above anything a server
-    // holds, and it says what the playlist is called.
-    expect(find.text('libraryOwnedPlaylists'.tr()), findsOneWidget);
+    // Device playlists sit in the one list of playlists, above anything a
+    // server holds, and the row says what the playlist is called.
+    expect(find.text('libraryPlaylists'.tr()), findsOneWidget);
     expect(find.text('Sunday'), findsOneWidget);
   });
 
@@ -65,7 +65,7 @@ void main() {
     await _pump(tester, LibraryCatalog(db));
 
     // An empty device list is an invitation with the action in the header.
-    expect(find.text('libraryOwnedPlaylistsEmpty'.tr()), findsOneWidget);
+    expect(find.text('libraryPlaylistsEmpty'.tr()), findsOneWidget);
     await tester.tap(find.text('libraryNewPlaylist'.tr()));
     await tester.pumpAndSettle();
 

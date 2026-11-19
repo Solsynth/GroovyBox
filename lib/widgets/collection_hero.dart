@@ -32,6 +32,12 @@ class CollectionHero extends StatelessWidget {
   /// three of anything.
   final String? eyebrow;
 
+  /// The first line of the meta block: where the collection lives. A
+  /// playlist can be owned by this device, a server, or the account, and the
+  /// detail page is where that is said — the list that opened it is one
+  /// list of every playlist, not one list per drawer.
+  final String? source;
+
   /// Who made it, when, and what it is called. The caller decides which of
   /// those it has; missing pieces are simply absent from the line.
   final String meta;
@@ -44,6 +50,7 @@ class CollectionHero extends StatelessWidget {
     super.key,
     required this.meta,
     required this.actions,
+    this.source,
     this.eyebrow,
     this.sourceId,
     this.artId,
@@ -91,6 +98,17 @@ class CollectionHero extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: SolSpace.xs),
+                ],
+                if (source != null && source!.isNotEmpty) ...[
+                  Text(
+                    source!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: SolSpace.xxs),
                 ],
                 Text(
                   meta,

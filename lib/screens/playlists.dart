@@ -8,6 +8,7 @@ import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/collection_hero.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/format.dart';
+import 'package:groovy_box/widgets/section.dart';
 import 'package:groovy_box/pulsar/links.dart';
 import 'package:groovy_box/widgets/pulsar_upload.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -68,6 +69,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
                         child: CollectionHero(
                           sourceId: list.first.sourceId,
                           artId: list.first.artId,
+                          source: playlistSourceName(sourceId, ref),
                           eyebrow: 'playlistsKind'.tr(),
                           meta: [
                             list.first.artist ?? 'commonUnknownArtist'.tr(),

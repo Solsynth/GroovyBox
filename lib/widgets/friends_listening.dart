@@ -1,20 +1,21 @@
-import 'package:easy_localization/easy_localization.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/pulsar/models.dart';
 import 'package:groovy_box/pulsar/providers.dart';
-import 'package:groovy_box/screens/explore.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// What the account's friends are listening to, right now.
+/// What the account's friends are listening to, right now, as rows.
 ///
 /// One row per friend with a live presence activity: avatar, name, and the
 /// track their player reported. Data comes from Stargate's friends overview,
 /// which already merges each friend's live Pulsar session, so this widget
 /// only renders and refreshes.
-class FriendsListeningShelf extends ConsumerWidget {
-  const FriendsListeningShelf({super.key});
+///
+/// The name above it belongs to the page: a shelf that draws its own label
+/// could not be folded or reordered with the other sections of the page.
+class FriendsListeningRows extends ConsumerWidget {
+  const FriendsListeningRows({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -23,10 +24,15 @@ class FriendsListeningShelf extends ConsumerWidget {
       data: (list) => list.isEmpty
           ? const SizedBox.shrink()
           : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                LibrarySectionHeader(title: 'friendsListeningTitle'.tr()),
-                for (final friend in list) _FriendRow(friend: friend),
+                for (final friend in list)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: SolSpace.xxl,
+                    ),
+                    child: _FriendRow(friend: friend),
+                  ),
               ],
             ),
       loading: () => const SizedBox.shrink(),

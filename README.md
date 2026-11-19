@@ -35,9 +35,9 @@ than block you behind a form.
   imports the plugin, `lib/player/apple_player.dart` drives it, and the
   transport routes to it through `LibrarySource.usesPlatformPlayer`. Covers
   are Apple's own `{w}x{h}` art templates, resized per painted box in
-  `artworkUri`. The landing page opens with the account's own dashboard card
-  (library size) and its curated shelves — personal mixes, recently played,
-  station suggestions — which no other provider has a word for; a station is
+  `artworkUri`. The landing page opens with its curated shelves — personal
+  mixes, recently played, station suggestions — which no other provider has a
+  word for; a station is
   queued as a `LibrarySong` with `isRadio`, so the dock, the queue panel and
   the scrobbler need no special case, and the transport hands the system
   player the whole run from the current track onward so a finished track
@@ -122,8 +122,15 @@ than block you behind a form.
   folder can move or disappear. Importing the same file again is recognised by
   name and length instead of duplicating it; a different file with the same name
   is kept beside the first rather than overwriting it.
-- **Screens** — Browse (search + random shelf + recently added), Albums, album
-  detail, Playlists, playlist detail, Stats, full Player, Setup, Settings. The
+- **Dashboard** — the explore tab is one scroll of shelves, and the page is
+  the user's: sections fold and stay folded (`CollapsedSections`, keyed
+  `page:section`), and a customize sheet reorders them, removes them, and pins
+  a playlist as a section of its own (`lib/core/dashboard_layout.dart`,
+  `lib/widgets/dashboard.dart`). The arrangement is one JSON value in prefs.
+- **Screens** — Explore (curated shelves, random draw, recently added), Search,
+  the Library (albums, artists and one merged Playlists list), album and
+  playlist detail, Profile, Player, Setup, Settings. A playlist detail names
+  the library it lives in, since the list that opened it mixes every source. The
   queue has no page of its own: it is a pane of the player and a sheet in the
   dock, because a third view of one list only made the transport compete with
   itself.

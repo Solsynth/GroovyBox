@@ -97,16 +97,22 @@ void main() {
     expect(find.text('Recently added'), findsOneWidget);
     expect(find.text('Sunday'), findsOneWidget);
 
-    // Remembered: the preference is the fold, not a widget's mood.
+    // Remembered: the preference is the fold, not a widget's mood. The key
+    // is namespaced by page, so the dashboard's own folds never move one of
+    // these.
     final prefs = await SharedPreferences.getInstance();
     expect(
-      prefs.getStringList('app_library_collapsed_sections'),
-      contains('albums'),
+      prefs.getStringList('app_collapsed_sections'),
+      contains('library:albums'),
     );
 
     // And it opens again from the same place.
     await tester.tap(find.text('Recently added'));
     await tester.pumpAndSettle();
     expect(find.text('An album'), findsOneWidget);
+    expect(
+      prefs.getStringList('app_collapsed_sections'),
+      isNot(contains('library:albums')),
+    );
   });
 }

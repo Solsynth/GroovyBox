@@ -72,50 +72,62 @@ final class SharedPreferencesProvider
 
 String _$sharedPreferencesHash() => r'202c01c26ca87869b7483dea241401711caea82b';
 
-/// Which collection sections the user has folded away.
+/// Which sections the user has folded away, per page.
 ///
-/// The library is one long page of shelves, and someone who came for their
+/// Pages are one long scroll of shelves, and someone who came for their
 /// playlists should not have to scroll past every album to reach them. A
 /// folded section keeps its header — so the way back is always visible — and
 /// the set is remembered: folding once is a decision about how this user
-/// reads their own collection, not a gesture repeated every launch.
-
-@ProviderFor(CollapsedLibrarySections)
-final collapsedLibrarySectionsProvider = CollapsedLibrarySectionsProvider._();
-
-/// Which collection sections the user has folded away.
+/// reads their own dashboard, not a gesture repeated every launch.
 ///
-/// The library is one long page of shelves, and someone who came for their
+/// Keys are `page:id` — see [FoldableSection] — so a fold on one page never
+/// moves a section on another. The old library-only set is still read once
+/// and folded in: a user's existing folds are a decision already made.
+
+@ProviderFor(CollapsedSections)
+final collapsedSectionsProvider = CollapsedSectionsProvider._();
+
+/// Which sections the user has folded away, per page.
+///
+/// Pages are one long scroll of shelves, and someone who came for their
 /// playlists should not have to scroll past every album to reach them. A
 /// folded section keeps its header — so the way back is always visible — and
 /// the set is remembered: folding once is a decision about how this user
-/// reads their own collection, not a gesture repeated every launch.
-final class CollapsedLibrarySectionsProvider
-    extends $NotifierProvider<CollapsedLibrarySections, Set<String>> {
-  /// Which collection sections the user has folded away.
+/// reads their own dashboard, not a gesture repeated every launch.
+///
+/// Keys are `page:id` — see [FoldableSection] — so a fold on one page never
+/// moves a section on another. The old library-only set is still read once
+/// and folded in: a user's existing folds are a decision already made.
+final class CollapsedSectionsProvider
+    extends $NotifierProvider<CollapsedSections, Set<String>> {
+  /// Which sections the user has folded away, per page.
   ///
-  /// The library is one long page of shelves, and someone who came for their
+  /// Pages are one long scroll of shelves, and someone who came for their
   /// playlists should not have to scroll past every album to reach them. A
   /// folded section keeps its header — so the way back is always visible — and
   /// the set is remembered: folding once is a decision about how this user
-  /// reads their own collection, not a gesture repeated every launch.
-  CollapsedLibrarySectionsProvider._()
+  /// reads their own dashboard, not a gesture repeated every launch.
+  ///
+  /// Keys are `page:id` — see [FoldableSection] — so a fold on one page never
+  /// moves a section on another. The old library-only set is still read once
+  /// and folded in: a user's existing folds are a decision already made.
+  CollapsedSectionsProvider._()
     : super(
         from: null,
         argument: null,
         retry: null,
-        name: r'collapsedLibrarySectionsProvider',
+        name: r'collapsedSectionsProvider',
         isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
 
   @override
-  String debugGetCreateSourceHash() => _$collapsedLibrarySectionsHash();
+  String debugGetCreateSourceHash() => _$collapsedSectionsHash();
 
   @$internal
   @override
-  CollapsedLibrarySections create() => CollapsedLibrarySections();
+  CollapsedSections create() => CollapsedSections();
 
   /// {@macro riverpod.override_with_value}
   Override overrideWithValue(Set<String> value) {
@@ -126,18 +138,21 @@ final class CollapsedLibrarySectionsProvider
   }
 }
 
-String _$collapsedLibrarySectionsHash() =>
-    r'76c9949afbf38ac02d529874c4b8eea760ebcb24';
+String _$collapsedSectionsHash() => r'c6afa56f13c1eeceede5d234814bcb80f6c6f8c0';
 
-/// Which collection sections the user has folded away.
+/// Which sections the user has folded away, per page.
 ///
-/// The library is one long page of shelves, and someone who came for their
+/// Pages are one long scroll of shelves, and someone who came for their
 /// playlists should not have to scroll past every album to reach them. A
 /// folded section keeps its header — so the way back is always visible — and
 /// the set is remembered: folding once is a decision about how this user
-/// reads their own collection, not a gesture repeated every launch.
+/// reads their own dashboard, not a gesture repeated every launch.
+///
+/// Keys are `page:id` — see [FoldableSection] — so a fold on one page never
+/// moves a section on another. The old library-only set is still read once
+/// and folded in: a user's existing folds are a decision already made.
 
-abstract class _$CollapsedLibrarySections extends $Notifier<Set<String>> {
+abstract class _$CollapsedSections extends $Notifier<Set<String>> {
   Set<String> build();
   @$mustCallSuper
   @override
