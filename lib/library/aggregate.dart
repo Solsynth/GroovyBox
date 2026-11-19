@@ -17,9 +17,14 @@ class LibraryAggregator {
 
   final List<LibrarySource> sources;
 
-  /// Called with the songs of every successful read, including a single
-  /// album's or playlist's, so the local library learns a track the first time
-  /// the user sees it instead of at some later sync.
+  /// Called with the songs of a read that describes what the library *holds*,
+  /// so the local library learns a track the first time the user sees it.
+  ///
+  /// Never called for [search] or [randomSongs]: those answer with things the
+  /// account does not own — a NetEase search is the whole cloud catalogue, and
+  /// its "random" feed is a recommendation list — and adopting them fills the
+  /// local library with tracks the user never added, which then turn up in the
+  /// device's own random draw and in its "on this device" count.
   final void Function(Iterable<LibrarySong> songs)? onSongs;
 
   /// Called once per source that answered with an error, after the merge.
@@ -30,8 +35,9 @@ class LibraryAggregator {
   final void Function(String sourceId)? onSuccess;
 
   Future<List<T>> _fanOut<T>(
-    Future<List<T>> Function(LibrarySource source) task,
-  ) async {
+    Future<List<T>> Function(LibrarySource source) task, {
+    bool adopt = false,
+  }) async {
     if (sources.isEmpty) return const [];
 
     final results = await Future.wait<Object?>([
@@ -49,7 +55,9 @@ class LibraryAggregator {
         // Sources keep their own ordering; concatenation is in source order
         // because not every backend exposes a comparable timestamp.
         merged.addAll(result);
-        if (result case final List<LibrarySong> songs) onSongs?.call(songs);
+        if (adopt) {
+          if (result case final List<LibrarySong> songs) onSongs?.call(songs);
+        }
       } else if (result != null) {
         failures.add((sources[index].id, result));
       }
@@ -66,14 +74,18 @@ class LibraryAggregator {
     return merged;
   }
 
-  Future<List<LibraryAlbum>> recentlyAdded({int limit = 50}) =>
-      _fanOut((source) => source.recentlyAdded(limit: limit));
+  Future<List<LibraryAlbum>> recentlyAdded({int limit = 50}) => _fanOut(
+    (source) => source.recentlyAdded(limit: limit),
+    adopt: true,
+  );
 
   Future<List<LibraryAlbum>> albums({int limit = 60, int offset = 0}) =>
       _fanOut((source) => source.albums(limit: limit, offset: offset));
 
-  Future<List<LibrarySong>> albumSongs(String albumId) =>
-      _fanOut((source) => source.albumSongs(albumId));
+  Future<List<LibrarySong>> albumSongs(String albumId) => _fanOut(
+    (source) => source.albumSongs(albumId),
+    adopt: true,
+  );
 
   Future<List<LibraryArtist>> artists() =>
       _fanOut((source) => source.artists());
@@ -84,8 +96,10 @@ class LibraryAggregator {
   Future<List<LibraryPlaylist>> playlists() =>
       _fanOut((source) => source.playlists());
 
-  Future<List<LibrarySong>> playlistSongs(String playlistId) =>
-      _fanOut((source) => source.playlistSongs(playlistId));
+  Future<List<LibrarySong>> playlistSongs(String playlistId) => _fanOut(
+    (source) => source.playlistSongs(playlistId),
+    adopt: true,
+  );
 
   Future<List<LibrarySong>> search(String query, {int limit = 40}) async {
     final songs = await _fanOut((source) => source.search(query, limit: limit));

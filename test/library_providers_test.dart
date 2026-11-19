@@ -1,5 +1,8 @@
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:groovy_box/core/app.dart';
+import 'package:groovy_box/data/local/library_database.dart';
+import 'package:groovy_box/library/catalog.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/source.dart';
@@ -60,16 +63,31 @@ class _FlakySource extends LibrarySource {
     ];
   }
 
+  /// The account's own list, which is library content.
+  @override
+  Future<List<LibrarySong>> playlistSongs(String playlistId) async => [
+    LibrarySong(
+      sourceId: id,
+      id: '$playlistId-song',
+      title: 'Song in a playlist',
+      duration: Duration.zero,
+    ),
+  ];
+
   @override
   dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
 }
 
-Future<ProviderContainer> _container(List<LibrarySource> sources) async {
+Future<ProviderContainer> _container(
+  List<LibrarySource> sources, {
+  LibraryDatabase? database,
+}) async {
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
   final container = ProviderContainer(
     overrides: [
       sharedPreferencesProvider.overrideWithValue(prefs),
+      libraryDatabaseProvider.overrideWithValue(database),
       librarySourcesProvider.overrideWithValue(sources),
     ],
   );
@@ -204,5 +222,41 @@ void main() {
     // the same id from every other library.
     expect(songs.single.sourceId, 'second');
     expect(songs.single.id, 'second-album-song');
+  });
+
+  test('a search does not add its hits to the local library', () async {
+    // The reported bug: a NetEase search answers the whole cloud catalogue,
+    // and adopting it filled "on this device" with tracks the user never
+    // added. Only reads of what the account holds may adopt.
+    final db = LibraryDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final catalogue = _FlakySource('ne')
+      ..catalogue = const [
+        LibrarySong(
+          sourceId: 'ne',
+          id: 'hit-1',
+          title: 'Someone Else’s Song',
+          artist: 'Artist',
+          duration: Duration(seconds: 200),
+        ),
+      ];
+    final container = await _container([catalogue], database: db);
+
+    await container.read(searchSongsProvider('Someone').future);
+    // Adoption is fire-and-forget; a turn of the event loop lets it land, so
+    // the assertion below is about the policy, not about timing.
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    expect(await db.trackCount(), 0);
+    expect(
+      (await LibraryCatalog(db).libraryCounts()).tracks,
+      0,
+      reason: 'the settings row counts what this device holds',
+    );
+
+    // A playlist read is the account's own content, and does adopt.
+    await container.read(libraryAggregatorProvider).playlistSongs('p');
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(await db.trackCount(), greaterThan(0));
   });
 }

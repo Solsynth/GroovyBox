@@ -3,9 +3,15 @@ import 'package:groovy_box/library/aggregate.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/source.dart';
 
-/// A source that answers `recentlyAdded` and throws everywhere else.
+/// A source that answers the reads these tests exercise and throws everywhere
+/// else.
 class _FakeSource extends LibrarySource {
-  _FakeSource(this.id, this._albums, {this.failure, this.songs = const []});
+  _FakeSource(
+    this.id,
+    this._albums, {
+    this.failure,
+    this.songs = const [],
+  });
 
   @override
   final String id;
@@ -25,6 +31,18 @@ class _FakeSource extends LibrarySource {
   Future<List<LibraryAlbum>> recentlyAdded({int limit = 50}) async {
     if (failure != null) throw failure!;
     return _albums;
+  }
+
+  @override
+  Future<List<LibrarySong>> albumSongs(String albumId) async {
+    if (failure != null) throw failure!;
+    return songs;
+  }
+
+  @override
+  Future<List<LibrarySong>> playlistSongs(String playlistId) async {
+    if (failure != null) throw failure!;
+    return songs;
   }
 
   @override
@@ -124,4 +142,102 @@ void main() {
     expect(results.first.id, 's1');
     expect(results.last.id, 's3');
   });
+
+  /// One song per read, so a test can tell which read adopted what.
+  ({LibrarySong album, LibrarySong playlist, LibrarySong search, LibrarySong random})
+  oneOfEach(String sourceId) => (
+    album: LibrarySong(
+      sourceId: sourceId,
+      id: 'album-song',
+      title: 'From an album',
+      duration: const Duration(seconds: 200),
+    ),
+    playlist: LibrarySong(
+      sourceId: sourceId,
+      id: 'playlist-song',
+      title: 'From a playlist',
+      duration: const Duration(seconds: 200),
+    ),
+    search: LibrarySong(
+      sourceId: sourceId,
+      id: 'search-hit',
+      title: 'From search',
+      duration: const Duration(seconds: 200),
+    ),
+    random: LibrarySong(
+      sourceId: sourceId,
+      id: 'recommendation',
+      title: 'Recommended',
+      duration: const Duration(seconds: 200),
+    ),
+  );
+
+  test('only reads of what the library holds are adopted', () async {
+    // Search answers the whole cloud catalogue and "random" answers a
+    // recommendation: adopting either fills the device's own library with
+    // tracks the user never added, which then turn up in its random draw and
+    // its "on this device" count. Album and playlist listings are what the
+    // account actually has, so those are adopted.
+    final adopted = <String>[];
+    final source = _FakeSource('a', const []);
+    final songs = oneOfEach('a');
+    final aggregator = LibraryAggregator(
+      [_CountingSource(source, songs)],
+      onSongs: (songs) => adopted.addAll(songs.map((song) => song.id)),
+    );
+
+    await aggregator.albumSongs('album');
+    await aggregator.playlistSongs('playlist');
+    await aggregator.search('query');
+    await aggregator.randomSongs(size: 5);
+
+    expect(adopted, ['album-song', 'playlist-song']);
+  });
 }
+
+/// One source whose four song reads each answer a different song, so the
+/// adoption test can tell which read a row came from.
+class _CountingSource extends LibrarySource {
+  _CountingSource(this._inner, this._songs);
+
+  final _FakeSource _inner;
+  final ({
+    LibrarySong album,
+    LibrarySong playlist,
+    LibrarySong search,
+    LibrarySong random,
+  })
+  _songs;
+
+  @override
+  String get id => _inner.id;
+
+  @override
+  SourceConfig get config => _inner.config;
+
+  @override
+  Future<List<LibraryAlbum>> recentlyAdded({int limit = 50}) =>
+      _inner.recentlyAdded(limit: limit);
+
+  @override
+  Future<List<LibrarySong>> albumSongs(String albumId) async => [_songs.album];
+
+  @override
+  Future<List<LibrarySong>> playlistSongs(String playlistId) async => [
+    _songs.playlist,
+  ];
+
+  @override
+  Future<List<LibrarySong>> search(String query, {int limit = 40}) async => [
+    _songs.search,
+  ];
+
+  @override
+  Future<List<LibrarySong>> randomSongs({int size = 40}) async => [
+    _songs.random,
+  ];
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
+}
+
