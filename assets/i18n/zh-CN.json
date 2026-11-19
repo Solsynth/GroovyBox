@@ -222,6 +222,19 @@
   "exploreLoadError": "无法加载",
   "exploreNoSourceTitle": "添加音乐",
   "exploreNoSourceMessage": "连接 Subsonic 或 Jellyfin 服务器即可串流，也可以导入此设备上已有的音频文件。导入的文件会复制到 GroovyBox，无需服务器即可播放。",
+  "albumsAbout": "关于这张专辑",
+  "artistsBioLoading": "正在查询这位艺术家…",
+  "artistsDiscography": "作品列表",
+  "artistsDiscographyCount": {
+    "one": "{} 张作品",
+    "other": "{} 张作品"
+  },
+  "entityAbout": "简介",
+  "entityPlays": {
+    "one": "{} 次播放",
+    "other": "{} 次播放"
+  },
+  "entityProseSource": "来自 {}",
   "exploreAddSource": "连接曲库",
   "exploreImportFiles": "导入文件",
   "libraryTitle": "曲库",

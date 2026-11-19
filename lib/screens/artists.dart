@@ -6,12 +6,14 @@ import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
+import 'package:groovy_box/pulsar/metadata.dart';
 import 'package:groovy_box/pulsar/providers.dart';
 import 'package:groovy_box/screens/albums.dart';
 import 'package:groovy_box/widgets/section.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:groovy_box/widgets/collection_hero.dart';
 import 'package:groovy_box/widgets/common.dart';
+import 'package:groovy_box/widgets/entity_metadata.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
@@ -113,14 +115,31 @@ class _BodyState extends ConsumerState<_Body> {
   /// network for a list it already has.
   List<LibrarySong>? _topTracks;
 
+  /// The name the fleet is asked about. A library may spell an artist one
+  /// way and MusicBrainz canonically another; the fleet resolves the name and
+  /// caches the answer, so the page asks with what the library gave it.
+  String? get _name => widget.name ?? _artistOf(widget.albums);
+
+  static String? _artistOf(List<LibraryAlbum> albums) =>
+      albums.map((album) => album.artist).whereType<String>().firstOrNull;
+
   @override
   Widget build(BuildContext context) {
     final albums = widget.albums;
     final fallback = widget.name ?? 'artistsDetailTitleFallback'.tr();
-    final artist = albums
-        .map((album) => album.artist)
-        .whereType<String>()
-        .firstOrNull;
+    final artist = _name;
+    // The fleet's record for this act. Watched by name, so a page opened for
+    // a different artist asks again; a failure answers null and the page
+    // keeps everything its own libraries already gave it.
+    final profileState = artist == null
+        ? const AsyncValue<PulsarEntityMetadata?>.data(null)
+        : ref.watch(
+            pulsarArtistProfileProvider(
+              artist,
+              language: Localizations.localeOf(context).languageCode,
+            ),
+          );
+    final profile = profileState.value;
     final topTracks = _topTracks ?? const <LibrarySong>[];
     if (_topTracks == null && albums.isNotEmpty) {
       ref
@@ -153,13 +172,28 @@ class _BodyState extends ConsumerState<_Body> {
                       .map((a) => a.artId)
                       .whereType<String>()
                       .firstOrNull,
+                  // The fleet's portrait wins when the library has none: a
+                  // source that lists an artist often has no picture of them,
+                  // and an artist page that opens as a generic person is the
+                  // one thing this page can plainly fix.
+                  artworkUrl: profile?.artworkUrl ?? profile?.imageUrl,
                   title:
                       artist ??
                       widget.name ??
                       'artistsDetailTitleFallback'.tr(),
                   eyebrow: 'artistsEyebrow'.tr(),
                   fallbackIcon: Symbols.artist,
-                  meta: artist ?? fallback,
+                  // What the act is, from the fleet: "group · United
+                  // Kingdom" reads as a description, and the library's own
+                  // name for the artist is already above it.
+                  meta: [
+                    if (profile?.subtitle != null &&
+                        profile!.subtitle!.isNotEmpty)
+                      profile.subtitle!
+                    else
+                      artist ?? fallback,
+                    if (profile?.lifespan != null) profile!.lifespan!,
+                  ].join('  ·  '),
                   actions: [
                     if (topTracks.isNotEmpty)
                       FilledButton.icon(
@@ -182,6 +216,33 @@ class _BodyState extends ConsumerState<_Body> {
                   ],
                 ),
               ),
+              if (profile != null)
+                SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      EntityFacts(metadata: profile),
+                      EntityProse(metadata: profile),
+                    ],
+                  ),
+                )
+              else if (profileState.isLoading && albums.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      SolSpace.xxl,
+                      SolSpace.sm,
+                      SolSpace.xxl,
+                      SolSpace.sm,
+                    ),
+                    child: Text(
+                      'artistsBioLoading'.tr(),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
               if (albums.isEmpty && topTracks.isEmpty)
                 SliverToBoxAdapter(
                   child: EmptyState(
@@ -260,6 +321,18 @@ class _BodyState extends ConsumerState<_Body> {
                   ),
               ],
 
+              if (profile != null && profile.albums.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: _Discography(
+                    albums: profile.albums,
+                    // What the artist page already lists, by title: the
+                    // fleet's discography is a completion, not a second copy.
+                    known: albums.map((album) => album.name).toSet(),
+                    total: profile.releaseGroupCount,
+                  ),
+                ),
+              if (profile != null)
+                SliverToBoxAdapter(child: EntityLinks(metadata: profile)),
               if (artist != null)
                 SliverToBoxAdapter(child: _FleetSection(name: artist)),
               SliverToBoxAdapter(child: SizedBox(height: widget.bottomInset)),
@@ -360,6 +433,135 @@ class _FleetSection extends ConsumerWidget {
       // section simply stays out, and the page keeps its own libraries' body.
       loading: () => const SizedBox.shrink(),
       error: (_, _) => const SizedBox.shrink(),
+    );
+  }
+}
+
+/// The artist's records as the fleet knows them, completed against what this
+/// device's libraries already list.
+///
+/// The point is the gap: a server holding two of an artist's nine albums
+/// leaves the page looking like the artist made two. This section says the
+/// rest exist — a year, a title, a cover — without pretending any of them can
+/// be played from here, which is the difference between a discography and a
+/// library.
+class _Discography extends StatelessWidget {
+  final List<PulsarAlbumSummary> albums;
+  final Set<String> known;
+  final int total;
+
+  const _Discography({
+    required this.albums,
+    required this.known,
+    required this.total,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final missing = albums
+        .where(
+          (album) => !known.any(
+            (title) => title.toLowerCase() == album.title.toLowerCase(),
+          ),
+        )
+        .toList();
+    if (missing.isEmpty) return const SizedBox.shrink();
+    final count = total > albums.length ? total : albums.length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(
+          title: 'artistsDiscography'.tr(),
+          trailing: Text(
+            'artistsDiscographyCount'.plural(count),
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 200,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
+            itemCount: missing.length,
+            separatorBuilder: (_, _) => const SizedBox(width: SolSpace.md),
+            itemBuilder: (context, index) =>
+                _DiscographyTile(album: missing[index]),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// One fleet-only record: cover, title, year. Not tappable — this device has
+/// nothing to open, and a tile that leads to an empty page is worse than one
+/// that plainly says "not here".
+class _DiscographyTile extends StatelessWidget {
+  final PulsarAlbumSummary album;
+
+  const _DiscographyTile({required this.album});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SizedBox(
+      width: 150,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: AspectRatio(
+              aspectRatio: 1,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(SolRadius.md),
+                child: album.artworkUrl == null
+                    ? ColoredBox(
+                        color: theme.colorScheme.surfaceContainerHigh,
+                        child: Icon(
+                          Symbols.album,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      )
+                    : Image.network(
+                        album.artworkUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => ColoredBox(
+                          color: theme.colorScheme.surfaceContainerHigh,
+                          child: Icon(
+                            Symbols.album,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+              ),
+            ),
+          ),
+          const SizedBox(height: SolSpace.sm),
+          Text(
+            album.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          Text(
+            [
+              if (album.year != null) '${album.year}',
+              if (album.type != null) album.type!.toLowerCase(),
+            ].join('  ·  '),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

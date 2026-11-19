@@ -512,4 +512,84 @@ void main() {
       ]);
     });
   });
+
+  group('entity metadata', () {
+    test('artistMetadata asks by name and maps the profile', () async {
+      RequestOptions? recorded;
+      final dio = Dio();
+      dio.httpClientAdapter = _MockDioAdapter((options) async {
+        recorded = options;
+        return _MockDioAdapter.json(
+          '{"title":"多田葵","subtitle":"person · Japan","bio":"A Japanese singer.",'
+          '"bio_source":"EN Wikipedia","artwork_url":"https://img/aoi.jpg",'
+          '"artist":{"mbid":"a1","type":"Person","area":"Japan","born":"1981-07-03"},'
+          '"genres":["j-pop"],'
+          '"albums":[{"mbid":"rg-1","title":"Sora no Oto","year":2010,"type":"Album"}],'
+          '"release_group_count":9}',
+          200,
+        );
+      });
+      final client = PulsarClient(dio: dio, baseUrl: 'https://fleet.example');
+
+      final media = await client.artistMetadata('多田葵', language: 'en');
+
+      expect(recorded!.path, endsWith('/pulsar/metadata/artist'));
+      expect(recorded!.queryParameters['name'], '多田葵');
+      expect(recorded!.queryParameters['lang'], 'en');
+      expect(media.bio, 'A Japanese singer.');
+      expect(media.artist!.area, 'Japan');
+      expect(media.origin, 'Japan');
+      expect(media.lifespan, '1981-07-03');
+      expect(media.albums.single.title, 'Sora no Oto');
+      expect(media.releaseGroupCount, 9);
+    });
+
+    test('albumMetadata sends the title and artist pair', () async {
+      RequestOptions? recorded;
+      final dio = Dio();
+      dio.httpClientAdapter = _MockDioAdapter((options) async {
+        recorded = options;
+        return _MockDioAdapter.json(
+          '{"title":"OK Computer","subtitle":"Radiohead","caption":"Album",'
+          '"description":"The third studio album.","release_date":"1997-05-21",'
+          '"artwork_url":"https://caa/front-500",'
+          '"tracks":[{"title":"Airbag","disc":1,"position":1,"length_ms":284400}]}',
+          200,
+        );
+      });
+      final client = PulsarClient(dio: dio, baseUrl: 'https://fleet.example');
+
+      final media = await client.albumMetadata(
+        title: 'OK Computer',
+        artist: 'Radiohead',
+      );
+
+      expect(recorded!.path, endsWith('/pulsar/metadata/album'));
+      expect(recorded!.queryParameters['title'], 'OK Computer');
+      expect(recorded!.queryParameters['artist'], 'Radiohead');
+      expect(media.prose, 'The third studio album.');
+      expect(media.tracks.single.title, 'Airbag');
+      expect(media.tracks.single.length, const Duration(milliseconds: 284400));
+      expect(media.releaseDate, '1997-05-21');
+    });
+
+    test(
+      'a metadata miss answers 404 and is not silently an empty page',
+      () async {
+        final dio = Dio();
+        dio.httpClientAdapter = _MockDioAdapter(
+          (options) async => _MockDioAdapter.json(
+            '{"code":"NOT_FOUND","message":"no musicbrainz artist named Nobody"}',
+            404,
+          ),
+        );
+        final client = PulsarClient(dio: dio, baseUrl: 'https://fleet.example');
+
+        expect(
+          () => client.artistMetadata('Nobody'),
+          throwsA(isA<PulsarException>()),
+        );
+      },
+    );
+  });
 }

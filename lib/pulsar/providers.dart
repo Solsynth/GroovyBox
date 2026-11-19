@@ -14,6 +14,7 @@ import '../solarpass/providers.dart';
 import 'client.dart';
 import 'favourites.dart';
 import 'links.dart';
+import 'metadata.dart';
 import 'models.dart';
 
 part 'providers.g.dart';
@@ -547,4 +548,54 @@ Future<PulsarArtistMetadata?> pulsarArtistMetadata(Ref ref, String name) async {
     roles: roles,
     catalog: catalog,
   );
+}
+
+/// The fleet's record for one artist, as the artist page reads it.
+///
+/// Signed out is not a failure: the endpoint is public, and the section
+/// simply shows what the request answered. Any failure — the fleet being
+/// down, a name MusicBrainz does not know — answers null so the page keeps
+/// the device's own libraries and never turns into an error screen.
+@riverpod
+Future<PulsarEntityMetadata?> pulsarArtistProfile(
+  Ref ref,
+  String name, {
+  String? language,
+}) async {
+  final trimmed = name.trim();
+  if (trimmed.isEmpty) return null;
+  final client = ref.watch(pulsarClientProvider);
+  try {
+    return await client.artistMetadata(
+      trimmed,
+      language: language,
+      session: ref.read(pulsarSessionProvider).value,
+    );
+  } on PulsarException {
+    return null;
+  }
+}
+
+/// The fleet's record for one album, asked by title and artist — the pair
+/// every connected library spells.
+@riverpod
+Future<PulsarEntityMetadata?> pulsarAlbumProfile(
+  Ref ref, {
+  required String title,
+  String? artist,
+  String? language,
+}) async {
+  final trimmed = title.trim();
+  if (trimmed.isEmpty) return null;
+  final client = ref.watch(pulsarClientProvider);
+  try {
+    return await client.albumMetadata(
+      title: trimmed,
+      artist: artist,
+      language: language,
+      session: ref.read(pulsarSessionProvider).value,
+    );
+  } on PulsarException {
+    return null;
+  }
 }

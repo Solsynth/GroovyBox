@@ -223,6 +223,19 @@
   "exploreLoadError": "Could not load this",
   "exploreNoSourceTitle": "Add some music",
   "exploreNoSourceMessage": "Connect a Subsonic or Jellyfin server to stream from it, or import audio files already on this device. Imported files are copied into GroovyBox and play without a server.",
+  "albumsAbout": "About this album",
+  "artistsBioLoading": "Looking this artist up…",
+  "artistsDiscography": "Discography",
+  "artistsDiscographyCount": {
+    "one": "{} record",
+    "other": "{} records"
+  },
+  "entityAbout": "About",
+  "entityPlays": {
+    "one": "{} play",
+    "other": "{} plays"
+  },
+  "entityProseSource": "From {}",
   "exploreAddSource": "Connect a library",
   "exploreImportFiles": "Import files",
   "libraryTitle": "Library",

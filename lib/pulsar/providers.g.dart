@@ -978,3 +978,230 @@ final class PulsarArtistMetadataFamily extends $Family
   @override
   String toString() => r'pulsarArtistMetadataProvider';
 }
+
+/// The fleet's record for one artist, as the artist page reads it.
+///
+/// Signed out is not a failure: the endpoint is public, and the section
+/// simply shows what the request answered. Any failure — the fleet being
+/// down, a name MusicBrainz does not know — answers null so the page keeps
+/// the device's own libraries and never turns into an error screen.
+
+@ProviderFor(pulsarArtistProfile)
+final pulsarArtistProfileProvider = PulsarArtistProfileFamily._();
+
+/// The fleet's record for one artist, as the artist page reads it.
+///
+/// Signed out is not a failure: the endpoint is public, and the section
+/// simply shows what the request answered. Any failure — the fleet being
+/// down, a name MusicBrainz does not know — answers null so the page keeps
+/// the device's own libraries and never turns into an error screen.
+
+final class PulsarArtistProfileProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<PulsarEntityMetadata?>,
+          PulsarEntityMetadata?,
+          FutureOr<PulsarEntityMetadata?>
+        >
+    with
+        $FutureModifier<PulsarEntityMetadata?>,
+        $FutureProvider<PulsarEntityMetadata?> {
+  /// The fleet's record for one artist, as the artist page reads it.
+  ///
+  /// Signed out is not a failure: the endpoint is public, and the section
+  /// simply shows what the request answered. Any failure — the fleet being
+  /// down, a name MusicBrainz does not know — answers null so the page keeps
+  /// the device's own libraries and never turns into an error screen.
+  PulsarArtistProfileProvider._({
+    required PulsarArtistProfileFamily super.from,
+    required (String, {String? language}) super.argument,
+  }) : super(
+         retry: null,
+         name: r'pulsarArtistProfileProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$pulsarArtistProfileHash();
+
+  @override
+  String toString() {
+    return r'pulsarArtistProfileProvider'
+        ''
+        '$argument';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<PulsarEntityMetadata?> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<PulsarEntityMetadata?> create(Ref ref) {
+    final argument = this.argument as (String, {String? language});
+    return pulsarArtistProfile(ref, argument.$1, language: argument.language);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is PulsarArtistProfileProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$pulsarArtistProfileHash() =>
+    r'3005adb64960e6d7c7d4d25b3c0e3290de5a2cad';
+
+/// The fleet's record for one artist, as the artist page reads it.
+///
+/// Signed out is not a failure: the endpoint is public, and the section
+/// simply shows what the request answered. Any failure — the fleet being
+/// down, a name MusicBrainz does not know — answers null so the page keeps
+/// the device's own libraries and never turns into an error screen.
+
+final class PulsarArtistProfileFamily extends $Family
+    with
+        $FunctionalFamilyOverride<
+          FutureOr<PulsarEntityMetadata?>,
+          (String, {String? language})
+        > {
+  PulsarArtistProfileFamily._()
+    : super(
+        retry: null,
+        name: r'pulsarArtistProfileProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  /// The fleet's record for one artist, as the artist page reads it.
+  ///
+  /// Signed out is not a failure: the endpoint is public, and the section
+  /// simply shows what the request answered. Any failure — the fleet being
+  /// down, a name MusicBrainz does not know — answers null so the page keeps
+  /// the device's own libraries and never turns into an error screen.
+
+  PulsarArtistProfileProvider call(String name, {String? language}) =>
+      PulsarArtistProfileProvider._(
+        argument: (name, language: language),
+        from: this,
+      );
+
+  @override
+  String toString() => r'pulsarArtistProfileProvider';
+}
+
+/// The fleet's record for one album, asked by title and artist — the pair
+/// every connected library spells.
+
+@ProviderFor(pulsarAlbumProfile)
+final pulsarAlbumProfileProvider = PulsarAlbumProfileFamily._();
+
+/// The fleet's record for one album, asked by title and artist — the pair
+/// every connected library spells.
+
+final class PulsarAlbumProfileProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<PulsarEntityMetadata?>,
+          PulsarEntityMetadata?,
+          FutureOr<PulsarEntityMetadata?>
+        >
+    with
+        $FutureModifier<PulsarEntityMetadata?>,
+        $FutureProvider<PulsarEntityMetadata?> {
+  /// The fleet's record for one album, asked by title and artist — the pair
+  /// every connected library spells.
+  PulsarAlbumProfileProvider._({
+    required PulsarAlbumProfileFamily super.from,
+    required ({String title, String? artist, String? language}) super.argument,
+  }) : super(
+         retry: null,
+         name: r'pulsarAlbumProfileProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$pulsarAlbumProfileHash();
+
+  @override
+  String toString() {
+    return r'pulsarAlbumProfileProvider'
+        ''
+        '$argument';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<PulsarEntityMetadata?> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<PulsarEntityMetadata?> create(Ref ref) {
+    final argument =
+        this.argument as ({String title, String? artist, String? language});
+    return pulsarAlbumProfile(
+      ref,
+      title: argument.title,
+      artist: argument.artist,
+      language: argument.language,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is PulsarAlbumProfileProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$pulsarAlbumProfileHash() =>
+    r'bd7c9681956d43cca86ccc070aee7e43d5460689';
+
+/// The fleet's record for one album, asked by title and artist — the pair
+/// every connected library spells.
+
+final class PulsarAlbumProfileFamily extends $Family
+    with
+        $FunctionalFamilyOverride<
+          FutureOr<PulsarEntityMetadata?>,
+          ({String title, String? artist, String? language})
+        > {
+  PulsarAlbumProfileFamily._()
+    : super(
+        retry: null,
+        name: r'pulsarAlbumProfileProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  /// The fleet's record for one album, asked by title and artist — the pair
+  /// every connected library spells.
+
+  PulsarAlbumProfileProvider call({
+    required String title,
+    String? artist,
+    String? language,
+  }) => PulsarAlbumProfileProvider._(
+    argument: (title: title, artist: artist, language: language),
+    from: this,
+  );
+
+  @override
+  String toString() => r'pulsarAlbumProfileProvider';
+}

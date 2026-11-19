@@ -5,10 +5,13 @@ import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
+import 'package:groovy_box/pulsar/metadata.dart';
+import 'package:groovy_box/pulsar/providers.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/collection_hero.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/download_actions.dart';
+import 'package:groovy_box/widgets/entity_metadata.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -132,6 +135,25 @@ class AlbumDetailScreen extends ConsumerWidget {
       playbackProvider.select((state) => state.current != null),
     );
     final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
+    // The album's own record, when the list gave us a name to ask with. Read
+    // here rather than inside a section so the hero can use the fleet's cover
+    // when the server has none — the one case where a page would otherwise
+    // open as a blank square.
+    final artist = songs.value?.firstOrNull?.artist;
+    final title = songs.value?.firstOrNull?.album ?? albumName;
+    final metadata = title == null
+        ? const AsyncValue<PulsarEntityMetadata?>.data(null)
+        : ref.watch(
+            pulsarAlbumProfileProvider(
+              title: title,
+              artist: artist,
+              // The route carries the name the row was tapped on, so the
+              // description is asked for while the tracklist is still
+              // loading rather than after it lands.
+              language: Localizations.localeOf(context).languageCode,
+            ),
+          );
+    final profile = metadata.value;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -144,6 +166,21 @@ class AlbumDetailScreen extends ConsumerWidget {
             SliverToBoxAdapter(
               child: BackButtonRow(onBack: () => context.router.maybePop()),
             ),
+            // The album's description is not part of the tracklist branch:
+            // a source that answers with no tracks still has a record to
+            // describe, and the page should not go blank where it could say
+            // what the album is.
+            if (profile != null)
+              SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    EntityFacts(metadata: profile),
+                    EntityProse(metadata: profile, title: 'albumsAbout'.tr()),
+                    EntityLinks(metadata: profile),
+                  ],
+                ),
+              ),
             ...songs.when(
               data: (list) => list.isEmpty
                   ? const [
@@ -159,6 +196,11 @@ class AlbumDetailScreen extends ConsumerWidget {
                         child: CollectionHero(
                           sourceId: list.first.sourceId,
                           artId: list.first.artId,
+                          // The server's own cover wins when it has one; with
+                          // neither, the hero's fallback icon carries it.
+                          artworkUrl: list.first.artId == null
+                              ? profile?.artworkUrl
+                              : null,
                           title:
                               albumName ??
                               list.first.album ??
@@ -166,7 +208,15 @@ class AlbumDetailScreen extends ConsumerWidget {
                           eyebrow: 'albumsEyebrow'.tr(),
                           meta: [
                             list.first.artist ?? 'commonUnknownArtist'.tr(),
-                            if (list.first.year != null) '${list.first.year}',
+                            // The fleet knows the release date even when the
+                            // library's tags carry no year.
+                            if (list.first.year != null)
+                              '${list.first.year}'
+                            else if (profile?.releaseDate != null)
+                              profile!.releaseDate!.split('-').first,
+                            if (profile?.caption != null &&
+                                profile!.caption!.isNotEmpty)
+                              profile.caption!,
                             if (list.first.albumArtist != null &&
                                 list.first.albumArtist != list.first.artist)
                               list.first.albumArtist!,

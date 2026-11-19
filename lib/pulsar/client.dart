@@ -11,6 +11,7 @@ import 'package:dio/dio.dart';
 import '../core/identity.dart';
 import '../library/models.dart';
 import '../solarpass/models.dart';
+import 'metadata.dart';
 import 'models.dart';
 
 /// The stable identity GroovyBox sends for one track, scoped to its source.
@@ -437,6 +438,65 @@ class PulsarClient {
         options: Options(headers: _headers(session)),
       ),
     );
+  }
+
+  // ── Entity metadata ────────────────────────────────────────────────────
+
+  /// The fleet's record for one artist, resolved from MusicBrainz and cached
+  /// server-side. A name is the only handle the app's libraries share, so
+  /// the query is the name; [language] asks for the biography in the reader's
+  /// language when Wikipedia has it.
+  ///
+  /// Public: a page shows what the act is whether or not anyone is signed in,
+  /// and the record is a shared artefact rather than an account's data.
+  Future<PulsarEntityMetadata> artistMetadata(
+    String name, {
+    String? language,
+    OAuthSession? session,
+  }) async {
+    final data = await _send<Map<String, dynamic>>(
+      () => dio.get<Map<String, dynamic>>(
+        '$_basePath/metadata/artist',
+        queryParameters: {
+          'name': name,
+          if (language != null && language.isNotEmpty) 'lang': language,
+        },
+        options: Options(
+          headers: {
+            ..._publicHeaders,
+            if (session != null) ..._headers(session),
+          },
+        ),
+      ),
+    );
+    return PulsarEntityMetadata.fromJson(data ?? const {});
+  }
+
+  /// The fleet's record for one album, identified the way every library
+  /// spells it: a title and the artist credited on it.
+  Future<PulsarEntityMetadata> albumMetadata({
+    required String title,
+    String? artist,
+    String? language,
+    OAuthSession? session,
+  }) async {
+    final data = await _send<Map<String, dynamic>>(
+      () => dio.get<Map<String, dynamic>>(
+        '$_basePath/metadata/album',
+        queryParameters: {
+          'title': title,
+          if (artist != null && artist.isNotEmpty) 'artist': artist,
+          if (language != null && language.isNotEmpty) 'lang': language,
+        },
+        options: Options(
+          headers: {
+            ..._publicHeaders,
+            if (session != null) ..._headers(session),
+          },
+        ),
+      ),
+    );
+    return PulsarEntityMetadata.fromJson(data ?? const {});
   }
 
   // ── Creators ───────────────────────────────────────────────────────────
