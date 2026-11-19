@@ -123,13 +123,24 @@ class LyricsEnricher {
     return needsPronunciation || needsTranslation;
   }
 
+  /// Normalizes punctuation that Kuromoji treats as sentence separators.
+  ///
+  /// The tokenizer splits on '、' and '。'. An empty piece makes its Viterbi
+  /// search link EOS to itself and loop until the heap dies — so a line ending
+  /// in a Japanese comma (or doubled punctuation) froze the app. Replacing
+  /// both delimiters before tokenizing keeps every piece non-empty, and the
+  /// punctuation still reaches the reading as an ordinary symbol token.
+  static String _forTokenizer(String input) =>
+      input.replaceAll('。', '.').replaceAll('、', ',');
+
   /// Romanizes Japanese text into naturally spaced Romaji using Kuromoji
   /// tokenization + KanaKit.
   static String romanizeJapanese(String input) {
     if (input.trim().isEmpty) return input;
+    final tokenizerInput = _forTokenizer(input);
     if (_tokenizer != null) {
       try {
-        final tokens = _tokenizer!.tokenize(input.replaceAll('。', '.'));
+        final tokens = _tokenizer!.tokenize(tokenizerInput);
         final buffer = StringBuffer();
         for (var i = 0; i < tokens.length; i++) {
           final t = tokens[i];
@@ -154,7 +165,7 @@ class LyricsEnricher {
         if (result.isNotEmpty) return result;
       } catch (_) {}
     }
-    return JapaneseRomanizer().romanize(input);
+    return JapaneseRomanizer().romanize(tokenizerInput);
   }
 
   /// Generates Romaji / Pinyin / Hangul romanization for one line.
