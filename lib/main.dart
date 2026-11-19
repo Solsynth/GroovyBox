@@ -18,6 +18,7 @@ import 'package:groovy_box/data/local/library_database.dart';
 import 'package:groovy_box/library/local_import.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
+import 'package:groovy_box/library/plugins/plugin_host.dart';
 import 'package:groovy_box/player/session.dart';
 import 'package:groovy_box/shell/window_frame.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -153,6 +154,13 @@ Future<void> main() async {
   } catch (error) {
     debugPrint('[Library] Local music directory unavailable: $error');
   }
+
+  // User-installed library plugins, before the first frame: a connected
+  // plugin's rows are stored configs, and the sources they resolve to have to
+  // exist by the time the shell reads the library list. The guest engine
+  // returns from `_runMiniPlayer` long before this line, so plugins are never
+  // loaded twice.
+  await (PluginHost.instance ??= PluginHost()).boot();
 
   runApp(
     ProviderScope(

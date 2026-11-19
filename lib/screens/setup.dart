@@ -7,6 +7,9 @@ import 'package:flutter/services.dart';
 import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/source.dart';
+import 'package:groovy_box/library/plugins/plugin_adapter.dart';
+import 'package:groovy_box/library/plugins/plugin_host.dart';
+import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/store.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -36,7 +39,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   final _serverController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
-  LibraryKind _kind = LibraryKind.subsonic;
+  SetupOption _option = const BuiltInOption(LibraryKind.subsonic);
   bool _busy = false;
   String? _error;
   String? _success;
@@ -55,15 +58,24 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   /// instead of the three-field form.
   bool get _isInteractive => adapter is InteractiveLoginAdapter;
 
-  /// The adapter of the kind currently picked in the picker.
-  LibraryAdapter get adapter => libraryAdapters[_kind]!;
+  /// The adapter of the option currently picked in the picker.
+  ///
+  /// A built-in kind is looked up in the adapter map; a plugin provider is
+  /// wrapped against the live host, because a plugin can be installed while
+  /// this screen is open.
+  LibraryAdapter get adapter => switch (_option) {
+    BuiltInOption(:final kind) => libraryAdapters[kind]!,
+    PluginOption(:final provider) => PluginAdapter(
+      provider,
+      host: PluginHost.instance!,
+    ),
+  };
 
-  /// The kinds this platform can actually run, in adapter order. The local
-  /// library is not a connection and never appears.
-  List<LibraryKind> get _kinds => [
-    for (final entry in libraryAdapters.entries)
-      if (entry.value.isAvailable) entry.key,
-  ];
+  /// The options this platform can actually run, in display order. The local
+  /// library is not a connection and never appears; a plugin contributes one
+  /// row per provider it declares.
+  List<SetupOption> get _options =>
+      setupOptions(ref.watch(pluginProvidersProvider));
 
   @override
   void initState() {
@@ -100,13 +112,14 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     }
   }
 
-  void _pickKind(LibraryKind? kind) {
-    if (kind == null || kind == _kind) return;
+  void _pick(SetupOption? option) {
+    if (option == null || option == _option) return;
     setState(() {
-      _kind = kind;
+      _option = option;
       _error = null;
       _success = null;
-      // A half-finished interactive login belongs to the kind that started it.
+      // A half-finished interactive login belongs to the option that started
+      // it.
       _qrPoll?.cancel();
       _qrPoll = null;
       _loginSteps = null;
@@ -175,10 +188,10 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               _ProviderPicker(
-                                kind: _kind,
-                                kinds: _kinds,
+                                option: _option,
+                                options: _options,
                                 enabled: !_busy,
-                                onChanged: _pickKind,
+                                onChanged: _pick,
                               ),
                               const SizedBox(height: SolSpace.lg),
                               ..._formFields(),
@@ -239,7 +252,10 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       onFieldSubmitted: _isInteractive ? (_) => _startInteractive() : null,
       decoration: InputDecoration(
         labelText: 'setupServerAddress'.tr(),
-        hintText: _kind.addressHint,
+        hintText: switch (_option) {
+          BuiltInOption(:final kind) => kind.addressHint,
+          PluginOption() => 'libraryAddressPlugin'.tr(),
+        },
         prefixIcon: const Icon(Symbols.dns_rounded),
       ),
       validator: (value) {
@@ -259,7 +275,12 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     if (!adapter.needsCredentials) {
       return [
         Text(
-          'setupAppleMusicNote'.tr(),
+          switch (_option) {
+            // A plugin that asks for nothing signs itself in: one line says
+            // so instead of three empty fields.
+            PluginOption() => 'setupPluginNote'.tr(),
+            BuiltInOption() => 'setupAppleMusicNote'.tr(),
+          },
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
             height: 1.5,
@@ -543,14 +564,14 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
 /// The provider menu: one labelled control, named after the services a person
 /// recognises rather than after the protocol behind them.
 class _ProviderPicker extends StatelessWidget {
-  final LibraryKind kind;
-  final List<LibraryKind> kinds;
+  final SetupOption option;
+  final List<SetupOption> options;
   final bool enabled;
-  final ValueChanged<LibraryKind?> onChanged;
+  final ValueChanged<SetupOption?> onChanged;
 
   const _ProviderPicker({
-    required this.kind,
-    required this.kinds,
+    required this.option,
+    required this.options,
     required this.enabled,
     required this.onChanged,
   });
@@ -558,11 +579,11 @@ class _ProviderPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return DropdownButtonFormField<LibraryKind>(
+    return DropdownButtonFormField<SetupOption>(
       // The form field owns the value once it has been built; `initialValue`
       // is what a rebuild passes back, and a new pick is reported through
       // [onChanged] to the screen's own state.
-      initialValue: kind,
+      initialValue: option,
       isExpanded: true,
       enabled: enabled,
       itemHeight: 56,
@@ -575,13 +596,13 @@ class _ProviderPicker extends StatelessWidget {
         fontWeight: FontWeight.w600,
       ),
       items: [
-        for (final option in kinds)
+        for (final option in options)
           DropdownMenuItem(
             value: option,
             child: Row(
               children: [
                 Icon(
-                  option.pickerIcon,
+                  option.icon,
                   size: 20,
                   color: theme.colorScheme.onSurfaceVariant,
                 ),

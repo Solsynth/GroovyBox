@@ -519,5 +519,24 @@
   "settingsSolarImportDone": "已从 {} 导入喜欢：共 {} 首，新增 {} 首。",
   "settingsSolarImportFailed": "无法读取 {} 的喜欢列表。",
   "libraryCloudFavouritesEmptyTitle": "还没有喜欢的歌曲",
-  "libraryCloudFavouritesEmptyMessage": "在任意设备上收藏一首歌，它就会出现在这里，随时可播。"
+  "libraryCloudFavouritesEmptyMessage": "在任意设备上收藏一首歌，它就会出现在这里，随时可播。",
+
+  "libraryKindPlugin": "插件",
+  "libraryAddressPlugin": "https://example.com",
+  "libraryPluginFailed": "插件拒绝了本次请求。",
+  "libraryPluginCrashed": "插件出错了。",
+  "libraryPluginMissing": "此插件尚未安装。",
+  "libraryPluginPreviewOnly": "插件只能提供这首曲目的试听片段。",
+  "libraryPluginTooManyRequests": "插件发起的请求过多。",
+  "setupPluginNote": "此插件无需地址或密码，连接后即成为曲库。",
+  "settingsSectionPlugins": "插件",
+  "settingsPluginsEmpty": "尚未安装插件。插件可以为应用添加它本身并不内置的曲库。",
+  "settingsPluginsInstall": "从文件夹安装…",
+  "settingsPluginsInstallFailed": "该文件夹里没有 manifest.json，未安装任何插件。",
+  "settingsPluginsReload": "重新加载",
+  "settingsPluginsUnsupported": "插件可在 Android、iOS、macOS、Windows 与 Linux 上运行，当前构建不支持。",
+  "settingsPluginsStateActive": "运行中",
+  "settingsPluginsStateDiscovered": "尚未加载",
+  "settingsPluginsStateDisabled": "已停用",
+  "settingsPluginsStateError": "加载失败"
 }

@@ -15,6 +15,7 @@ import 'package:groovy_box/screens/library_sync_section.dart';
 
 import 'pulsar_section.dart';
 
+import 'plugins_section.dart';
 import 'package:groovy_box/solarpass/solarpass_section.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -197,6 +198,10 @@ class SettingsScreen extends ConsumerWidget {
                 ],
               ),
             ),
+            // Plugins first: one is what makes certain libraries available at
+            // all, so the section that installs them comes before the list
+            // that connects them.
+            const PluginsSection(),
             SectionLabel('settingsSectionLibraries'.tr()),
             IslandCard(
               margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),

@@ -1,0 +1,17 @@
+{
+  "id": "dev.groovybox.bilibili",
+  "name": "Bilibili",
+  "version": "1.0.0",
+  "author": "GroovyBox",
+  "description": "Searches Bilibili video uploads and streams their DASH audio track. Videos labelled as music uploads are the practical way to hear a track Bilibili itself does not licence as music.",
+  "entry": "main.js",
+  "permissions": ["networkInternet"],
+  "providers": [
+    {
+      "id": "bilibili",
+      "name": "Bilibili",
+      "requiresAuth": false,
+      "functions": ["search", "streamUri"]
+    }
+  ]
+}

@@ -520,5 +520,24 @@
   "settingsSolarImportDone": "Imported favourites from {}: {} found, {} new.",
   "settingsSolarImportFailed": "Could not read {}’s favourites.",
   "libraryCloudFavouritesEmptyTitle": "No favourites yet",
-  "libraryCloudFavouritesEmptyMessage": "Heart a track on any device and it lands here, ready to play."
+  "libraryCloudFavouritesEmptyMessage": "Heart a track on any device and it lands here, ready to play.",
+
+  "libraryKindPlugin": "Plugin",
+  "libraryAddressPlugin": "https://example.com",
+  "libraryPluginFailed": "The plugin refused the request.",
+  "libraryPluginCrashed": "The plugin failed.",
+  "libraryPluginMissing": "This plugin is not installed.",
+  "libraryPluginPreviewOnly": "The plugin only offers a preview of this track.",
+  "libraryPluginTooManyRequests": "The plugin made too many requests.",
+  "setupPluginNote": "This plugin needs no address or password. Connect it and it becomes a library.",
+  "settingsSectionPlugins": "Plugins",
+  "settingsPluginsEmpty": "No plugins installed. A plugin adds a library the app itself does not ship.",
+  "settingsPluginsInstall": "Install from folder…",
+  "settingsPluginsInstallFailed": "That folder has no manifest.json, so nothing was installed.",
+  "settingsPluginsReload": "Reload",
+  "settingsPluginsUnsupported": "Plugins run on Android, iOS, macOS, Windows and Linux. This build cannot run them.",
+  "settingsPluginsStateActive": "Running",
+  "settingsPluginsStateDiscovered": "Not loaded yet",
+  "settingsPluginsStateDisabled": "Disabled",
+  "settingsPluginsStateError": "Failed to load"
 }

@@ -1,4 +1,6 @@
 PODS:
+  - flutter_js (0.0.1):
+    - FlutterMacOS
   - FlutterMacOS (1.0.0)
   - media_kit_libs_macos_audio (1.0.4):
     - FlutterMacOS
@@ -7,11 +9,14 @@ PODS:
     - FlutterMacOS
 
 DEPENDENCIES:
+  - flutter_js (from `Flutter/ephemeral/.symlinks/plugins/flutter_js/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
   - media_kit_libs_macos_audio (from `Flutter/ephemeral/.symlinks/plugins/media_kit_libs_macos_audio/macos`)
   - music_kit (from `Flutter/ephemeral/.symlinks/plugins/music_kit/darwin`)
 
 EXTERNAL SOURCES:
+  flutter_js:
+    :path: Flutter/ephemeral/.symlinks/plugins/flutter_js/macos
   FlutterMacOS:
     :path: Flutter/ephemeral
   media_kit_libs_macos_audio:
@@ -20,6 +25,7 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/music_kit/darwin
 
 SPEC CHECKSUMS:
+  flutter_js: 79c3c70d33ba464c67d8eb88639a61aa718cd8b8
   FlutterMacOS: c232990155153907050900a2e175c7773903ba4e
   media_kit_libs_macos_audio: 06f3cf88d6d89c7c3c87eae57689d1c6adb335b2
   music_kit: 401df686dad5d77dba4cb369cb63f72df0e4d424

@@ -31,12 +31,17 @@ class _FakePlayer extends Fake implements Player {
   /// Every URL this player was asked to open.
   final opened = <String>[];
 
+  /// The HTTP headers each open carried, in the same order.
+  final openedHeaders = <Map<String, String>?>[];
+
   @override
   PlayerStream get stream => _SilentPlayerStream();
 
   @override
   Future<void> open(Playable playable, {bool? play = true}) async {
-    opened.add((playable as Media).uri);
+    final media = playable as Media;
+    opened.add(media.uri);
+    openedHeaders.add(media.httpHeaders);
   }
 
   @override
@@ -59,7 +64,12 @@ class _FakePlayer extends Fake implements Player {
 /// answer is a trial URL handed back with [PreviewOnlyException] instead of a
 /// playable one.
 class _MintingSource extends LibrarySource implements ResolvedStreamSource {
-  _MintingSource(this.id, {this.preview = false, this.catalogue = const []});
+  _MintingSource(
+    this.id, {
+    this.preview = false,
+    this.catalogue = const [],
+    this.headers = const {},
+  });
 
   @override
   final String id;
@@ -67,6 +77,9 @@ class _MintingSource extends LibrarySource implements ResolvedStreamSource {
 
   /// What this library answers when another library searches it.
   final List<LibrarySong> catalogue;
+
+  /// Headers this library's stream server requires, as a plugin's CDN may.
+  final Map<String, String> headers;
 
   @override
   SourceConfig get config => SourceConfig(
@@ -95,6 +108,11 @@ class _MintingSource extends LibrarySource implements ResolvedStreamSource {
   @override
   Uri streamUri(LibrarySong song) =>
       throw StateError('this library mints its URLs');
+
+  /// A minted URL is the one place a provider learns what its CDN wants, so
+  /// this answers from what this source was constructed with.
+  @override
+  Map<String, String> streamHeaders(LibrarySong song) => headers;
 
   @override
   Uri? artworkUri(String? artId, {int size = 600}) => null;
@@ -242,5 +260,50 @@ void main() {
     await container.read(playbackProvider.notifier).playQueue([_wanted]);
 
     expect(player.opened, ['https://jam.example.com/s-1.mp3']);
+  });
+
+  test('a plugin source plays the copy NetEase only previews', () async {
+    // The plugin contract is not special: a plugin-backed source is an
+    // ordinary `LibrarySource`, so the paywall fallback reaches it the same
+    // way it reaches a Subsonic server.
+    final plugin = _MintingSource(
+      'kugou',
+      headers: const {'Referer': 'https://www.kugou.com/'},
+      catalogue: const [
+        LibrarySong(
+          sourceId: 'kugou',
+          id: 'hash-1',
+          title: 'Yellow',
+          artist: 'Coldplay',
+          duration: Duration(milliseconds: 266000),
+        ),
+      ],
+    );
+    final container = await containerFor([
+      _MintingSource('ne', preview: true),
+      plugin,
+    ]);
+
+    await container.read(playbackProvider.notifier).playQueue([_wanted]);
+
+    expect(player.opened, ['https://kugou.example.com/hash-1.mp3']);
+    // The header the plugin asked for reached media_kit: a CDN that gates on
+    // a `Referer` refuses a bare `open`.
+    expect(player.openedHeaders.single, {'Referer': 'https://www.kugou.com/'});
+    // The row names what is actually sounding, so the dock, the lyrics lookup
+    // and the next open of this slot follow the plugin.
+    final row = container.read(playbackProvider).queueRow!;
+    expect(row.sourceId, 'kugou');
+    expect(row.id, 'hash-1');
+  });
+
+  test('a source with no headers opens bare', () async {
+    final container = await containerFor([_MintingSource('ne')]);
+
+    await container.read(playbackProvider.notifier).playQueue([_wanted]);
+
+    expect(player.opened, ['https://ne.example.com/101.mp3']);
+    // `null`, not an empty map: libmpv then sends its own defaults.
+    expect(player.openedHeaders.single, isNull);
   });
 }

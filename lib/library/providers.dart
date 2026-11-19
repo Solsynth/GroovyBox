@@ -17,6 +17,8 @@ import 'lyrics_store.dart';
 import 'models.dart';
 import 'netease_adapter.dart';
 import 'source.dart';
+import 'plugins/plugin_host.dart';
+import 'plugins/plugin_schema.dart';
 import '../library_sync/queue.dart';
 import 'store.dart';
 
@@ -47,6 +49,22 @@ List<LibrarySource> librarySources(Ref ref) => [
   for (final config in ref.watch(sourceStoreProvider))
     librarySourceFromConfig(config),
 ];
+
+/// Providers contributed by installed plugins, empty when none is installed.
+///
+/// Reads the process-wide host and rebuilds when it changes, so installing a
+/// plugin mid-session updates the setup picker and the settings card without a
+/// restart. Nothing else in the library chain changes: a plugin source is an
+/// ordinary stored config, resolved by `librarySourceFromConfig`.
+@Riverpod(keepAlive: true)
+List<PluginProvider> pluginProviders(Ref ref) {
+  final host = PluginHost.instance;
+  if (host == null) return const [];
+  void listener() => ref.invalidateSelf();
+  ref.onDispose(() => host.removeListener(listener));
+  host.addListener(listener);
+  return host.providers;
+}
 
 /// Everything that can serve music: the local library first, then the servers.
 ///

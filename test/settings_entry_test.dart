@@ -136,11 +136,14 @@ void main() {
     await tester.tap(find.byIcon(Symbols.settings));
     await tester.pumpAndSettle();
 
+    // The plugins card sits above the libraries card, so on a 900 px window
+    // the button is below the fold and the lazy list has not built it yet.
     final addLibraryButton = find.text('Add library');
-    expect(addLibraryButton, findsOneWidget);
-    // The appearance card grew with the dynamic-color switch, so the library
-    // row can sit below the fold on a 900 px window.
-    await tester.ensureVisible(addLibraryButton);
+    await tester.scrollUntilVisible(
+      addLibraryButton,
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(addLibraryButton);

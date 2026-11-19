@@ -1,0 +1,17 @@
+{
+  "id": "dev.groovybox.kugou",
+  "name": "Kugou",
+  "version": "1.0.0",
+  "author": "GroovyBox",
+  "description": "Search Kugou Music and stream its tracks without an account. Tracks that Kugou only sells return the 60-second trial, so playback can fall back to another connected library.",
+  "entry": "main.js",
+  "permissions": ["networkInternet"],
+  "providers": [
+    {
+      "id": "kugou",
+      "name": "Kugou Music",
+      "requiresAuth": false,
+      "functions": ["search", "albumSongs", "streamUri", "lyrics"]
+    }
+  ]
+}

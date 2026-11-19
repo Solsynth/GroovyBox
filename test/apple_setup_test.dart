@@ -13,7 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Picks a provider from the page's dropdown the way a person does: open the
 /// menu, then tap the row.
 Future<void> pickKind(WidgetTester tester, LibraryKind kind) async {
-  await tester.tap(find.byType(DropdownButtonFormField<LibraryKind>));
+  await tester.tap(find.byType(DropdownButtonFormField<SetupOption>));
   await tester.pumpAndSettle();
   await tester.tap(find.text(kind.label).last);
   await tester.pumpAndSettle();
@@ -73,7 +73,7 @@ void main() {
         if (entry.value.isAvailable) entry.key,
     ];
 
-    await tester.tap(find.byType(DropdownButtonFormField<LibraryKind>));
+    await tester.tap(find.byType(DropdownButtonFormField<SetupOption>));
     await tester.pumpAndSettle();
 
     // The menu is open: every runnable adapter is offered, and the local

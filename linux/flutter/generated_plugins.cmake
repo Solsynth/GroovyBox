@@ -5,6 +5,7 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   desktop_multi_window
   desktop_webview_window
+  flutter_js
   media_kit_libs_linux
   url_launcher_linux
   window_to_front

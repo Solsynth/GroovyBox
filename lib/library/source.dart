@@ -8,6 +8,9 @@ import 'lyrics.dart';
 import 'models.dart';
 import 'subsonic_adapter.dart';
 import 'netease_adapter.dart';
+import 'plugins/plugin_host.dart';
+import 'plugins/plugin_source.dart';
+import 'plugins/plugin_schema.dart';
 
 /// The kinds of library GroovyBox can talk to.
 enum LibraryKind {
@@ -21,7 +24,14 @@ enum LibraryKind {
 
   /// Files this device owns. There is nothing to sign in to, so this kind has
   /// no adapter: [LocalLibrarySource] is constructed directly.
-  local('libraryKindLocal', '');
+  local('libraryKindLocal', ''),
+
+  /// A source implemented by an installed JS plugin. [SourceConfig.baseUrl] is
+  /// the plugin's manifest id and [SourceConfig.auth]'s `providerId` names
+  /// which provider of that plugin this connection is — which is why this kind
+  /// has no entry in [libraryAdapters]: the plugin is a per-config fact, not a
+  /// per-kind one.
+  plugin('libraryKindPlugin', 'libraryAddressPlugin');
 
   const LibraryKind(this.labelKey, this.addressHintKey);
 
@@ -45,6 +55,7 @@ enum LibraryKind {
     // own mark for an account-backed library.
     LibraryKind.appleMusic => Symbols.cloud_rounded,
     LibraryKind.local => Symbols.smartphone_rounded,
+    LibraryKind.plugin => Symbols.extension_rounded,
     LibraryKind.netease || LibraryKind.subsonic || LibraryKind.jellyfin => null,
   };
 
@@ -59,6 +70,7 @@ enum LibraryKind {
     LibraryKind.jellyfin => Symbols.movie_rounded,
     LibraryKind.appleMusic => Symbols.cloud_rounded,
     LibraryKind.local => Symbols.smartphone_rounded,
+    LibraryKind.plugin => Symbols.extension_rounded,
   };
 
   /// Setup field placeholder.
@@ -167,6 +179,14 @@ abstract class LibrarySource {
   /// "could not ask".
   Future<Lyrics> lyrics(LibrarySong song);
   Uri streamUri(LibrarySong song);
+
+  /// Extra headers the stream server requires (a `Referer`, a `Range` gate).
+  ///
+  /// Empty when the URL plays bare, which is every built-in source. A provider
+  /// whose CDN refuses requests without one answers from what it already
+  /// learned when the URL was resolved: this is asked *after* that, when the
+  /// stream is opened, and it cannot perform a request of its own.
+  Map<String, String> streamHeaders(LibrarySong song) => const {};
   Uri? artworkUri(String? artId, {int size});
 }
 
@@ -248,6 +268,7 @@ abstract interface class ResolvedStreamSource implements LibrarySource {
   /// Throws [LibraryException] when the provider refuses the track (no
   /// entitlement, or the region has no licence).
   Future<Uri> resolveStreamUri(LibrarySong song);
+
 }
 
 /// A library backed by a store the user can browse and add from.
@@ -439,8 +460,94 @@ final Map<LibraryKind, LibraryAdapter> libraryAdapters = {
   LibraryKind.appleMusic: AppleMusicAdapter(),
 };
 
-LibrarySource librarySourceFromConfig(SourceConfig config) =>
-    libraryAdapters[config.kind]!.sourceFor(config);
+/// One row of the setup picker: a built-in kind, or a provider an installed
+/// plugin contributes.
+///
+/// One sealed type rather than two dropdowns, because the choice is a single
+/// question — "which library am I adding" — and a plugin's provider answers it
+/// exactly as a Subsonic server does.
+sealed class SetupOption {
+  const SetupOption();
+
+  String get label;
+
+  IconData get icon;
+}
+
+class BuiltInOption extends SetupOption {
+  const BuiltInOption(this.kind);
+
+  final LibraryKind kind;
+
+  @override
+  String get label => kind.label;
+
+  @override
+  IconData get icon => kind.pickerIcon;
+
+  /// The dropdown compares its value by equality, and the selected option is
+  /// rebuilt on every frame; identity would make it look unselected.
+  @override
+  bool operator ==(Object other) =>
+      other is BuiltInOption && other.kind == kind;
+
+  @override
+  int get hashCode => kind.hashCode;
+}
+
+class PluginOption extends SetupOption {
+  const PluginOption(this.provider);
+
+  final PluginProvider provider;
+
+  @override
+  String get label => provider.name;
+
+  @override
+  IconData get icon => Symbols.extension_rounded;
+
+  /// The dropdown holds one of these as its selected value and compares by
+  /// equality, so two options for one provider must be the same option.
+  @override
+  bool operator ==(Object other) =>
+      other is PluginOption && other.provider == provider;
+
+  @override
+  int get hashCode => provider.hashCode;
+}
+
+/// Everything the setup picker can offer, built-ins first.
+///
+/// [libraryAdapters] is enumerated rather than [LibraryKind.values]: the local
+/// library has no adapter (there is nothing to connect to) and `plugin` has
+/// none either (the plugin is a per-config fact).
+List<SetupOption> setupOptions(List<PluginProvider> plugins) => [
+  for (final entry in libraryAdapters.entries)
+    if (entry.value.isAvailable) BuiltInOption(entry.key),
+  for (final provider in plugins) PluginOption(provider),
+];
+
+/// A stored config's source.
+///
+/// A plugin-backed config branches before the adapter map is indexed: which
+/// plugin it belongs to is a per-config fact (`auth['providerId']`), so
+/// [libraryAdapters] has no `plugin` entry and means it. The branch is what
+/// folds an installed plugin into `librarySourcesWithLocal`, and therefore
+/// into search, `findCopies` and playback, with no further change.
+
+LibrarySource librarySourceFromConfig(SourceConfig config) {
+  if (config.kind == LibraryKind.plugin) {
+    final host = PluginHost.instance;
+    // No runtime (an unsupported platform) or a plugin that was uninstalled is
+    // a source that reports itself missing, never a crash at resolve time.
+    return PluginSource(
+      config,
+      host: host,
+      missing: host == null || !host.knows(config.baseUrl),
+    );
+  }
+  return libraryAdapters[config.kind]!.sourceFor(config);
+}
 
 /// `'<kind>-<base36 microseconds>'`; collision-free within a device.
 String newSourceId(LibraryKind kind) =>

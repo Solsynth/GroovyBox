@@ -1,0 +1,17 @@
+{
+  "id": "dev.groovybox.kuwo",
+  "name": "Kuwo",
+  "version": "1.0.0",
+  "author": "GroovyBox",
+  "description": "Search, stream and lyric lookup for Kuwo Music (search.kuwo.cn / antiserver.kuwo.cn).",
+  "entry": "main.js",
+  "permissions": ["networkInternet"],
+  "providers": [
+    {
+      "id": "kuwo",
+      "name": "Kuwo Music",
+      "requiresAuth": false,
+      "functions": ["search", "streamUri", "lyrics"]
+    }
+  ]
+}

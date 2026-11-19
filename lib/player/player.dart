@@ -829,8 +829,8 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     // address.
     Uri? preview;
     try {
-      final uri = await _streamUriOf(source, toPlay);
-      await _player.open(Media(uri.toString()));
+      final (uri, headers) = await _streamUriOf(source, toPlay);
+      await _player.open(Media(uri.toString(), httpHeaders: headers));
       return;
     } on PreviewOnlyException catch (error) {
       // The provider holds the track but only sells an excerpt: the full
@@ -856,17 +856,20 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       // player a single item would cut its run short: the fallback stays
       // between libraries the app can stream from.
       if (altSource == null || altSource is PlatformPlayedSource) continue;
-      final Uri uri;
+      (Uri, Map<String, String>?) stream;
       try {
-        uri = await _streamUriOf(altSource, copy.song);
+        stream = await _streamUriOf(altSource, copy.song);
       } on PreviewOnlyException catch (error) {
         preview ??= error.previewUri;
         continue;
       } catch (_) {
         continue;
       }
+      final uri = stream.$1;
+      final headers = stream.$2;
+
       try {
-        await _player.open(Media(uri.toString()));
+        await _player.open(Media(uri.toString(), httpHeaders: headers));
       } catch (_) {
         continue;
       }
@@ -887,12 +890,23 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     }
   }
 
-  /// The address to open [song] from [source], asked first when the library
-  /// mints per-request URLs.
-  Future<Uri> _streamUriOf(LibrarySource source, LibrarySong song) async =>
-      source is ResolvedStreamSource
-      ? await source.resolveStreamUri(song)
-      : source.streamUri(song);
+  /// The address to open [song] from [source], and the headers the server
+  /// wants with it.
+  ///
+  /// A minting library is asked first; everything else answers from the item's
+  /// own address. The headers are what a provider's CDN requires — Bilibili's
+  /// refuses a request without a `Referer` — and are empty for every built-in
+  /// source, so `Media` takes `null` and libmpv sends its own defaults.
+  Future<(Uri, Map<String, String>?)> _streamUriOf(
+    LibrarySource source,
+    LibrarySong song,
+  ) async {
+    final uri = source is ResolvedStreamSource
+        ? await source.resolveStreamUri(song)
+        : source.streamUri(song);
+    final headers = source.streamHeaders(song);
+    return (uri, headers.isEmpty ? null : headers);
+  }
 
   /// Rewrites the row playing now to [copy], the library that actually
   /// answered with a stream.

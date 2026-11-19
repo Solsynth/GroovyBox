@@ -20,6 +20,13 @@ dependencies:
   material_symbols_icons: ^4.2960.0
   auto_route: ^11.2.0
   hooks_riverpod: ^3.5.0
+  # JS plugin runtime (git, not a path copy): the same package Island uses.
+  # Pinned to a commit so a plugin sandbox change is a deliberate bump.
+  island_plugin_foundation:
+    git:
+      url: https://src.solsynth.dev/SoSYS/Socommon.git
+      path: packages/island_plugin_foundation
+      ref: 26cf43cc7727126be21a13676c3e1d956b9462bd
   flutter_hooks: ^0.21.4
 
   # Desktop window

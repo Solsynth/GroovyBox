@@ -176,6 +176,73 @@ final class LibrarySourcesProvider
 
 String _$librarySourcesHash() => r'c79aaf9f2061f5b44592a30768758528bbd5e83b';
 
+/// Providers contributed by installed plugins, empty when none is installed.
+///
+/// Reads the process-wide host and rebuilds when it changes, so installing a
+/// plugin mid-session updates the setup picker and the settings card without a
+/// restart. Nothing else in the library chain changes: a plugin source is an
+/// ordinary stored config, resolved by `librarySourceFromConfig`.
+
+@ProviderFor(pluginProviders)
+final pluginProvidersProvider = PluginProvidersProvider._();
+
+/// Providers contributed by installed plugins, empty when none is installed.
+///
+/// Reads the process-wide host and rebuilds when it changes, so installing a
+/// plugin mid-session updates the setup picker and the settings card without a
+/// restart. Nothing else in the library chain changes: a plugin source is an
+/// ordinary stored config, resolved by `librarySourceFromConfig`.
+
+final class PluginProvidersProvider
+    extends
+        $FunctionalProvider<
+          List<PluginProvider>,
+          List<PluginProvider>,
+          List<PluginProvider>
+        >
+    with $Provider<List<PluginProvider>> {
+  /// Providers contributed by installed plugins, empty when none is installed.
+  ///
+  /// Reads the process-wide host and rebuilds when it changes, so installing a
+  /// plugin mid-session updates the setup picker and the settings card without a
+  /// restart. Nothing else in the library chain changes: a plugin source is an
+  /// ordinary stored config, resolved by `librarySourceFromConfig`.
+  PluginProvidersProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'pluginProvidersProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$pluginProvidersHash();
+
+  @$internal
+  @override
+  $ProviderElement<List<PluginProvider>> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  List<PluginProvider> create(Ref ref) {
+    return pluginProviders(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(List<PluginProvider> value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<List<PluginProvider>>(value),
+    );
+  }
+}
+
+String _$pluginProvidersHash() => r'ae79a02386c22effcf9ea9efa5fa2dd52da2dd92';
+
 /// Everything that can serve music: the local library first, then the servers.
 ///
 /// Local files come first because they are the ones guaranteed to answer; a
@@ -920,10 +987,9 @@ abstract class _$LibraryEditor extends $Notifier<void> {
 
 /// Every connected library's copy of one song, for the "other versions" sheet.
 ///
-/// Two sources of truth, merged. The catalog knows the copies the app has
-/// already seen — instant, offline, and the only way to find a local file. The
-/// other libraries are *asked*, because a song this library has but another
-/// does not yet show in a browse is exactly the case a lookup is for.
+/// The lookup itself is [findCopies]: playback asks the same question when a
+/// provider only sells a trial excerpt, so the two answers can never disagree
+/// about which libraries hold the track.
 ///
 /// Auto-disposed: the sheet is opened for one track and closed again.
 
@@ -932,10 +998,9 @@ final songCopiesProvider = SongCopiesFamily._();
 
 /// Every connected library's copy of one song, for the "other versions" sheet.
 ///
-/// Two sources of truth, merged. The catalog knows the copies the app has
-/// already seen — instant, offline, and the only way to find a local file. The
-/// other libraries are *asked*, because a song this library has but another
-/// does not yet show in a browse is exactly the case a lookup is for.
+/// The lookup itself is [findCopies]: playback asks the same question when a
+/// provider only sells a trial excerpt, so the two answers can never disagree
+/// about which libraries hold the track.
 ///
 /// Auto-disposed: the sheet is opened for one track and closed again.
 
@@ -949,10 +1014,9 @@ final class SongCopiesProvider
     with $FutureModifier<List<TrackCopy>>, $FutureProvider<List<TrackCopy>> {
   /// Every connected library's copy of one song, for the "other versions" sheet.
   ///
-  /// Two sources of truth, merged. The catalog knows the copies the app has
-  /// already seen — instant, offline, and the only way to find a local file. The
-  /// other libraries are *asked*, because a song this library has but another
-  /// does not yet show in a browse is exactly the case a lookup is for.
+  /// The lookup itself is [findCopies]: playback asks the same question when a
+  /// provider only sells a trial excerpt, so the two answers can never disagree
+  /// about which libraries hold the track.
   ///
   /// Auto-disposed: the sheet is opened for one track and closed again.
   SongCopiesProvider._({
@@ -999,14 +1063,13 @@ final class SongCopiesProvider
   }
 }
 
-String _$songCopiesHash() => r'bf49a7e021ab84a615badba5033e44e048db974d';
+String _$songCopiesHash() => r'31a63623129412f8f05e7e154c708cda2032a621';
 
 /// Every connected library's copy of one song, for the "other versions" sheet.
 ///
-/// Two sources of truth, merged. The catalog knows the copies the app has
-/// already seen — instant, offline, and the only way to find a local file. The
-/// other libraries are *asked*, because a song this library has but another
-/// does not yet show in a browse is exactly the case a lookup is for.
+/// The lookup itself is [findCopies]: playback asks the same question when a
+/// provider only sells a trial excerpt, so the two answers can never disagree
+/// about which libraries hold the track.
 ///
 /// Auto-disposed: the sheet is opened for one track and closed again.
 
@@ -1023,10 +1086,9 @@ final class SongCopiesFamily extends $Family
 
   /// Every connected library's copy of one song, for the "other versions" sheet.
   ///
-  /// Two sources of truth, merged. The catalog knows the copies the app has
-  /// already seen — instant, offline, and the only way to find a local file. The
-  /// other libraries are *asked*, because a song this library has but another
-  /// does not yet show in a browse is exactly the case a lookup is for.
+  /// The lookup itself is [findCopies]: playback asks the same question when a
+  /// provider only sells a trial excerpt, so the two answers can never disagree
+  /// about which libraries hold the track.
   ///
   /// Auto-disposed: the sheet is opened for one track and closed again.
 

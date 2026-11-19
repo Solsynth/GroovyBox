@@ -118,7 +118,7 @@ Future<void> _pump(WidgetTester tester) async {
 /// Picks a provider from the page's dropdown the way a person does: open the
 /// menu, then tap the row.
 Future<void> pickKind(WidgetTester tester, LibraryKind kind) async {
-  await tester.tap(find.byType(DropdownButtonFormField<LibraryKind>));
+  await tester.tap(find.byType(DropdownButtonFormField<SetupOption>));
   await tester.pumpAndSettle();
   await tester.tap(find.text(kind.label).last);
   await tester.pumpAndSettle();
