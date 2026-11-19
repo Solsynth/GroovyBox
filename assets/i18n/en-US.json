@@ -410,6 +410,7 @@
   "libraryNeteaseSignedOut": "This NetEase account is no longer signed in. Connect it again from Settings.",
   "libraryNeteaseRequestFailed": "The NetEase server refused the request.",
   "libraryNeteaseUnavailable": "This track cannot be played with the current account.",
+  "libraryNeteasePreviewOnly": "This track is behind the NetEase paywall; only a preview is available.",
   "libraryNeteaseNoStream": "NetEase tracks are streamed through a resolved URL.",
   "libraryNeteaseQrExpired": "The sign-in code expired. Start again.",
   "libraryNeteaseNotFound": "That address has no API. Use the address the API server listens on: no path after the host, not its documentation page.",

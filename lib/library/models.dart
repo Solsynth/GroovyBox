@@ -235,6 +235,23 @@ class LibraryException implements Exception {
   String toString() => code == null ? message : 'Library error $code: $message';
 }
 
+/// A provider holds the track but will not sell it to this account: the URL
+/// it minted plays a trial excerpt.
+///
+/// A refusal with the excerpt attached rather than a plain failure: the
+/// caller can still sound the preview when no other library has the track in
+/// full, which is better than silence.
+class PreviewOnlyException extends LibraryException {
+  /// The trial URL the provider minted.
+  final Uri previewUri;
+
+  const PreviewOnlyException(
+    this.previewUri,
+    String message, {
+    super.messageKey,
+  }) : super(message);
+}
+
 /// One shelf a source curates for the landing page.
 ///
 /// The page renders a shelf as a horizontal run of cards; [songs] are what it

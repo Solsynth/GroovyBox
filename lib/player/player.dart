@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/library/catalog.dart';
 import 'package:groovy_box/library/models.dart';
+import 'package:groovy_box/library/lookup.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/library/track_identity.dart';
@@ -742,32 +743,20 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     }
 
     if (source == null) {
-      final catalog = ref.read(libraryCatalogProvider);
-      if (catalog != null) {
-        final links = await catalog.linksOfSong(song);
-        for (final link in links) {
-          final altSource = sources[link.sourceId];
-          if (altSource != null) {
-            source = altSource;
-            toPlay = LibrarySong(
-              sourceId: link.sourceId,
-              id: link.externalId,
-              title: song.title,
-              artist: song.artist,
-              album: song.album,
-              albumId: link.albumExternalId,
-              artistId: link.artistExternalId,
-              artId: link.artId,
-              duration: song.duration,
-              track: song.track,
-              discNumber: song.discNumber,
-              year: song.year,
-              genre: song.genre,
-              mbid: song.mbid,
-            );
-            break;
-          }
-        }
+      // The row's library is gone (disconnected, or the account removed): a
+      // neighbour may still hold the track, whether or not the catalog has
+      // seen it before.
+      final copies = await findCopies(
+        song,
+        sources: sources,
+        catalog: ref.read(libraryCatalogProvider),
+      );
+      for (final copy in copies) {
+        final altSource = sources[copy.sourceId];
+        if (altSource == null) continue;
+        source = altSource;
+        toPlay = copy.song;
+        break;
       }
     }
 
@@ -835,57 +824,92 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     // already deactivated; a streamed track needs it active again before it
     // can sound. Activating an already-active session is a no-op.
     await _activateAudioSession();
-    // A minted URL (per-request playback links) has to be asked for first;
-    // everything else opens straight from the item's own address. The
-    // resolution sits inside the try below: a refusal (expired session, no
-    // entitlement) is answered by the fallback path with another library's
-    // copy, exactly like a dead URL.
+    // The row's own library first. A minted URL (per-request playback links)
+    // has to be asked for; everything else opens straight from the item's own
+    // address.
+    Uri? preview;
     try {
-      final streamUri = source is ResolvedStreamSource
-          ? await source.resolveStreamUri(toPlay)
-          : source.streamUri(toPlay);
-      await _player.open(Media(streamUri.toString()));
-      final catalog = ref.read(libraryCatalogProvider);
-      if (catalog != null) {
-        final links = await catalog.linksOfSong(song);
-        for (final link in links) {
-          if (link.sourceId == toPlay.sourceId &&
-              link.externalId == toPlay.id) {
-            continue;
-          }
-          final altSource = sources[link.sourceId];
-          if (altSource != null) {
-            final fallbackSong = LibrarySong(
-              sourceId: link.sourceId,
-              id: link.externalId,
-              title: song.title,
-              artist: song.artist,
-              album: song.album,
-              albumId: link.albumExternalId,
-              artistId: link.artistExternalId,
-              artId: link.artId,
-              duration: song.duration,
-              track: song.track,
-              discNumber: song.discNumber,
-              year: song.year,
-              genre: song.genre,
-              mbid: song.mbid,
-            );
-            try {
-              await _player.open(
-                Media(altSource.streamUri(fallbackSong).toString()),
-              );
-              return;
-            } catch (_) {
-              // Try next link
-            }
-          }
-        }
-      }
+      final uri = await _streamUriOf(source, toPlay);
+      await _player.open(Media(uri.toString()));
+      return;
+    } on PreviewOnlyException catch (error) {
+      // The provider holds the track but only sells an excerpt: the full
+      // recording may well be in another connected library, so the trial URL
+      // is held rather than opened and the others are asked first.
+      preview = error.previewUri;
     } catch (_) {
-      // The stream URL was refused (offline source, expired mint, gone
-      // track): the queue stays where it is rather than crashing playback.
+      // Expired session, no entitlement, offline source, gone track: the same
+      // question — does another library have this one in full?
     }
+
+    final copies = await findCopies(
+      song,
+      sources: sources,
+      catalog: ref.read(libraryCatalogProvider),
+    );
+    for (final copy in copies) {
+      if (copy.sourceId == toPlay.sourceId && copy.externalId == toPlay.id) {
+        continue;
+      }
+      final altSource = sources[copy.sourceId];
+      // Another platform-played copy is not a stream, and handing the system
+      // player a single item would cut its run short: the fallback stays
+      // between libraries the app can stream from.
+      if (altSource == null || altSource is PlatformPlayedSource) continue;
+      final Uri uri;
+      try {
+        uri = await _streamUriOf(altSource, copy.song);
+      } on PreviewOnlyException catch (error) {
+        preview ??= error.previewUri;
+        continue;
+      } catch (_) {
+        continue;
+      }
+      try {
+        await _player.open(Media(uri.toString()));
+      } catch (_) {
+        continue;
+      }
+      // What is sounding is the other library's copy, so the row says so:
+      // the dock, the lyrics lookup and the next open of this slot all follow
+      // what actually plays instead of the library that refused it.
+      if (!song.isRadio) _adoptPlayedCopy(copy.song);
+      return;
+    }
+
+    // Nobody has the full track: the excerpt is better than silence.
+    if (preview != null) {
+      try {
+        await _player.open(Media(preview.toString()));
+      } catch (_) {
+        // The trial URL died between the mint and the open.
+      }
+    }
+  }
+
+  /// The address to open [song] from [source], asked first when the library
+  /// mints per-request URLs.
+  Future<Uri> _streamUriOf(LibrarySource source, LibrarySong song) async =>
+      source is ResolvedStreamSource
+      ? await source.resolveStreamUri(song)
+      : source.streamUri(song);
+
+  /// Rewrites the row playing now to [copy], the library that actually
+  /// answered with a stream.
+  void _adoptPlayedCopy(LibrarySong copy) {
+    final index = state.currentIndex;
+    if (index == null || index >= state.queue.length) return;
+    final queue = List.of(state.queue);
+    queue[index] = copy;
+    _order[index] = copy;
+    // Undoing a shuffle sorts by the order the queue was handed over in; the
+    // slot now holds a different item, so that order has to move with it or
+    // the copy would sort to the front.
+    final sourceIndex = _sourceOrder.indexOf(
+      state.queue[index],
+    );
+    if (sourceIndex >= 0) _sourceOrder[sourceIndex] = copy;
+    state = state.copyWith(queue: queue);
   }
 
   Future<void> _jumpTo(int index) async {

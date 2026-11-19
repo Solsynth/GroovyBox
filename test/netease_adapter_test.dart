@@ -27,6 +27,10 @@ class _FakeNetease {
   /// Whether the minted stream URL is a playable one.
   bool trackPlayable = true;
 
+  /// Whether the minted URL is a paywalled track's 30-second trial, which the
+  /// bridge marks with `freeTrialInfo` instead of refusing outright.
+  bool trackPreviewOnly = false;
+
   /// The scan states `/login/qr/check` walks through, one per call. The last
   /// value repeats if the list runs out.
   List<int> qrStates = [801, 802, 803];
@@ -262,8 +266,12 @@ class _FakeNetease {
             'data': [
               {
                 'id': 101,
-                'url': trackPlayable ? 'http://m.example/stream/101.mp3' : null,
+                'url': trackPlayable
+                    ? 'http://m.example/stream/101.mp3'
+                    : null,
                 'level': request.uri.queryParameters['level'],
+                if (trackPreviewOnly)
+                  'freeTrialInfo': {'start': 0, 'end': 30},
               },
             ],
           }),
@@ -561,6 +569,39 @@ void main() {
           'libraryNeteaseUnavailable',
         ),
       ),
+    );
+  });
+
+  test('a paywalled track is refused as a preview, not played as one', () async {
+    // The bridge mints a 30-second trial for a VIP track instead of refusing
+    // it, and the only sign is `freeTrialInfo`: playing that URL as if it
+    // were the track is the bug this guards.
+    server.trackPreviewOnly = true;
+    final source = signedIn();
+    final song = (await source.playlistSongs('1')).single;
+
+    await expectLater(
+      source.resolveStreamUri(song),
+      throwsA(
+        isA<PreviewOnlyException>()
+            .having(
+              (e) => e.previewUri.toString(),
+              'previewUri',
+              'http://m.example/stream/101.mp3',
+            )
+            .having(
+              (e) => e.messageKey,
+              'messageKey',
+              'libraryNeteasePreviewOnly',
+            ),
+      ),
+    );
+    // A refusal is not cached: the next play asks again instead of replaying
+    // a trial forever after the account upgrades.
+    server.trackPreviewOnly = false;
+    expect(
+      (await source.resolveStreamUri(song)).toString(),
+      'http://m.example/stream/101.mp3',
     );
   });
 

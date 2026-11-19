@@ -409,6 +409,7 @@
   "libraryNeteaseSignedOut": "此网易账户的登录已失效，请在设置中重新连接。",
   "libraryNeteaseRequestFailed": "网易服务器拒绝了本次请求。",
   "libraryNeteaseUnavailable": "当前账户无法播放这首曲目。",
+  "libraryNeteasePreviewOnly": "该曲目属于网易云音乐付费内容，仅能试听片段。",
   "libraryNeteaseNoStream": "网易曲目通过解析出的地址播放。",
   "libraryNeteaseQrExpired": "登录二维码已过期，请重新开始。",
   "libraryNeteaseNotFound": "该地址没有 API。请填写 API 服务器本身监听的地址：主机名后不要带路径，也不是文档页面。",

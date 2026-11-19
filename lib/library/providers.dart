@@ -8,6 +8,7 @@ import '../widgets/common.dart';
 import 'aggregate.dart';
 import 'catalog.dart';
 import 'local_library.dart';
+import 'lookup.dart';
 import 'lrclib.dart';
 import 'lyrics.dart';
 import 'lyrics_query.dart';
@@ -18,7 +19,6 @@ import 'netease_adapter.dart';
 import 'source.dart';
 import '../library_sync/queue.dart';
 import 'store.dart';
-import 'track_identity.dart';
 
 part 'providers.g.dart';
 
@@ -293,79 +293,17 @@ class LibraryEditor extends Notifier<void> {
 
 /// Every connected library's copy of one song, for the "other versions" sheet.
 ///
-/// Two sources of truth, merged. The catalog knows the copies the app has
-/// already seen — instant, offline, and the only way to find a local file. The
-/// other libraries are *asked*, because a song this library has but another
-/// does not yet show in a browse is exactly the case a lookup is for.
+/// The lookup itself is [findCopies]: playback asks the same question when a
+/// provider only sells a trial excerpt, so the two answers can never disagree
+/// about which libraries hold the track.
 ///
 /// Auto-disposed: the sheet is opened for one track and closed again.
 @riverpod
-Future<List<TrackCopy>> songCopies(Ref ref, TrackLookup lookup) async {
-  final sources = ref.watch(librarySourceByIdProvider);
-  final catalog = ref.watch(libraryCatalogProvider);
-  final song = lookup.song;
-
-  final known = catalog == null
-      ? const <TrackCopy>[]
-      : await catalog.copiesOfSong(
-          song,
-          connectedSourceIds: sources.keys.toSet(),
-        );
-  // The track the user is looking at is always one of the answers, even when
-  // the catalog has never seen it: it is the copy they currently have.
-  final bySource = {
-    song.sourceId: TrackCopy(
-      sourceId: song.sourceId,
-      externalId: song.id,
-      song: song,
-      playable: sources.containsKey(song.sourceId),
-    ),
-    for (final copy in known)
-      if (copy.playable) copy.sourceId: copy,
-  };
-
-  final others = [
-    for (final source in sources.values)
-      if (source.id != song.sourceId) source,
-  ];
-  if (others.isEmpty) return bySource.values.toList();
-
-  // Title and artist, not the album: a copy in another library is usually
-  // tagged with that library's own album, and an album match would miss it.
-  final query = [song.artist, song.title].whereType<String>().join(' ');
-  final identity = TrackIdentity.of(song);
-  final results = await Future.wait([
-    for (final source in others)
-      source.search(query, limit: 20).catchError((Object error) {
-        debugPrint('[Library] lookup on ${source.displayName}: $error');
-        return const <LibrarySong>[];
-      }),
-  ]);
-
-  for (var index = 0; index < others.length; index++) {
-    final source = others[index];
-    if (bySource.containsKey(source.id)) continue;
-    final match = results[index]
-        .where((candidate) => identity.matches(TrackIdentity.of(candidate)))
-        .firstOrNull;
-    if (match == null) continue;
-    bySource[source.id] = TrackCopy(
-      sourceId: source.id,
-      externalId: match.id,
-      song: match,
-    );
-  }
-
-  // The source the track was opened from comes first; the rest keep the
-  // order the user connected them in.
-  final ordered = bySource.values.toList()
-    ..sort((a, b) {
-      if (a.sourceId == song.sourceId) return -1;
-      if (b.sourceId == song.sourceId) return 1;
-      return 0;
-    });
-  return ordered;
-}
+Future<List<TrackCopy>> songCopies(Ref ref, TrackLookup lookup) => findCopies(
+  lookup.song,
+  sources: ref.watch(librarySourceByIdProvider),
+  catalog: ref.watch(libraryCatalogProvider),
+);
 
 /// Songs of one album, read straight from its own source./// Songs of one album, read straight from its own source.
 @riverpod

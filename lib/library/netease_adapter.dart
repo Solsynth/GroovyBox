@@ -596,9 +596,13 @@ class NeteaseSource extends LibrarySource
 
   /// The playback URL, minted per request by the bridge.
   ///
-  /// `/song/url/v1` answers `{data: [{url, ...}]}`; a `null` url means the
-  /// account cannot hear the track (no entitlement, or no licence in the
-  /// region), which is a refusal the UI can explain, not a network failure.
+  /// `/song/url/v1` answers `{data: [{url, freeTrialInfo, ...}]}`. A track
+  /// the account has no entitlement to still comes back with a URL — a
+  /// 30-second trial, flagged by `freeTrialInfo` — and that is a refusal, not
+  /// a playable answer: the caller is told with [PreviewOnlyException] so it
+  /// can look for the full recording in another library and fall back to the
+  /// excerpt only when nobody has it. A `null` url is the plain refusal (no
+  /// licence in the region, or the track is gone).
   final Map<String, (Uri, DateTime)> _streamCache = {};
 
   @override
@@ -621,6 +625,19 @@ class NeteaseSource extends LibrarySource
       );
     }
     final uri = Uri.parse(url);
+    // The trial flag is a signed-in-only answer: a signed-out bridge mints a
+    // trial for everything it can see, and the source refuses it before it
+    // gets here (an empty URL), so an account with no session never reaches
+    // this branch. `freeTrialInfo` is what the bridge adds when the excerpt
+    // is what was minted.
+    if (first is Map && first['freeTrialInfo'] != null) {
+      throw PreviewOnlyException(
+        uri,
+        'This track is behind the NetEase paywall; only a preview is '
+        'available.',
+        messageKey: 'libraryNeteasePreviewOnly',
+      );
+    }
     // The minted URL is short-lived; ten minutes keeps one queue position
     // from re-asking during a long listen without outliving the token.
     _streamCache[song.id] = (

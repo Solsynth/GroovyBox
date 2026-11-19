@@ -65,7 +65,14 @@ than block you behind a form.
   picker. Playback URLs are minted per request by
   `song/url/v1`, which is `ResolvedStreamSource` — the transport asks that
   capability before falling back to `streamUri`, so a refused mint falls
-  through the cross-library fallback like a dead URL.
+  through the cross-library fallback like a dead URL. A VIP track is not
+  refused, though: the bridge mints a 30-second trial and marks it with
+  `freeTrialInfo`, so the source answers `PreviewOnlyException`, which carries
+  the trial URL instead of playing it. The transport then looks the recording
+  up in every connected library (`findCopies`, the same answer the "other
+  versions" sheet shows), plays the first full copy it can resolve, rewrites
+  the playing row to that copy, and opens the trial only when nobody has the
+  whole track.
 - **Playback** — one `media_kit` player for the app's lifetime
   (`lib/player/player.dart`), exposed through Riverpod. Shuffle reorders the
   visible queue instead of hiding randomization underneath. The media session
