@@ -2,6 +2,7 @@ import 'package:auto_route/auto_route.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/theme.dart';
+import 'package:groovy_box/library/downloads.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
@@ -12,6 +13,7 @@ import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/collection_hero.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/format.dart';
+import 'package:groovy_box/widgets/playlist_picker.dart';
 import 'package:groovy_box/widgets/track_selection.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -59,6 +61,73 @@ class _SolinkFavouritesScreenState
     if (mounted) setState(() {});
   }
 
+  /// The ticked rows' playable copies, in the account's order.
+  List<LibrarySong> _selectedSongs(
+    List<PlaylistItem> list,
+    List<LibrarySong?> resolved,
+  ) => [
+    for (var i = 0; i < list.length; i++)
+      if (list[i].catalogId case final id?
+          when _selection.contains(id))
+        if (i < resolved.length) ?resolved[i],
+  ];
+
+  /// Puts the ticked recordings into another playlist. Only the ones this
+  /// device can name are offered: a row without a copy has nothing to write.
+  Future<void> _addSelected(
+    List<PlaylistItem> list,
+    List<LibrarySong?> resolved,
+  ) async {
+    final songs = _selectedSongs(list, resolved);
+    if (songs.isEmpty) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      final result = await addTracksToPlaylist(context, songs: songs);
+      if (result == null) return;
+      _selection.end();
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text(
+            'playlistSelectionAdded'.plural(
+              result.added,
+              args: [result.name],
+            ),
+          ),
+        ),
+      );
+    } catch (error) {
+      messenger?.showSnackBar(
+        SnackBar(content: Text(describeServerError(error))),
+      );
+    }
+  }
+
+  /// Keeps the ticked recordings on this device.
+  Future<void> _downloadSelected(
+    List<PlaylistItem> list,
+    List<LibrarySong?> resolved,
+  ) async {
+    final songs = [
+      for (final song in _selectedSongs(list, resolved))
+        if (!song.isRadio) song,
+    ];
+    if (songs.isEmpty) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final added = await ref
+        .read(downloadsControllerProvider.notifier)
+        .downloadAll(songs);
+    if (!mounted) return;
+    messenger?.showSnackBar(
+      SnackBar(
+        content: Text(
+          added == 0
+              ? 'downloadsNothingNew'.tr()
+              : 'downloadsAdded'.plural(added),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final favourites = ref.watch(pulsarFavouritesProvider);
@@ -67,176 +136,180 @@ class _SolinkFavouritesScreenState
     final hasSong = ref.watch(
       playbackProvider.select((state) => state.current != null),
     );
-    final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
+    // The bar floats above the page, so the list reserves its height too:
+    // the last row must be able to scroll out from under it.
+    final barOffset = solFloatingBarOffset(context, dockVisible: hasSong);
+    final bottomInset =
+        solBottomChromeInset(context, dockVisible: hasSong) +
+        (_selection.active ? kSelectionBarHeight + SolSpace.md : 0);
     final creator = ref.watch(solarpassAccountProvider).value?.displayName;
+
+    // Index-aligned with the account's order: a null is a track no connected
+    // library holds, and dropping it would shift every row after it onto the
+    // wrong recording. The bar reads the same pairing the rows do.
+    final list = favourites.value ?? const <PlaylistItem>[];
+    final resolved = songs.value ?? const <LibrarySong?>[];
+    // The catalog id is the row's identity here: it is what a removal names,
+    // and it exists whether or not this device holds a copy of the recording.
+    final keys = [
+      for (final item in list)
+        if (item.catalogId != null) item.catalogId!,
+    ];
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: ContentFrame(
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: BackButtonRow(onBack: () => context.router.maybePop()),
-            ),
-            ...favourites.when(
-              data: (list) {
-                if (list.isEmpty) {
+      body: SelectionBarOverlay(
+        selection: _selection,
+        bottom: barOffset,
+        bar: SelectionToolbar(
+          selection: _selection,
+          keys: keys,
+          onPlay: () => ref
+              .read(playbackProvider.notifier)
+              .playQueue(_selectedSongs(list, resolved)),
+          onAddToPlaylist: () => _addSelected(list, resolved),
+          onDownload: () => _downloadSelected(list, resolved),
+          onRemove: () => _removeSelected(list),
+        ),
+        child: ContentFrame(
+          child: CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: BackButtonRow(onBack: () => context.router.maybePop()),
+              ),
+              ...favourites.when(
+                data: (rows) {
+                  if (rows.isEmpty) {
+                    return [
+                      SliverToBoxAdapter(
+                        child: EmptyState(
+                          icon: Symbols.favorite_rounded,
+                          title: 'libraryCloudFavouritesEmptyTitle'.tr(),
+                          message: 'libraryCloudFavouritesEmptyMessage'.tr(),
+                        ),
+                      ),
+                    ];
+                  }
+                  final playable = [for (final song in resolved) ?song];
+                  final cover = rows
+                      .map((item) => item.catalogItem?.artworkUrl)
+                      .whereType<String>()
+                      .where((url) => url.isNotEmpty)
+                      .firstOrNull;
                   return [
                     SliverToBoxAdapter(
-                      child: EmptyState(
-                        icon: Symbols.favorite_rounded,
-                        title: 'libraryCloudFavouritesEmptyTitle'.tr(),
-                        message: 'libraryCloudFavouritesEmptyMessage'.tr(),
+                      child: CollectionHero(
+                        artworkUrl: cover,
+                        source: 'settingsSectionSolarNetwork'.tr(),
+                        title: 'libraryCloudFavourites'.tr(),
+                        eyebrow: 'settingsSectionSolarNetwork'.tr(),
+                        meta: [
+                          if (creator != null && creator.isNotEmpty) creator,
+                          'playlistsTrackCount'.plural(rows.length),
+                        ].join('  ·  '),
+                        fallbackIcon: Symbols.favorite_rounded,
+                        actions: [
+                          FilledButton.icon(
+                            onPressed: playable.isEmpty
+                                ? null
+                                : () => ref
+                                      .read(playbackProvider.notifier)
+                                      .playQueue(playable),
+                            icon: const Icon(
+                              Symbols.play_arrow_rounded,
+                              size: 20,
+                            ),
+                            label: Text('commonPlay'.tr()),
+                          ),
+                          IconButton.filledTonal(
+                            tooltip: 'libraryShuffle'.tr(),
+                            onPressed: playable.isEmpty
+                                ? null
+                                : () {
+                                    final notifier = ref.read(
+                                      playbackProvider.notifier,
+                                    );
+                                    notifier.playQueue(playable);
+                                    notifier.setShuffle(true);
+                                  },
+                            icon: const Icon(Symbols.shuffle_rounded),
+                          ),
+                          SelectionToggleButton(selection: _selection),
+                        ],
                       ),
                     ),
-                  ];
-                }
-                // Index-aligned with the account's order: a null is a track
-                // no connected library holds, and dropping it would shift
-                // every row after it onto the wrong recording.
-                final resolved = songs.value ?? const <LibrarySong?>[];
-                final playable = [for (final song in resolved) ?song];
-                final cover = list
-                    .map((item) => item.catalogItem?.artworkUrl)
-                    .whereType<String>()
-                    .where((url) => url.isNotEmpty)
-                    .firstOrNull;
-                // The catalog id is the row's identity here: it is what a
-                // removal names, and it exists whether or not this device
-                // holds a copy of the recording.
-                final keys = [
-                  for (final item in list)
-                    if (item.catalogId != null) item.catalogId!,
-                ];
-                return [
-                  SliverToBoxAdapter(
-                    child: CollectionHero(
-                      artworkUrl: cover,
-                      source: 'settingsSectionSolarNetwork'.tr(),
-                      title: 'libraryCloudFavourites'.tr(),
-                      eyebrow: 'settingsSectionSolarNetwork'.tr(),
-                      meta: [
-                        if (creator != null && creator.isNotEmpty) creator,
-                        'playlistsTrackCount'.plural(list.length),
-                      ].join('  ·  '),
-                      fallbackIcon: Symbols.favorite_rounded,
-                      actions: _selection.active
-                          ? [
-                              SelectionActions(
-                                selection: _selection,
-                                keys: keys,
-                                onPlay: () => ref
-                                    .read(playbackProvider.notifier)
-                                    .playQueue([
-                                      for (var i = 0; i < list.length; i++)
-                                        if (list[i].catalogId case final id?
-                                            when _selection.contains(id))
-                                          if (i < resolved.length &&
-                                              resolved[i] != null)
-                                            resolved[i]!,
-                                    ]),
-                                onRemove: () => _removeSelected(list),
-                              ),
-                            ]
-                          : [
-                              FilledButton.icon(
-                                onPressed: playable.isEmpty
-                                    ? null
-                                    : () => ref
-                                          .read(playbackProvider.notifier)
-                                          .playQueue(playable),
-                                icon: const Icon(
-                                  Symbols.play_arrow_rounded,
-                                  size: 20,
-                                ),
-                                label: Text('commonPlay'.tr()),
-                              ),
-                              IconButton.filledTonal(
-                                tooltip: 'libraryShuffle'.tr(),
-                                onPressed: playable.isEmpty
-                                    ? null
-                                    : () {
-                                        final notifier = ref.read(
-                                          playbackProvider.notifier,
-                                        );
-                                        notifier.playQueue(playable);
-                                        notifier.setShuffle(true);
-                                      },
-                                icon: const Icon(Symbols.shuffle_rounded),
-                              ),
-                              SelectionToggleButton(selection: _selection),
-                            ],
-                    ),
-                  ),
-                  SliverList.builder(
-                    itemCount: list.length,
-                    itemBuilder: (context, index) {
-                      final item = list[index];
-                      final track = item.catalogItem;
-                      final catalogId = item.catalogId;
-                      if (track == null || catalogId == null) {
-                        return const SizedBox.shrink();
-                      }
-                      final song = index < resolved.length
-                          ? resolved[index]
-                          : null;
-                      void onTap() {
-                        if (_selection.active) {
-                          _selection.toggle(catalogId);
-                          return;
+                    SliverList.builder(
+                      itemCount: rows.length,
+                      itemBuilder: (context, index) {
+                        final item = rows[index];
+                        final track = item.catalogItem;
+                        final catalogId = item.catalogId;
+                        if (track == null || catalogId == null) {
+                          return const SizedBox.shrink();
                         }
-                        if (song == null || playable.isEmpty) return;
-                        ref
-                            .read(playbackProvider.notifier)
-                            .playQueue(
-                              playable,
-                              startIndex: playable.indexOf(song),
-                            );
-                      }
+                        final song = index < resolved.length
+                            ? resolved[index]
+                            : null;
+                        void onTap() {
+                          if (_selection.active) {
+                            _selection.toggle(catalogId);
+                            return;
+                          }
+                          if (song == null || playable.isEmpty) return;
+                          ref
+                              .read(playbackProvider.notifier)
+                              .playQueue(
+                                playable,
+                                startIndex: playable.indexOf(song),
+                              );
+                        }
 
-                      return _CloudFavouriteRow(
-                        track: track,
-                        song: song,
-                        leading: _selection.active
-                            ? SelectionCheckbox(
-                                selection: _selection,
-                                rowKey: catalogId,
-                              )
-                            : null,
-                        onPlay: onTap,
-                        onLongPress: _selection.active
-                            ? null
-                            : () => _remove(catalogId, track, song),
-                      );
-                    },
-                  ),
-                ];
-              },
-              loading: () => const [
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.all(SolSpace.huge),
-                    child: Center(child: CircularProgressIndicator()),
-                  ),
-                ),
-              ],
-              error: (error, _) => [
-                SliverToBoxAdapter(
-                  child: EmptyState(
-                    icon: Symbols.error_rounded,
-                    title: 'playlistsDetailLoadError'.tr(),
-                    message: describeServerError(error),
-                    iconColor: Theme.of(context).colorScheme.error,
-                    action: FilledButton(
-                      onPressed: () => ref.invalidate(pulsarFavouritesProvider),
-                      child: Text('commonTryAgain'.tr()),
+                        return _CloudFavouriteRow(
+                          track: track,
+                          song: song,
+                          onPlay: onTap,
+                          artwork: SelectionCover(
+                            selection: _selection,
+                            rowKey: catalogId,
+                            child: _CloudFavouriteCover(
+                              track: track,
+                              song: song,
+                            ),
+                          ),
+                          onLongPress: _selection.active
+                              ? null
+                              : () => _remove(catalogId, track, song),
+                        );
+                      },
+                    ),
+                  ];
+                },
+                loading: () => const [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.all(SolSpace.huge),
+                      child: Center(child: CircularProgressIndicator()),
                     ),
                   ),
-                ),
-              ],
-            ),
-            SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
-          ],
+                ],
+                error: (error, _) => [
+                  SliverToBoxAdapter(
+                    child: EmptyState(
+                      icon: Symbols.error_rounded,
+                      title: 'playlistsDetailLoadError'.tr(),
+                      message: describeServerError(error),
+                      iconColor: Theme.of(context).colorScheme.error,
+                      action: FilledButton(
+                        onPressed: () => ref.invalidate(pulsarFavouritesProvider),
+                        child: Text('commonTryAgain'.tr()),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
+            ],
+          ),
         ),
       ),
     );
@@ -316,47 +389,93 @@ class _SolinkFavouritesScreenState
   }
 }
 
+/// The cover of one favourite: the device's own art when it holds a copy,
+/// the account's `artwork_url` otherwise, and the heart when neither exists.
+class _CloudFavouriteCover extends StatelessWidget {
+  final CatalogItem track;
+  final LibrarySong? song;
+
+  const _CloudFavouriteCover({required this.track, required this.song});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final local = song;
+    final art = track.artworkUrl;
+    if (local != null) {
+      return LibraryArtwork(
+        sourceId: local.sourceId,
+        artId: local.artId,
+        size: 48,
+        radius: SolRadius.xs,
+      );
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(SolRadius.xs),
+      child: SizedBox.square(
+        dimension: 48,
+        child: art == null || art.isEmpty
+            ? ColoredBox(
+                color: scheme.surfaceContainerHigh,
+                child: Icon(
+                  Symbols.favorite_rounded,
+                  color: scheme.onSurfaceVariant,
+                ),
+              )
+            : Image.network(
+                art,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => ColoredBox(
+                  color: scheme.surfaceContainerHigh,
+                  child: Icon(
+                    Symbols.favorite_rounded,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+      ),
+    );
+  }
+}
+
 /// One row of the account's favourites: the track, playable when this device
 /// holds it, and the heart that takes it back out of the account.
+///
+/// A favourite no library holds has no song to draw a row from, so it keeps
+/// its own two-line layout. It is written at the same metrics as [TrackRow]
+/// so the list does not change rhythm at the one row the device cannot play.
 class _CloudFavouriteRow extends ConsumerWidget {
   final CatalogItem track;
   final LibrarySong? song;
-  final Widget? leading;
+  final Widget artwork;
   final VoidCallback? onPlay;
   final VoidCallback? onLongPress;
 
   const _CloudFavouriteRow({
     required this.track,
     required this.song,
+    required this.artwork,
     required this.onPlay,
-    this.leading,
     this.onLongPress,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final local = song;
     if (local != null) {
       return SongTrackRow(
         song: local,
         subtitle: songRowSubtitle(ref, local),
-        leading: leading,
         trailing: local.duration == Duration.zero
             ? null
             : formatDuration(local.duration),
-        artwork: LibraryArtwork(
-          sourceId: local.sourceId,
-          artId: local.artId,
-          size: 48,
-          radius: SolRadius.xs,
-        ),
+        artwork: artwork,
         onTap: onPlay,
         onLongPress: onLongPress,
       );
     }
-    final art = track.artworkUrl;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: SolSpace.md, vertical: 2),
       child: Material(
@@ -372,35 +491,7 @@ class _CloudFavouriteRow extends ConsumerWidget {
             ),
             child: Row(
               children: [
-                if (leading != null) ...[
-                  leading!,
-                  const SizedBox(width: SolSpace.sm),
-                ],
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(SolRadius.md),
-                  child: SizedBox.square(
-                    dimension: 48,
-                    child: art == null || art.isEmpty
-                        ? ColoredBox(
-                            color: scheme.surfaceContainerHigh,
-                            child: Icon(
-                              Symbols.favorite_rounded,
-                              color: scheme.onSurfaceVariant,
-                            ),
-                          )
-                        : Image.network(
-                            art,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => ColoredBox(
-                              color: scheme.surfaceContainerHigh,
-                              child: Icon(
-                                Symbols.favorite_rounded,
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ),
-                  ),
-                ),
+                artwork,
                 const SizedBox(width: SolSpace.md),
                 Expanded(
                   child: Column(
@@ -410,7 +501,9 @@ class _CloudFavouriteRow extends ConsumerWidget {
                         track.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       Text(
                         track.subtitle ?? 'pulsarPlaylistUnmatched'.tr(),

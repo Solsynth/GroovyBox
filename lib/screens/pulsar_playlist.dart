@@ -2,6 +2,7 @@ import 'package:auto_route/auto_route.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/theme.dart';
+import 'package:groovy_box/library/downloads.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/pulsar/models.dart';
@@ -12,6 +13,7 @@ import 'package:groovy_box/widgets/collection_hero.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:groovy_box/widgets/playlist_name_dialog.dart';
+import 'package:groovy_box/widgets/playlist_picker.dart';
 import 'package:groovy_box/widgets/track_selection.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -196,6 +198,68 @@ class _PulsarPlaylistDetailScreenState
     }
   }
 
+  /// The ticked rows' playable copies, in playlist order.
+  List<LibrarySong> _selectedSongs(
+    List<(PlaylistItem, LibrarySong?)> pairs,
+  ) => [
+    for (final (item, song) in pairs)
+      if (_selection.contains(item.id)) ?song,
+  ];
+
+  /// Puts the ticked tracks into another playlist. Rows the libraries cannot
+  /// name carry no song, so they are not offered: there is nothing to write.
+  Future<void> _addSelected(
+    List<(PlaylistItem, LibrarySong?)> pairs,
+  ) async {
+    final songs = _selectedSongs(pairs);
+    if (songs.isEmpty) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      final result = await addTracksToPlaylist(context, songs: songs);
+      if (result == null) return;
+      _selection.end();
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text(
+            'playlistSelectionAdded'.plural(
+              result.added,
+              args: [result.name],
+            ),
+          ),
+        ),
+      );
+    } catch (error) {
+      messenger?.showSnackBar(
+        SnackBar(content: Text(describeServerError(error))),
+      );
+    }
+  }
+
+  /// Keeps the ticked tracks on this device.
+  Future<void> _downloadSelected(
+    List<(PlaylistItem, LibrarySong?)> pairs,
+  ) async {
+    final songs = [
+      for (final song in _selectedSongs(pairs))
+        if (!song.isRadio) song,
+    ];
+    if (songs.isEmpty) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final added = await ref
+        .read(downloadsControllerProvider.notifier)
+        .downloadAll(songs);
+    if (!mounted) return;
+    messenger?.showSnackBar(
+      SnackBar(
+        content: Text(
+          added == 0
+              ? 'downloadsNothingNew'.tr()
+              : 'downloadsAdded'.plural(added),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final detail = ref.watch(pulsarPlaylistDetailProvider(widget.playlistId));
@@ -203,21 +267,61 @@ class _PulsarPlaylistDetailScreenState
     final hasSong = ref.watch(
       playbackProvider.select((state) => state.current != null),
     );
-    final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
+    // The bar floats above the page, so the list reserves its height too:
+    // the last row must be able to scroll out from under it.
+    final barOffset = solFloatingBarOffset(context, dockVisible: hasSong);
+    final bottomInset =
+        solBottomChromeInset(context, dockVisible: hasSong) +
+        (_selection.active ? kSelectionBarHeight + SolSpace.md : 0);
     final creator = ref.watch(solarpassAccountProvider).value?.displayName;
+
+    // The bar floats outside the scroll view, so it reads the same resolved
+    // list the rows do. Both are derived from the same two providers; a null
+    // playlist or an unresolved list simply means nothing is tickable yet.
+    final playlist = detail.value;
+    final resolved = playlist == null
+        ? null
+        : ref.watch(pulsarPlaylistSongsProvider(playlist)).value;
+    // The resolver is index-aligned with the items, so a track the libraries
+    // cannot name keeps its row instead of shifting the ones after it.
+    final pairs = playlist == null || resolved == null
+        ? const <(PlaylistItem, LibrarySong?)>[]
+        : [
+            for (var i = 0; i < playlist.items.length; i++)
+              (playlist.items[i], resolved[i]),
+          ];
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: ContentFrame(
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: BackButtonRow(onBack: () => context.router.maybePop()),
-            ),
-            ...detail.when(
-              data: (playlist) => ref
-                  .watch(pulsarPlaylistSongsProvider(playlist))
-                  .when(
+      body: SelectionBarOverlay(
+        selection: _selection,
+        bottom: barOffset,
+        bar: SelectionToolbar(
+          selection: _selection,
+          keys: [for (final (item, _) in pairs) item.id],
+          onPlay: () => ref
+              .read(playbackProvider.notifier)
+              .playQueue(_selectedSongs(pairs)),
+          onAddToPlaylist: () => _addSelected(pairs),
+          onDownload: () => _downloadSelected(pairs),
+          onRemove: () => switch (playlist) {
+            final playlist? => _removeSelected(playlist, [
+              for (final (item, _) in pairs)
+                if (_selection.contains(item.id)) item,
+            ]),
+            null => null,
+          },
+        ),
+        child: ContentFrame(
+          child: CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: BackButtonRow(onBack: () => context.router.maybePop()),
+              ),
+              ...detail.when(
+                data: (playlist) {
+                  final list = ref.watch(pulsarPlaylistSongsProvider(playlist));
+                  return list.when(
                     data: (list) {
                       if (playlist.items.isEmpty) {
                         return [
@@ -230,24 +334,17 @@ class _PulsarPlaylistDetailScreenState
                           ),
                         ];
                       }
-                      // The resolver is index-aligned with the items, so a
-                      // track the libraries cannot name keeps its row instead
-                      // of shifting the ones after it.
-                      final pairs = [
+                      final rows = [
                         for (var i = 0; i < playlist.items.length; i++)
                           (playlist.items[i], list[i]),
                       ];
-                      final playable = [for (final (_, song) in pairs) ?song];
-                      // Every item is selectable, matched or not: removing a
-                      // name the libraries cannot resolve is exactly what the
-                      // page is for.
-                      final keys = [for (final (item, _) in pairs) item.id];
+                      final playable = [for (final (_, song) in rows) ?song];
                       // The collection's own cover, or its first named track's
                       // when the cloud record has none: a playlist filled by
                       // uploading tracks never had an artwork_url of its own.
                       final cover =
                           playlist.artworkUrl ??
-                          pairs
+                          rows
                               .map((pair) => pair.$1.catalogItem?.artworkUrl)
                               .whereType<String>()
                               .where((url) => url.isNotEmpty)
@@ -272,79 +369,53 @@ class _PulsarPlaylistDetailScreenState
                               ),
                             ].join('  ·  '),
                             fallbackIcon: Symbols.cloud_rounded,
-                            actions: _selection.active
-                                ? [
-                                    SelectionActions(
-                                      selection: _selection,
-                                      keys: keys,
-                                      onPlay: () => ref
+                            // The hero keeps the collection's own actions; a
+                            // batch belongs to the bar over the rows.
+                            actions: [
+                              FilledButton.icon(
+                                onPressed: playable.isEmpty
+                                    ? null
+                                    : () => ref
                                           .read(playbackProvider.notifier)
-                                          .playQueue([
-                                            for (final (item, song) in pairs)
-                                              if (_selection.contains(item.id))
-                                                ?song,
-                                          ]),
-                                      onRemove: () =>
-                                          _removeSelected(playlist, [
-                                            for (final (item, _) in pairs)
-                                              if (_selection.contains(item.id))
-                                                item,
-                                          ]),
-                                    ),
-                                  ]
-                                : [
-                                    FilledButton.icon(
-                                      onPressed: playable.isEmpty
-                                          ? null
-                                          : () => ref
-                                                .read(playbackProvider.notifier)
-                                                .playQueue(playable),
-                                      icon: const Icon(
-                                        Symbols.play_arrow_rounded,
-                                        size: 20,
-                                      ),
-                                      label: Text('commonPlay'.tr()),
-                                    ),
-                                    IconButton.filledTonal(
-                                      tooltip: 'libraryShuffle'.tr(),
-                                      onPressed: playable.isEmpty
-                                          ? null
-                                          : () {
-                                              final notifier = ref.read(
-                                                playbackProvider.notifier,
-                                              );
-                                              notifier.playQueue(playable);
-                                              notifier.setShuffle(true);
-                                            },
-                                      icon: const Icon(Symbols.shuffle_rounded),
-                                    ),
-                                    IconButton(
-                                      tooltip: 'ownedPlaylistRename'.tr(),
-                                      onPressed: () => _rename(playlist.name),
-                                      icon: const Icon(Symbols.edit_rounded),
-                                    ),
-                                    IconButton(
-                                      tooltip: 'commonDelete'.tr(),
-                                      onPressed: _confirmDelete,
-                                      icon: const Icon(Symbols.delete_rounded),
-                                    ),
-                                    SelectionToggleButton(
-                                      selection: _selection,
-                                    ),
-                                  ],
+                                          .playQueue(playable),
+                                icon: const Icon(
+                                  Symbols.play_arrow_rounded,
+                                  size: 20,
+                                ),
+                                label: Text('commonPlay'.tr()),
+                              ),
+                              IconButton.filledTonal(
+                                tooltip: 'libraryShuffle'.tr(),
+                                onPressed: playable.isEmpty
+                                    ? null
+                                    : () {
+                                        final notifier = ref.read(
+                                          playbackProvider.notifier,
+                                        );
+                                        notifier.playQueue(playable);
+                                        notifier.setShuffle(true);
+                                      },
+                                icon: const Icon(Symbols.shuffle_rounded),
+                              ),
+                              IconButton(
+                                tooltip: 'ownedPlaylistRename'.tr(),
+                                onPressed: () => _rename(playlist.name),
+                                icon: const Icon(Symbols.edit_rounded),
+                              ),
+                              IconButton(
+                                tooltip: 'commonDelete'.tr(),
+                                onPressed: _confirmDelete,
+                                icon: const Icon(Symbols.delete_rounded),
+                              ),
+                              SelectionToggleButton(selection: _selection),
+                            ],
                           ),
                         ),
                         SliverList.builder(
-                          itemCount: pairs.length,
+                          itemCount: rows.length,
                           itemBuilder: (context, index) {
-                            final (item, song) = pairs[index];
+                            final (item, song) = rows[index];
                             final track = item.catalogItem;
-                            final tick = _selection.active
-                                ? SelectionCheckbox(
-                                    selection: _selection,
-                                    rowKey: item.id,
-                                  )
-                                : null;
                             void onTap() {
                               if (_selection.active) {
                                 _selection.toggle(item.id);
@@ -359,6 +430,17 @@ class _PulsarPlaylistDetailScreenState
                                   );
                             }
 
+                            final artwork = SelectionCover(
+                              selection: _selection,
+                              rowKey: item.id,
+                              child: LibraryArtwork(
+                                sourceId: song?.sourceId,
+                                artId: song?.artId,
+                                size: 48,
+                                radius: SolRadius.xs,
+                                fallbackIcon: Symbols.cloud_rounded,
+                              ),
+                            );
                             if (song == null || track == null) {
                               return SongTrackRow(
                                 song: LibrarySong(
@@ -370,7 +452,7 @@ class _PulsarPlaylistDetailScreenState
                                     seconds: track?.durationSeconds ?? 0,
                                   ),
                                 ),
-                                leading: tick,
+                                artwork: artwork,
                                 subtitle: 'pulsarPlaylistUnmatched'.tr(),
                                 trailing: track?.durationSeconds == null
                                     ? null
@@ -384,15 +466,9 @@ class _PulsarPlaylistDetailScreenState
                             }
                             return SongTrackRow(
                               song: song,
-                              leading: tick,
                               subtitle: songRowSubtitle(ref, song),
                               trailing: formatDuration(song.duration),
-                              artwork: LibraryArtwork(
-                                sourceId: song.sourceId,
-                                artId: song.artId,
-                                size: 44,
-                                radius: SolRadius.xs,
-                              ),
+                              artwork: artwork,
                               onTap: onTap,
                               onLongPress: _selection.active
                                   ? null
@@ -426,34 +502,36 @@ class _PulsarPlaylistDetailScreenState
                         ),
                       ),
                     ],
-                  ),
-              loading: () => const [
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.all(SolSpace.huge),
-                    child: Center(child: CircularProgressIndicator()),
-                  ),
-                ),
-              ],
-              error: (error, _) => [
-                SliverToBoxAdapter(
-                  child: EmptyState(
-                    icon: Symbols.error_rounded,
-                    title: 'playlistsDetailLoadError'.tr(),
-                    message: describeServerError(error),
-                    iconColor: Theme.of(context).colorScheme.error,
-                    action: FilledButton(
-                      onPressed: () => ref.invalidate(
-                        pulsarPlaylistDetailProvider(widget.playlistId),
-                      ),
-                      child: Text('commonTryAgain'.tr()),
+                  );
+                },
+                loading: () => const [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.all(SolSpace.huge),
+                      child: Center(child: CircularProgressIndicator()),
                     ),
                   ),
-                ),
-              ],
-            ),
-            SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
-          ],
+                ],
+                error: (error, _) => [
+                  SliverToBoxAdapter(
+                    child: EmptyState(
+                      icon: Symbols.error_rounded,
+                      title: 'playlistsDetailLoadError'.tr(),
+                      message: describeServerError(error),
+                      iconColor: Theme.of(context).colorScheme.error,
+                      action: FilledButton(
+                        onPressed: () => ref.invalidate(
+                          pulsarPlaylistDetailProvider(widget.playlistId),
+                        ),
+                        child: Text('commonTryAgain'.tr()),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
+            ],
+          ),
         ),
       ),
     );

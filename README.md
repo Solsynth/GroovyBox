@@ -163,11 +163,16 @@ than block you behind a form.
   with one `CollectionHero` whose title is the collection's own name and whose
   meta line names where it lives and who made it — a playlist's creator, not its
   first track's artist. A playlist page can also enter selection mode
-  (`lib/widgets/track_selection.dart`): tick rows, then play them in playlist
-  order or remove them in one write, with a confirm because a batch cannot be
-  undone one row at a time. The queue has no page of its own: it is a pane of
-  the player and a sheet in the dock, because a third view of one list only made
-  the transport compete with itself.
+  (`lib/widgets/track_selection.dart`): the mode is announced on the artwork —
+  every cover mutes, a tap stamps it with a check — so no row changes shape and
+  no slot is taken from the number, the title or the duration. The hero keeps
+  the collection's own actions unchanged; a batch gets its own floating glass
+  bar above the now-playing dock, offering play in playlist order, add to
+  another playlist (`lib/widgets/playlist_picker.dart`, shared with the player's
+  single-track picker), download, and remove in one write behind a confirm — a
+  batch cannot be undone one row at a time. The queue has no page of its own: it
+  is a pane of the player and a sheet in the dock, because a third view of one
+  list only made the transport compete with itself.
 - **Stats** — `lib/screens/stats.dart` reads `play_events` and shows what the
   history adds up to: plays, time listened, songs heard, how many plays ran to
   the end, the most played tracks and artists, and the last dozen plays. All of

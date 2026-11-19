@@ -270,6 +270,12 @@
     "other": "{} selected"
   },
   "playlistSelectionPlay": "Play selected",
+  "playlistSelectionAdd": "Add selected to a playlist",
+  "playlistSelectionDownload": "Download selected",
+  "playlistSelectionAdded": {
+    "one": "Added {} track to {}",
+    "other": "Added {} tracks to {}"
+  },
   "playlistSelectionRemove": "Remove selected",
   "playlistSelectionDone": "Done",
   "playlistSelectAll": "Select all",

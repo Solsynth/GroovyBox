@@ -1,15 +1,12 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:groovy_box/core/theme.dart';
-import 'package:groovy_box/library/catalog.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/pulsar/client.dart';
-import 'package:groovy_box/pulsar/models.dart';
 import 'package:groovy_box/pulsar/providers.dart';
-import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/common.dart';
-import 'package:groovy_box/widgets/playlist_name_dialog.dart';
+import 'package:groovy_box/widgets/playlist_picker.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
@@ -290,38 +287,13 @@ class _SongActionBarState extends ConsumerState<SongActionBar> {
   Future<void> _pickPlaylist() async {
     final actions = _actions;
     if (_busy || !actions.canAddToPlaylist) return;
-    final choice = await showModalBottomSheet<_PlaylistChoice>(
-      context: context,
-      showDragHandle: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      builder: (_) => _PlaylistPicker(actions: actions),
-    );
-    if (choice == null || !mounted) return;
     setState(() => _busy = true);
     try {
-      // The device playlist comes first: it is the one this app owns, and the
-      // account's own is a write that leaves the app.
-      final String name;
-      switch (choice) {
-        case _OwnedChoice(:final playlist):
-          await ref.read(ownedPlaylistsProvider.notifier).add(playlist.id, [
-            widget.song,
-          ]);
-          name = playlist.name;
-        case _CloudChoice(:final playlist):
-          await ref
-              .read(pulsarPlaylistsProvider.notifier)
-              .addSong(playlist, widget.song);
-          name = playlist.name;
-        case _SourceChoice(:final playlist):
-          await actions.addToPlaylist(playlist);
-          name = playlist.name;
-      }
-      if (mounted) {
-        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-          SnackBar(content: Text('playerPlaylistAdded'.tr(args: [name]))),
-        );
-      }
+      final result = await addTracksToPlaylist(context, songs: [widget.song]);
+      if (!mounted || result == null) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(content: Text('playerPlaylistAdded'.tr(args: [result.name]))),
+      );
     } catch (error) {
       if (mounted) _report(error);
     } finally {
@@ -440,37 +412,13 @@ abstract final class SongActionsRunner {
     SongActions actions,
   ) async {
     if (!actions.canAddToPlaylist || !context.mounted) return;
-    final container = ProviderScope.containerOf(context, listen: false);
-    final choice = await showModalBottomSheet<_PlaylistChoice>(
-      context: context,
-      showDragHandle: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      builder: (_) => _PlaylistPicker(actions: actions),
-    );
-    if (choice == null || !context.mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
     try {
-      final String name;
-      switch (choice) {
-        case _OwnedChoice(:final playlist):
-          await container.read(ownedPlaylistsProvider.notifier).add(
-            playlist.id,
-            [actions.song],
-          );
-          name = playlist.name;
-        case _CloudChoice(:final playlist):
-          await container
-              .read(pulsarPlaylistsProvider.notifier)
-              .addSong(playlist, actions.song);
-          name = playlist.name;
-        case _SourceChoice(:final playlist):
-          await actions.addToPlaylist(playlist);
-          name = playlist.name;
-      }
-      if (context.mounted) {
-        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-          SnackBar(content: Text('playerPlaylistAdded'.tr(args: [name]))),
-        );
-      }
+      final result = await addTracksToPlaylist(context, songs: [actions.song]);
+      if (result == null || !context.mounted) return;
+      messenger?.showSnackBar(
+        SnackBar(content: Text('playerPlaylistAdded'.tr(args: [result.name]))),
+      );
     } catch (error) {
       if (context.mounted) _report(context, error);
     }
@@ -518,315 +466,5 @@ abstract final class SongActionsRunner {
   static void _report(BuildContext context, Object error) {
     ScaffoldMessenger.maybeOf(context)
         ?.showSnackBar(SnackBar(content: Text(describeServerError(error))));
-  }
-}
-
-/// What the picker hands back: one of this device's playlists, one of the
-/// account's cloud playlists, or one a connected source holds.
-sealed class _PlaylistChoice {
-  const _PlaylistChoice();
-}
-
-class _OwnedChoice extends _PlaylistChoice {
-  final OwnedPlaylist playlist;
-
-  const _OwnedChoice(this.playlist);
-}
-
-class _CloudChoice extends _PlaylistChoice {
-  final PulsarPlaylist playlist;
-
-  const _CloudChoice(this.playlist);
-}
-
-class _SourceChoice extends _PlaylistChoice {
-  final LibraryPlaylist playlist;
-
-  const _SourceChoice(this.playlist);
-}
-
-/// Where a track can be put, as a sheet: this device's playlists first, then
-/// the account's cloud playlists when it is signed in, then the ones the
-/// connected source holds.
-///
-/// Device playlists are the primary list — they exist before a library does
-/// and survive every one of them being swapped. The other sections are
-/// writes that leave the app, so they follow, not replace: a cloud playlist
-/// needs a Pulsar session, and a source playlist only appears when the
-/// source says it is editable, because the favourites mix appears among them
-/// but silently refuses an add.
-class _PlaylistPicker extends ConsumerStatefulWidget {
-  final SongActions actions;
-
-  const _PlaylistPicker({required this.actions});
-
-  @override
-  ConsumerState<_PlaylistPicker> createState() => _PlaylistPickerState();
-}
-
-class _PlaylistPickerState extends ConsumerState<_PlaylistPicker> {
-  List<LibraryPlaylist>? _account;
-  String? _error;
-  bool _creating = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadAccount();
-  }
-
-  Future<void> _loadAccount() async {
-    if (!widget.actions.canAddToPlaylist) {
-      if (mounted) setState(() => _account = const []);
-      return;
-    }
-    try {
-      final playlists = await widget.actions.editablePlaylists();
-      if (mounted) setState(() => _account = playlists);
-    } catch (error) {
-      if (mounted) setState(() => _error = describeServerError(error));
-    }
-  }
-
-  /// Makes a playlist on this device, then adds the track to it.
-  ///
-  /// A name is asked for rather than invented: a playlist called "New
-  /// playlist" is one the user has to rename before it means anything.
-  Future<void> _create() async {
-    final trimmed = await askPlaylistName(
-      context,
-      title: 'playlistPickerNewTitle'.tr(),
-      confirmLabelKey: 'commonSave',
-    );
-    if (trimmed == null || !mounted) return;
-    setState(() => _creating = true);
-    final playlist = await ref
-        .read(ownedPlaylistsProvider.notifier)
-        .create(trimmed);
-    if (!mounted) return;
-    setState(() => _creating = false);
-    if (playlist != null) {
-      Navigator.of(context).pop(_OwnedChoice(playlist));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final owned = ref.watch(ownedPlaylistsProvider);
-    final cloud = ref.watch(pulsarPlaylistsProvider);
-    final cloudSession = ref.watch(
-      pulsarSessionProvider.select((session) => session.value != null),
-    );
-    return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              SolSpace.md,
-              SolSpace.xs,
-              SolSpace.md,
-              SolSpace.sm,
-            ),
-            child: Text(
-              'playlistPickerTitle'.tr(),
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          ListTile(
-            enabled: !_creating,
-            leading: SizedBox.square(
-              dimension: 40,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(SolRadius.sm),
-                ),
-                child: const Icon(Symbols.add_rounded),
-              ),
-            ),
-            title: Text('playlistPickerNew'.tr()),
-            onTap: _creating ? null : _create,
-          ),
-          ...owned.when(
-            data: (playlists) => [
-              for (final playlist in playlists)
-                ListTile(
-                  leading: SizedBox.square(
-                    dimension: 40,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHigh,
-                        borderRadius: BorderRadius.circular(SolRadius.sm),
-                      ),
-                      child: const Icon(Symbols.queue_music_rounded),
-                    ),
-                  ),
-                  title: Text(playlist.name),
-                  subtitle: playlist.trackCount == 0
-                      ? null
-                      : Text('playlistsTrackCount'.plural(playlist.trackCount)),
-                  onTap: () =>
-                      Navigator.of(context).pop(_OwnedChoice(playlist)),
-                ),
-            ],
-            loading: () => const [
-              Padding(
-                padding: EdgeInsets.all(SolSpace.lg),
-                child: Center(child: CircularProgressIndicator()),
-              ),
-            ],
-            error: (_, _) => const [],
-          ),
-          ..._cloudRows(theme, cloud, cloudSession),
-          ..._accountRows(theme),
-        ],
-      ),
-    );
-  }
-
-  /// The account's cloud playlists, between the device's own and a server's.
-  /// Signed out is the normal state for half the app's windows, so the
-  /// section is silence rather than an empty-state row.
-  List<Widget> _cloudRows(
-    ThemeData theme,
-    AsyncValue<List<PulsarPlaylist>> cloud,
-    bool signedIn,
-  ) {
-    if (!signedIn) return const [];
-    final list = cloud.value;
-    if (list == null) {
-      return const [
-        Padding(
-          padding: EdgeInsets.all(SolSpace.lg),
-          child: Center(child: CircularProgressIndicator()),
-        ),
-      ];
-    }
-    if (list.isEmpty) return const [];
-    return [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(
-          SolSpace.md,
-          SolSpace.md,
-          SolSpace.md,
-          SolSpace.xs,
-        ),
-        child: Text(
-          'playlistPickerCloudSection'.tr(),
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.2,
-          ),
-        ),
-      ),
-      Flexible(
-        child: ListView.builder(
-          shrinkWrap: true,
-          itemCount: list.length,
-          itemBuilder: (context, index) {
-            final playlist = list[index];
-            return ListTile(
-              leading: SizedBox.square(
-                dimension: 40,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(SolRadius.sm),
-                  ),
-                  child: const Icon(Symbols.cloud_rounded),
-                ),
-              ),
-              title: Text(playlist.name),
-              subtitle: playlist.items.isEmpty
-                  ? null
-                  : Text('playlistsTrackCount'.plural(playlist.items.length)),
-              onTap: () => Navigator.of(context).pop(_CloudChoice(playlist)),
-            );
-          },
-        ),
-      ),
-    ];
-  }
-
-  List<Widget> _accountRows(ThemeData theme) {
-    if (_error != null) {
-      return [
-        Padding(
-          padding: const EdgeInsets.all(SolSpace.md),
-          child: Text(
-            _error!,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.error,
-            ),
-          ),
-        ),
-      ];
-    }
-    final account = _account;
-    if (account == null) {
-      return const [
-        Padding(
-          padding: EdgeInsets.all(SolSpace.lg),
-          child: Center(child: CircularProgressIndicator()),
-        ),
-      ];
-    }
-    // No account playlists is the normal case for a server, not a failure:
-    // the device's own list above is the whole answer, so the sheet simply
-    // ends there.
-    if (account.isEmpty) return const [];
-    return [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(
-          SolSpace.md,
-          SolSpace.md,
-          SolSpace.md,
-          SolSpace.xs,
-        ),
-        child: Text(
-          'playlistPickerAccountSection'.tr(),
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.2,
-          ),
-        ),
-      ),
-      Flexible(
-        child: ListView.builder(
-          shrinkWrap: true,
-          itemCount: account.length,
-          itemBuilder: (context, index) {
-            final playlist = account[index];
-            return ListTile(
-              leading: SizedBox.square(
-                dimension: 40,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(SolRadius.sm),
-                  child: LibraryArtwork(
-                    sourceId: playlist.sourceId,
-                    artId: playlist.artId,
-                    radius: 0,
-                    size: 40,
-                    fallbackIcon: Symbols.queue_music_rounded,
-                  ),
-                ),
-              ),
-              title: Text(playlist.name),
-              subtitle: playlist.songCount == null
-                  ? null
-                  : Text('${playlist.songCount}'),
-              onTap: () => Navigator.of(context).pop(_SourceChoice(playlist)),
-            );
-          },
-        ),
-      ),
-    ];
   }
 }

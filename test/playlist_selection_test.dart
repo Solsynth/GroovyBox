@@ -9,6 +9,7 @@ import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/screens/owned_playlist.dart';
+import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/track_selection.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
@@ -68,6 +69,18 @@ Future<void> _pump(WidgetTester tester, LibraryCatalog catalog, int id) async {
   );
   await tester.pumpAndSettle();
 }
+Finder _rowOf(String title) => find.ancestor(
+  of: find.text(title),
+  matching: find.byType(SongTrackRow),
+);
+
+Finder _coverOf(String title) =>
+    find.descendant(of: _rowOf(title), matching: find.byType(SelectionCover));
+
+Finder _barCount(String value) => find.descendant(
+  of: find.byType(SelectionToolbar),
+  matching: find.text(value),
+);
 
 void main() {
   testWidgets('a device playlist names itself in the hero', (tester) async {
@@ -81,6 +94,50 @@ void main() {
     expect(find.text('Sunday drive'), findsOneWidget);
   });
 
+  testWidgets('the batch bar is a separate surface from the hero actions', (
+    tester,
+  ) async {
+    final catalog = await _catalogWithPlaylist();
+    final id = (await catalog.ownedPlaylists()).single.id;
+    await _pump(tester, catalog, id);
+
+    // The hero's own actions stay put; the batch controls only exist while
+    // the mode is on.
+    expect(find.byTooltip('libraryShuffle'.tr()), findsOneWidget);
+    expect(find.byType(SelectionToolbar), findsNothing);
+
+    await tester.tap(find.byTooltip('playlistsSelectMode'.tr()));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SelectionToolbar), findsOneWidget);
+    expect(find.byTooltip('libraryShuffle'.tr()), findsOneWidget);
+  });
+
+  testWidgets('a cover carries the tick, and the row keeps its shape', (
+    tester,
+  ) async {
+    final catalog = await _catalogWithPlaylist();
+    final id = (await catalog.ownedPlaylists()).single.id;
+    await _pump(tester, catalog, id);
+
+    // Positions keep their own column whether or not the mode is on: the
+    // tick lives on the artwork instead of taking a slot.
+    expect(find.text('1'), findsOneWidget);
+    await tester.tap(find.byTooltip('playlistsSelectMode'.tr()));
+    await tester.pumpAndSettle();
+    expect(find.text('1'), findsOneWidget);
+    expect(find.byType(SelectionCover), findsNWidgets(2));
+    expect(_barCount('0'), findsOneWidget);
+
+    await tester.tap(_coverOf('Yellow'));
+    await tester.pumpAndSettle();
+    expect(_barCount('1'), findsOneWidget);
+
+    await tester.tap(_coverOf('Yellow'));
+    await tester.pumpAndSettle();
+    expect(_barCount('0'), findsOneWidget);
+  });
+
   testWidgets('selection removes several tracks in one go', (tester) async {
     final catalog = await _catalogWithPlaylist();
     final id = (await catalog.ownedPlaylists()).single.id;
@@ -88,11 +145,8 @@ void main() {
 
     await tester.tap(find.byTooltip('playlistsSelectMode'.tr()));
     await tester.pumpAndSettle();
-    expect(find.byType(SelectionCheckbox), findsNWidgets(2));
-
-    await tester.tap(find.byType(SelectionCheckbox).first);
+    await tester.tap(_coverOf('Yellow'));
     await tester.pumpAndSettle();
-    expect(find.text('playlistSelectionCount'.plural(1)), findsOneWidget);
 
     await tester.tap(find.byTooltip('playlistSelectionRemove'.tr()));
     await tester.pumpAndSettle();
@@ -103,6 +157,8 @@ void main() {
     final entries = await catalog.ownedPlaylistEntryRows(id);
     expect(entries, hasLength(1));
     expect(entries.single.$2.title, 'Sunday');
-    expect(find.byType(SelectionCheckbox), findsNothing);
+    // The batch ends with the write: the bar is gone and the remaining row
+    // is a plain row again.
+    expect(find.byType(SelectionToolbar), findsNothing);
   });
 }

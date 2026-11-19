@@ -78,3 +78,18 @@ const double kBottomNavHeight = 56.0;
 
 /// Gutter between the floating chrome and the window edges.
 const double kChromeGutter = SolSpace.md;
+
+/// Where one of the page's own floating bars sits, measured from the page's
+/// bottom edge: above the now-playing capsule when it is up, and above the
+/// tab capsule on the compact layout. A page that adds a bar of its own
+/// stacks it here rather than at a guessed offset, so it never covers the
+/// chrome the shell already floats.
+double solFloatingBarOffset(
+  BuildContext context, {
+  required bool dockVisible,
+}) {
+  final safeBottom = MediaQuery.viewPaddingOf(context).bottom;
+  final dock = dockVisible ? kNowPlayingDockHeight + SolSpace.sm : 0.0;
+  final nav = isWideScreen(context) ? 0.0 : kBottomNavHeight + SolSpace.md;
+  return dock + nav + SolSpace.sm + safeBottom;
+}

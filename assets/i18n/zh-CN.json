@@ -269,6 +269,12 @@
     "other": "已选 {} 首"
   },
   "playlistSelectionPlay": "播放所选",
+  "playlistSelectionAdd": "将所选加入歌单",
+  "playlistSelectionDownload": "下载所选",
+  "playlistSelectionAdded": {
+    "one": "已将 {} 首加入 {}",
+    "other": "已将 {} 首加入 {}"
+  },
   "playlistSelectionRemove": "移除所选",
   "playlistSelectionDone": "完成",
   "playlistSelectAll": "全选",

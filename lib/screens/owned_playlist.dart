@@ -2,13 +2,16 @@ import 'package:auto_route/auto_route.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/theme.dart';
+import 'package:groovy_box/library/downloads.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
+import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/collection_hero.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:groovy_box/widgets/playlist_name_dialog.dart';
+import 'package:groovy_box/widgets/playlist_picker.dart';
 import 'package:groovy_box/widgets/section.dart';
 import 'package:groovy_box/widgets/track_selection.dart';
 import 'package:groovy_box/pulsar/links.dart';
@@ -140,6 +143,61 @@ class _OwnedPlaylistDetailScreenState
     );
   }
 
+  /// Puts every ticked track into another playlist, one write per track for a
+  /// cloud target and one transaction for a device one.
+  Future<void> _addSelected(List<OwnedPlaylistEntry> list) async {
+    final songs = [
+      for (final entry in list)
+        if (_selection.contains('${entry.entryId}')) entry.song,
+    ];
+    if (songs.isEmpty) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      final result = await addTracksToPlaylist(context, songs: songs);
+      if (result == null) return;
+      _selection.end();
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text(
+            'playlistSelectionAdded'.plural(
+              result.added,
+              args: [result.name],
+            ),
+          ),
+        ),
+      );
+    } catch (error) {
+      messenger?.showSnackBar(
+        SnackBar(content: Text(describeServerError(error))),
+      );
+    }
+  }
+
+  /// Keeps the ticked tracks on this device. The controller reports its own
+  /// failures per track, so the bar only says how many landed.
+  Future<void> _downloadSelected(List<OwnedPlaylistEntry> list) async {
+    final songs = [
+      for (final entry in list)
+        if (_selection.contains('${entry.entryId}') && !entry.song.isRadio)
+          entry.song,
+    ];
+    if (songs.isEmpty) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final added = await ref
+        .read(downloadsControllerProvider.notifier)
+        .downloadAll(songs);
+    if (!mounted) return;
+    messenger?.showSnackBar(
+      SnackBar(
+        content: Text(
+          added == 0
+              ? 'downloadsNothingNew'.tr()
+              : 'downloadsAdded'.plural(added),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final playlistId = widget.playlistId;
@@ -153,179 +211,203 @@ class _OwnedPlaylistDetailScreenState
     final hasSong = ref.watch(
       playbackProvider.select((state) => state.current != null),
     );
-    final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
+    // The bar floats above the page, so the list reserves its height too:
+    // the last row must be able to scroll out from under it.
+    final barOffset = solFloatingBarOffset(context, dockVisible: hasSong);
+    final bottomInset =
+        solBottomChromeInset(context, dockVisible: hasSong) +
+        (_selection.active ? kSelectionBarHeight + SolSpace.md : 0);
+    final list = entries.value ?? const <OwnedPlaylistEntry>[];
+    final keys = [for (final e in list) '${e.entryId}'];
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: ContentFrame(
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: BackButtonRow(onBack: () => context.router.maybePop()),
-            ),
-            ...entries.when(
-              data: (list) {
-                final trackList = [for (final e in list) e.song];
-                if (list.isEmpty) {
+      body: SelectionBarOverlay(
+        selection: _selection,
+        // Above the shell's own floating chrome: the bar belongs to the page,
+        // so it stacks rather than taking the dock's place.
+        bottom: barOffset,
+        bar: SelectionToolbar(
+          selection: _selection,
+          keys: keys,
+          onPlay: () => _playSelected(list),
+          onAddToPlaylist: () => _addSelected(list),
+          onDownload: () => _downloadSelected(list),
+          onRemove: () => _removeSelected(list),
+        ),
+        child: ContentFrame(
+          child: CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: BackButtonRow(onBack: () => context.router.maybePop()),
+              ),
+              ...entries.when(
+                data: (rows) {
+                  if (rows.isEmpty) {
+                    return [
+                      SliverToBoxAdapter(
+                        child: EmptyState(
+                          icon: Symbols.playlist_play,
+                          title: 'ownedPlaylistEmptyTitle'.tr(),
+                          message: 'ownedPlaylistEmptyMessage'.tr(),
+                        ),
+                      ),
+                    ];
+                  }
+                  final trackList = [for (final e in rows) e.song];
                   return [
                     SliverToBoxAdapter(
-                      child: EmptyState(
-                        icon: Symbols.playlist_play,
-                        title: 'ownedPlaylistEmptyTitle'.tr(),
-                        message: 'ownedPlaylistEmptyMessage'.tr(),
+                      child: CollectionHero(
+                        sourceId: playlist?.artId?.sourceId,
+                        artId: playlist?.artId?.artId,
+                        fallbackIcon: Symbols.playlist_play,
+                        source: playlistSourceName(kLocalSourceId, ref),
+                        title:
+                            playlist?.name ??
+                            widget.playlistName ??
+                            'playlistsDetailTitleFallback'.tr(),
+                        eyebrow: 'ownedPlaylistKind'.tr(),
+                        meta: [
+                          if (playlist != null)
+                            'ownedPlaylistEdited'.tr(
+                              args: [formatRelativeTime(playlist.updatedAt)],
+                            ),
+                        ].join('  ·  '),
+                        // The hero is about the collection, so it keeps the
+                        // collection's actions. What happens to several rows
+                        // at once is a different question, answered by the
+                        // bar that floats over them.
+                        actions: [
+                          FilledButton.icon(
+                            onPressed: () => ref
+                                .read(playbackProvider.notifier)
+                                .playQueue(trackList),
+                            icon: const Icon(
+                              Symbols.play_arrow_rounded,
+                              size: 20,
+                            ),
+                            label: Text('commonPlay'.tr()),
+                          ),
+                          IconButton.filledTonal(
+                            tooltip: 'libraryShuffle'.tr(),
+                            onPressed: () {
+                              final notifier = ref.read(
+                                playbackProvider.notifier,
+                              );
+                              notifier.playQueue(trackList);
+                              notifier.setShuffle(true);
+                            },
+                            icon: const Icon(Symbols.shuffle_rounded),
+                          ),
+                          // Editing lives beside the thing it edits, not
+                          // in a bar above it: rename, delete and the
+                          // cloud push all act on this one playlist.
+                          IconButton(
+                            tooltip: 'ownedPlaylistRename'.tr(),
+                            onPressed: playlist == null
+                                ? null
+                                : () => _rename(playlist.name),
+                            icon: const Icon(Symbols.edit_rounded),
+                          ),
+                          IconButton(
+                            tooltip: 'commonDelete'.tr(),
+                            onPressed: _confirmDelete,
+                            icon: const Icon(Symbols.delete_rounded),
+                          ),
+                          PulsarUploadButton(
+                            localKey: PulsarPlaylistLinks.deviceKey(playlistId),
+                            suggestedName:
+                                playlist?.name ?? widget.playlistName ?? '',
+                            songs: (ref) =>
+                                PulsarUpload.deviceSongs(ref, playlistId),
+                          ),
+                          SelectionToggleButton(selection: _selection),
+                        ],
                       ),
+                    ),
+                    SliverList.builder(
+                      itemCount: rows.length,
+                      itemBuilder: (context, index) {
+                        final entry = rows[index];
+                        final song = entry.song;
+                        final key = '${entry.entryId}';
+                        return SongTrackRow(
+                          song: song,
+                          subtitle: songRowSubtitle(ref, song),
+                          // The row's shape does not change with the mode:
+                          // the position keeps its slot and the cover takes
+                          // the tick.
+                          leading: Text(
+                            '${entry.position + 1}',
+                            style: Theme.of(context).textTheme.labelMedium
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures(),
+                                  ],
+                                ),
+                          ),
+                          artwork: SelectionCover(
+                            selection: _selection,
+                            rowKey: key,
+                            child: LibraryArtwork(
+                              sourceId: song.sourceId,
+                              artId: song.artId,
+                              size: 48,
+                              radius: SolRadius.xs,
+                            ),
+                          ),
+                          trailing: formatDuration(song.duration),
+                          onTap: () {
+                            if (_selection.active) {
+                              _selection.toggle(key);
+                              return;
+                            }
+                            ref
+                                .read(playbackProvider.notifier)
+                                .playQueue(
+                                  trackList,
+                                  startIndex: entry.position,
+                                );
+                          },
+                          onLongPress: _selection.active
+                              ? null
+                              : () => _removeEntry(entry),
+                        );
+                      },
                     ),
                   ];
-                }
-                final keys = [for (final e in list) '${e.entryId}'];
-                return [
+                },
+                loading: () => const [
                   SliverToBoxAdapter(
-                    child: CollectionHero(
-                      sourceId: playlist?.artId?.sourceId,
-                      artId: playlist?.artId?.artId,
-                      fallbackIcon: Symbols.playlist_play,
-                      source: playlistSourceName(kLocalSourceId, ref),
-                      title:
-                          playlist?.name ??
-                          widget.playlistName ??
-                          'playlistsDetailTitleFallback'.tr(),
-                      eyebrow: 'ownedPlaylistKind'.tr(),
-                      meta: [
-                        if (playlist != null)
-                          'ownedPlaylistEdited'.tr(
-                            args: [formatRelativeTime(playlist.updatedAt)],
-                          ),
-                      ].join('  ·  '),
-                      actions: _selection.active
-                          ? [
-                              SelectionActions(
-                                selection: _selection,
-                                keys: keys,
-                                onPlay: () => _playSelected(list),
-                                onRemove: () => _removeSelected(list),
-                              ),
-                            ]
-                          : [
-                              FilledButton.icon(
-                                onPressed: () => ref
-                                    .read(playbackProvider.notifier)
-                                    .playQueue(trackList),
-                                icon: const Icon(
-                                  Symbols.play_arrow_rounded,
-                                  size: 20,
-                                ),
-                                label: Text('commonPlay'.tr()),
-                              ),
-                              IconButton.filledTonal(
-                                tooltip: 'libraryShuffle'.tr(),
-                                onPressed: () {
-                                  final notifier = ref.read(
-                                    playbackProvider.notifier,
-                                  );
-                                  notifier.playQueue(trackList);
-                                  notifier.setShuffle(true);
-                                },
-                                icon: const Icon(Symbols.shuffle_rounded),
-                              ),
-                              // Editing lives beside the thing it edits, not
-                              // in a bar above it: rename, delete and the
-                              // cloud push all act on this one playlist.
-                              IconButton(
-                                tooltip: 'ownedPlaylistRename'.tr(),
-                                onPressed: playlist == null
-                                    ? null
-                                    : () => _rename(playlist.name),
-                                icon: const Icon(Symbols.edit_rounded),
-                              ),
-                              IconButton(
-                                tooltip: 'commonDelete'.tr(),
-                                onPressed: _confirmDelete,
-                                icon: const Icon(Symbols.delete_rounded),
-                              ),
-                              PulsarUploadButton(
-                                localKey: PulsarPlaylistLinks.deviceKey(
-                                  playlistId,
-                                ),
-                                suggestedName:
-                                    playlist?.name ?? widget.playlistName ?? '',
-                                songs: (ref) =>
-                                    PulsarUpload.deviceSongs(ref, playlistId),
-                              ),
-                              SelectionToggleButton(selection: _selection),
-                            ],
+                    child: Padding(
+                      padding: EdgeInsets.all(SolSpace.huge),
+                      child: Center(child: CircularProgressIndicator()),
                     ),
                   ),
-                  SliverList.builder(
-                    itemCount: list.length,
-                    itemBuilder: (context, index) {
-                      final entry = list[index];
-                      final song = entry.song;
-                      final key = '${entry.entryId}';
-                      return SongTrackRow(
-                        song: song,
-                        subtitle: songRowSubtitle(ref, song),
-                        leading: _selection.active
-                            ? SelectionCheckbox(
-                                selection: _selection,
-                                rowKey: key,
-                              )
-                            : Text(
-                                '${entry.position + 1}',
-                                style: Theme.of(context).textTheme.labelMedium
-                                    ?.copyWith(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant,
-                                      fontFeatures: const [
-                                        FontFeature.tabularFigures(),
-                                      ],
-                                    ),
-                              ),
-                        trailing: formatDuration(song.duration),
-                        onTap: () {
-                          if (_selection.active) {
-                            _selection.toggle(key);
-                            return;
-                          }
-                          ref
-                              .read(playbackProvider.notifier)
-                              .playQueue(trackList, startIndex: entry.position);
-                        },
-                        onLongPress: _selection.active
-                            ? null
-                            : () => _removeEntry(entry),
-                      );
-                    },
-                  ),
-                ];
-              },
-              loading: () => const [
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.all(SolSpace.huge),
-                    child: Center(child: CircularProgressIndicator()),
-                  ),
-                ),
-              ],
-              error: (error, _) => [
-                SliverToBoxAdapter(
-                  child: EmptyState(
-                    icon: Symbols.error_rounded,
-                    title: 'playlistsDetailLoadError'.tr(),
-                    message: describeServerError(error),
-                    iconColor: Theme.of(context).colorScheme.error,
-                    action: FilledButton(
-                      onPressed: () => ref.invalidate(
-                        ownedPlaylistEntriesProvider(playlistId),
+                ],
+                error: (error, _) => [
+                  SliverToBoxAdapter(
+                    child: EmptyState(
+                      icon: Symbols.error_rounded,
+                      title: 'playlistsDetailLoadError'.tr(),
+                      message: describeServerError(error),
+                      iconColor: Theme.of(context).colorScheme.error,
+                      action: FilledButton(
+                        onPressed: () => ref.invalidate(
+                          ownedPlaylistEntriesProvider(playlistId),
+                        ),
+                        child: Text('commonTryAgain'.tr()),
                       ),
-                      child: Text('commonTryAgain'.tr()),
                     ),
                   ),
-                ),
-              ],
-            ),
-            SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
-          ],
+                ],
+              ),
+              SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
+            ],
+          ),
         ),
       ),
     );
