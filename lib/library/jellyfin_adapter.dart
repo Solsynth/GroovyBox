@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 
 import '../core/identity.dart';
 import 'http.dart';
+import 'http_cache.dart';
 import 'lyrics.dart';
 import 'models.dart';
 import 'source.dart';
@@ -81,7 +82,8 @@ class JellyfinAdapter implements LibraryAdapter {
   }
 
   @override
-  LibrarySource sourceFor(SourceConfig config) => JellyfinSource(config);
+  LibrarySource sourceFor(SourceConfig config, {ResponseCache? cache}) =>
+      JellyfinSource(config, cache: cache);
 
   /// The one header Jellyfin authenticates every request with.
   ///
@@ -132,7 +134,7 @@ class JellyfinSource extends LibrarySource implements RatedSource {
   final SourceConfig config;
   final Dio _dio;
 
-  JellyfinSource(this.config)
+  JellyfinSource(this.config, {ResponseCache? cache})
     : _dio = Dio(
         BaseOptions(
           baseUrl: normalizeBaseUrl(config.baseUrl),
@@ -147,7 +149,11 @@ class JellyfinSource extends LibrarySource implements RatedSource {
             ),
           },
         ),
-      );
+      ) {
+    if (cache != null) {
+      _dio.interceptors.add(cache.interceptorFor(config.id));
+    }
+  }
 
   String get _root => normalizeBaseUrl(config.baseUrl);
 

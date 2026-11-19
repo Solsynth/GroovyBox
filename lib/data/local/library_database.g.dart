@@ -4749,6 +4749,1028 @@ class LocalPlaylistEntriesCompanion
   }
 }
 
+class $DownloadsTable extends Downloads
+    with TableInfo<$DownloadsTable, DownloadRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DownloadsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceId = GeneratedColumn<String>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _externalIdMeta = const VerificationMeta(
+    'externalId',
+  );
+  @override
+  late final GeneratedColumn<String> externalId = GeneratedColumn<String>(
+    'external_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _pathMeta = const VerificationMeta('path');
+  @override
+  late final GeneratedColumn<String> path = GeneratedColumn<String>(
+    'path',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _sizeBytesMeta = const VerificationMeta(
+    'sizeBytes',
+  );
+  @override
+  late final GeneratedColumn<int> sizeBytes = GeneratedColumn<int>(
+    'size_bytes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _artistMeta = const VerificationMeta('artist');
+  @override
+  late final GeneratedColumn<String> artist = GeneratedColumn<String>(
+    'artist',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _albumMeta = const VerificationMeta('album');
+  @override
+  late final GeneratedColumn<String> album = GeneratedColumn<String>(
+    'album',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _durationMsMeta = const VerificationMeta(
+    'durationMs',
+  );
+  @override
+  late final GeneratedColumn<int> durationMs = GeneratedColumn<int>(
+    'duration_ms',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _artPathMeta = const VerificationMeta(
+    'artPath',
+  );
+  @override
+  late final GeneratedColumn<String> artPath = GeneratedColumn<String>(
+    'art_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _downloadedAtMeta = const VerificationMeta(
+    'downloadedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> downloadedAt = GeneratedColumn<DateTime>(
+    'downloaded_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    sourceId,
+    externalId,
+    path,
+    sizeBytes,
+    title,
+    artist,
+    album,
+    durationMs,
+    artPath,
+    downloadedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'downloads';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DownloadRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceIdMeta);
+    }
+    if (data.containsKey('external_id')) {
+      context.handle(
+        _externalIdMeta,
+        externalId.isAcceptableOrUnknown(data['external_id']!, _externalIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_externalIdMeta);
+    }
+    if (data.containsKey('path')) {
+      context.handle(
+        _pathMeta,
+        path.isAcceptableOrUnknown(data['path']!, _pathMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_pathMeta);
+    }
+    if (data.containsKey('size_bytes')) {
+      context.handle(
+        _sizeBytesMeta,
+        sizeBytes.isAcceptableOrUnknown(data['size_bytes']!, _sizeBytesMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sizeBytesMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('artist')) {
+      context.handle(
+        _artistMeta,
+        artist.isAcceptableOrUnknown(data['artist']!, _artistMeta),
+      );
+    }
+    if (data.containsKey('album')) {
+      context.handle(
+        _albumMeta,
+        album.isAcceptableOrUnknown(data['album']!, _albumMeta),
+      );
+    }
+    if (data.containsKey('duration_ms')) {
+      context.handle(
+        _durationMsMeta,
+        durationMs.isAcceptableOrUnknown(data['duration_ms']!, _durationMsMeta),
+      );
+    }
+    if (data.containsKey('art_path')) {
+      context.handle(
+        _artPathMeta,
+        artPath.isAcceptableOrUnknown(data['art_path']!, _artPathMeta),
+      );
+    }
+    if (data.containsKey('downloaded_at')) {
+      context.handle(
+        _downloadedAtMeta,
+        downloadedAt.isAcceptableOrUnknown(
+          data['downloaded_at']!,
+          _downloadedAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_downloadedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {sourceId, externalId},
+  ];
+  @override
+  DownloadRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DownloadRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      sourceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_id'],
+      )!,
+      externalId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}external_id'],
+      )!,
+      path: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}path'],
+      )!,
+      sizeBytes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}size_bytes'],
+      )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      artist: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}artist'],
+      ),
+      album: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}album'],
+      ),
+      durationMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}duration_ms'],
+      )!,
+      artPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}art_path'],
+      ),
+      downloadedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}downloaded_at'],
+      )!,
+    );
+  }
+
+  @override
+  $DownloadsTable createAlias(String alias) {
+    return $DownloadsTable(attachedDatabase, alias);
+  }
+}
+
+class DownloadRow extends DataClass implements Insertable<DownloadRow> {
+  final int id;
+  final String sourceId;
+  final String externalId;
+
+  /// Path of the audio file, relative to the download directory. Relative for
+  /// the same reason [LocalFiles.path] is: the app's container moving must not
+  /// invalidate what is already on disk.
+  final String path;
+  final int sizeBytes;
+
+  /// The track's tags as the source described them at download time, so the
+  /// downloads page can name a track whose library is not connected.
+  final String title;
+  final String? artist;
+  final String? album;
+  final int durationMs;
+
+  /// Cover written beside the download, or null when the library had none.
+  final String? artPath;
+  final DateTime downloadedAt;
+  const DownloadRow({
+    required this.id,
+    required this.sourceId,
+    required this.externalId,
+    required this.path,
+    required this.sizeBytes,
+    required this.title,
+    this.artist,
+    this.album,
+    required this.durationMs,
+    this.artPath,
+    required this.downloadedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['source_id'] = Variable<String>(sourceId);
+    map['external_id'] = Variable<String>(externalId);
+    map['path'] = Variable<String>(path);
+    map['size_bytes'] = Variable<int>(sizeBytes);
+    map['title'] = Variable<String>(title);
+    if (!nullToAbsent || artist != null) {
+      map['artist'] = Variable<String>(artist);
+    }
+    if (!nullToAbsent || album != null) {
+      map['album'] = Variable<String>(album);
+    }
+    map['duration_ms'] = Variable<int>(durationMs);
+    if (!nullToAbsent || artPath != null) {
+      map['art_path'] = Variable<String>(artPath);
+    }
+    map['downloaded_at'] = Variable<DateTime>(downloadedAt);
+    return map;
+  }
+
+  DownloadsCompanion toCompanion(bool nullToAbsent) {
+    return DownloadsCompanion(
+      id: Value(id),
+      sourceId: Value(sourceId),
+      externalId: Value(externalId),
+      path: Value(path),
+      sizeBytes: Value(sizeBytes),
+      title: Value(title),
+      artist: artist == null && nullToAbsent
+          ? const Value.absent()
+          : Value(artist),
+      album: album == null && nullToAbsent
+          ? const Value.absent()
+          : Value(album),
+      durationMs: Value(durationMs),
+      artPath: artPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(artPath),
+      downloadedAt: Value(downloadedAt),
+    );
+  }
+
+  factory DownloadRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DownloadRow(
+      id: serializer.fromJson<int>(json['id']),
+      sourceId: serializer.fromJson<String>(json['sourceId']),
+      externalId: serializer.fromJson<String>(json['externalId']),
+      path: serializer.fromJson<String>(json['path']),
+      sizeBytes: serializer.fromJson<int>(json['sizeBytes']),
+      title: serializer.fromJson<String>(json['title']),
+      artist: serializer.fromJson<String?>(json['artist']),
+      album: serializer.fromJson<String?>(json['album']),
+      durationMs: serializer.fromJson<int>(json['durationMs']),
+      artPath: serializer.fromJson<String?>(json['artPath']),
+      downloadedAt: serializer.fromJson<DateTime>(json['downloadedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'sourceId': serializer.toJson<String>(sourceId),
+      'externalId': serializer.toJson<String>(externalId),
+      'path': serializer.toJson<String>(path),
+      'sizeBytes': serializer.toJson<int>(sizeBytes),
+      'title': serializer.toJson<String>(title),
+      'artist': serializer.toJson<String?>(artist),
+      'album': serializer.toJson<String?>(album),
+      'durationMs': serializer.toJson<int>(durationMs),
+      'artPath': serializer.toJson<String?>(artPath),
+      'downloadedAt': serializer.toJson<DateTime>(downloadedAt),
+    };
+  }
+
+  DownloadRow copyWith({
+    int? id,
+    String? sourceId,
+    String? externalId,
+    String? path,
+    int? sizeBytes,
+    String? title,
+    Value<String?> artist = const Value.absent(),
+    Value<String?> album = const Value.absent(),
+    int? durationMs,
+    Value<String?> artPath = const Value.absent(),
+    DateTime? downloadedAt,
+  }) => DownloadRow(
+    id: id ?? this.id,
+    sourceId: sourceId ?? this.sourceId,
+    externalId: externalId ?? this.externalId,
+    path: path ?? this.path,
+    sizeBytes: sizeBytes ?? this.sizeBytes,
+    title: title ?? this.title,
+    artist: artist.present ? artist.value : this.artist,
+    album: album.present ? album.value : this.album,
+    durationMs: durationMs ?? this.durationMs,
+    artPath: artPath.present ? artPath.value : this.artPath,
+    downloadedAt: downloadedAt ?? this.downloadedAt,
+  );
+  DownloadRow copyWithCompanion(DownloadsCompanion data) {
+    return DownloadRow(
+      id: data.id.present ? data.id.value : this.id,
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      externalId: data.externalId.present
+          ? data.externalId.value
+          : this.externalId,
+      path: data.path.present ? data.path.value : this.path,
+      sizeBytes: data.sizeBytes.present ? data.sizeBytes.value : this.sizeBytes,
+      title: data.title.present ? data.title.value : this.title,
+      artist: data.artist.present ? data.artist.value : this.artist,
+      album: data.album.present ? data.album.value : this.album,
+      durationMs: data.durationMs.present
+          ? data.durationMs.value
+          : this.durationMs,
+      artPath: data.artPath.present ? data.artPath.value : this.artPath,
+      downloadedAt: data.downloadedAt.present
+          ? data.downloadedAt.value
+          : this.downloadedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DownloadRow(')
+          ..write('id: $id, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('externalId: $externalId, ')
+          ..write('path: $path, ')
+          ..write('sizeBytes: $sizeBytes, ')
+          ..write('title: $title, ')
+          ..write('artist: $artist, ')
+          ..write('album: $album, ')
+          ..write('durationMs: $durationMs, ')
+          ..write('artPath: $artPath, ')
+          ..write('downloadedAt: $downloadedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    sourceId,
+    externalId,
+    path,
+    sizeBytes,
+    title,
+    artist,
+    album,
+    durationMs,
+    artPath,
+    downloadedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DownloadRow &&
+          other.id == this.id &&
+          other.sourceId == this.sourceId &&
+          other.externalId == this.externalId &&
+          other.path == this.path &&
+          other.sizeBytes == this.sizeBytes &&
+          other.title == this.title &&
+          other.artist == this.artist &&
+          other.album == this.album &&
+          other.durationMs == this.durationMs &&
+          other.artPath == this.artPath &&
+          other.downloadedAt == this.downloadedAt);
+}
+
+class DownloadsCompanion extends UpdateCompanion<DownloadRow> {
+  final Value<int> id;
+  final Value<String> sourceId;
+  final Value<String> externalId;
+  final Value<String> path;
+  final Value<int> sizeBytes;
+  final Value<String> title;
+  final Value<String?> artist;
+  final Value<String?> album;
+  final Value<int> durationMs;
+  final Value<String?> artPath;
+  final Value<DateTime> downloadedAt;
+  const DownloadsCompanion({
+    this.id = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.externalId = const Value.absent(),
+    this.path = const Value.absent(),
+    this.sizeBytes = const Value.absent(),
+    this.title = const Value.absent(),
+    this.artist = const Value.absent(),
+    this.album = const Value.absent(),
+    this.durationMs = const Value.absent(),
+    this.artPath = const Value.absent(),
+    this.downloadedAt = const Value.absent(),
+  });
+  DownloadsCompanion.insert({
+    this.id = const Value.absent(),
+    required String sourceId,
+    required String externalId,
+    required String path,
+    required int sizeBytes,
+    required String title,
+    this.artist = const Value.absent(),
+    this.album = const Value.absent(),
+    this.durationMs = const Value.absent(),
+    this.artPath = const Value.absent(),
+    required DateTime downloadedAt,
+  }) : sourceId = Value(sourceId),
+       externalId = Value(externalId),
+       path = Value(path),
+       sizeBytes = Value(sizeBytes),
+       title = Value(title),
+       downloadedAt = Value(downloadedAt);
+  static Insertable<DownloadRow> custom({
+    Expression<int>? id,
+    Expression<String>? sourceId,
+    Expression<String>? externalId,
+    Expression<String>? path,
+    Expression<int>? sizeBytes,
+    Expression<String>? title,
+    Expression<String>? artist,
+    Expression<String>? album,
+    Expression<int>? durationMs,
+    Expression<String>? artPath,
+    Expression<DateTime>? downloadedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (sourceId != null) 'source_id': sourceId,
+      if (externalId != null) 'external_id': externalId,
+      if (path != null) 'path': path,
+      if (sizeBytes != null) 'size_bytes': sizeBytes,
+      if (title != null) 'title': title,
+      if (artist != null) 'artist': artist,
+      if (album != null) 'album': album,
+      if (durationMs != null) 'duration_ms': durationMs,
+      if (artPath != null) 'art_path': artPath,
+      if (downloadedAt != null) 'downloaded_at': downloadedAt,
+    });
+  }
+
+  DownloadsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? sourceId,
+    Value<String>? externalId,
+    Value<String>? path,
+    Value<int>? sizeBytes,
+    Value<String>? title,
+    Value<String?>? artist,
+    Value<String?>? album,
+    Value<int>? durationMs,
+    Value<String?>? artPath,
+    Value<DateTime>? downloadedAt,
+  }) {
+    return DownloadsCompanion(
+      id: id ?? this.id,
+      sourceId: sourceId ?? this.sourceId,
+      externalId: externalId ?? this.externalId,
+      path: path ?? this.path,
+      sizeBytes: sizeBytes ?? this.sizeBytes,
+      title: title ?? this.title,
+      artist: artist ?? this.artist,
+      album: album ?? this.album,
+      durationMs: durationMs ?? this.durationMs,
+      artPath: artPath ?? this.artPath,
+      downloadedAt: downloadedAt ?? this.downloadedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (sourceId.present) {
+      map['source_id'] = Variable<String>(sourceId.value);
+    }
+    if (externalId.present) {
+      map['external_id'] = Variable<String>(externalId.value);
+    }
+    if (path.present) {
+      map['path'] = Variable<String>(path.value);
+    }
+    if (sizeBytes.present) {
+      map['size_bytes'] = Variable<int>(sizeBytes.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (artist.present) {
+      map['artist'] = Variable<String>(artist.value);
+    }
+    if (album.present) {
+      map['album'] = Variable<String>(album.value);
+    }
+    if (durationMs.present) {
+      map['duration_ms'] = Variable<int>(durationMs.value);
+    }
+    if (artPath.present) {
+      map['art_path'] = Variable<String>(artPath.value);
+    }
+    if (downloadedAt.present) {
+      map['downloaded_at'] = Variable<DateTime>(downloadedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DownloadsCompanion(')
+          ..write('id: $id, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('externalId: $externalId, ')
+          ..write('path: $path, ')
+          ..write('sizeBytes: $sizeBytes, ')
+          ..write('title: $title, ')
+          ..write('artist: $artist, ')
+          ..write('album: $album, ')
+          ..write('durationMs: $durationMs, ')
+          ..write('artPath: $artPath, ')
+          ..write('downloadedAt: $downloadedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $HttpCacheTable extends HttpCache
+    with TableInfo<$HttpCacheTable, HttpCacheRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $HttpCacheTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _keyMeta = const VerificationMeta('key');
+  @override
+  late final GeneratedColumn<String> key = GeneratedColumn<String>(
+    'key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bodyMeta = const VerificationMeta('body');
+  @override
+  late final GeneratedColumn<String> body = GeneratedColumn<String>(
+    'body',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _storedAtMeta = const VerificationMeta(
+    'storedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> storedAt = GeneratedColumn<DateTime>(
+    'stored_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _expiresAtMeta = const VerificationMeta(
+    'expiresAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> expiresAt = GeneratedColumn<DateTime>(
+    'expires_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _staleMeta = const VerificationMeta('stale');
+  @override
+  late final GeneratedColumn<bool> stale = GeneratedColumn<bool>(
+    'stale',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("stale" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [key, body, storedAt, expiresAt, stale];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'http_cache';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<HttpCacheRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('key')) {
+      context.handle(
+        _keyMeta,
+        key.isAcceptableOrUnknown(data['key']!, _keyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_keyMeta);
+    }
+    if (data.containsKey('body')) {
+      context.handle(
+        _bodyMeta,
+        body.isAcceptableOrUnknown(data['body']!, _bodyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bodyMeta);
+    }
+    if (data.containsKey('stored_at')) {
+      context.handle(
+        _storedAtMeta,
+        storedAt.isAcceptableOrUnknown(data['stored_at']!, _storedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_storedAtMeta);
+    }
+    if (data.containsKey('expires_at')) {
+      context.handle(
+        _expiresAtMeta,
+        expiresAt.isAcceptableOrUnknown(data['expires_at']!, _expiresAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_expiresAtMeta);
+    }
+    if (data.containsKey('stale')) {
+      context.handle(
+        _staleMeta,
+        stale.isAcceptableOrUnknown(data['stale']!, _staleMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {key};
+  @override
+  HttpCacheRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return HttpCacheRow(
+      key: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}key'],
+      )!,
+      body: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}body'],
+      )!,
+      storedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}stored_at'],
+      )!,
+      expiresAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}expires_at'],
+      )!,
+      stale: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}stale'],
+      )!,
+    );
+  }
+
+  @override
+  $HttpCacheTable createAlias(String alias) {
+    return $HttpCacheTable(attachedDatabase, alias);
+  }
+}
+
+class HttpCacheRow extends DataClass implements Insertable<HttpCacheRow> {
+  final String key;
+  final String body;
+  final DateTime storedAt;
+  final DateTime expiresAt;
+
+  /// Whether the answer has been served from disk at least once, so an entry
+  /// that outlives [expiresAt] is still known to be good enough to show while
+  /// the network is asked again.
+  final bool stale;
+  const HttpCacheRow({
+    required this.key,
+    required this.body,
+    required this.storedAt,
+    required this.expiresAt,
+    required this.stale,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['key'] = Variable<String>(key);
+    map['body'] = Variable<String>(body);
+    map['stored_at'] = Variable<DateTime>(storedAt);
+    map['expires_at'] = Variable<DateTime>(expiresAt);
+    map['stale'] = Variable<bool>(stale);
+    return map;
+  }
+
+  HttpCacheCompanion toCompanion(bool nullToAbsent) {
+    return HttpCacheCompanion(
+      key: Value(key),
+      body: Value(body),
+      storedAt: Value(storedAt),
+      expiresAt: Value(expiresAt),
+      stale: Value(stale),
+    );
+  }
+
+  factory HttpCacheRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return HttpCacheRow(
+      key: serializer.fromJson<String>(json['key']),
+      body: serializer.fromJson<String>(json['body']),
+      storedAt: serializer.fromJson<DateTime>(json['storedAt']),
+      expiresAt: serializer.fromJson<DateTime>(json['expiresAt']),
+      stale: serializer.fromJson<bool>(json['stale']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'key': serializer.toJson<String>(key),
+      'body': serializer.toJson<String>(body),
+      'storedAt': serializer.toJson<DateTime>(storedAt),
+      'expiresAt': serializer.toJson<DateTime>(expiresAt),
+      'stale': serializer.toJson<bool>(stale),
+    };
+  }
+
+  HttpCacheRow copyWith({
+    String? key,
+    String? body,
+    DateTime? storedAt,
+    DateTime? expiresAt,
+    bool? stale,
+  }) => HttpCacheRow(
+    key: key ?? this.key,
+    body: body ?? this.body,
+    storedAt: storedAt ?? this.storedAt,
+    expiresAt: expiresAt ?? this.expiresAt,
+    stale: stale ?? this.stale,
+  );
+  HttpCacheRow copyWithCompanion(HttpCacheCompanion data) {
+    return HttpCacheRow(
+      key: data.key.present ? data.key.value : this.key,
+      body: data.body.present ? data.body.value : this.body,
+      storedAt: data.storedAt.present ? data.storedAt.value : this.storedAt,
+      expiresAt: data.expiresAt.present ? data.expiresAt.value : this.expiresAt,
+      stale: data.stale.present ? data.stale.value : this.stale,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('HttpCacheRow(')
+          ..write('key: $key, ')
+          ..write('body: $body, ')
+          ..write('storedAt: $storedAt, ')
+          ..write('expiresAt: $expiresAt, ')
+          ..write('stale: $stale')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(key, body, storedAt, expiresAt, stale);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is HttpCacheRow &&
+          other.key == this.key &&
+          other.body == this.body &&
+          other.storedAt == this.storedAt &&
+          other.expiresAt == this.expiresAt &&
+          other.stale == this.stale);
+}
+
+class HttpCacheCompanion extends UpdateCompanion<HttpCacheRow> {
+  final Value<String> key;
+  final Value<String> body;
+  final Value<DateTime> storedAt;
+  final Value<DateTime> expiresAt;
+  final Value<bool> stale;
+  final Value<int> rowid;
+  const HttpCacheCompanion({
+    this.key = const Value.absent(),
+    this.body = const Value.absent(),
+    this.storedAt = const Value.absent(),
+    this.expiresAt = const Value.absent(),
+    this.stale = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  HttpCacheCompanion.insert({
+    required String key,
+    required String body,
+    required DateTime storedAt,
+    required DateTime expiresAt,
+    this.stale = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : key = Value(key),
+       body = Value(body),
+       storedAt = Value(storedAt),
+       expiresAt = Value(expiresAt);
+  static Insertable<HttpCacheRow> custom({
+    Expression<String>? key,
+    Expression<String>? body,
+    Expression<DateTime>? storedAt,
+    Expression<DateTime>? expiresAt,
+    Expression<bool>? stale,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (key != null) 'key': key,
+      if (body != null) 'body': body,
+      if (storedAt != null) 'stored_at': storedAt,
+      if (expiresAt != null) 'expires_at': expiresAt,
+      if (stale != null) 'stale': stale,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  HttpCacheCompanion copyWith({
+    Value<String>? key,
+    Value<String>? body,
+    Value<DateTime>? storedAt,
+    Value<DateTime>? expiresAt,
+    Value<bool>? stale,
+    Value<int>? rowid,
+  }) {
+    return HttpCacheCompanion(
+      key: key ?? this.key,
+      body: body ?? this.body,
+      storedAt: storedAt ?? this.storedAt,
+      expiresAt: expiresAt ?? this.expiresAt,
+      stale: stale ?? this.stale,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (key.present) {
+      map['key'] = Variable<String>(key.value);
+    }
+    if (body.present) {
+      map['body'] = Variable<String>(body.value);
+    }
+    if (storedAt.present) {
+      map['stored_at'] = Variable<DateTime>(storedAt.value);
+    }
+    if (expiresAt.present) {
+      map['expires_at'] = Variable<DateTime>(expiresAt.value);
+    }
+    if (stale.present) {
+      map['stale'] = Variable<bool>(stale.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('HttpCacheCompanion(')
+          ..write('key: $key, ')
+          ..write('body: $body, ')
+          ..write('storedAt: $storedAt, ')
+          ..write('expiresAt: $expiresAt, ')
+          ..write('stale: $stale, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$LibraryDatabase extends GeneratedDatabase {
   _$LibraryDatabase(QueryExecutor e) : super(e);
   $LibraryDatabaseManager get managers => $LibraryDatabaseManager(this);
@@ -4766,6 +5788,8 @@ abstract class _$LibraryDatabase extends GeneratedDatabase {
   late final $LocalPlaylistsTable localPlaylists = $LocalPlaylistsTable(this);
   late final $LocalPlaylistEntriesTable localPlaylistEntries =
       $LocalPlaylistEntriesTable(this);
+  late final $DownloadsTable downloads = $DownloadsTable(this);
+  late final $HttpCacheTable httpCache = $HttpCacheTable(this);
   late final Index trackLinksTrack = Index(
     'track_links_track',
     'CREATE INDEX track_links_track ON track_links (track_id)',
@@ -4786,6 +5810,14 @@ abstract class _$LibraryDatabase extends GeneratedDatabase {
     'local_playlist_entries_playlist',
     'CREATE INDEX local_playlist_entries_playlist ON local_playlist_entries (playlist_id)',
   );
+  late final Index downloadsLink = Index(
+    'downloads_link',
+    'CREATE INDEX downloads_link ON downloads (source_id, external_id)',
+  );
+  late final Index httpCacheExpiry = Index(
+    'http_cache_expiry',
+    'CREATE INDEX http_cache_expiry ON http_cache (expires_at)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -4800,11 +5832,15 @@ abstract class _$LibraryDatabase extends GeneratedDatabase {
     favouriteTracks,
     localPlaylists,
     localPlaylistEntries,
+    downloads,
+    httpCache,
     trackLinksTrack,
     playEventsTrack,
     playEventsStarted,
     localFilesAlbum,
     localPlaylistEntriesPlaylist,
+    downloadsLink,
+    httpCacheExpiry,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -8542,6 +9578,534 @@ typedef $$LocalPlaylistEntriesTableProcessedTableManager =
       LocalPlaylistEntryRow,
       PrefetchHooks Function({bool playlistId, bool trackId})
     >;
+typedef $$DownloadsTableCreateCompanionBuilder = DownloadsCompanion Function({
+  Value<int> id,
+  required String sourceId,
+  required String externalId,
+  required String path,
+  required int sizeBytes,
+  required String title,
+  Value<String?> artist,
+  Value<String?> album,
+  Value<int> durationMs,
+  Value<String?> artPath,
+  required DateTime downloadedAt,
+});
+typedef $$DownloadsTableUpdateCompanionBuilder = DownloadsCompanion Function({
+  Value<int> id,
+  Value<String> sourceId,
+  Value<String> externalId,
+  Value<String> path,
+  Value<int> sizeBytes,
+  Value<String> title,
+  Value<String?> artist,
+  Value<String?> album,
+  Value<int> durationMs,
+  Value<String?> artPath,
+  Value<DateTime> downloadedAt,
+});
+
+class $$DownloadsTableFilterComposer
+    extends Composer<_$LibraryDatabase, $DownloadsTable> {
+  $$DownloadsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get path => $composableBuilder(
+    column: $table.path,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sizeBytes => $composableBuilder(
+    column: $table.sizeBytes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get artist => $composableBuilder(
+    column: $table.artist,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get album => $composableBuilder(
+    column: $table.album,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get durationMs => $composableBuilder(
+    column: $table.durationMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get artPath => $composableBuilder(
+    column: $table.artPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get downloadedAt => $composableBuilder(
+    column: $table.downloadedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DownloadsTableOrderingComposer
+    extends Composer<_$LibraryDatabase, $DownloadsTable> {
+  $$DownloadsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get path => $composableBuilder(
+    column: $table.path,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sizeBytes => $composableBuilder(
+    column: $table.sizeBytes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get artist => $composableBuilder(
+    column: $table.artist,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get album => $composableBuilder(
+    column: $table.album,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get durationMs => $composableBuilder(
+    column: $table.durationMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get artPath => $composableBuilder(
+    column: $table.artPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get downloadedAt => $composableBuilder(
+    column: $table.downloadedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DownloadsTableAnnotationComposer
+    extends Composer<_$LibraryDatabase, $DownloadsTable> {
+  $$DownloadsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceId =>
+      $composableBuilder(column: $table.sourceId, builder: (column) => column);
+
+  GeneratedColumn<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get path =>
+      $composableBuilder(column: $table.path, builder: (column) => column);
+
+  GeneratedColumn<int> get sizeBytes =>
+      $composableBuilder(column: $table.sizeBytes, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get artist =>
+      $composableBuilder(column: $table.artist, builder: (column) => column);
+
+  GeneratedColumn<String> get album =>
+      $composableBuilder(column: $table.album, builder: (column) => column);
+
+  GeneratedColumn<int> get durationMs => $composableBuilder(
+    column: $table.durationMs,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get artPath =>
+      $composableBuilder(column: $table.artPath, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get downloadedAt => $composableBuilder(
+    column: $table.downloadedAt,
+    builder: (column) => column,
+  );
+}
+
+class $$DownloadsTableTableManager
+    extends
+        RootTableManager<
+          _$LibraryDatabase,
+          $DownloadsTable,
+          DownloadRow,
+          $$DownloadsTableFilterComposer,
+          $$DownloadsTableOrderingComposer,
+          $$DownloadsTableAnnotationComposer,
+          $$DownloadsTableCreateCompanionBuilder,
+          $$DownloadsTableUpdateCompanionBuilder,
+          (
+            DownloadRow,
+            BaseReferences<_$LibraryDatabase, $DownloadsTable, DownloadRow>,
+          ),
+          DownloadRow,
+          PrefetchHooks Function()
+        > {
+  $$DownloadsTableTableManager(_$LibraryDatabase db, $DownloadsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DownloadsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DownloadsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DownloadsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> sourceId = const Value.absent(),
+                Value<String> externalId = const Value.absent(),
+                Value<String> path = const Value.absent(),
+                Value<int> sizeBytes = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<String?> artist = const Value.absent(),
+                Value<String?> album = const Value.absent(),
+                Value<int> durationMs = const Value.absent(),
+                Value<String?> artPath = const Value.absent(),
+                Value<DateTime> downloadedAt = const Value.absent(),
+              }) => DownloadsCompanion(
+                id: id,
+                sourceId: sourceId,
+                externalId: externalId,
+                path: path,
+                sizeBytes: sizeBytes,
+                title: title,
+                artist: artist,
+                album: album,
+                durationMs: durationMs,
+                artPath: artPath,
+                downloadedAt: downloadedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String sourceId,
+                required String externalId,
+                required String path,
+                required int sizeBytes,
+                required String title,
+                Value<String?> artist = const Value.absent(),
+                Value<String?> album = const Value.absent(),
+                Value<int> durationMs = const Value.absent(),
+                Value<String?> artPath = const Value.absent(),
+                required DateTime downloadedAt,
+              }) => DownloadsCompanion.insert(
+                id: id,
+                sourceId: sourceId,
+                externalId: externalId,
+                path: path,
+                sizeBytes: sizeBytes,
+                title: title,
+                artist: artist,
+                album: album,
+                durationMs: durationMs,
+                artPath: artPath,
+                downloadedAt: downloadedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$DownloadsTable, DownloadRow>(table),
+                  BaseReferences<
+                    _$LibraryDatabase,
+                    $DownloadsTable,
+                    DownloadRow
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DownloadsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LibraryDatabase,
+      $DownloadsTable,
+      DownloadRow,
+      $$DownloadsTableFilterComposer,
+      $$DownloadsTableOrderingComposer,
+      $$DownloadsTableAnnotationComposer,
+      $$DownloadsTableCreateCompanionBuilder,
+      $$DownloadsTableUpdateCompanionBuilder,
+      (
+        DownloadRow,
+        BaseReferences<_$LibraryDatabase, $DownloadsTable, DownloadRow>,
+      ),
+      DownloadRow,
+      PrefetchHooks Function()
+    >;
+typedef $$HttpCacheTableCreateCompanionBuilder = HttpCacheCompanion Function({
+  required String key,
+  required String body,
+  required DateTime storedAt,
+  required DateTime expiresAt,
+  Value<bool> stale,
+  Value<int> rowid,
+});
+typedef $$HttpCacheTableUpdateCompanionBuilder = HttpCacheCompanion Function({
+  Value<String> key,
+  Value<String> body,
+  Value<DateTime> storedAt,
+  Value<DateTime> expiresAt,
+  Value<bool> stale,
+  Value<int> rowid,
+});
+
+class $$HttpCacheTableFilterComposer
+    extends Composer<_$LibraryDatabase, $HttpCacheTable> {
+  $$HttpCacheTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get key => $composableBuilder(
+    column: $table.key,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get body => $composableBuilder(
+    column: $table.body,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get storedAt => $composableBuilder(
+    column: $table.storedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get expiresAt => $composableBuilder(
+    column: $table.expiresAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get stale => $composableBuilder(
+    column: $table.stale,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$HttpCacheTableOrderingComposer
+    extends Composer<_$LibraryDatabase, $HttpCacheTable> {
+  $$HttpCacheTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get key => $composableBuilder(
+    column: $table.key,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get body => $composableBuilder(
+    column: $table.body,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get storedAt => $composableBuilder(
+    column: $table.storedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get expiresAt => $composableBuilder(
+    column: $table.expiresAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get stale => $composableBuilder(
+    column: $table.stale,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$HttpCacheTableAnnotationComposer
+    extends Composer<_$LibraryDatabase, $HttpCacheTable> {
+  $$HttpCacheTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get key =>
+      $composableBuilder(column: $table.key, builder: (column) => column);
+
+  GeneratedColumn<String> get body =>
+      $composableBuilder(column: $table.body, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get storedAt =>
+      $composableBuilder(column: $table.storedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get expiresAt =>
+      $composableBuilder(column: $table.expiresAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get stale =>
+      $composableBuilder(column: $table.stale, builder: (column) => column);
+}
+
+class $$HttpCacheTableTableManager
+    extends
+        RootTableManager<
+          _$LibraryDatabase,
+          $HttpCacheTable,
+          HttpCacheRow,
+          $$HttpCacheTableFilterComposer,
+          $$HttpCacheTableOrderingComposer,
+          $$HttpCacheTableAnnotationComposer,
+          $$HttpCacheTableCreateCompanionBuilder,
+          $$HttpCacheTableUpdateCompanionBuilder,
+          (
+            HttpCacheRow,
+            BaseReferences<_$LibraryDatabase, $HttpCacheTable, HttpCacheRow>,
+          ),
+          HttpCacheRow,
+          PrefetchHooks Function()
+        > {
+  $$HttpCacheTableTableManager(_$LibraryDatabase db, $HttpCacheTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$HttpCacheTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$HttpCacheTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$HttpCacheTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> key = const Value.absent(),
+                Value<String> body = const Value.absent(),
+                Value<DateTime> storedAt = const Value.absent(),
+                Value<DateTime> expiresAt = const Value.absent(),
+                Value<bool> stale = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => HttpCacheCompanion(
+                key: key,
+                body: body,
+                storedAt: storedAt,
+                expiresAt: expiresAt,
+                stale: stale,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String key,
+                required String body,
+                required DateTime storedAt,
+                required DateTime expiresAt,
+                Value<bool> stale = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => HttpCacheCompanion.insert(
+                key: key,
+                body: body,
+                storedAt: storedAt,
+                expiresAt: expiresAt,
+                stale: stale,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$HttpCacheTable, HttpCacheRow>(table),
+                  BaseReferences<
+                    _$LibraryDatabase,
+                    $HttpCacheTable,
+                    HttpCacheRow
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$HttpCacheTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LibraryDatabase,
+      $HttpCacheTable,
+      HttpCacheRow,
+      $$HttpCacheTableFilterComposer,
+      $$HttpCacheTableOrderingComposer,
+      $$HttpCacheTableAnnotationComposer,
+      $$HttpCacheTableCreateCompanionBuilder,
+      $$HttpCacheTableUpdateCompanionBuilder,
+      (
+        HttpCacheRow,
+        BaseReferences<_$LibraryDatabase, $HttpCacheTable, HttpCacheRow>,
+      ),
+      HttpCacheRow,
+      PrefetchHooks Function()
+    >;
 
 class $LibraryDatabaseManager {
   final _$LibraryDatabase _db;
@@ -8564,4 +10128,8 @@ class $LibraryDatabaseManager {
       $$LocalPlaylistsTableTableManager(_db, _db.localPlaylists);
   $$LocalPlaylistEntriesTableTableManager get localPlaylistEntries =>
       $$LocalPlaylistEntriesTableTableManager(_db, _db.localPlaylistEntries);
+  $$DownloadsTableTableManager get downloads =>
+      $$DownloadsTableTableManager(_db, _db.downloads);
+  $$HttpCacheTableTableManager get httpCache =>
+      $$HttpCacheTableTableManager(_db, _db.httpCache);
 }

@@ -79,7 +79,7 @@
   "settingsStoredLyricsNone": "从曲库和 LRCLIB 下载的歌词可离线使用。",
   "settingsImportMusic": "导入音乐文件",
   "settingsImportMusicSubtitle": "将本设备上的音频文件复制进 GroovyBox。标签、封面与歌词会一并带入，无需服务器即可播放。",
-  "settingsStreamsFooter": "GroovyBox 从你自己的音乐服务器串流播放，也能播放你导入到其自身存储中的文件。任何内容都不会被上传。",
+  "settingsStreamsFooter": "GroovyBox 从你自己的音乐服务器串流，也能播放导入到本设备的文件，并把所有返回数据和下载内容保存在本设备上。任何内容都不会被上传。",
   "settingsRemoveLibraryTitle": "移除此曲库？",
   "settingsRemoveLibraryMessage": "服务器地址和已登录的账户将从本设备移除。其歌曲仍保留在本地曲库中，连同歌词与播放历史；因此重新添加同一服务器时可找回它们。你的音乐本身不受影响。",
   "settingsClearLyricsTitle": "清除已存歌词？",
@@ -561,5 +561,50 @@
   "settingsPluginsStateActive": "运行中",
   "settingsPluginsStateDiscovered": "尚未加载",
   "settingsPluginsStateDisabled": "已停用",
-  "settingsPluginsStateError": "加载失败"
+  "settingsPluginsStateError": "加载失败",
+  "settingsSectionOffline": "离线",
+  "settingsDownloads": "下载",
+  "settingsDownloadsNone": "保存到本设备的歌曲无需网络即可播放。",
+  "settingsDownloadsKept": {
+    "one": "本设备已保存 {} 首歌曲  ·  {}",
+    "other": "本设备已保存 {} 首歌曲  ·  {}"
+  },
+  "settingsResponseCache": "已存数据",
+  "settingsResponseCacheEmpty": "浏览时保存的专辑、歌单和搜索结果会保留在这里。",
+  "settingsResponseCacheHeld": {
+    "one": "已保存 {} 条数据  ·  {}",
+    "other": "已保存 {} 条数据  ·  {}"
+  },
+  "settingsClearCacheTitle": "清除已存数据？",
+  "settingsClearCacheMessage": "从音乐库保存的专辑、歌单、搜索和封面会被移除，下次打开页面时重新获取。下载、歌词和播放历史不受影响。",
+  "downloadsTitle": "下载",
+  "downloadsCount": {
+    "one": "{} 首歌曲",
+    "other": "{} 首歌曲"
+  },
+  "downloadsEmptyTitle": "还没有下载",
+  "downloadsEmptyMessage": "下载专辑、歌单或单曲后，即可在无网络时播放。",
+  "downloadsLoadError": "无法读取下载内容",
+  "downloadsRemoveTitle": "移除这个下载？",
+  "downloadsRemoveMessage": "本设备上 {} 的副本将被删除。歌曲仍保留在原音乐库中，可以再次下载。",
+  "downloadsDownloadTrack": "下载",
+  "downloadsRemoveTrack": "移除下载",
+  "downloadsDownloadAll": "全部下载",
+  "downloadsStarting": "准备中…",
+  "downloadsProgress": "正在下载 {}%",
+  "downloadsRunning": {
+    "one": "{} 个下载进行中",
+    "other": "{} 个下载进行中"
+  },
+  "downloadsAdded": {
+    "one": "已保存 {} 首歌曲",
+    "other": "已保存 {} 首歌曲"
+  },
+  "downloadsNothingNew": "这些歌曲都已在本设备上。",
+  "downloadsFailed": "无法下载这首歌曲。",
+  "downloadsHttpError": "服务器拒绝下载（HTTP {}）。",
+  "downloadsRadioUnsupported": "电台无法下载。",
+  "downloadsPlatformUnsupported": "该音乐库由系统播放器播放，无法复制。",
+  "downloadsSourceMissing": "这首歌所在的音乐库未连接。",
+  "libraryOfflineCached": "无法连接到该音乐库，显示已保存的内容。"
 }

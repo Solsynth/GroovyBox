@@ -5,6 +5,8 @@ import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/router.gr.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/backup.dart';
+import 'package:groovy_box/library/artwork_cache.dart';
+import 'package:groovy_box/library/downloads.dart';
 import 'package:groovy_box/library/local_import.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
@@ -18,6 +20,7 @@ import 'pulsar_section.dart';
 import 'plugins_section.dart';
 import 'package:groovy_box/solarpass/solarpass_section.dart';
 import 'package:groovy_box/widgets/common.dart';
+import 'package:groovy_box/widgets/format.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
@@ -394,6 +397,56 @@ class SettingsScreen extends ConsumerWidget {
                 ],
               ),
             ),
+            SectionLabel('settingsSectionOffline'.tr()),
+            IslandCard(
+              margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
+              child: Column(
+                children: [
+                  ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: SolSpace.lg,
+                    ),
+                    leading: const Icon(Symbols.download_rounded),
+                    title: Text('settingsDownloads'.tr()),
+                    subtitle: Text(switch (ref
+                        .watch(downloadTotalsProvider)
+                        .value) {
+                      final totals? when totals.count == 0 =>
+                        'settingsDownloadsNone'.tr(),
+                      final totals? => 'settingsDownloadsKept'.plural(
+                        totals.count,
+                        args: [formatBytes(totals.bytes)],
+                      ),
+                      null => 'settingsDownloadsNone'.tr(),
+                    }),
+                    trailing: const Icon(Symbols.chevron_right_rounded),
+                    onTap: () => context.router.push(const DownloadsRoute()),
+                  ),
+                  ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: SolSpace.lg,
+                    ),
+                    leading: const Icon(Symbols.cloud_off_rounded),
+                    title: Text('settingsResponseCache'.tr()),
+                    subtitle: Text(switch (ref
+                        .watch(responseCacheTotalsProvider)
+                        .value) {
+                      final totals? when totals.count == 0 =>
+                        'settingsResponseCacheEmpty'.tr(),
+                      final totals? => 'settingsResponseCacheHeld'.plural(
+                        totals.count,
+                        args: [formatBytes(totals.bytes)],
+                      ),
+                      null => 'settingsResponseCacheEmpty'.tr(),
+                    }),
+                    trailing: TextButton(
+                      onPressed: () => _confirmClearCache(context, ref),
+                      child: Text('commonClear'.tr()),
+                    ),
+                  ),
+                ],
+              ),
+            ),
             const SolarpassSettingsSection(),
             const LibrarySyncSection(),
             const SolarFavouritesSection(),
@@ -550,6 +603,32 @@ class SettingsScreen extends ConsumerWidget {
 
     if (confirmed != true) return;
     await ref.read(lyricsMaintenanceProvider.notifier).clear();
+  }
+
+  /// Empties the saved answers. Downloads are untouched: they are the user's
+  /// copies, not a cache, and clearing one must not delete the other.
+  Future<void> _confirmClearCache(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('settingsClearCacheTitle'.tr()),
+        content: Text('settingsClearCacheMessage'.tr()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text('commonCancel'.tr()),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text('commonClear'.tr()),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await ref.read(responseCacheProvider)?.clear();
+    await ref.read(artworkCacheProvider)?.clear();
+    ref.invalidate(responseCacheTotalsProvider);
   }
 }
 

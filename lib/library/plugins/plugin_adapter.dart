@@ -1,3 +1,4 @@
+import '../http_cache.dart';
 import '../source.dart';
 import 'plugin_host.dart';
 import 'plugin_schema.dart';
@@ -44,11 +45,13 @@ class PluginAdapter implements LibraryAdapter {
   );
 
   @override
-  LibrarySource sourceFor(SourceConfig config) => PluginSource(
-    config,
-    host: host,
-    // A config whose plugin is gone (uninstalled, or a backup restored onto a
-    // machine without it) reports itself missing instead of throwing here.
-    missing: !host.knows(config.baseUrl),
-  );
+  LibrarySource sourceFor(SourceConfig config, {ResponseCache? cache}) =>
+      PluginSource(
+        config,
+        host: host,
+        // A config whose plugin is gone (uninstalled, or a backup restored
+        // onto a machine without it) reports itself missing, never a crash at
+        // resolve time.
+        missing: !host.knows(config.baseUrl),
+      );
 }

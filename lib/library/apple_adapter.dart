@@ -4,9 +4,10 @@ import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
-import 'models.dart';
 import 'apple_kit.dart';
+import 'http_cache.dart';
 import 'lyrics.dart';
+import 'models.dart';
 import 'source.dart';
 
 /// Apple Music, read through the Apple Music REST API and played through the
@@ -65,7 +66,8 @@ class AppleMusicAdapter implements LibraryAdapter {
   }
 
   @override
-  LibrarySource sourceFor(SourceConfig config) => AppleMusicSource(config);
+  LibrarySource sourceFor(SourceConfig config, {ResponseCache? cache}) =>
+      AppleMusicSource(config, cache: cache);
 
   /// Apple Music signs in through the system: there is no address or
   /// password to type.
@@ -106,7 +108,7 @@ class AppleMusicSource extends LibrarySource
   final SourceConfig config;
   final Dio _dio;
 
-  AppleMusicSource(this.config)
+  AppleMusicSource(this.config, {ResponseCache? cache})
     : _dio = Dio(
         BaseOptions(
           // The API root, kept as the stored address so nothing else has to
@@ -123,7 +125,13 @@ class AppleMusicSource extends LibrarySource
             'Accept-Language': 'en',
           },
         ),
-      );
+      ) {
+    if (cache != null) {
+      // The landing shelves read by absolute `relationships.contents.href`
+      // URLs; a key built from host and path keeps those apart naturally.
+      _dio.interceptors.add(cache.interceptorFor(config.id));
+    }
+  }
 
   /// MusicKit's own player can only play on iOS 15+ and macOS 14+. Reads
   /// still work without it, but a library that cannot be heard is not a
@@ -154,6 +162,7 @@ class AppleMusicSource extends LibrarySource
   Future<Map<String, dynamic>> _get(
     String path, {
     Map<String, dynamic>? query,
+    CachePolicy cache = CachePolicy.medium,
   }) async {
     if (config.auth['developerToken'] == null ||
         config.auth['userToken'] == null) {
@@ -161,7 +170,11 @@ class AppleMusicSource extends LibrarySource
     }
     final Response<dynamic> response;
     try {
-      response = await _dio.get<dynamic>(path, queryParameters: query);
+      response = await _dio.get<dynamic>(
+        path,
+        queryParameters: query,
+        options: Options(extra: {kCachePolicyExtra: cache}),
+      );
     } on DioException catch (error) {
       final status = error.response?.statusCode;
       if (status == 401 || status == 403) {
@@ -193,8 +206,9 @@ class AppleMusicSource extends LibrarySource
   Future<List<Map<String, dynamic>>> _data(
     String path, {
     Map<String, dynamic>? query,
+    CachePolicy cache = CachePolicy.medium,
   }) async {
-    final body = await _get(path, query: query);
+    final body = await _get(path, query: query, cache: cache);
     return _resources(body);
   }
 
@@ -840,13 +854,18 @@ class AppleMusicSource extends LibrarySource
   /// that range.
   @override
   Future<List<LibrarySong>> randomSongs({int size = 40}) async {
-    final first = await _get('/v1/me/library/songs', query: {'limit': 1});
+    final first = await _get(
+      '/v1/me/library/songs',
+      query: {'limit': 1},
+      cache: CachePolicy.none,
+    );
     final meta = first['meta'];
     final total = meta is Map ? (meta['total'] as num?)?.toInt() ?? 0 : 0;
     final offset = total > size ? Random().nextInt(total - size) : 0;
     final items = await _data(
       '/v1/me/library/songs',
       query: {'limit': size, 'offset': offset},
+      cache: CachePolicy.none,
     );
     return [for (final item in items) _song(item)]..shuffle();
   }

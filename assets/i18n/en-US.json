@@ -80,7 +80,7 @@
   "settingsStoredLyricsNone": "Lyrics downloaded from the library and LRCLIB stay available offline.",
   "settingsImportMusic": "Import music files",
   "settingsImportMusicSubtitle": "Copy audio files from this device into GroovyBox. Tags, covers and lyrics travel with them, and they play without a server.",
-  "settingsStreamsFooter": "GroovyBox streams from your own music servers, and plays files you import into its own storage. Nothing is uploaded anywhere.",
+  "settingsStreamsFooter": "GroovyBox streams from your own music servers, plays files you import into its own storage, and keeps every answer and every download on this device. Nothing is uploaded anywhere.",
   "settingsRemoveLibraryTitle": "Remove this library?",
   "settingsRemoveLibraryMessage": "The server address and signed-in account are removed from this device. Its songs stay in the local library with their lyrics and play history, so adding the same server back keeps them. Your music is untouched.",
   "settingsClearLyricsTitle": "Clear stored lyrics?",
@@ -562,5 +562,50 @@
   "settingsPluginsStateActive": "Running",
   "settingsPluginsStateDiscovered": "Not loaded yet",
   "settingsPluginsStateDisabled": "Disabled",
-  "settingsPluginsStateError": "Failed to load"
+  "settingsPluginsStateError": "Failed to load",
+  "settingsSectionOffline": "Offline",
+  "settingsDownloads": "Downloads",
+  "settingsDownloadsNone": "Tracks you keep play with no network at all.",
+  "settingsDownloadsKept": {
+    "one": "{} track kept on this device  ·  {}",
+    "other": "{} tracks kept on this device  ·  {}"
+  },
+  "settingsResponseCache": "Saved answers",
+  "settingsResponseCacheEmpty": "Album lists, playlists and searches are kept here as you browse.",
+  "settingsResponseCacheHeld": {
+    "one": "{} answer saved  ·  {}",
+    "other": "{} answers saved  ·  {}"
+  },
+  "settingsClearCacheTitle": "Clear saved answers?",
+  "settingsClearCacheMessage": "Album lists, playlists, searches and cover art saved from your libraries are removed. They are fetched again the next time each page opens, and your downloads, lyrics and play history are untouched.",
+  "downloadsTitle": "Downloads",
+  "downloadsCount": {
+    "one": "{} track",
+    "other": "{} tracks"
+  },
+  "downloadsEmptyTitle": "Nothing downloaded",
+  "downloadsEmptyMessage": "Download an album, a playlist or a single track and it plays without a network.",
+  "downloadsLoadError": "Could not read the downloads",
+  "downloadsRemoveTitle": "Remove this download?",
+  "downloadsRemoveMessage": "The copy of {} on this device is deleted. The track stays in its library, so it can be downloaded again.",
+  "downloadsDownloadTrack": "Download",
+  "downloadsRemoveTrack": "Remove download",
+  "downloadsDownloadAll": "Download all",
+  "downloadsStarting": "Starting…",
+  "downloadsProgress": "Downloading {}%",
+  "downloadsRunning": {
+    "one": "{} download in progress",
+    "other": "{} downloads in progress"
+  },
+  "downloadsAdded": {
+    "one": "Saved {} track",
+    "other": "Saved {} tracks"
+  },
+  "downloadsNothingNew": "Everything here is already on this device.",
+  "downloadsFailed": "The track could not be downloaded.",
+  "downloadsHttpError": "The server refused the download (HTTP {}).",
+  "downloadsRadioUnsupported": "A radio station cannot be downloaded.",
+  "downloadsPlatformUnsupported": "This library plays through the system player, so its tracks cannot be copied.",
+  "downloadsSourceMissing": "The library this track lives in is not connected.",
+  "libraryOfflineCached": "This library could not be reached; showing what was saved."
 }

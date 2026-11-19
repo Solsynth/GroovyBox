@@ -7,8 +7,9 @@ import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
 import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/library/catalog.dart';
-import 'package:groovy_box/library/models.dart';
+import 'package:groovy_box/library/downloads.dart';
 import 'package:groovy_box/library/lookup.dart';
+import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/library/track_identity.dart';
@@ -740,6 +741,21 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       // Emptying the queue retires that entry.
       unawaited(_apple?.stop());
       unawaited(_apple?.clearQueue());
+    }
+    // A downloaded track is the copy the user chose to keep, so it opens from
+    // disk even when its server is reachable: that is what makes it a
+    // download rather than a cache, and it is the one path that keeps playing
+    // when DNS, the home server or the whole network is gone. Asked after the
+    // platform player is retired above, so two tracks are never audible at
+    // once, and before the source lookup, because a download outlives the
+    // connection it came from.
+    final downloaded = await ref
+        .read(downloadServiceProvider.future)
+        .then((service) => service?.downloadedFile(song));
+    if (downloaded != null) {
+      await _activateAudioSession();
+      await _player.open(Media(Uri.file(downloaded).toString()));
+      return;
     }
 
     if (source == null) {

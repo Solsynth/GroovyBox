@@ -2,6 +2,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/core/theme.dart';
+import 'package:groovy_box/library/http_cache.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/library/store.dart';
@@ -38,7 +39,8 @@ class _FakeInteractive implements InteractiveLoginAdapter {
   }) async => throw UnimplementedError();
 
   @override
-  LibrarySource sourceFor(SourceConfig config) => throw UnimplementedError();
+  LibrarySource sourceFor(SourceConfig config, {ResponseCache? cache}) =>
+      throw UnimplementedError();
 
   @override
   List<LoginStep> loginSteps(String baseUrl) {

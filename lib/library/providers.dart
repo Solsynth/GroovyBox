@@ -7,6 +7,7 @@ import '../data/local/library_database.dart';
 import '../widgets/common.dart';
 import 'aggregate.dart';
 import 'catalog.dart';
+import 'http_cache.dart';
 import 'local_library.dart';
 import 'lookup.dart';
 import 'lrclib.dart';
@@ -43,12 +44,14 @@ LocalLibrarySource? localLibrary(Ref ref) {
 /// Every connected library, in the order the user added them.
 ///
 /// Servers only: [librarySourcesWithLocalProvider] is what reads from when the
-/// question is "what music is there".
 @Riverpod(keepAlive: true)
-List<LibrarySource> librarySources(Ref ref) => [
-  for (final config in ref.watch(sourceStoreProvider))
-    librarySourceFromConfig(config),
-];
+List<LibrarySource> librarySources(Ref ref) {
+  final cache = ref.watch(responseCacheProvider);
+  return [
+    for (final config in ref.watch(sourceStoreProvider))
+      librarySourceFromConfig(config, cache: cache),
+  ];
+}
 
 /// Providers contributed by installed plugins, empty when none is installed.
 ///
@@ -83,6 +86,41 @@ Map<String, LibrarySource> librarySourceById(Ref ref) => {
   for (final source in ref.watch(librarySourcesWithLocalProvider))
     source.id: source,
 };
+
+
+/// The device's copy of every library's answers: what makes a screen show
+/// what it last showed when the network is gone.
+///
+/// Built from the database, which every source already shares, so no second
+/// storage decision had to be made for it. Null without a database, exactly
+/// like [libraryCatalogProvider]: the app then reads from the network only.
+@Riverpod(keepAlive: true)
+ResponseCache? responseCache(Ref ref) {
+  final database = ref.watch(libraryDatabaseProvider);
+  if (database == null) return null;
+  final cache = ResponseCache(
+    database,
+    // A disk-served answer is visible where a failure already shows: the
+    // settings row names the library, so "offline" never looks like "the
+    // server changed".
+    onServedStale: (scopeId) => ref
+        .read(sourceFailuresProvider.notifier)
+        .report(scopeId, offlineCachedFailure),
+  );
+  // The plugin host makes its own requests, so it is handed the cache here
+  // rather than through an adapter: its scope is per provider, not per
+  // config, and the host outlives every source object.
+  PluginHost.instance?.cache = cache;
+  return cache;
+}
+
+/// How many answers are cached and how many bytes they take, for Settings.
+@riverpod
+Future<({int count, int bytes})> responseCacheTotals(Ref ref) async {
+  final cache = ref.watch(responseCacheProvider);
+  if (cache == null) return (count: 0, bytes: 0);
+  return cache.totals();
+}
 
 /// The last failure of each source, so settings can show why it went quiet.
 @Riverpod(keepAlive: true)

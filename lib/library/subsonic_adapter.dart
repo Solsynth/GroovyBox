@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart' as crypto;
 import 'package:dio/dio.dart';
 
 import 'http.dart';
+import 'http_cache.dart';
 import 'lyrics.dart';
 import 'models.dart';
 import 'source.dart';
@@ -46,7 +47,8 @@ class SubsonicAdapter implements LibraryAdapter {
   }
 
   @override
-  LibrarySource sourceFor(SourceConfig config) => SubsonicSource(config);
+  LibrarySource sourceFor(SourceConfig config, {ResponseCache? cache}) =>
+      SubsonicSource(config, cache: cache);
 
   /// The server host, used when the caller passes no display name.
   static String _displayNameFor(String normalizedUrl) =>
@@ -77,7 +79,7 @@ class SubsonicSource extends LibrarySource implements RatedSource {
   final SourceConfig config;
   final Dio _dio;
 
-  SubsonicSource(this.config)
+  SubsonicSource(this.config, {ResponseCache? cache})
     : _dio = Dio(
         BaseOptions(
           baseUrl: normalizeBaseUrl(config.baseUrl, suffix: '/rest'),
@@ -87,7 +89,11 @@ class SubsonicSource extends LibrarySource implements RatedSource {
           // The API is queried with query parameters only; no JSON bodies.
           contentType: Headers.jsonContentType,
         ),
-      );
+      ) {
+    if (cache != null) {
+      _dio.interceptors.add(cache.interceptorFor(config.id));
+    }
+  }
 
   String get _username {
     final username = config.auth['username'];
@@ -127,15 +133,35 @@ class SubsonicSource extends LibrarySource implements RatedSource {
   };
 
   /// Unwraps the envelope and returns the body of a successful response.
+  ///
+  /// [mutates] marks a write the server spells as a GET (`star`, `unstar`):
+  /// its answer is not cached, and the library's stored answers are dropped
+  /// first, so a heart tapped offline is never answered with the list it was
+  /// meant to change.
   Future<Map<String, dynamic>> _request(
     String endpoint, {
     Map<String, dynamic>? query,
+    bool mutates = false,
   }) async {
     final Response<dynamic> response;
     try {
       response = await _dio.get<dynamic>(
         '/$endpoint',
         queryParameters: {..._authParams(), ...?query},
+        options: switch ((mutates, endpoint)) {
+          (true, _) => Options(
+            extra: {
+              kCachePolicyExtra: CachePolicy.none,
+              kCacheMutationExtra: true,
+            },
+          ),
+          // A random draw is a different answer every time; storing it would
+          // make "shuffle" replay what was drawn first, offline or not.
+          (_, 'getRandomSongs') => Options(
+            extra: {kCachePolicyExtra: CachePolicy.none},
+          ),
+          _ => null,
+        },
       );
     } on DioException catch (error) {
       throw describeDioError(error);
@@ -316,7 +342,11 @@ class SubsonicSource extends LibrarySource implements RatedSource {
   /// write throws, so the button can put the heart back where the server says.
   @override
   Future<void> setFavourite(LibrarySong song, {required bool value}) async {
-    await _request(value ? 'star' : 'unstar', query: {'id': song.id});
+    await _request(
+      value ? 'star' : 'unstar',
+      query: {'id': song.id},
+      mutates: true,
+    );
   }
 
   /// Whether the server's `starred` field is set on [song].

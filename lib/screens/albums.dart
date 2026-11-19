@@ -8,6 +8,7 @@ import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/collection_hero.dart';
 import 'package:groovy_box/widgets/common.dart';
+import 'package:groovy_box/widgets/download_actions.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -192,6 +193,7 @@ class AlbumDetailScreen extends ConsumerWidget {
                               },
                               icon: const Icon(Symbols.shuffle_rounded),
                             ),
+                            CollectionDownloadButton(songs: list),
                           ],
                         ),
                       ),

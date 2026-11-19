@@ -15,6 +15,8 @@ import 'package:groovy_box/desktop/mini_player/window.dart';
 import 'package:groovy_box/core/glass.dart';
 import 'package:groovy_box/core/router.dart';
 import 'package:groovy_box/data/local/library_database.dart';
+import 'package:groovy_box/library/artwork_cache.dart';
+import 'package:groovy_box/library/downloads.dart';
 import 'package:groovy_box/library/local_import.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
@@ -26,6 +28,8 @@ import 'package:material_ui/material_ui.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:window_manager/window_manager.dart' hide Window;
 
 /// Translations live in `assets/i18n/<language>-<COUNTRY>.json`, one file per
@@ -155,6 +159,20 @@ Future<void> main() async {
     debugPrint('[Library] Local music directory unavailable: $error');
   }
 
+
+  // Downloads live under the same support directory as imports, in a folder
+  // of their own: a machine that refuses one still runs, just without
+  // offline copies. The folder is created on the first download, not here,
+  // so an app that never downloads writes nothing.
+  String? downloadPath;
+  String? artCachePath;
+  try {
+    final support = await getApplicationSupportDirectory();
+    downloadPath = p.join(support.path, kDownloadDirectory);
+    artCachePath = p.join(support.path, kArtworkCacheDirectory);
+  } catch (error) {
+    debugPrint('[Downloads] Download directory unavailable: $error');
+  }
   // User-installed library plugins, before the first frame: a connected
   // plugin's rows are stored configs, and the sources they resolve to have to
   // exist by the time the shell reads the library list. The guest engine
@@ -169,6 +187,8 @@ Future<void> main() async {
         audioHandlerProvider.overrideWithValue(audioHandler),
         libraryDatabaseProvider.overrideWithValue(library),
         localLibraryPathProvider.overrideWithValue(localLibraryPath),
+        downloadDirectoryProvider.overrideWithValue(downloadPath),
+        artworkCacheDirectoryProvider.overrideWithValue(artCachePath),
         // The host half of the mini player's channel: created here so the
         // command handler is registered before the second engine launches.
         miniPlayerLinkProvider.overrideWithValue(MiniPlayerLink.host()),
@@ -259,6 +279,8 @@ Future<void> _runMiniPlayer(int? mainWindowId) async {
         sharedPreferencesProvider.overrideWithValue(prefs),
         libraryDatabaseProvider.overrideWithValue(libraryDatabase),
         localLibraryPathProvider.overrideWithValue(localLibraryPath),
+        downloadDirectoryProvider.overrideWithValue(localLibraryPath),
+        artworkCacheDirectoryProvider.overrideWithValue(localLibraryPath),
         miniPlayerLinkProvider.overrideWithValue(link),
         playbackProvider.overrideWith(MiniPlayback.new),
         // The guest has no database, so every lyric it shows is the host's:

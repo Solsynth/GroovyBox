@@ -3,6 +3,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:dio/dio.dart';
 
 import 'http.dart';
+import 'http_cache.dart';
 import 'lyrics.dart';
 import 'lyrics_query.dart';
 import 'lyrics_store.dart';
@@ -47,7 +48,8 @@ class NeteaseAdapter implements InteractiveLoginAdapter {
   }) => completeLogin(baseUrl, const []);
 
   @override
-  LibrarySource sourceFor(SourceConfig config) => NeteaseSource(config);
+  LibrarySource sourceFor(SourceConfig config, {ResponseCache? cache}) =>
+      NeteaseSource(config, cache: cache);
 
   // ---- interactive login ---------------------------------------------------
 
@@ -188,7 +190,28 @@ class NeteaseAdapter implements InteractiveLoginAdapter {
 /// the bridge documents, and errors come back as `{code, msg}` with HTTP 200
 /// more often than not.
 class _NeteaseHttp {
-  _NeteaseHttp(this.baseUrl, {required this.cookie});
+  _NeteaseHttp(
+    this.baseUrl, {
+    required this.cookie,
+    ResponseCache? cache,
+    String? scope,
+  }) : _dio = Dio(
+         BaseOptions(
+           connectTimeout: const Duration(seconds: 12),
+           receiveTimeout: const Duration(seconds: 25),
+           responseType: ResponseType.json,
+         ),
+       ) {
+    if (cache != null) {
+      // The login flow builds this helper before an account exists, so a
+      // connection without a source id falls back to the bridge's address.
+      // Login endpoints are never cached (`CachePolicy.none` on every poll),
+      // so no session state is replayed from disk.
+      _dio.interceptors.add(
+        cache.interceptorFor(scope ?? 'netease:$baseUrl'),
+      );
+    }
+  }
 
   final String baseUrl;
   final String? cookie;
@@ -198,13 +221,7 @@ class _NeteaseHttp {
   /// returns cookies as headers instead of a body field; every other call
   /// ignores it.
   String? lastSetCookie;
-  late final Dio _dio = Dio(
-    BaseOptions(
-      connectTimeout: const Duration(seconds: 12),
-      receiveTimeout: const Duration(seconds: 25),
-      responseType: ResponseType.json,
-    ),
-  );
+  final Dio _dio;
 
   void close() => _dio.close();
 
@@ -232,6 +249,11 @@ class _NeteaseHttp {
     // sending it on every call is what keeps a stateless client signed in.
     if (cookie != null) fullQuery['cookie'] = cookie;
     final Response<dynamic> response;
+    // The sign-in poll is the one thing that must never be replayed: its
+    // answer is the code's state, and a cached 803 would sign in twice.
+    final options = path.startsWith('/login/')
+        ? Options(extra: {kCachePolicyExtra: CachePolicy.none})
+        : null;
     try {
       response = method == 'post'
           ? await _dio.post<dynamic>(
@@ -241,6 +263,7 @@ class _NeteaseHttp {
           : await _dio.get<dynamic>(
               '$baseUrl$path',
               queryParameters: fullQuery,
+              options: options,
             );
     } on DioException catch (error) {
       // A 404 means the request reached *something* but not the bridge's
@@ -318,8 +341,15 @@ class NeteaseSource extends LibrarySource
         CuratedSource,
         ResolvedStreamSource,
         LyricsQuerySource {
-  NeteaseSource(this.config)
-    : _http = _NeteaseHttp(config.baseUrl, cookie: config.auth['cookie']);
+  NeteaseSource(this.config, {ResponseCache? cache})
+    : _http = _NeteaseHttp(
+        config.baseUrl,
+        cookie: config.auth['cookie'],
+        cache: cache,
+        // Scoped by the source, so a stale answer is reported against the
+        // connection Settings names rather than against its address.
+        scope: config.id,
+      );
 
   @override
   final SourceConfig config;

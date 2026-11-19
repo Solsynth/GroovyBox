@@ -31,6 +31,7 @@ List<AutoRoute> _tabChildren(AutoRoute root) => [
     page: SolinkFavouritesRoute.page,
     path: 'solink-favourites',
   ),
+  AutoRoute(page: DownloadsRoute.page, path: 'downloads'),
 ];
 
 /// The app's route table.

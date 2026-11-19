@@ -118,7 +118,6 @@ String _$localLibraryHash() => r'2b88d4a4b494380fe6ce81b09b3ad43ed994f7ed';
 /// Every connected library, in the order the user added them.
 ///
 /// Servers only: [librarySourcesWithLocalProvider] is what reads from when the
-/// question is "what music is there".
 
 @ProviderFor(librarySources)
 final librarySourcesProvider = LibrarySourcesProvider._();
@@ -126,7 +125,6 @@ final librarySourcesProvider = LibrarySourcesProvider._();
 /// Every connected library, in the order the user added them.
 ///
 /// Servers only: [librarySourcesWithLocalProvider] is what reads from when the
-/// question is "what music is there".
 
 final class LibrarySourcesProvider
     extends
@@ -139,7 +137,6 @@ final class LibrarySourcesProvider
   /// Every connected library, in the order the user added them.
   ///
   /// Servers only: [librarySourcesWithLocalProvider] is what reads from when the
-  /// question is "what music is there".
   LibrarySourcesProvider._()
     : super(
         from: null,
@@ -174,7 +171,7 @@ final class LibrarySourcesProvider
   }
 }
 
-String _$librarySourcesHash() => r'c79aaf9f2061f5b44592a30768758528bbd5e83b';
+String _$librarySourcesHash() => r'acef46af4d87f4835ba409d27188aadada35a445';
 
 /// Providers contributed by installed plugins, empty when none is installed.
 ///
@@ -359,6 +356,114 @@ final class LibrarySourceByIdProvider
 }
 
 String _$librarySourceByIdHash() => r'a683ac40f05cc3393529e7f24838d993cb8465d5';
+
+/// The device's copy of every library's answers: what makes a screen show
+/// what it last showed when the network is gone.
+///
+/// Built from the database, which every source already shares, so no second
+/// storage decision had to be made for it. Null without a database, exactly
+/// like [libraryCatalogProvider]: the app then reads from the network only.
+
+@ProviderFor(responseCache)
+final responseCacheProvider = ResponseCacheProvider._();
+
+/// The device's copy of every library's answers: what makes a screen show
+/// what it last showed when the network is gone.
+///
+/// Built from the database, which every source already shares, so no second
+/// storage decision had to be made for it. Null without a database, exactly
+/// like [libraryCatalogProvider]: the app then reads from the network only.
+
+final class ResponseCacheProvider
+    extends $FunctionalProvider<ResponseCache?, ResponseCache?, ResponseCache?>
+    with $Provider<ResponseCache?> {
+  /// The device's copy of every library's answers: what makes a screen show
+  /// what it last showed when the network is gone.
+  ///
+  /// Built from the database, which every source already shares, so no second
+  /// storage decision had to be made for it. Null without a database, exactly
+  /// like [libraryCatalogProvider]: the app then reads from the network only.
+  ResponseCacheProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'responseCacheProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$responseCacheHash();
+
+  @$internal
+  @override
+  $ProviderElement<ResponseCache?> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  ResponseCache? create(Ref ref) {
+    return responseCache(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(ResponseCache? value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<ResponseCache?>(value),
+    );
+  }
+}
+
+String _$responseCacheHash() => r'b9072489a2b2040c441a76b6b528c696feb02351';
+
+/// How many answers are cached and how many bytes they take, for Settings.
+
+@ProviderFor(responseCacheTotals)
+final responseCacheTotalsProvider = ResponseCacheTotalsProvider._();
+
+/// How many answers are cached and how many bytes they take, for Settings.
+
+final class ResponseCacheTotalsProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<({int bytes, int count})>,
+          ({int bytes, int count}),
+          FutureOr<({int bytes, int count})>
+        >
+    with
+        $FutureModifier<({int bytes, int count})>,
+        $FutureProvider<({int bytes, int count})> {
+  /// How many answers are cached and how many bytes they take, for Settings.
+  ResponseCacheTotalsProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'responseCacheTotalsProvider',
+        isAutoDispose: true,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$responseCacheTotalsHash();
+
+  @$internal
+  @override
+  $FutureProviderElement<({int bytes, int count})> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<({int bytes, int count})> create(Ref ref) {
+    return responseCacheTotals(ref);
+  }
+}
+
+String _$responseCacheTotalsHash() =>
+    r'cb21ffa873b8cb3fb68f7d2fcc51e6f1b7461931';
 
 /// The last failure of each source, so settings can show why it went quiet.
 
@@ -2280,7 +2385,7 @@ final class OwnedPlaylistsProvider
   OwnedPlaylists create() => OwnedPlaylists();
 }
 
-String _$ownedPlaylistsHash() => r'ba021842ac0bf3b149dbbe1e345fde3a55ca39d6';
+String _$ownedPlaylistsHash() => r'c3c8be2e45817d322531ce7138be7192c9f9518e';
 
 /// The device's own playlists, and the source's when the account has any.
 ///

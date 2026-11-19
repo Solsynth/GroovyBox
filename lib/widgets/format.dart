@@ -138,3 +138,22 @@ String? sourceSuffix(WidgetRef ref, String sourceId) {
 String queueSummary(int count, bool shuffled) => shuffled
     ? 'queueTrackCountShuffled'.plural(count)
     : 'queueTrackCount'.plural(count);
+
+/// A size a person can read: `840 KB`, `1.2 GB`.
+///
+/// Binary units, because that is what every file browser shows for the same
+/// file; one decimal past the unit keeps a list from jumping widths.
+String formatBytes(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  var value = bytes / 1024;
+  var unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  final text = value >= 100
+      ? value.round().toString()
+      : value.toStringAsFixed(1);
+  return '$text ${units[unit]}';
+}

@@ -246,6 +246,75 @@ class LocalFiles extends Table {
   TextColumn get artPath => text().nullable()();
   DateTimeColumn get addedAt => dateTime()();
 }
+/// One track kept on this device for offline play: a stream copied out of a
+/// connected library into the app's own storage.
+///
+/// Separate from [LocalFiles] on purpose. An import is the user's own music
+/// and is adopted as a `local` link, so it is browsable as "on this device".
+/// A download is a *copy of a streamed track*: the canonical row and the link
+/// to the library that served it stay exactly as they were, and this table
+/// only says where the bytes are. Removing a download therefore cannot lose
+/// the track, its lyrics or its history, and re-adding the same server still
+/// finds everything by fingerprint.
+///
+/// [sourceId] and [externalId] are the link the copy was made from, not the
+/// canonical track: two libraries holding the same song are two different
+/// files, and downloading one must not claim to have the other.
+@DataClassName('DownloadRow')
+@TableIndex(name: 'downloads_link', columns: {#sourceId, #externalId})
+class Downloads extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get sourceId => text()();
+  TextColumn get externalId => text()();
+
+  /// Path of the audio file, relative to the download directory. Relative for
+  /// the same reason [LocalFiles.path] is: the app's container moving must not
+  /// invalidate what is already on disk.
+  TextColumn get path => text().unique()();
+  IntColumn get sizeBytes => integer()();
+
+  /// The track's tags as the source described them at download time, so the
+  /// downloads page can name a track whose library is not connected.
+  TextColumn get title => text()();
+  TextColumn get artist => text().nullable()();
+  TextColumn get album => text().nullable()();
+  IntColumn get durationMs => integer().withDefault(const Constant(0))();
+
+  /// Cover written beside the download, or null when the library had none.
+  TextColumn get artPath => text().nullable()();
+  DateTimeColumn get downloadedAt => dateTime()();
+
+  /// A source id and an item id are unique inside themselves, so the pair is
+  /// the identity: downloading one track twice replaces rather than duplicates.
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {sourceId, externalId},
+  ];
+}
+
+/// One cached HTTP response, for the app's own reads.
+///
+/// Only JSON API answers live here — never audio, never a page: the bytes of a
+/// track are a download (see [Downloads]) and a cover is an image the widget
+/// layer caches separately. [key] is the normalised request the response
+/// answered, with the source id in front so two libraries sharing a path
+/// cannot collide.
+@DataClassName('HttpCacheRow')
+@TableIndex(name: 'http_cache_expiry', columns: {#expiresAt})
+class HttpCache extends Table {
+  TextColumn get key => text()();
+  TextColumn get body => text()();
+  DateTimeColumn get storedAt => dateTime()();
+  DateTimeColumn get expiresAt => dateTime()();
+
+  /// Whether the answer has been served from disk at least once, so an entry
+  /// that outlives [expiresAt] is still known to be good enough to show while
+  /// the network is asked again.
+  BoolColumn get stale => boolean().withDefault(const Constant(false))();
+
+  @override
+  Set<Column> get primaryKey => {key};
+}
 
 /// Everything the app remembers about songs, in one SQLite file.
 ///
@@ -263,6 +332,8 @@ class LocalFiles extends Table {
     FavouriteTracks,
     LocalPlaylists,
     LocalPlaylistEntries,
+    Downloads,
+    HttpCache,
   ],
 )
 class LibraryDatabase extends _$LibraryDatabase {
@@ -283,7 +354,7 @@ class LibraryDatabase extends _$LibraryDatabase {
   }
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -310,6 +381,10 @@ class LibraryDatabase extends _$LibraryDatabase {
         await m.createTable(favouriteTracks);
         await m.createTable(localPlaylists);
         await m.createTable(localPlaylistEntries);
+      }
+      if (from < 8) {
+        await m.createTable(downloads);
+        await m.createTable(httpCache);
       }
     },
     beforeOpen: (details) async {
@@ -1295,5 +1370,98 @@ extension LocalPlaylistQuery on LibraryDatabase {
         LocalPlaylistsCompanion(updatedAt: Value(DateTime.now())),
       );
     });
+  }
+}
+
+/// Tracks kept on this device for offline play.
+extension DownloadQuery on LibraryDatabase {
+  /// The row for one library item, or null when it is not downloaded.
+  Future<DownloadRow?> downloadOf(String sourceId, String externalId) =>
+      (select(downloads)..where(
+            (row) =>
+                row.sourceId.equals(sourceId) &
+                row.externalId.equals(externalId),
+          ))
+          .getSingleOrNull();
+
+  /// Every download, newest first.
+  Future<List<DownloadRow>> allDownloads() =>
+      (select(downloads)
+            ..orderBy([(row) => OrderingTerm.desc(row.downloadedAt)]))
+          .get();
+
+  /// Writes the row for one downloaded item, replacing any earlier copy of
+  /// the same library item rather than keeping two files for one track.
+  Future<void> upsertDownload(DownloadsCompanion row) => into(downloads).insert(
+    row,
+    onConflict: DoUpdate(
+      (old) => row,
+      target: [downloads.sourceId, downloads.externalId],
+    ),
+  );
+
+  /// Forgets one download. The file is the caller's to delete: a row that
+  /// outlives its bytes is what "not downloaded" means, and a file with no
+  /// row is swept by the same service later.
+  Future<void> removeDownload(String sourceId, String externalId) =>
+      (delete(downloads)..where(
+            (row) =>
+                row.sourceId.equals(sourceId) &
+                row.externalId.equals(externalId),
+          ))
+          .go();
+
+  Future<void> clearDownloads() => delete(downloads).go();
+
+  /// How many tracks are kept, and how many bytes they take.
+  Future<({int count, int bytes})> downloadTotals() async {
+    final row = await customSelect(
+      'SELECT COUNT(*) AS n, COALESCE(SUM(size_bytes), 0) AS bytes '
+      'FROM downloads',
+    ).getSingle();
+    return (count: row.read<int>('n'), bytes: row.read<int>('bytes'));
+  }
+}
+
+/// Cached API responses, so a screen reads what it last saw when the network
+/// is gone.
+extension HttpCacheQuery on LibraryDatabase {
+  Future<HttpCacheRow?> cachedResponse(String key) =>
+      (select(httpCache)..where((row) => row.key.equals(key)))
+          .getSingleOrNull();
+
+  /// Writes an answer, replacing the previous one for the same request.
+  Future<void> putCachedResponse(HttpCacheRow row) => into(
+    httpCache,
+  ).insert(row, onConflict: DoUpdate((old) => row, target: [httpCache.key]));
+
+  /// Marks an expired-but-usable answer as having been served from disk, so a
+  /// later offline read knows the difference between "never fetched" and
+  /// "fetched once, currently unreachable".
+  Future<void> touchCachedResponse(String key) =>
+      (update(httpCache)..where((row) => row.key.equals(key))).write(
+        const HttpCacheCompanion(stale: Value(true)),
+      );
+
+  /// Drops answers that expired before [before].
+  Future<int> pruneCache(DateTime before) => (delete(httpCache)
+        ..where((row) => row.expiresAt.isSmallerThanValue(before)))
+      .go();
+
+  Future<void> clearCache() => delete(httpCache).go();
+
+  /// Drops every entry one library stored: keys are `'<scope> GET …'`, so the
+  /// scope is a prefix and needs no second column.
+  Future<int> clearScope(String scope) => (delete(httpCache)
+        ..where((row) => row.key.like('$scope %')))
+      .go();
+
+  /// How many answers are stored and how many bytes their bodies take.
+  Future<({int count, int bytes})> cacheTotals() async {
+    final row = await customSelect(
+      'SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(body)), 0) AS bytes '
+      'FROM http_cache',
+    ).getSingle();
+    return (count: row.read<int>('n'), bytes: row.read<int>('bytes'));
   }
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../http_cache.dart';
 import '../lyrics.dart';
 import '../models.dart';
 import '../source.dart';
@@ -89,6 +90,11 @@ class PluginSource extends LibrarySource
       args: args,
       auth: config.auth,
       baseUrl: config.baseUrl,
+      // A provider's reads are listings; a random draw is the one function
+      // whose answer is meant to differ on every call.
+      cachePolicy: fn == 'randomSongs'
+          ? CachePolicy.none
+          : CachePolicy.medium,
     );
   }
 

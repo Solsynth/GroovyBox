@@ -9,6 +9,7 @@ import 'package:island_plugin_foundation/island_plugin_foundation.dart';
 import 'package:path/path.dart' as p;
 
 import '../http.dart';
+import '../http_cache.dart';
 import '../models.dart';
 import '../source.dart';
 import 'plugin_api.dart';
@@ -57,6 +58,15 @@ class PluginHost extends ChangeNotifier {
   /// The only HTTP a plugin gets.
   @visibleForTesting
   final Dio dio;
+
+  /// The device's response cache, when it has one. Null in tests and on a
+  /// platform without a database: a plugin read then always hits the network.
+  ResponseCache? cache;
+
+  /// The scope a plugin provider's answers are cached under: its plugin and
+  /// provider ids, never its baseUrl — a manifest id is not an address.
+  static String cacheScopeFor(String pluginId, String providerId) =>
+      'plugin:$pluginId/$providerId';
 
   /// Providers discovered so far, in manifest order.
   List<PluginProvider> _providers = const [];
@@ -223,6 +233,7 @@ class PluginHost extends ChangeNotifier {
     Map<String, String> auth = const {},
     String baseUrl = '',
     int maxRoundTrips = 8,
+    CachePolicy cachePolicy = CachePolicy.medium,
   }) => _serialized(pluginId, () async {
     final runtime = await _runtimeFor(pluginId);
     final exists = runtime.eval('typeof $fn === "function"');
@@ -257,7 +268,14 @@ class PluginHost extends ChangeNotifier {
         );
       }
       roundTrips++;
-      payload = {...payload, '__response': await _perform(request)};
+      payload = {
+        ...payload,
+        '__response': await _perform(
+          request,
+          scope: cacheScopeFor(pluginId, providerId),
+          policy: cachePolicy,
+        ),
+      };
     }
   });
 
@@ -360,7 +378,11 @@ class PluginHost extends ChangeNotifier {
   ///
   /// The body is never parsed here: Kuwo answers with a JavaScript object
   /// literal, and it is the plugin's own sandbox that decides how to read it.
-  Future<Map<String, dynamic>> _perform(Map<dynamic, dynamic> request) async {
+  Future<Map<String, dynamic>> _perform(
+    Map<dynamic, dynamic> request, {
+    required String scope,
+    required CachePolicy policy,
+  }) async {
     final url = request['url'];
     if (url is! String || url.isEmpty) {
       throw const LibraryException(
@@ -377,6 +399,18 @@ class PluginHost extends ChangeNotifier {
     };
 
     final body = request['body'];
+    final uri = Uri.tryParse(url);
+    final cached = policy == CachePolicy.none ? null : cache;
+    final key = cached == null || uri == null || method != 'GET'
+        ? null
+        : cacheKeyForUri(scope, method, uri);
+    if (cached != null && key != null) {
+      final hit = await cached.readPerformed(key, allowStale: false);
+      if (hit != null) return hit;
+      // A write makes every listing of this provider suspect; dropping them
+      // all is cheaper than tracking which lists it touched.
+      if (method != 'GET') await cached.invalidateScope(scope);
+    }
 
     final Response<String> response;
     try {
@@ -397,10 +431,16 @@ class PluginHost extends ChangeNotifier {
         ),
       );
     } on DioException catch (error) {
+      // The same rule a source's own client follows: a timeout is the network
+      // being gone, and an expired answer beats an empty library.
+      if (cached != null && key != null && _unreachable(error)) {
+        final hit = await cached.readPerformed(key, allowStale: true);
+        if (hit != null) return hit;
+      }
       throw describeDioError(error);
     }
 
-    return {
+    final answer = {
       'status': response.statusCode ?? 0,
       'headers': {
         for (final entry in response.headers.map.entries)
@@ -408,7 +448,26 @@ class PluginHost extends ChangeNotifier {
       },
       'body': response.data ?? '',
     };
+    if (cached != null &&
+        key != null &&
+        (response.statusCode ?? 0) ~/ 100 == 2) {
+      await cached.writePerformed(key, answer, policy);
+    }
+    return answer;
   }
+
+  /// Whether a failure means the network is gone rather than the provider
+  /// answering no. Mirrors the sources' own cache policy.
+  static bool _unreachable(DioException error) => switch (error.type) {
+    DioExceptionType.connectionError ||
+    DioExceptionType.connectionTimeout ||
+    DioExceptionType.receiveTimeout ||
+    DioExceptionType.sendTimeout ||
+    DioExceptionType.unknown => true,
+    DioExceptionType.badResponse =>
+      const {502, 503, 504}.contains(error.response?.statusCode),
+    _ => false,
+  };
 
   // ---- discovery ------------------------------------------------------------
 

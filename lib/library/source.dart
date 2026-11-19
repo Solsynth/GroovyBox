@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'apple_adapter.dart';
+import 'http_cache.dart';
 import 'jellyfin_adapter.dart';
 import 'lyrics.dart';
 import 'models.dart';
@@ -363,7 +364,11 @@ abstract interface class LibraryAdapter {
   });
 
   /// Cheap, offline: builds the source object from a stored config.
-  LibrarySource sourceFor(SourceConfig config);
+  ///
+  /// [cache] is the device's response cache. A source that takes it answers
+  /// its reads from disk when the network is gone; one that does not (a test
+  /// double, an adapter with nothing to cache) ignores it.
+  LibrarySource sourceFor(SourceConfig config, {ResponseCache? cache});
 
   /// Whether this platform can run the adapter at all.
   ///
@@ -535,7 +540,10 @@ List<SetupOption> setupOptions(List<PluginProvider> plugins) => [
 /// folds an installed plugin into `librarySourcesWithLocal`, and therefore
 /// into search, `findCopies` and playback, with no further change.
 
-LibrarySource librarySourceFromConfig(SourceConfig config) {
+LibrarySource librarySourceFromConfig(
+  SourceConfig config, {
+  ResponseCache? cache,
+}) {
   if (config.kind == LibraryKind.plugin) {
     final host = PluginHost.instance;
     // No runtime (an unsupported platform) or a plugin that was uninstalled is
@@ -546,7 +554,7 @@ LibrarySource librarySourceFromConfig(SourceConfig config) {
       missing: host == null || !host.knows(config.baseUrl),
     );
   }
-  return libraryAdapters[config.kind]!.sourceFor(config);
+  return libraryAdapters[config.kind]!.sourceFor(config, cache: cache);
 }
 
 /// `'<kind>-<base36 microseconds>'`; collision-free within a device.

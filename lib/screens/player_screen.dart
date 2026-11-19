@@ -20,6 +20,7 @@ import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/lyrics_view.dart';
 import 'package:groovy_box/widgets/queue_panel.dart';
+import 'package:groovy_box/widgets/download_actions.dart';
 import 'package:groovy_box/widgets/song_actions.dart';
 import 'package:groovy_box/widgets/track_versions.dart';
 import 'package:groovy_box/widgets/transport.dart';
@@ -1946,6 +1947,7 @@ class _TrackMoreMenu extends ConsumerWidget {
               : () => TrackVersionsPanel.show(context, song),
           child: Text('versionsTitle'.tr()),
         ),
+        TrackDownloadMenuItem(song: song, hostContext: context),
         const Divider(height: 1),
         _SongActionsMenuItems(hostContext: context),
       ],

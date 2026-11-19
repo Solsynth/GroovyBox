@@ -5,6 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../core/theme.dart';
+import '../library/artwork_cache.dart';
 import '../library/providers.dart';
 import '../library/source.dart';
 
@@ -14,6 +15,11 @@ import '../library/source.dart';
 /// The requested image is sized from the box the art actually paints into,
 /// in device pixels. A fixed request leaves covers soft on the grid and in
 /// the player, where the same tile is painted at two to five times that size.
+///
+/// A server's cover is kept on disk (`lib/library/artwork_cache.dart`) the
+/// first time it is painted, so the library looks the same with no network.
+/// The file is what is painted once it exists; the URL is only the way it got
+/// there.
 class LibraryArtwork extends ConsumerWidget {
   /// Which library owns the item; resolves the URL scheme.
   final String? sourceId;
@@ -108,7 +114,7 @@ class LibraryArtwork extends ConsumerWidget {
   static int _clampPixels(int pixels) => pixels.clamp(64, 1600);
 }
 
-class _Art extends StatelessWidget {
+class _Art extends ConsumerWidget {
   final LibrarySource? source;
   final String? artId;
   final int pixels;
@@ -128,10 +134,25 @@ class _Art extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
     final uri = source?.artworkUri(artId, size: pixels);
     final extent = width ?? height ?? pixels.toDouble();
+    final cache = ref.watch(artworkCacheProvider);
+    // A local file is already on disk; a server's cover is what the cache
+    // fills in. Either way the file is the thing painted.
+    final cached =
+        cache == null || source == null || artId == null || artId!.isEmpty
+        ? null
+        : ref
+              .watch(
+                artworkFileProvider((
+                  sourceId: source!.id,
+                  artId: artId,
+                  size: pixels,
+                )),
+              )
+              .value;
 
     final placeholder = ColoredBox(
       color: colorScheme.surfaceContainerHighest,
@@ -144,12 +165,25 @@ class _Art extends StatelessWidget {
       ),
     );
 
+    // A platform that keeps no files (the web, a test) still paints a remote
+    // cover the old way: the disk cache is an improvement where it exists,
+    // not a new requirement.
+    final File? file = uri == null
+        ? null
+        : uri.isScheme('file')
+        ? File(uri.toFilePath())
+        : cached;
+    final remote = uri != null && !uri.isScheme('file') && cache == null;
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: SizedBox(
         width: width,
         height: height,
-        child: uri == null
+        child: file == null && !remote
+            // Nothing to paint yet: the placeholder is the surface until the
+            // cached file arrives, and the widget rebuilds when it does —
+            // there is no second network image in between.
             ? placeholder
             // The placeholder sits *under* the image rather than replacing it.
             // `gaplessPlayback` can only hold the previous frame while the
@@ -160,12 +194,9 @@ class _Art extends StatelessWidget {
                 fit: StackFit.expand,
                 children: [
                   placeholder,
-                  // A local file is painted from disk; a server's cover is
-                  // fetched over HTTP. Both go through one widget so a list
-                  // mixing local and streamed songs never switches styles.
-                  if (uri.isScheme('file'))
+                  if (file != null)
                     Image.file(
-                      File(uri.toFilePath()),
+                      file,
                       fit: BoxFit.cover,
                       gaplessPlayback: true,
                       errorBuilder: (_, _, _) => const SizedBox.shrink(),
@@ -175,10 +206,6 @@ class _Art extends StatelessWidget {
                       uri.toString(),
                       fit: BoxFit.cover,
                       gaplessPlayback: true,
-                      // The server is local or user-hosted and the URL carries
-                      // the signed token; caching it on disk would keep
-                      // credentials in the image cache. The in-memory cache is
-                      // enough for scrolling.
                       errorBuilder: (_, _, _) => const SizedBox.shrink(),
                     ),
                 ],

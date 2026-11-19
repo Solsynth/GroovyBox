@@ -2,10 +2,11 @@
 
 A Flutter music player that streams from any **OpenSubsonic**-compatible
 server — Navidrome, Jellyfin, Gonic, Airsonic — and plays audio files imported
-from the device itself. Streams are never downloaded; an import is the one copy
-the app makes, and it is the user's own music, not a cache. What the app keeps
-locally is its own library — songs, lyrics and play history in one SQLite
-database, independent of whichever server or file happens to serve them.
+from the device itself, and works without a network: every library's answers are
+kept on the device, and tracks can be downloaded to play offline. What the app
+keeps locally is its own library — songs, lyrics, cached answers and play
+history in one SQLite database, independent of whichever server or file happens
+to serve them.
 
 There is no setup gate: the app opens on the library it has. Imported files
 live in its own storage (`lib/library/local_import.dart`), and a page would
@@ -122,6 +123,35 @@ than block you behind a form.
   folder can move or disappear. Importing the same file again is recognised by
   name and length instead of duplicating it; a different file with the same name
   is kept beside the first rather than overwriting it.
+- **Offline answers** — `lib/library/http_cache.dart` keeps every JSON read a
+  library answers (`http_cache` in the database), keyed by source, method, host,
+  path and the meaningful query parameters — the auth parameters (`t`, `s`,
+  `u`, `api_key`, `cookie`) are stripped, so no credential is written into a
+  key and a re-joined server is the same key again. Each source installs one
+  `CachingInterceptor` on its own Dio; the plugin host, which performs requests
+  itself, asks the same cache around `_perform`. A read walks three states: a
+  fresh entry answers with no request; otherwise the network answers and
+  replaces the entry; if the network is *gone* (timeout, DNS, 5xx from a
+  gateway) the expired entry answers anyway and the source is reported as
+  offline, so a banner says "showing what was saved" instead of a library
+  looking empty. A refusal (a 4xx, a server's own `status: failed`) is never
+  answered from disk. Anything that writes — a POST/PUT/DELETE, or a GET the
+  adapter marks as a mutation (Subsonic's `star`) — drops the library's entries
+  first. Random draws, login polls and minted playback URLs use
+  `CachePolicy.none` and are never stored. Entries older than two weeks are
+  pruned at startup; Settings shows the count and size and can clear them.
+- **Downloads** — `lib/library/downloads.dart` copies a library's stream into
+  the app's own storage (`downloads/` under the support directory) and records
+  the link it came from in `downloads`, with the cover written beside it. It is
+  *not* an import: the canonical track and its link stay as they were, so
+  removing a download deletes bytes and nothing else, and a download survives
+  its library being disconnected. `Playback._openCurrent` asks for the copy
+  first, before any URL is minted, so a downloaded track plays from disk with
+  no server at all. The player's menu downloads or removes the playing track;
+  an album's and a playlist's hero download the whole collection; Settings →
+  Offline opens `/downloads`, which lists what is kept, what it costs, plays it
+  and removes one on long press. Files are written to a staging folder and
+  renamed only when complete, and a sweep deletes anything no row claims.
 - **Dashboard** — the explore tab is one scroll of shelves, and the page is
   the user's: sections fold and stay folded (`CollapsedSections`, keyed
   `page:section`), and a customize sheet reorders them, removes them, and pins
