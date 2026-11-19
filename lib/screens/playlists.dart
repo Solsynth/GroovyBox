@@ -39,12 +39,20 @@ class PlaylistDetailScreen extends ConsumerWidget {
     final songs = ref.watch(
       playlistSongsProvider((sourceId: sourceId, id: playlistId)),
     );
+    final playlist = ref.watch(
+      playlistsProvider.select(
+        (state) => state.value
+            ?.where((p) => p.sourceId == sourceId && p.id == playlistId)
+            .firstOrNull,
+      ),
+    );
+    final title =
+        playlistName ?? playlist?.name ?? 'playlistsDetailTitleFallback'.tr();
     // One boolean, not the transport: rows decide their own selection.
     final hasSong = ref.watch(
       playbackProvider.select((state) => state.current != null),
     );
     final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
-
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: ContentFrame(
@@ -70,9 +78,10 @@ class PlaylistDetailScreen extends ConsumerWidget {
                           sourceId: list.first.sourceId,
                           artId: list.first.artId,
                           source: playlistSourceName(sourceId, ref),
+                          title: title,
                           eyebrow: 'playlistsKind'.tr(),
                           meta: [
-                            list.first.artist ?? 'commonUnknownArtist'.tr(),
+                            if (playlist?.owner != null) playlist!.owner!,
                             'playlistsTrackCount'.plural(list.length),
                           ].join('  ·  '),
                           fallbackIcon: Symbols.playlist_play,

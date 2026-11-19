@@ -7,10 +7,12 @@ import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/pulsar/models.dart';
 import 'package:groovy_box/pulsar/providers.dart';
+import 'package:groovy_box/solarpass/providers.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/collection_hero.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/format.dart';
+import 'package:groovy_box/widgets/track_selection.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
@@ -27,11 +29,38 @@ import 'package:material_ui/material_ui.dart';
 /// there; one it cannot play yet stays visible, because its presence is what
 /// the next import or library connection fills in.
 @RoutePage()
-class SolinkFavouritesScreen extends ConsumerWidget {
+class SolinkFavouritesScreen extends ConsumerStatefulWidget {
   const SolinkFavouritesScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SolinkFavouritesScreen> createState() =>
+      _SolinkFavouritesScreenState();
+}
+
+class _SolinkFavouritesScreenState
+    extends ConsumerState<SolinkFavouritesScreen> {
+  final _selection = TrackSelection();
+
+  @override
+  void initState() {
+    super.initState();
+    _selection.addListener(_onSelectionChanged);
+  }
+
+  @override
+  void dispose() {
+    _selection
+      ..removeListener(_onSelectionChanged)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _onSelectionChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final favourites = ref.watch(pulsarFavouritesProvider);
     final songs = ref.watch(solarFavouriteSongsProvider);
     // One boolean, not the transport: rows decide their own selection.
@@ -39,6 +68,7 @@ class SolinkFavouritesScreen extends ConsumerWidget {
       playbackProvider.select((state) => state.current != null),
     );
     final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
+    final creator = ref.watch(solarpassAccountProvider).value?.displayName;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -71,41 +101,71 @@ class SolinkFavouritesScreen extends ConsumerWidget {
                     .whereType<String>()
                     .where((url) => url.isNotEmpty)
                     .firstOrNull;
+                // The catalog id is the row's identity here: it is what a
+                // removal names, and it exists whether or not this device
+                // holds a copy of the recording.
+                final keys = [
+                  for (final item in list)
+                    if (item.catalogId != null) item.catalogId!,
+                ];
                 return [
                   SliverToBoxAdapter(
                     child: CollectionHero(
                       artworkUrl: cover,
                       source: 'settingsSectionSolarNetwork'.tr(),
-                      eyebrow: 'libraryCloudFavourites'.tr(),
-                      meta: 'playlistsTrackCount'.plural(list.length),
+                      title: 'libraryCloudFavourites'.tr(),
+                      eyebrow: 'settingsSectionSolarNetwork'.tr(),
+                      meta: [
+                        if (creator != null && creator.isNotEmpty) creator,
+                        'playlistsTrackCount'.plural(list.length),
+                      ].join('  ·  '),
                       fallbackIcon: Symbols.favorite_rounded,
-                      actions: [
-                        FilledButton.icon(
-                          onPressed: playable.isEmpty
-                              ? null
-                              : () => ref
+                      actions: _selection.active
+                          ? [
+                              SelectionActions(
+                                selection: _selection,
+                                keys: keys,
+                                onPlay: () => ref
                                     .read(playbackProvider.notifier)
-                                    .playQueue(playable),
-                          icon: const Icon(
-                            Symbols.play_arrow_rounded,
-                            size: 20,
-                          ),
-                          label: Text('commonPlay'.tr()),
-                        ),
-                        IconButton.filledTonal(
-                          tooltip: 'libraryShuffle'.tr(),
-                          onPressed: playable.isEmpty
-                              ? null
-                              : () {
-                                  final notifier = ref.read(
-                                    playbackProvider.notifier,
-                                  );
-                                  notifier.playQueue(playable);
-                                  notifier.setShuffle(true);
-                                },
-                          icon: const Icon(Symbols.shuffle_rounded),
-                        ),
-                      ],
+                                    .playQueue([
+                                      for (var i = 0; i < list.length; i++)
+                                        if (list[i].catalogId case final id?
+                                            when _selection.contains(id))
+                                          if (i < resolved.length &&
+                                              resolved[i] != null)
+                                            resolved[i]!,
+                                    ]),
+                                onRemove: () => _removeSelected(list),
+                              ),
+                            ]
+                          : [
+                              FilledButton.icon(
+                                onPressed: playable.isEmpty
+                                    ? null
+                                    : () => ref
+                                          .read(playbackProvider.notifier)
+                                          .playQueue(playable),
+                                icon: const Icon(
+                                  Symbols.play_arrow_rounded,
+                                  size: 20,
+                                ),
+                                label: Text('commonPlay'.tr()),
+                              ),
+                              IconButton.filledTonal(
+                                tooltip: 'libraryShuffle'.tr(),
+                                onPressed: playable.isEmpty
+                                    ? null
+                                    : () {
+                                        final notifier = ref.read(
+                                          playbackProvider.notifier,
+                                        );
+                                        notifier.playQueue(playable);
+                                        notifier.setShuffle(true);
+                                      },
+                                icon: const Icon(Symbols.shuffle_rounded),
+                              ),
+                              SelectionToggleButton(selection: _selection),
+                            ],
                     ),
                   ),
                   SliverList.builder(
@@ -120,19 +180,33 @@ class SolinkFavouritesScreen extends ConsumerWidget {
                       final song = index < resolved.length
                           ? resolved[index]
                           : null;
+                      void onTap() {
+                        if (_selection.active) {
+                          _selection.toggle(catalogId);
+                          return;
+                        }
+                        if (song == null || playable.isEmpty) return;
+                        ref
+                            .read(playbackProvider.notifier)
+                            .playQueue(
+                              playable,
+                              startIndex: playable.indexOf(song),
+                            );
+                      }
+
                       return _CloudFavouriteRow(
                         track: track,
                         song: song,
-                        onPlay: song == null || playable.isEmpty
+                        leading: _selection.active
+                            ? SelectionCheckbox(
+                                selection: _selection,
+                                rowKey: catalogId,
+                              )
+                            : null,
+                        onPlay: onTap,
+                        onLongPress: _selection.active
                             ? null
-                            : () => ref
-                                  .read(playbackProvider.notifier)
-                                  .playQueue(
-                                    playable,
-                                    startIndex: playable.indexOf(song),
-                                  ),
-                        onRemove: () =>
-                            _remove(context, ref, catalogId, track, song),
+                            : () => _remove(catalogId, track, song),
                       );
                     },
                   ),
@@ -154,8 +228,7 @@ class SolinkFavouritesScreen extends ConsumerWidget {
                     message: describeServerError(error),
                     iconColor: Theme.of(context).colorScheme.error,
                     action: FilledButton(
-                      onPressed: () =>
-                          ref.invalidate(pulsarFavouritesProvider),
+                      onPressed: () => ref.invalidate(pulsarFavouritesProvider),
                       child: Text('commonTryAgain'.tr()),
                     ),
                   ),
@@ -169,9 +242,50 @@ class SolinkFavouritesScreen extends ConsumerWidget {
     );
   }
 
+  /// Takes several recordings out of the account's favourites in one pass,
+  /// and the device's own hearts with them: the next sync pushes every local
+  /// heart the account is missing, so leaving them would put them all back.
+  Future<void> _removeSelected(List<PlaylistItem> list) async {
+    final picked = [
+      for (final item in list)
+        if (item.catalogId case final id? when _selection.contains(id)) item,
+    ];
+    if (picked.isEmpty) return;
+    final agreed = await confirmBatchRemove(context, count: picked.length);
+    if (!agreed || !mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final songs = ref.read(solarFavouriteSongsProvider).value;
+    try {
+      for (final item in picked) {
+        final catalogId = item.catalogId!;
+        await ref.read(pulsarFavouritesProvider.notifier).clear(catalogId);
+        final index = list.indexOf(item);
+        final song = songs != null && index < songs.length
+            ? songs[index]
+            : null;
+        if (song != null) {
+          await ref.read(favouritesProvider).set(song, value: false);
+          ref.invalidate(favouriteStateProvider(song));
+        }
+      }
+      // The account's key set is what the hearts read, so one removal turns
+      // every surface that asked.
+      ref.invalidate(solarFavouriteKeysProvider);
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text('playlistSelectionRemoved'.plural(picked.length)),
+        ),
+      );
+    } catch (error) {
+      messenger?.showSnackBar(
+        SnackBar(content: Text(describeServerError(error))),
+      );
+    } finally {
+      _selection.end();
+    }
+  }
+
   Future<void> _remove(
-    BuildContext context,
-    WidgetRef ref,
     String catalogId,
     CatalogItem track,
     LibrarySong? song,
@@ -207,14 +321,16 @@ class SolinkFavouritesScreen extends ConsumerWidget {
 class _CloudFavouriteRow extends ConsumerWidget {
   final CatalogItem track;
   final LibrarySong? song;
+  final Widget? leading;
   final VoidCallback? onPlay;
-  final VoidCallback onRemove;
+  final VoidCallback? onLongPress;
 
   const _CloudFavouriteRow({
     required this.track,
     required this.song,
     required this.onPlay,
-    required this.onRemove,
+    this.leading,
+    this.onLongPress,
   });
 
   @override
@@ -226,6 +342,7 @@ class _CloudFavouriteRow extends ConsumerWidget {
       return SongTrackRow(
         song: local,
         subtitle: songRowSubtitle(ref, local),
+        leading: leading,
         trailing: local.duration == Duration.zero
             ? null
             : formatDuration(local.duration),
@@ -236,68 +353,80 @@ class _CloudFavouriteRow extends ConsumerWidget {
           radius: SolRadius.xs,
         ),
         onTap: onPlay,
-        onLongPress: onRemove,
+        onLongPress: onLongPress,
       );
     }
     final art = track.artworkUrl;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: SolSpace.md, vertical: 2),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(SolRadius.md),
-            child: SizedBox.square(
-              dimension: 48,
-              child: art == null || art.isEmpty
-                  ? ColoredBox(
-                      color: scheme.surfaceContainerHigh,
-                      child: Icon(
-                        Symbols.favorite_rounded,
-                        color: scheme.onSurfaceVariant,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onPlay,
+          onLongPress: onLongPress,
+          borderRadius: BorderRadius.circular(SolRadius.md),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: SolSpace.md,
+              vertical: SolSpace.sm,
+            ),
+            child: Row(
+              children: [
+                if (leading != null) ...[
+                  leading!,
+                  const SizedBox(width: SolSpace.sm),
+                ],
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(SolRadius.md),
+                  child: SizedBox.square(
+                    dimension: 48,
+                    child: art == null || art.isEmpty
+                        ? ColoredBox(
+                            color: scheme.surfaceContainerHigh,
+                            child: Icon(
+                              Symbols.favorite_rounded,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          )
+                        : Image.network(
+                            art,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => ColoredBox(
+                              color: scheme.surfaceContainerHigh,
+                              child: Icon(
+                                Symbols.favorite_rounded,
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                  ),
+                ),
+                const SizedBox(width: SolSpace.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        track.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall,
                       ),
-                    )
-                  : Image.network(
-                      art,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => ColoredBox(
-                        color: scheme.surfaceContainerHigh,
-                        child: Icon(
-                          Symbols.favorite_rounded,
+                      Text(
+                        track.subtitle ?? 'pulsarPlaylistUnmatched'.tr(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),
                       ),
-                    ),
-            ),
-          ),
-          const SizedBox(width: SolSpace.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  track.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall,
-                ),
-                Text(
-                  track.subtitle ?? 'pulsarPlaylistUnmatched'.tr(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-          IconButton(
-            tooltip: 'libraryCloudFavouriteRemove'.tr(),
-            icon: const Icon(Symbols.favorite_rounded),
-            color: scheme.error,
-            onPressed: onRemove,
-          ),
-        ],
+        ),
       ),
     );
   }

@@ -271,6 +271,7 @@ class AppleMusicSource extends LibrarySource
           id: '${item['id']}',
           name: _attributes(item)['name'] as String? ?? 'Untitled playlist',
           duration: Duration.zero,
+          artId: _artTemplate(_attributes(item)),
         ),
     ];
   }

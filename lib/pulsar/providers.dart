@@ -170,6 +170,28 @@ class PulsarPlaylists extends AsyncNotifier<List<PulsarPlaylist>> {
     ref.invalidate(pulsarPlaylistDetailProvider(playlist.id));
   }
 
+  /// Removes several items in one pass and refreshes once. Each removal is
+  /// its own request — the server has no batch delete — so a failure part way
+  /// through still leaves everything before it gone and the page honest about
+  /// what remains.
+  Future<void> removeItems(
+    PulsarPlaylist playlist,
+    Iterable<PlaylistItem> items,
+  ) async {
+    final session = ref.read(pulsarSessionProvider).value;
+    if (session == null) return;
+    final client = ref.read(pulsarClientProvider);
+    for (final item in items) {
+      await client.removeTrack(
+        session,
+        playlistId: playlist.id,
+        itemId: item.id,
+      );
+    }
+    ref.invalidateSelf();
+    ref.invalidate(pulsarPlaylistDetailProvider(playlist.id));
+  }
+
   /// Deletes a playlist and refreshes. Any local playlist that was syncing
   /// into it loses its link: the next push must not target a dead id.
   Future<void> delete(PulsarPlaylist playlist) async {

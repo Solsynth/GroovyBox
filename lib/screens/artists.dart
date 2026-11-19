@@ -153,6 +153,10 @@ class _BodyState extends ConsumerState<_Body> {
                       .map((a) => a.artId)
                       .whereType<String>()
                       .firstOrNull,
+                  title:
+                      artist ??
+                      widget.name ??
+                      'artistsDetailTitleFallback'.tr(),
                   eyebrow: 'artistsEyebrow'.tr(),
                   fallbackIcon: Symbols.artist,
                   meta: artist ?? fallback,
@@ -257,9 +261,7 @@ class _BodyState extends ConsumerState<_Body> {
               ],
 
               if (artist != null)
-                SliverToBoxAdapter(
-                  child: _FleetSection(name: artist),
-                ),
+                SliverToBoxAdapter(child: _FleetSection(name: artist)),
               SliverToBoxAdapter(child: SizedBox(height: widget.bottomInset)),
             ],
           ),
@@ -309,9 +311,7 @@ class _FleetSection extends ConsumerWidget {
                     0,
                   ),
                   child: Text(
-                    'artistsFleetRoles'.tr(
-                      args: [metadata.roles.join(', ')],
-                    ),
+                    'artistsFleetRoles'.tr(args: [metadata.roles.join(', ')]),
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
@@ -333,7 +333,11 @@ class _FleetSection extends ConsumerWidget {
                                 const SizedBox(width: 44, height: 44),
                           ),
                         ),
-                  title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  title: Text(
+                    item.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   subtitle: item.subtitle == null
                       ? null
                       : Text(

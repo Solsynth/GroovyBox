@@ -632,6 +632,14 @@ class OwnedPlaylists extends AsyncNotifier<List<OwnedPlaylist>> {
     ref.invalidateSelf();
   }
 
+  /// Removes several tracks from a device-owned playlist in one write.
+  Future<void> removeSongs(int playlistId, Iterable<int> entryIds) async {
+    final catalog = ref.read(libraryCatalogProvider);
+    if (catalog == null) return;
+    await catalog.removeFromOwnedPlaylistBatch(playlistId, entryIds);
+    ref.invalidateSelf();
+  }
+
   /// Renames a device-owned playlist.
   Future<void> rename(int playlistId, String name) async {
     final catalog = ref.read(libraryCatalogProvider);

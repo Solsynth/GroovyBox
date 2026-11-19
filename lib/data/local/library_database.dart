@@ -1276,4 +1276,24 @@ extension LocalPlaylistQuery on LibraryDatabase {
       LocalPlaylistsCompanion(updatedAt: Value(DateTime.now())),
     );
   }
+
+  /// Removes several entries in one transaction, keeping the survivors at
+  /// their positions for the same reason a single removal does.
+  Future<void> removePlaylistEntries(
+    int playlistId,
+    List<int> entryIds,
+  ) async {
+    if (entryIds.isEmpty) return;
+    await transaction(() async {
+      await (delete(localPlaylistEntries)..where(
+            (row) => row.id.isIn(entryIds) & row.playlistId.equals(playlistId),
+          ))
+          .go();
+      await (update(
+        localPlaylists,
+      )..where((row) => row.id.equals(playlistId))).write(
+        LocalPlaylistsCompanion(updatedAt: Value(DateTime.now())),
+      );
+    });
+  }
 }

@@ -263,6 +263,23 @@
   },
   "playlistsLoadError": "无法加载歌单",
   "playlistsDetailTitleFallback": "歌单",
+  "playlistsSelectMode": "选择曲目",
+  "playlistSelectionCount": {
+    "one": "已选 {} 首",
+    "other": "已选 {} 首"
+  },
+  "playlistSelectionPlay": "播放所选",
+  "playlistSelectionRemove": "移除所选",
+  "playlistSelectionDone": "完成",
+  "playlistSelectAll": "全选",
+  "playlistSelectNone": "取消全选",
+  "playlistSelectionToggle": "选择曲目",
+  "playlistSelectionRemoveTitle": "移除所选曲目？",
+  "playlistSelectionRemoveMessage": "将从歌单中移除 {} 首曲目，歌曲本身仍保留在你的曲库中。",
+  "playlistSelectionRemoved": {
+    "one": "已移除 {} 首",
+    "other": "已移除 {} 首"
+  },
   "playlistsDetailEmptyHeader": "空歌单",
   "playlistsDetailTrackCount": {
     "one": "{} 首曲目  ·  {}",
@@ -489,9 +506,9 @@
   "pulsarUploadEmpty": "这个歌单还没有可以上传的曲目。",
   "pulsarUploadDone": "已上传“{}”，共 {} 首。",
   "pulsarSyncDone": "“{}”现在有 {} 首。",
-  "libraryCloudFavourites": "Solink 喜欢",
-  "libraryCloudFavouriteRemove": "从 Solink 喜欢中移除",
-  "libraryCloudFavouriteRemoved": "已从 Solink 喜欢中移除“{}”。",
+  "libraryCloudFavourites": "你的喜欢",
+  "libraryCloudFavouriteRemove": "从你的喜欢中移除",
+  "libraryCloudFavouriteRemoved": "已从你的喜欢中移除“{}”。",
   "pulsarFavouritesSynced": "已向 Solink 推送 {} 首新的喜欢。",
   "pulsarSyncAction": "更新 Solink 歌单",
   "pulsarSyncSubtitle": "用当前列表替换“{}”的内容。",

@@ -264,6 +264,23 @@
   },
   "playlistsLoadError": "Could not load playlists",
   "playlistsDetailTitleFallback": "Playlist",
+  "playlistsSelectMode": "Select tracks",
+  "playlistSelectionCount": {
+    "one": "{} selected",
+    "other": "{} selected"
+  },
+  "playlistSelectionPlay": "Play selected",
+  "playlistSelectionRemove": "Remove selected",
+  "playlistSelectionDone": "Done",
+  "playlistSelectAll": "Select all",
+  "playlistSelectNone": "Clear selection",
+  "playlistSelectionToggle": "Select track",
+  "playlistSelectionRemoveTitle": "Remove the selected tracks?",
+  "playlistSelectionRemoveMessage": "{} tracks are removed from this playlist. The tracks themselves stay in your libraries.",
+  "playlistSelectionRemoved": {
+    "one": "Removed {} track",
+    "other": "Removed {} tracks"
+  },
   "playlistsDetailEmptyHeader": "Empty playlist",
   "playlistsDetailTrackCount": {
     "one": "{} track  ·  {}",

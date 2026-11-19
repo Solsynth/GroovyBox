@@ -6,11 +6,13 @@ import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/pulsar/models.dart';
 import 'package:groovy_box/pulsar/providers.dart';
+import 'package:groovy_box/solarpass/providers.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/collection_hero.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:groovy_box/widgets/playlist_name_dialog.dart';
+import 'package:groovy_box/widgets/track_selection.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
@@ -27,8 +29,12 @@ import 'package:material_ui/material_ui.dart';
 /// Editing is here because this is the only surface that knows the item ids
 /// a removal needs — adding happens where tracks are, through the player's
 /// add-to-playlist action.
+///
+/// The creator of a Solink playlist is the account that made it: the list
+/// endpoint only ever returns the signed-in account's own collections, so the
+/// hero names that account rather than the first track's artist.
 @RoutePage()
-class PulsarPlaylistDetailScreen extends ConsumerWidget {
+class PulsarPlaylistDetailScreen extends ConsumerStatefulWidget {
   final String playlistId;
   final String? playlistName;
 
@@ -38,11 +44,34 @@ class PulsarPlaylistDetailScreen extends ConsumerWidget {
     this.playlistName,
   });
 
-  Future<void> _rename(
-    BuildContext context,
-    WidgetRef ref,
-    String current,
-  ) async {
+  @override
+  ConsumerState<PulsarPlaylistDetailScreen> createState() =>
+      _PulsarPlaylistDetailScreenState();
+}
+
+class _PulsarPlaylistDetailScreenState
+    extends ConsumerState<PulsarPlaylistDetailScreen> {
+  final _selection = TrackSelection();
+
+  @override
+  void initState() {
+    super.initState();
+    _selection.addListener(_onSelectionChanged);
+  }
+
+  @override
+  void dispose() {
+    _selection
+      ..removeListener(_onSelectionChanged)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _onSelectionChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _rename(String current) async {
     final messenger = ScaffoldMessenger.maybeOf(context);
     final name = await askPlaylistName(
       context,
@@ -52,7 +81,9 @@ class PulsarPlaylistDetailScreen extends ConsumerWidget {
     );
     if (name == null || name == current) return;
     try {
-      await ref.read(pulsarPlaylistsProvider.notifier).rename(playlistId, name);
+      await ref
+          .read(pulsarPlaylistsProvider.notifier)
+          .rename(widget.playlistId, name);
     } catch (error) {
       messenger?.showSnackBar(
         SnackBar(content: Text(describeServerError(error))),
@@ -60,7 +91,7 @@ class PulsarPlaylistDetailScreen extends ConsumerWidget {
     }
   }
 
-  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+  Future<void> _confirmDelete() async {
     final messenger = ScaffoldMessenger.maybeOf(context);
     final agreed = await showDialog<bool>(
       context: context,
@@ -87,12 +118,12 @@ class PulsarPlaylistDetailScreen extends ConsumerWidget {
     final playlist = ref
         .read(pulsarPlaylistsProvider)
         .value
-        ?.where((p) => p.id == playlistId)
+        ?.where((p) => p.id == widget.playlistId)
         .firstOrNull;
     if (playlist == null) return;
     try {
       await ref.read(pulsarPlaylistsProvider.notifier).delete(playlist);
-      if (context.mounted) context.router.maybePop();
+      if (mounted) context.router.maybePop();
     } catch (error) {
       messenger?.showSnackBar(
         SnackBar(content: Text(describeServerError(error))),
@@ -104,8 +135,6 @@ class PulsarPlaylistDetailScreen extends ConsumerWidget {
   /// removal is one tap to redo, and a confirm would be asked on every
   /// tidying pass through a playlist.
   Future<void> _removeItem(
-    BuildContext context,
-    WidgetRef ref,
     PulsarPlaylist playlist,
     PlaylistItem item,
     LibrarySong song,
@@ -115,7 +144,7 @@ class PulsarPlaylistDetailScreen extends ConsumerWidget {
       await ref
           .read(pulsarPlaylistsProvider.notifier)
           .removeItem(playlist, item);
-      ref.invalidate(pulsarPlaylistDetailProvider(playlistId));
+      ref.invalidate(pulsarPlaylistDetailProvider(widget.playlistId));
       messenger?.showSnackBar(
         SnackBar(
           content: Text('ownedPlaylistRemoved'.tr(args: [song.playing.title])),
@@ -125,7 +154,7 @@ class PulsarPlaylistDetailScreen extends ConsumerWidget {
               await ref
                   .read(pulsarPlaylistsProvider.notifier)
                   .addSong(playlist, song);
-              ref.invalidate(pulsarPlaylistDetailProvider(playlistId));
+              ref.invalidate(pulsarPlaylistDetailProvider(widget.playlistId));
             },
           ),
         ),
@@ -137,14 +166,45 @@ class PulsarPlaylistDetailScreen extends ConsumerWidget {
     }
   }
 
+  /// Removes every ticked item in one pass. The server has no batch delete,
+  /// so this is several requests; a failure is reported and the page is
+  /// re-read either way, because what remains is the truth.
+  Future<void> _removeSelected(
+    PulsarPlaylist playlist,
+    List<PlaylistItem> items,
+  ) async {
+    if (items.isEmpty) return;
+    final agreed = await confirmBatchRemove(context, count: items.length);
+    if (!agreed || !mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      await ref
+          .read(pulsarPlaylistsProvider.notifier)
+          .removeItems(playlist, items);
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text('playlistSelectionRemoved'.plural(items.length)),
+        ),
+      );
+    } catch (error) {
+      messenger?.showSnackBar(
+        SnackBar(content: Text(describeServerError(error))),
+      );
+    } finally {
+      ref.invalidate(pulsarPlaylistDetailProvider(widget.playlistId));
+      _selection.end();
+    }
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final detail = ref.watch(pulsarPlaylistDetailProvider(playlistId));
+  Widget build(BuildContext context) {
+    final detail = ref.watch(pulsarPlaylistDetailProvider(widget.playlistId));
     // One boolean, not the transport: rows decide their own selection.
     final hasSong = ref.watch(
       playbackProvider.select((state) => state.current != null),
     );
     final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
+    final creator = ref.watch(solarpassAccountProvider).value?.displayName;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -178,6 +238,10 @@ class PulsarPlaylistDetailScreen extends ConsumerWidget {
                           (playlist.items[i], list[i]),
                       ];
                       final playable = [for (final (_, song) in pairs) ?song];
+                      // Every item is selectable, matched or not: removing a
+                      // name the libraries cannot resolve is exactly what the
+                      // page is for.
+                      final keys = [for (final (item, _) in pairs) item.id];
                       // The collection's own cover, or its first named track's
                       // when the cloud record has none: a playlist filled by
                       // uploading tracks never had an artwork_url of its own.
@@ -193,8 +257,13 @@ class PulsarPlaylistDetailScreen extends ConsumerWidget {
                           child: CollectionHero(
                             artworkUrl: cover,
                             source: 'settingsSectionSolarNetwork'.tr(),
+                            title: playlist.name.isEmpty
+                                ? 'pulsarPlaylistKind'.tr()
+                                : playlist.name,
                             eyebrow: 'pulsarPlaylistKind'.tr(),
                             meta: [
+                              if (creator != null && creator.isNotEmpty)
+                                creator,
                               if (playlist.description != null &&
                                   playlist.description!.isNotEmpty)
                                 playlist.description!,
@@ -203,44 +272,66 @@ class PulsarPlaylistDetailScreen extends ConsumerWidget {
                               ),
                             ].join('  ·  '),
                             fallbackIcon: Symbols.cloud_rounded,
-                            actions: [
-                              FilledButton.icon(
-                                onPressed: playable.isEmpty
-                                    ? null
-                                    : () => ref
+                            actions: _selection.active
+                                ? [
+                                    SelectionActions(
+                                      selection: _selection,
+                                      keys: keys,
+                                      onPlay: () => ref
                                           .read(playbackProvider.notifier)
-                                          .playQueue(playable),
-                                icon: const Icon(
-                                  Symbols.play_arrow_rounded,
-                                  size: 20,
-                                ),
-                                label: Text('commonPlay'.tr()),
-                              ),
-                              IconButton.filledTonal(
-                                tooltip: 'libraryShuffle'.tr(),
-                                onPressed: playable.isEmpty
-                                    ? null
-                                    : () {
-                                        final notifier = ref.read(
-                                          playbackProvider.notifier,
-                                        );
-                                        notifier.playQueue(playable);
-                                        notifier.setShuffle(true);
-                                      },
-                                icon: const Icon(Symbols.shuffle_rounded),
-                              ),
-                              IconButton(
-                                tooltip: 'ownedPlaylistRename'.tr(),
-                                onPressed: () =>
-                                    _rename(context, ref, playlist.name),
-                                icon: const Icon(Symbols.edit_rounded),
-                              ),
-                              IconButton(
-                                tooltip: 'commonDelete'.tr(),
-                                onPressed: () => _confirmDelete(context, ref),
-                                icon: const Icon(Symbols.delete_rounded),
-                              ),
-                            ],
+                                          .playQueue([
+                                            for (final (item, song) in pairs)
+                                              if (_selection.contains(item.id))
+                                                ?song,
+                                          ]),
+                                      onRemove: () =>
+                                          _removeSelected(playlist, [
+                                            for (final (item, _) in pairs)
+                                              if (_selection.contains(item.id))
+                                                item,
+                                          ]),
+                                    ),
+                                  ]
+                                : [
+                                    FilledButton.icon(
+                                      onPressed: playable.isEmpty
+                                          ? null
+                                          : () => ref
+                                                .read(playbackProvider.notifier)
+                                                .playQueue(playable),
+                                      icon: const Icon(
+                                        Symbols.play_arrow_rounded,
+                                        size: 20,
+                                      ),
+                                      label: Text('commonPlay'.tr()),
+                                    ),
+                                    IconButton.filledTonal(
+                                      tooltip: 'libraryShuffle'.tr(),
+                                      onPressed: playable.isEmpty
+                                          ? null
+                                          : () {
+                                              final notifier = ref.read(
+                                                playbackProvider.notifier,
+                                              );
+                                              notifier.playQueue(playable);
+                                              notifier.setShuffle(true);
+                                            },
+                                      icon: const Icon(Symbols.shuffle_rounded),
+                                    ),
+                                    IconButton(
+                                      tooltip: 'ownedPlaylistRename'.tr(),
+                                      onPressed: () => _rename(playlist.name),
+                                      icon: const Icon(Symbols.edit_rounded),
+                                    ),
+                                    IconButton(
+                                      tooltip: 'commonDelete'.tr(),
+                                      onPressed: _confirmDelete,
+                                      icon: const Icon(Symbols.delete_rounded),
+                                    ),
+                                    SelectionToggleButton(
+                                      selection: _selection,
+                                    ),
+                                  ],
                           ),
                         ),
                         SliverList.builder(
@@ -248,6 +339,26 @@ class PulsarPlaylistDetailScreen extends ConsumerWidget {
                           itemBuilder: (context, index) {
                             final (item, song) = pairs[index];
                             final track = item.catalogItem;
+                            final tick = _selection.active
+                                ? SelectionCheckbox(
+                                    selection: _selection,
+                                    rowKey: item.id,
+                                  )
+                                : null;
+                            void onTap() {
+                              if (_selection.active) {
+                                _selection.toggle(item.id);
+                                return;
+                              }
+                              if (song == null) return;
+                              ref
+                                  .read(playbackProvider.notifier)
+                                  .playQueue(
+                                    playable,
+                                    startIndex: playable.indexOf(song),
+                                  );
+                            }
+
                             if (song == null || track == null) {
                               return SongTrackRow(
                                 song: LibrarySong(
@@ -259,6 +370,7 @@ class PulsarPlaylistDetailScreen extends ConsumerWidget {
                                     seconds: track?.durationSeconds ?? 0,
                                   ),
                                 ),
+                                leading: tick,
                                 subtitle: 'pulsarPlaylistUnmatched'.tr(),
                                 trailing: track?.durationSeconds == null
                                     ? null
@@ -267,10 +379,12 @@ class PulsarPlaylistDetailScreen extends ConsumerWidget {
                                           seconds: track!.durationSeconds!,
                                         ),
                                       ),
+                                onTap: onTap,
                               );
                             }
                             return SongTrackRow(
                               song: song,
+                              leading: tick,
                               subtitle: songRowSubtitle(ref, song),
                               trailing: formatDuration(song.duration),
                               artwork: LibraryArtwork(
@@ -279,19 +393,10 @@ class PulsarPlaylistDetailScreen extends ConsumerWidget {
                                 size: 44,
                                 radius: SolRadius.xs,
                               ),
-                              onTap: () => ref
-                                  .read(playbackProvider.notifier)
-                                  .playQueue(
-                                    playable,
-                                    startIndex: playable.indexOf(song),
-                                  ),
-                              onLongPress: () => _removeItem(
-                                context,
-                                ref,
-                                playlist,
-                                item,
-                                song,
-                              ),
+                              onTap: onTap,
+                              onLongPress: _selection.active
+                                  ? null
+                                  : () => _removeItem(playlist, item, song),
                             );
                           },
                         ),
@@ -314,7 +419,7 @@ class PulsarPlaylistDetailScreen extends ConsumerWidget {
                           iconColor: Theme.of(context).colorScheme.error,
                           action: FilledButton(
                             onPressed: () => ref.invalidate(
-                              pulsarPlaylistDetailProvider(playlistId),
+                              pulsarPlaylistDetailProvider(widget.playlistId),
                             ),
                             child: Text('commonTryAgain'.tr()),
                           ),
@@ -339,7 +444,7 @@ class PulsarPlaylistDetailScreen extends ConsumerWidget {
                     iconColor: Theme.of(context).colorScheme.error,
                     action: FilledButton(
                       onPressed: () => ref.invalidate(
-                        pulsarPlaylistDetailProvider(playlistId),
+                        pulsarPlaylistDetailProvider(widget.playlistId),
                       ),
                       child: Text('commonTryAgain'.tr()),
                     ),

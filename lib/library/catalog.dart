@@ -560,18 +560,46 @@ extension FavouritesAndPlaylists on LibraryCatalog {
     );
   }
 
-  /// Every device-owned playlist, newest change first.
+  /// Every device-owned playlist, newest change first. The cover is the first
+  /// entry's art: a device playlist has no artwork of its own, and the list
+  /// row has to draw something better than a monogram.
   Future<List<OwnedPlaylist>> ownedPlaylists() async {
     final rows = await _db.localPlaylists_();
     return [
-      for (final row in rows)
-        OwnedPlaylist(
-          id: row.id,
-          name: row.name,
-          trackCount: (await _db.playlistEntries(row.id)).length,
-          updatedAt: row.updatedAt,
-        ),
+      for (final row in rows) await _ownedPlaylist(row),
     ];
+  }
+
+  /// One row of [ownedPlaylists], with the count and cover its card draws.
+  Future<OwnedPlaylist> _ownedPlaylist(LocalPlaylistRow row) async {
+    final entries = await _db.playlistEntries(row.id);
+    return OwnedPlaylist(
+      id: row.id,
+      name: row.name,
+      trackCount: entries.length,
+      updatedAt: row.updatedAt,
+      artId: await _firstArtId(entries),
+    );
+  }
+
+  /// The cover handle of a playlist's first entry that has one.
+  ///
+  /// The list row's cover is the first track's, because the playlist has no
+  /// artwork of its own; the handle is the link's, so [LibraryArtwork] can
+  /// resolve it through the source that serves the track.
+  Future<({String sourceId, String artId})?> _firstArtId(
+    List<LocalPlaylistEntryRow> entries,
+  ) async {
+    for (final entry in entries) {
+      final links = await _db.linksOf(entry.trackId);
+      for (final link in links) {
+        final art = link.artId;
+        if (art != null && art.isNotEmpty) {
+          return (sourceId: link.sourceId, artId: art);
+        }
+      }
+    }
+    return null;
   }
 
   /// Appends [songs] to a device-owned playlist, in the order given.
@@ -625,6 +653,14 @@ extension FavouritesAndPlaylists on LibraryCatalog {
   /// do not.
   Future<void> removeFromOwnedPlaylist(int playlistId, int entryId) =>
       _db.removePlaylistEntry(playlistId, entryId);
+
+  /// Removes several entries at once, in one transaction. The ids are entry
+  /// ids for the same reason one removal takes one: positions shift, ids do
+  /// not.
+  Future<void> removeFromOwnedPlaylistBatch(
+    int playlistId,
+    Iterable<int> entryIds,
+  ) => _db.removePlaylistEntries(playlistId, entryIds.toList());
 
   /// Renames a device-owned playlist.
   Future<void> renameOwnedPlaylist(int playlistId, String name) =>
@@ -696,10 +732,16 @@ class OwnedPlaylist {
   final int trackCount;
   final DateTime updatedAt;
 
+  /// The first entry's cover, as its own source spells the handle, and which
+  /// source that is. Null when the playlist is empty or none of its tracks
+  /// has a cover: a device playlist has no artwork of its own.
+  final ({String sourceId, String artId})? artId;
+
   const OwnedPlaylist({
     required this.id,
     required this.name,
     required this.trackCount,
     required this.updatedAt,
+    this.artId,
   });
 }

@@ -158,6 +158,10 @@ class AlbumDetailScreen extends ConsumerWidget {
                         child: CollectionHero(
                           sourceId: list.first.sourceId,
                           artId: list.first.artId,
+                          title:
+                              albumName ??
+                              list.first.album ??
+                              'albumsDetailTitleFallback'.tr(),
                           eyebrow: 'albumsEyebrow'.tr(),
                           meta: [
                             list.first.artist ?? 'commonUnknownArtist'.tr(),

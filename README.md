@@ -129,11 +129,15 @@ than block you behind a form.
   `lib/widgets/dashboard.dart`). The arrangement is one JSON value in prefs.
 - **Screens** — Explore (curated shelves, random draw, recently added), Search,
   the Library (albums, artists and one merged Playlists list), album and
-  playlist detail, Profile, Player, Setup, Settings. A playlist detail names
-  the library it lives in, since the list that opened it mixes every source. The
-  queue has no page of its own: it is a pane of the player and a sheet in the
-  dock, because a third view of one list only made the transport compete with
-  itself.
+  playlist detail, Profile, Player, Setup, Settings. Every collection page opens
+  with one `CollectionHero` whose title is the collection's own name and whose
+  meta line names where it lives and who made it — a playlist's creator, not its
+  first track's artist. A playlist page can also enter selection mode
+  (`lib/widgets/track_selection.dart`): tick rows, then play them in playlist
+  order or remove them in one write, with a confirm because a batch cannot be
+  undone one row at a time. The queue has no page of its own: it is a pane of
+  the player and a sheet in the dock, because a third view of one list only made
+  the transport compete with itself.
 - **Stats** — `lib/screens/stats.dart` reads `play_events` and shows what the
   history adds up to: plays, time listened, songs heard, how many plays ran to
   the end, the most played tracks and artists, and the last dozen plays. All of

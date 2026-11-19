@@ -882,13 +882,21 @@ class NeteaseSource extends LibrarySource
   );
 
   /// The cover URL, whichever of the shapes the endpoints answer with.
+  ///
+  /// NetEase still returns protocol-relative (`//p1.music.126.net/…`) and plain
+  /// `http://` covers. Both are served over TLS at the same path, and leaving
+  /// them as they come means [artworkUri] refuses the handle or the platform
+  /// blocks the load — an invisible cover either way.
   static String? _picUrl(Map<String, dynamic> json) {
     final url =
         json['picUrl'] ??
         json['coverImgUrl'] ??
         json['pic_str'] ??
         json['picUrl_str'];
-    return url is String && url.isNotEmpty ? url : null;
+    if (url is! String || url.isEmpty) return null;
+    if (url.startsWith('//')) return 'https:$url';
+    if (url.startsWith('http://')) return 'https://${url.substring(7)}';
+    return url;
   }
 
   static int? _year(Map<String, dynamic> json) {

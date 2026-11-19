@@ -352,7 +352,16 @@ sealed class PlaylistEntry {
 
   String get name;
   String get subtitle;
+
+  /// A cover that is a URL rather than a library handle: a cloud playlist's
+  /// own artwork, which no library can resolve.
   String? get artworkUrl;
+
+  /// A cover that is a library handle, and which source spells it. A device
+  /// playlist borrows its first track's; a server playlist has its own.
+  String? get artId;
+  String? get artSourceId;
+
   IconData get icon;
   void open(BuildContext context);
 }
@@ -372,6 +381,12 @@ class OwnedPlaylistEntry extends PlaylistEntry {
 
   @override
   String? get artworkUrl => null;
+
+  @override
+  String? get artId => playlist.artId?.artId;
+
+  @override
+  String? get artSourceId => playlist.artId?.sourceId;
 
   @override
   IconData get icon => Symbols.queue_music_rounded;
@@ -409,6 +424,12 @@ class ServerPlaylistEntry extends PlaylistEntry {
   String? get artworkUrl => null;
 
   @override
+  String? get artId => playlist.artId;
+
+  @override
+  String? get artSourceId => playlist.sourceId;
+
+  @override
   IconData get icon => Symbols.playlist_play;
 
   @override
@@ -442,6 +463,12 @@ class CloudPlaylistEntry extends PlaylistEntry {
   String? get artworkUrl => cover ?? playlist.artworkUrl;
 
   @override
+  String? get artId => null;
+
+  @override
+  String? get artSourceId => null;
+
+  @override
   IconData get icon => Symbols.cloud_rounded;
 
   @override
@@ -472,6 +499,12 @@ class CloudFavouritesEntry extends PlaylistEntry {
 
   @override
   String? get artworkUrl => cover;
+
+  @override
+  String? get artId => null;
+
+  @override
+  String? get artSourceId => null;
 
   @override
   IconData get icon => Symbols.favorite_rounded;
@@ -517,12 +550,15 @@ class PlaylistCard extends StatelessWidget {
                   child: SizedBox.square(
                     dimension: 52,
                     child: switch (entry) {
-                      ServerPlaylistEntry(:final playlist) => LibraryArtwork(
-                        sourceId: playlist.sourceId,
-                        artId: playlist.artId,
+                      // A handle is resolved through the library that spells
+                      // it: a device playlist's cover comes from a connected
+                      // source, and a server's from its own.
+                      _ when entry.artId != null => LibraryArtwork(
+                        sourceId: entry.artSourceId,
+                        artId: entry.artId,
                         size: 52,
                         radius: SolRadius.md,
-                        fallbackIcon: Symbols.playlist_play,
+                        fallbackIcon: entry.icon,
                       ),
                       _ when art != null && art.isNotEmpty => Image.network(
                         art,

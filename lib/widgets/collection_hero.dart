@@ -27,19 +27,23 @@ class CollectionHero extends StatelessWidget {
   /// through.
   final String? artworkUrl;
 
-  /// What the collection is, in one small word above the meta line: "ALBUM",
+  /// What the collection is, in one small word above the name: "ALBUM",
   /// "PLAYLIST", "ON THIS DEVICE". Not a number — a collection is not step
   /// three of anything.
   final String? eyebrow;
 
-  /// The first line of the meta block: where the collection lives. A
-  /// playlist can be owned by this device, a server, or the account, and the
-  /// detail page is where that is said — the list that opened it is one
-  /// list of every playlist, not one list per drawer.
+  /// The collection's name: the record, the list, the person. The hero is the
+  /// page's own heading, so the name belongs here rather than in a bar.
+  final String title;
+
+  /// Where the collection lives. A playlist can be owned by this device, a
+  /// server, or the account, and the detail page is where that is said — the
+  /// list that opened it is one list of every playlist, not one list per
+  /// drawer.
   final String? source;
 
-  /// Who made it, when, and what it is called. The caller decides which of
-  /// those it has; missing pieces are simply absent from the line.
+  /// Who made it, when, and what is in it. The caller decides which of those
+  /// it has; missing pieces are simply absent from the line.
   final String meta;
 
   /// The way in: play, shuffle, and anything page-specific.
@@ -48,6 +52,7 @@ class CollectionHero extends StatelessWidget {
 
   const CollectionHero({
     super.key,
+    required this.title,
     required this.meta,
     required this.actions,
     this.source,
@@ -99,26 +104,31 @@ class CollectionHero extends StatelessWidget {
                   ),
                   const SizedBox(height: SolSpace.xs),
                 ],
-                if (source != null && source!.isNotEmpty) ...[
+                Text(
+                  title,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style:
+                      (wide
+                              ? theme.textTheme.headlineMedium
+                              : theme.textTheme.headlineSmall)
+                          ?.copyWith(fontWeight: FontWeight.w800, height: 1.15),
+                ),
+                if (source != null || meta.isNotEmpty) ...[
+                  const SizedBox(height: SolSpace.xs),
                   Text(
-                    source!,
-                    maxLines: 1,
+                    [
+                      source ?? '',
+                      meta,
+                    ].where((s) => s.isNotEmpty).join('  ·  '),
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      height: 1.4,
                     ),
                   ),
-                  const SizedBox(height: SolSpace.xxs),
                 ],
-                Text(
-                  meta,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    height: 1.4,
-                  ),
-                ),
                 const SizedBox(height: SolSpace.md),
                 Wrap(
                   spacing: SolSpace.sm,
