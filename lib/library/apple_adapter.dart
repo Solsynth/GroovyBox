@@ -481,14 +481,14 @@ class AppleMusicSource extends LibrarySource
   @override
   Map<String, dynamic> platformResource(LibrarySong song) {
     if (!song.isRadio) {
-      // A copy resolved out of the local library carries only the link's id,
-      // and that id is the one place the distinction survives: the store's
-      // ids are bare digits while the account's own are dotted local names
-      // (`i.…`). Reading it here means a favourite replayed from the catalog
-      // still says "store" and a library track says "library", whoever built
-      // the song.
-      final catalogId =
-          song.catalogId ?? (_isCatalogId(song.id) ? song.id : null);
+      // Which kind of id this is decides how the system player resolves it,
+      // and the id itself is the one place that distinction survives: the
+      // store's ids are bare digits while the account's own are dotted local
+      // names (`i.…`). Reading it here means a favourite replayed from the
+      // catalog still says "store" and a library track says "library",
+      // whoever built the song — a `catalogId` on a library row is the handle
+      // the store is *asked* with, not the id the player is given.
+      final isLibrary = !_isCatalogId(song.id);
       return {
         'id': song.id,
         'type': 'songs',
@@ -504,7 +504,7 @@ class AppleMusicSource extends LibrarySource
           'playParams': {
             'id': song.id,
             'kind': 'song',
-            if (catalogId == null) 'isLibrary': true,
+            if (isLibrary) 'isLibrary': true,
           },
         },
       };
@@ -564,7 +564,14 @@ class AppleMusicSource extends LibrarySource
     final storefront = await _storefront();
     final body = await _get(
       '/v1/catalog/$storefront/search',
-      query: {'term': term, 'types': 'songs,albums,playlists', 'limit': limit},
+      query: {
+        'term': term,
+        'types': 'songs,albums,playlists',
+        'limit': limit,
+        // Names alone open no page: a store result's artist and album are
+        // addressed by ids, and the relationships are where they come from.
+        'include': 'artists,albums',
+      },
     );
     final results = body['results'];
     if (results is! Map) return const CatalogSearch();
@@ -829,13 +836,34 @@ class AppleMusicSource extends LibrarySource
     }
   }
 
-  /// Artwork for a track the platform player only described by handle.
+  /// What the store says about one of its songs, read once.
   ///
-  /// A station's tracks exist in the catalog and nowhere else, so one catalog
-  /// read is what turns `musicKit://artwork/transient/...` into a picture.
-  /// The result is cached per track: a station can report the same entry many
-  /// times, and each would otherwise cost a request.
-  final Map<String, String?> _artCache = {};
+  /// The platform player names a queue item by its title and, when the item
+  /// was resolved from an id, by that id. The store is the only thing that
+  /// turns either back into a recording with an artist, an album and the ids
+  /// their pages open — and a station's whole run is asked about this way, so
+  /// the answer is kept: a station reports the same entry many times.
+  final Map<String, LibrarySong?> _storeSongs = {};
+
+  Future<LibrarySong?> _storeSong(String catalogId) async {
+    if (_storeSongs.containsKey(catalogId)) return _storeSongs[catalogId];
+    try {
+      final storefront = await _storefront();
+      final body = await _get(
+        '/v1/catalog/$storefront/songs/$catalogId',
+        // `artists` and `albums` are what name the ids the credits open: the
+        // attributes carry the artist's *name* but no relationship, so a
+        // credit filled from attributes alone would lead nowhere.
+        query: {'include': 'artists,albums'},
+      );
+      final items = _resources(body);
+      return _storeSongs[catalogId] = items.isEmpty ? null : _song(items.first);
+    } on LibraryException {
+      // A cover or a credit that cannot be resolved is a missing one, not a
+      // failure of the track: the row draws its fallback.
+      return _storeSongs[catalogId] = null;
+    }
+  }
 
   @override
   Future<String?> artworkTemplate(LibrarySong song) async {
@@ -844,21 +872,20 @@ class AppleMusicSource extends LibrarySource
     if (own != null && own.startsWith('http')) return own;
     final catalogId = song.catalogId;
     if (catalogId == null) return null;
-    if (_artCache.containsKey(catalogId)) return _artCache[catalogId];
+    return (await _storeSong(catalogId))?.artId;
+  }
 
-    try {
-      final storefront = await _storefront();
-      final body = await _get('/v1/catalog/$storefront/songs/$catalogId');
-      final items = _resources(body);
-      final art = items.isEmpty ? null : _artTemplate(_attributes(items.first));
-      _artCache[catalogId] = art;
-      return art;
-    } on LibraryException {
-      // A cover that cannot be resolved is a missing cover, not a failure of
-      // the track: the row draws its tonal fallback.
-      _artCache[catalogId] = null;
-      return null;
-    }
+  /// What the store says about an item the platform player named by title.
+  ///
+  /// A queue entry for something the system generated — a station's track —
+  /// arrives with the title it drew and, at best, the catalog id behind it.
+  /// The recording itself, its artist and album, and the ids those credits
+  /// open, live in the store; this is that one read.
+  @override
+  Future<LibrarySong?> describe(LibrarySong song) async {
+    final catalogId = song.catalogId;
+    if (catalogId == null) return null;
+    return _storeSong(catalogId);
   }
 
   /// The store the account reads from. Cached: it changes when the user
@@ -1022,14 +1049,21 @@ class AppleMusicSource extends LibrarySource
     // resolves a track through that distinction: a store track must not be
     // queued as a library item.
     final isCatalog = json['type'] == 'songs';
+    // A library row names the store id behind it in `playParams`, not in the
+    // resource id: it is the only handle the store — and every write, rating
+    // and page that is keyed by the catalog — can be asked with.
+    final playParams = attributes['playParams'];
+    final catalogId = isCatalog
+        ? '${json['id']}'
+        : (playParams is Map ? playParams['catalogId']?.toString() : null);
     return LibrarySong(
       sourceId: id,
       id: '${json['id']}',
       title: attributes['name'] as String? ?? 'Untitled',
       artist: attributes['artistName'] as String?,
-      // Catalog responses name the artist's store id in attributes;
-      // library responses do not, and the artist page falls back to a
-      // library lookup through the album when the id is missing.
+      // Attributes carry the artist's *name*; the relationship is what names
+      // its id, and the id is what the artist page is addressed by. Reads ask
+      // for `include: artists,albums` for exactly this reason.
       artistId:
           attributes['artistId']?.toString() ??
           _relationshipId(json, 'artists'),
@@ -1041,7 +1075,7 @@ class AppleMusicSource extends LibrarySource
       discNumber: (attributes['discNumber'] as num?)?.toInt(),
       year: _year(attributes),
       genre: _genre(attributes),
-      catalogId: isCatalog ? '${json['id']}' : null,
+      catalogId: catalogId,
     );
   }
 

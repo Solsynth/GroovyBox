@@ -252,14 +252,26 @@ class PluginMusicKit implements MusicKitClient {
     final attrs = attributes is Map
         ? Map<String, dynamic>.from(attributes)
         : const <String, dynamic>{};
-    final artwork = attrs['artwork'];
-    // The artwork a station's generated track reports is a `musicKit://`
-    // handle, not an image URL: the system player reads it from its own
-    // cache and nothing else can. The track's catalog id is what turns it
-    // back into a picture (see `AppleMusicSource.artworkUri`), so it is kept.
+    // The entry's own artwork, which the system reports even when the item it
+    // resolved does not carry one. A `musicKit://` handle is kept as-is: only
+    // the system player can load it, and the track's catalog id is what turns
+    // it back into a picture (see `AppleMusicSource.artworkTemplate`).
+    final artwork =
+        current?.artwork ?? (attrs['artwork'] is Map ? attrs['artwork'] : null);
+    // The store id behind the entry. A catalog item's `href` names it; a
+    // library item's does not, and `playParams.catalogId` is where the library
+    // resource states the same correspondence. Without one of the two the
+    // store cannot be asked about the recording at all.
     final href = item?['href'];
-    final catalogId = href is String
-        ? RegExp(r'/songs/(\d+)$').firstMatch(href)?.group(1)
+    final playParams = attrs['playParams'];
+    String? catalogId = switch (href) {
+      final String path => RegExp(r'/songs/(\d+)$').firstMatch(path)?.group(1),
+      _ => null,
+    };
+    // A library item's href names the library id, not the store's; the
+    // correspondence is stated in `playParams` alone.
+    catalogId ??= playParams is Map
+        ? playParams['catalogId']?.toString()
         : null;
     final relationships = item?['relationships'];
     String? relatedId(String kind) {
@@ -275,7 +287,11 @@ class PluginMusicKit implements MusicKitClient {
       id: item?['id'] == null ? null : '${item!['id']}',
       catalogId: catalogId,
       title: (attrs['name'] as String?) ?? current?.title,
-      artist: attrs['artistName'] as String?,
+      // The entry's subtitle is the artist line the system player itself
+      // draws; an item that lost its attributes — a transient entry the
+      // player has not resolved — still carries it, and it is the only name
+      // of the act such an entry has.
+      artist: (attrs['artistName'] as String?) ?? current?.subtitle,
       // Catalog items name their artist's store id in attributes; queue
       // items resolved from playParams often do not, and the catalog read
       // the artwork already performs resolves the ids there.

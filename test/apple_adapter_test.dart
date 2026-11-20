@@ -142,6 +142,10 @@ class _FakeApple {
       '/v1/me/history/heavy-rotation' => _heavyRotation(),
       final p when p.startsWith('/v1/catalog/') && p.endsWith('/search') =>
         _catalogSearch(request),
+      final p
+          when p.startsWith('/v1/catalog/') &&
+              RegExp(r'/songs/\d+$').hasMatch(p) =>
+        _catalogSong(p),
       _ => null,
     };
     if (body == null) {
@@ -311,7 +315,6 @@ class _FakeApple {
     },
   };
 
-
   static Map<String, dynamic> _songResource(String id, String name) => {
     'id': id,
     'type': 'library-songs',
@@ -355,22 +358,58 @@ class _FakeApple {
       'songs': {
         'data': [
           {
-            'id': 'c.1',
+            'id': '1607593874',
             'type': 'songs',
             'attributes': {
               'name': 'Daytona Sand',
               'artistName': 'Orville Peck',
               'albumName': 'Bronco',
               'durationInMillis': 195160,
-              'playParams': {'id': 'c.1', 'kind': 'song'},
+              'playParams': {'id': '1607593874', 'kind': 'song'},
             },
           },
         ],
       },
     },
   };
-}
 
+  /// One store song, as `/v1/catalog/{storefront}/songs/{id}` answers with the
+  /// `include` the adapter asks for: names in the attributes, and the ids the
+  /// credits open in the relationships.
+  Map<String, dynamic> _catalogSong(String path) => {
+    'data': [
+      {
+        'id': RegExp(r'/songs/(\d+)$').firstMatch(path)!.group(1),
+        'type': 'songs',
+        'attributes': {
+          'name': 'Mesmerizer',
+          'artistName': 'サツキ',
+          'albumName': 'Mesmerizer',
+          'durationInMillis': 156000,
+          'artwork': {
+            'width': 1200,
+            'height': 1200,
+            'url':
+                'https://is1-ssl.mzstatic.com/image/thumb/store/{w}x{h}bb.jpg',
+          },
+          'playParams': {'id': '1745015575', 'kind': 'song'},
+        },
+        'relationships': {
+          'artists': {
+            'data': [
+              {'id': '1563515380', 'type': 'artists'},
+            ],
+          },
+          'albums': {
+            'data': [
+              {'id': '1745015574', 'type': 'albums'},
+            ],
+          },
+        },
+      },
+    ],
+  };
+}
 
 void main() {
   late _FakeApple server;
@@ -479,7 +518,7 @@ void main() {
     final source = AppleMusicSource(connected());
     final songs = await source.searchCatalogue('Daytona', limit: 40);
 
-    expect(songs.single.id, 'c.1');
+    expect(songs.single.id, '1607593874');
     expect(server.lastCatalogQuery['types'], 'songs');
     // The store refuses a page larger than 25 outright, so the ceiling is the
     // adapter's, not the caller's.
@@ -525,45 +564,38 @@ void main() {
       expect((attributes['playParams'] as Map)['isLibrary'], isTrue);
     },
   );
-  test(
-    'a catalog search result is not queued as a library item',
-    () async {
-      final source = AppleMusicSource(connected());
-      final catalog = await source.searchCatalog('Daytona');
-      final song = catalog.songs.single;
+  test('a catalog search result is not queued as a library item', () async {
+    final source = AppleMusicSource(connected());
+    final catalog = await source.searchCatalog('Daytona');
+    final song = catalog.songs.single;
 
-      // The store's id is not in the account's library; playParams claiming
-      // isLibrary on it makes the system player fail with
-      // MPMusicPlayerControllerErrorDomain 6.
-      expect(song.catalogId, 'c.1');
-      final playParams =
-          (source.platformResource(song)['attributes']
-              as Map)['playParams'] as Map;
-      expect(playParams['isLibrary'], isNull);
-    },
-  );
+    // The store's id is not in the account's library; playParams claiming
+    // isLibrary on it makes the system player fail with
+    // MPMusicPlayerControllerErrorDomain 6.
+    expect(song.catalogId, '1607593874');
+    final playParams =
+        (source.platformResource(song)['attributes'] as Map)['playParams']
+            as Map;
+    expect(playParams['isLibrary'], isNull);
+  });
 
-  test(
-    'a replayed copy keeps saying store, whoever built the song',
-    () async {
-      final source = AppleMusicSource(connected());
-      // What the catalog hands back for a favourite: a song rebuilt from the
-      // stored link, which carries the store id but no `catalogId` field.
-      final replayed = const LibrarySong(
-        sourceId: 'apple-1',
-        id: '1745015575',
-        title: 'Daytona Sand',
-        duration: Duration(minutes: 3),
-      );
-      final playParams =
-          (source.platformResource(replayed)['attributes']
-              as Map)['playParams'] as Map;
-      // Claiming isLibrary on a store id is what made a replayed favourite
-      // fail with MPMusicPlayerControllerErrorDomain 6.
-      expect(playParams['isLibrary'], isNull);
-    },
-  );
-
+  test('a replayed copy keeps saying store, whoever built the song', () async {
+    final source = AppleMusicSource(connected());
+    // What the catalog hands back for a favourite: a song rebuilt from the
+    // stored link, which carries the store id but no `catalogId` field.
+    final replayed = const LibrarySong(
+      sourceId: 'apple-1',
+      id: '1745015575',
+      title: 'Daytona Sand',
+      duration: Duration(minutes: 3),
+    );
+    final playParams =
+        (source.platformResource(replayed)['attributes'] as Map)['playParams']
+            as Map;
+    // Claiming isLibrary on a store id is what made a replayed favourite
+    // fail with MPMusicPlayerControllerErrorDomain 6.
+    expect(playParams['isLibrary'], isNull);
+  });
 
   test('the player bridge hands the run to the system player', () async {
     final songs = [
@@ -676,5 +708,65 @@ void main() {
     expect(kit.queuedAs.single, 'stations');
     expect(kit.queued.single.single['id'], 'ra.1');
     bridge.dispose();
+  });
+
+  test(
+    'a library song names the store id its row can be asked about',
+    () async {
+      final source = AppleMusicSource(connected());
+      final songs = await source.albumSongs('l.1');
+
+      // The library id is the row's own; the store id behind it is what the
+      // store, the ratings and every write are keyed by. `playParams` is the
+      // only place the library resource states the correspondence.
+      expect(songs.first.id, 'i.1');
+      expect(songs.first.catalogId, '1607593874');
+      // ...and it does not change which kind of id the system player is given.
+      final playParams =
+          (source.platformResource(songs.first)['attributes']
+                  as Map)['playParams']
+              as Map;
+      expect(playParams['isLibrary'], isTrue);
+    },
+  );
+
+  test('a store song is described with the ids its credits open', () async {
+    final source = AppleMusicSource(connected());
+    final described = await source.describe(
+      const LibrarySong(
+        sourceId: 'apple-1',
+        id: '1745015575',
+        title: 'Mesmerizer',
+        duration: Duration(milliseconds: 156000),
+        catalogId: '1745015575',
+      ),
+    );
+
+    // A station's track arrives as a title and an id: "Go to artist" and "Go
+    // to album" are only live if the relationships come back with the names.
+    expect(described?.artist, 'サツキ');
+    expect(described?.artistId, '1563515380');
+    expect(described?.album, 'Mesmerizer');
+    expect(described?.albumId, '1745015574');
+    expect(described?.artId, contains('{w}x{h}'));
+  });
+
+  test('a described song is what the cover resolution reads', () async {
+    final source = AppleMusicSource(connected());
+    final song = const LibrarySong(
+      sourceId: 'apple-1',
+      id: '1745015575',
+      title: 'Mesmerizer',
+      duration: Duration(milliseconds: 156000),
+      catalogId: '1745015575',
+      // What the system player reports for a generated track.
+      artId: 'musicKit://artwork/transient/600x600?id=abc',
+    );
+
+    expect(
+      await source.artworkTemplate(song),
+      contains('{w}x{h}bb.jpg'),
+      reason: 'the store template replaces the unloadable handle',
+    );
   });
 }

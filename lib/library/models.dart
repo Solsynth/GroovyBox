@@ -92,6 +92,44 @@ class LibrarySong {
   /// itself for everything that is a track in its own right.
   LibrarySong get playing => radioTrack ?? this;
 
+  /// A copy of this song with [other]'s credits where this one has none.
+  ///
+  /// A platform player reports a track it generated with little more than a
+  /// title. The artist and album are on the *other* connected libraries'
+  /// copies of the same recording, and a row that can name the act should.
+  ///
+  /// Names only. Ids and art handles are native to the library that issued
+  /// them: this row plays from its own source, so an id borrowed from another
+  /// one would open a page in the wrong library, and an art handle would be
+  /// read by an adapter that never emitted it. What this song already says
+  /// about itself always wins — a neighbour's spelling must not overwrite the
+  /// playing library's own.
+  LibrarySong withCreditsFrom(LibrarySong other) {
+    if (identical(this, other)) return this;
+    return LibrarySong(
+      sourceId: sourceId,
+      id: id,
+      title: title,
+      artist: artist ?? other.artist,
+      artistId: artistId,
+      album: album ?? other.album,
+      albumArtist: albumArtist ?? other.albumArtist,
+      albumId: albumId,
+      duration: duration,
+      track: track ?? other.track,
+      discNumber: discNumber ?? other.discNumber,
+      year: year ?? other.year,
+      genre: genre ?? other.genre,
+      artId: artId,
+      mbid: mbid ?? other.mbid,
+      isRadio: isRadio,
+      radioUrl: radioUrl,
+      radioPlayParams: radioPlayParams,
+      radioTrack: radioTrack,
+      catalogId: catalogId,
+    );
+  }
+
   Map<String, dynamic> toJson() => {
     'sourceId': sourceId,
     'id': id,

@@ -254,6 +254,16 @@ abstract interface class PlatformPlayedSource implements LibrarySource {
   /// null means the app has no way to draw it.
   Future<String?> artworkTemplate(LibrarySong song);
 
+  /// What the source can still say about [song], when the platform player
+  /// named it by title alone.
+  ///
+  /// The player reports a generated track — a station's — and a queue item
+  /// resolved by id with little more than a title; the store is what knows the
+  /// recording behind that id, including the artist and album pages its ids
+  /// open. One read per item, cached by the source. Null when the source has
+  /// nothing to add, or knows no id to ask about.
+  Future<LibrarySong?> describe(LibrarySong song);
+
   /// The kind the platform player resolves [song] as (`'songs'`,
   /// `'stations'`). A queue is all of one kind, so this is asked of its first
   /// item.

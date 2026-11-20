@@ -228,6 +228,20 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
   /// second position tick past the duration does not fire the next track again.
   bool _appleCompleted = false;
 
+  /// The open in flight, and the ticket that says which one is still wanted.
+  ///
+  /// Opening a track is a long sequence of awaits — a preferred-library lookup,
+  /// a download check, a stream mint, a hand-over to the system player — and
+  /// the transport can be asked for another track anywhere in the middle of
+  /// it. Two of them interleaving is exactly how two players end up sounding
+  /// one track: the older attempt resumes after the newer one retired a
+  /// player, and starts it again (`stop()` is queued, not synchronous, on the
+  /// platform side). Opens are therefore chained, and each ticket is checked
+  /// at every step that changes which player is sounding, so a superseded
+  /// attempt abandons its work instead of finishing it.
+  Future<void> _opening = Future.value();
+  int _openTicket = 0;
+
   @override
   PlaybackState build() {
     _player = _injectedPlayer ?? Player();
@@ -435,7 +449,9 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       position: Duration.zero,
     );
 
-    await _openCurrent();
+    // The newest queue wins: an open this call superseded has already been
+    // abandoned, and publishing here would describe the track it left behind.
+    if (!await _openCurrent()) return;
     _publish();
     _saveSession();
   }
@@ -452,7 +468,9 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       final apple = _apple;
       if (!_hasOpenedCurrent && state.current != null) {
         final resumePosition = state.position;
-        await _openCurrent();
+        // A newer open — a skip that landed while this one was opening —
+        // owns playback now, and seeking into it would move the wrong track.
+        if (!await _openCurrent()) return;
         if (resumePosition > Duration.zero) await apple?.seek(resumePosition);
       } else {
         await apple?.play();
@@ -464,7 +482,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
 
     if (!_hasOpenedCurrent && state.current != null) {
       final resumePosition = state.position;
-      await _openCurrent();
+      if (!await _openCurrent()) return;
       if (resumePosition > Duration.zero) {
         await _player.seek(resumePosition);
       }
@@ -707,7 +725,9 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     required Duration position,
     required bool playing,
   }) async {
-    await _openCurrent();
+    // A newer open already claimed playback: resuming or pausing now would
+    // reach into the track that superseded this one.
+    if (!await _openCurrent()) return;
     if (position > Duration.zero) {
       await seek(position);
     }
@@ -716,12 +736,38 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     _saveSession();
   }
 
-  /// Opens the song at the current index through its library's stream
+  /// Opens the row at the current index, superseding whatever open is in
+  /// flight.
+  ///
+  /// Every caller that changes the queue or the index goes through here, so
+  /// the transport has exactly one open running at a time (see [_opening]).
+  /// Returns whether *this* open was the one still wanted when it finished: a
+  /// caller that acts on the result — resuming a position, pausing a swapped
+  /// copy — must not do that to the track that superseded it.
+  Future<bool> _openCurrent() {
+    final ticket = ++_openTicket;
+    final run = _opening.then((_) async {
+      if (_superseded(ticket)) return false;
+      return _openCurrentNow(ticket);
+    });
+    // The chain must survive a failed open, or every later open would be
+    // skipped for the life of the session.
+    _opening = run.then<void>(
+      (_) {},
+      onError: (Object error) => debugPrint('[Playback] open failed: $error'),
+    );
+    return run;
+  }
+
+  /// Whether a newer open has already claimed playback.
+  bool _superseded(int ticket) => _disposed || ticket != _openTicket;
+
+  /// Opens the row at the current index through its library's stream
   /// endpoint, falling back to alternate sources that host the same canonical
   /// track if the primary source is missing or offline.
-  Future<void> _openCurrent() async {
+  Future<bool> _openCurrentNow(int ticket) async {
     final song = state.queueRow;
-    if (song == null) return;
+    if (song == null) return false;
     _hasOpenedCurrent = true;
     _appleCompleted = false;
     // The play is recorded before the stream opens, so a source that has been
@@ -733,11 +779,12 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     final sources = ref.read(librarySourceByIdProvider);
     var source = sources[song.sourceId];
     var toPlay = song;
-
     // Whatever plays next, the platform player must not keep sounding under
     // a track the app thinks it started. This runs before the source lookup
     // can bail out, because a song whose source is gone still ends Apple's
-    // playback.
+    // playback. Awaited, not fired off: the platform's `stop()` is queued,
+    // and an open that walked on before it landed is one of the ways two
+    // players end up sounding at once.
     if (_appleMode) {
       _appleMode = false;
       state = state.copyWith(volumeIsSystemControlled: false);
@@ -745,8 +792,15 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       // loaded, and macOS keeps showing its now-playing entry next to the
       // app's own for a track that is no longer the system's to describe.
       // Emptying the queue retires that entry.
-      unawaited(_apple?.stop());
-      unawaited(_apple?.clearQueue());
+      final apple = _apple;
+      if (apple != null) {
+        try {
+          await apple.stop();
+          await apple.clearQueue();
+        } catch (error) {
+          logAppleFailure(error);
+        }
+      }
     }
     // A downloaded track is the copy the user chose to keep, so it opens from
     // disk even when its server is reachable: that is what makes it a
@@ -758,10 +812,11 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     final downloaded = await ref
         .read(downloadServiceProvider.future)
         .then((service) => service?.downloadedFile(song));
+    if (_superseded(ticket)) return false;
     if (downloaded != null) {
       await _activateAudioSession();
       await _player.open(Media(Uri.file(downloaded).toString()));
-      return;
+      return true;
     }
 
     if (source == null) {
@@ -773,6 +828,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
         sources: sources,
         catalog: ref.read(libraryCatalogProvider),
       );
+      if (_superseded(ticket)) return false;
       for (final copy in copies) {
         final altSource = sources[copy.sourceId];
         if (altSource == null) continue;
@@ -782,7 +838,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       }
     }
 
-    if (source == null) return;
+    if (source == null) return false;
 
     // The library the user always prefers, before the row's own. When it holds
     // this recording, that copy plays and the row follows it there: a queue
@@ -803,14 +859,22 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
         source: preferred,
         catalog: ref.read(libraryCatalogProvider),
       );
+      if (_superseded(ticket)) return false;
       if (here != null) {
         await _activateAudioSession();
-        final attempt = await _tryOpenStream(preferred, here);
+        final attempt = await _tryOpenStream(
+          preferred,
+          here,
+          current: () => !_superseded(ticket),
+        );
+        // Opening is an await: the queue may have moved on, and adopting this
+        // copy afterwards would rewrite the row that is now playing.
+        if (_superseded(ticket)) return false;
         if (attempt.opened) {
           // What is sounding is the favourite's copy, so the dock, the lyrics
           // lookup and the next open of this slot name it.
           _adoptPlayedCopy(here);
-          return;
+          return true;
         }
         preview ??= attempt.preview;
       }
@@ -822,16 +886,25 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     if (source is PlatformPlayedSource) {
       // The mirror of the hand-over above: a streamed track that is already
       // sounding must be stopped, or media-kit keeps playing under the system
-      // player and two tracks are audible at once.
+      // player and two tracks are audible at once. The stop is awaited before
+      // the system player is started, so the two never overlap.
       if (!_appleMode) {
         await _player.stop();
         _hasOpenedCurrent = true;
       }
-      _appleMode = true;
-      state = state.copyWith(volumeIsSystemControlled: true);
+      // Both stops are awaits: a newer open may have claimed playback while
+      // this one was retiring the other player. Starting MusicKit now would
+      // sound it on top of whatever that newer open started.
+      if (_superseded(ticket)) return false;
       // MusicKit runs the audio session for its own player; the app's
       // session left active under it is the duplicate the two fight over.
       await _deactivateAudioSession();
+      // The session switch is an await too. Only now — with the other player
+      // silent, the app's session down, and no newer open wanting playback —
+      // does this attempt own the output.
+      if (_superseded(ticket)) return false;
+      _appleMode = true;
+      state = state.copyWith(volumeIsSystemControlled: true);
       _apple ??= ApplePlayer(
         ref.read(musicKitClientProvider),
         onStatus: (status) {
@@ -871,7 +944,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       } catch (error) {
         logAppleFailure(error);
       }
-      return;
+      return true;
     }
 
     // A hand-over from the platform player lands here with the app's session
@@ -881,8 +954,15 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     // The row's own library next. A minted URL (per-request playback links)
     // has to be asked for; everything else opens straight from the item's own
     // address.
-    final own = await _tryOpenStream(source, toPlay);
-    if (own.opened) return;
+    final own = await _tryOpenStream(
+      source,
+      toPlay,
+      current: () => !_superseded(ticket),
+    );
+    // The open is the last await before sound: a newer open that arrived
+    // during it has already taken the output.
+    if (_superseded(ticket)) return false;
+    if (own.opened) return true;
     // The provider holds the track but only sells an excerpt: the full
     // recording may well be in another connected library, so the trial URL is
     // held rather than opened and the others are asked first. Any other
@@ -894,6 +974,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       sources: sources,
       catalog: ref.read(libraryCatalogProvider),
     );
+    if (_superseded(ticket)) return false;
     for (final copy in copies) {
       if (copy.sourceId == toPlay.sourceId && copy.externalId == toPlay.id) {
         continue;
@@ -904,7 +985,12 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       // between libraries the app can stream from.
       if (altSource == null || altSource is PlatformPlayedSource) continue;
 
-      final attempt = await _tryOpenStream(altSource, copy.song);
+      final attempt = await _tryOpenStream(
+        altSource,
+        copy.song,
+        current: () => !_superseded(ticket),
+      );
+      if (_superseded(ticket)) return false;
       if (!attempt.opened) {
         preview ??= attempt.preview;
         continue;
@@ -913,17 +999,18 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       // the dock, the lyrics lookup and the next open of this slot all follow
       // what actually plays instead of the library that refused it.
       if (!song.isRadio) _adoptPlayedCopy(copy.song);
-      return;
+      return true;
     }
-
     // Nobody has the full track: the excerpt is better than silence.
     if (preview != null) {
       try {
         await _player.open(Media(preview.toString()));
+        return true;
       } catch (_) {
         // The trial URL died between the mint and the open.
       }
     }
+    return false;
   }
 
   /// The address to open [song] from [source], and the headers the server
@@ -950,12 +1037,21 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
   /// One helper for the three callers that try a stream — the preferred
   /// library, the row's own, and each alternate — so a refusal is classified
   /// the same way whichever copy it happened on.
+  ///
+  /// Minting a URL is an await, and it is the long one: a skip that lands
+  /// during it must not be followed by this open. [current] is asked after the
+  /// mint and before the player is touched, so an abandoned attempt never
+  /// starts media-kit.
   Future<({bool opened, Uri? preview})> _tryOpenStream(
     LibrarySource source,
-    LibrarySong song,
-  ) async {
+    LibrarySong song, {
+    bool Function()? current,
+  }) async {
     try {
       final (uri, headers) = await _streamUriOf(source, song);
+      if (current != null && !current()) {
+        return (opened: false, preview: null);
+      }
       await _player.open(Media(uri.toString(), httpHeaders: headers));
       return (opened: true, preview: null);
     } on PreviewOnlyException catch (error) {
@@ -989,7 +1085,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       position: Duration.zero,
       duration: _order[index].duration,
     );
-    await _openCurrent();
+    if (!await _openCurrent()) return;
     _saveSession();
   }
 
@@ -1091,9 +1187,10 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     unawaited(_tracker.finish().then((_) => _tracker.start(track)));
     // The player reports a `musicKit://` handle for a station's track, which
     // nothing but the system player can load; the source turns the catalog id
-    // into a real cover. Resolved off the position tick, then folded in, so a
-    // cover that takes a moment is not a cover that never arrives.
-    unawaited(_resolveStationArt(station.sourceId, track));
+    // into a real cover, and names credits the entry could not. Resolved off
+    // the position tick, then folded in, so a cover that takes a moment is not
+    // a cover that never arrives.
+    unawaited(_describeStationTrack(station.sourceId, track));
     final queue = List.of(state.queue);
     queue[index] = LibrarySong(
       sourceId: station.sourceId,
@@ -1155,17 +1252,17 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       stationIndex: queue.currentIndex,
     );
     _publish();
-    // The run reports `musicKit://` handles, so none of these rows has a
-    // cover yet: the list is drawn from what the store says about each.
-    unawaited(_resolveStationArtFor(row.sourceId, tracks));
+    // The run reports `musicKit://` handles and, for the entries the player
+    // has not resolved, nothing but a title: the list is drawn from what the
+    // store — or a neighbour holding the same recording — says about each.
+    unawaited(_describeStationRun(row.sourceId, tracks));
   }
 
-  /// Resolves covers for a station's whole run, a few at a time.
+  /// Names the credits and covers of a station's whole run, one at a time.
   ///
-  /// One catalog read per track, so this walks them in order and folds each
-  /// cover in as it arrives rather than waiting for the last one: the list is
-  /// readable immediately and fills in behind the eye.
-  Future<void> _resolveStationArtFor(
+  /// One read per track, folded in as it arrives rather than after the last
+  /// one: the list is readable immediately and fills in behind the eye.
+  Future<void> _describeStationRun(
     String sourceId,
     List<LibrarySong> tracks,
   ) async {
@@ -1173,47 +1270,122 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     if (source is! PlatformPlayedSource) return;
 
     for (final track in tracks) {
-      final art = await source.artworkTemplate(track);
-      if (art == null) continue;
+      var named = track;
+      final described = await source.describe(track);
+      if (described != null) {
+        named = LibrarySong(
+          sourceId: named.sourceId,
+          id: named.id,
+          title: named.title,
+          artist: described.artist ?? named.artist,
+          artistId: described.artistId ?? named.artistId,
+          album: described.album ?? named.album,
+          albumArtist: described.albumArtist ?? named.albumArtist,
+          albumId: described.albumId ?? named.albumId,
+          duration: named.duration,
+          track: named.track ?? described.track,
+          discNumber: named.discNumber ?? described.discNumber,
+          year: named.year ?? described.year,
+          genre: named.genre ?? described.genre,
+          artId: described.artId ?? named.artId,
+          catalogId: named.catalogId ?? described.catalogId,
+        );
+      }
       if (!ref.mounted) return;
+      // The station may have been left, or moved on to a different one, while
+      // this row was being resolved.
       final row = state.queueRow;
       if (row == null || !row.isRadio) return;
       final index = state.stationTracks.indexWhere(
-        (candidate) => candidate.id == track.id,
+        (candidate) => candidate.id == named.id,
       );
       if (index < 0) return;
-      if (state.stationTracks[index].artId == art) continue;
+      if (identical(state.stationTracks[index], named)) continue;
 
       final next = List.of(state.stationTracks);
-      next[index] = LibrarySong(
-        sourceId: track.sourceId,
-        id: track.id,
-        title: track.title,
-        artist: track.artist,
-        artistId: track.artistId,
-        album: track.album,
-        albumId: track.albumId,
-        artId: art,
-        catalogId: track.catalogId,
-        duration: track.duration,
-      );
+      next[index] = named;
       state = state.copyWith(stationTracks: next);
       _publish();
     }
   }
 
-  /// Fills in a station track's cover once the source has resolved one.
-  Future<void> _resolveStationArt(String sourceId, LibrarySong track) async {
+  /// Names a station track's credits and cover, once the source has them.
+  ///
+  /// The player draws a generated track from its title and id; the store is
+  /// what knows the recording behind that id — its artist, album and cover.
+  /// When the store cannot answer (Apple keeps no catalog row for some
+  /// account-only items), the credits are borrowed from another connected
+  /// library's copy of the same recording, matched by the app's own identity
+  /// rules. The row keeps playing from its own source either way: only names
+  /// travel, never an id or an art handle from a library that did not issue
+  /// the row.
+  Future<void> _describeStationTrack(String sourceId, LibrarySong track) async {
+    var named = track;
     final source = ref.read(librarySourceByIdProvider)[sourceId];
-    if (source is! PlatformPlayedSource) return;
-    final art = await source.artworkTemplate(track);
-    if (art == null || art == track.artId) return;
+    if (source is PlatformPlayedSource) {
+      final described = await source.describe(track);
+      if (described != null) {
+        named = LibrarySong(
+          sourceId: named.sourceId,
+          id: named.id,
+          title: named.title,
+          // The source's own answer about its own item: these names and the
+          // two ids their pages open belong to the library the row plays from.
+          artist: described.artist ?? named.artist,
+          artistId: described.artistId ?? named.artistId,
+          album: described.album ?? named.album,
+          albumArtist: described.albumArtist ?? named.albumArtist,
+          albumId: described.albumId ?? named.albumId,
+          duration: named.duration,
+          track: named.track ?? described.track,
+          discNumber: named.discNumber ?? described.discNumber,
+          year: named.year ?? described.year,
+          genre: named.genre ?? described.genre,
+          // A `musicKit://` handle cannot be loaded; the store's template can.
+          artId: described.artId ?? named.artId,
+          catalogId: named.catalogId ?? described.catalogId,
+        );
+      }
+    }
+    if (!ref.mounted) return;
+    final borrowed = named.artist == null || named.album == null
+        ? await _borrowCredits(named)
+        : null;
+    if (!ref.mounted) return;
+    _foldStationTrack(
+      borrowed == null ? named : named.withCreditsFrom(borrowed),
+    );
+  }
 
+  /// Another connected library's copy of [song], for credits Apple did not
+  /// state.
+  ///
+  /// The lookup is the app's own ([findCopies]), so a copy is only ever the
+  /// same recording by the rules every source already agrees on. Null when no
+  /// other library holds it, or none of them has anything to add.
+  Future<LibrarySong?> _borrowCredits(LibrarySong song) async {
+    final sources = ref.read(librarySourceByIdProvider);
+    if (sources.length < 2) return null;
+    final copies = await findCopies(
+      song,
+      sources: sources,
+      catalog: ref.read(libraryCatalogProvider),
+    );
+    for (final copy in copies) {
+      if (copy.sourceId == song.sourceId || !copy.playable) continue;
+      if (copy.song.artist == null && copy.song.album == null) continue;
+      return copy.song;
+    }
+    return null;
+  }
+
+  /// Replaces the station row's on-air track with [track]'s resolved copy.
+  void _foldStationTrack(LibrarySong track) {
     final index = state.currentIndex;
     if (index == null || index >= state.queue.length) return;
     final row = state.queue[index];
     final current = row.radioTrack;
-    // The station may have moved on while the cover was being fetched.
+    // The station may have moved on while the credits were being resolved.
     if (current == null || current.id != track.id) return;
 
     final queue = List.of(state.queue);
@@ -1226,18 +1398,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       isRadio: true,
       radioUrl: row.radioUrl,
       radioPlayParams: row.radioPlayParams,
-      radioTrack: LibrarySong(
-        sourceId: current.sourceId,
-        id: current.id,
-        title: current.title,
-        artist: current.artist,
-        artistId: current.artistId,
-        album: current.album,
-        albumId: current.albumId,
-        artId: art,
-        catalogId: current.catalogId,
-        duration: current.duration,
-      ),
+      radioTrack: track,
     );
     state = state.copyWith(queue: queue);
     _publish();
