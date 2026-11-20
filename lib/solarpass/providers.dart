@@ -373,7 +373,14 @@ class SolarpassScrobbler {
         // here every second and would otherwise keep pushing it back.
         _schedulePresence();
       } else if (prev?.playing != true) {
-        // Resumed playing same song
+        // Resumed playing the same song. If the pause outlived
+        // [_kPauseGrace] the play was already committed, so this opens a new
+        // one; otherwise the same play simply continues.
+        if (_activeSong == null) {
+          _activeSong = song;
+          _playStartedAt = clock.now();
+          _listenedDuration = Duration.zero;
+        }
         _lastResumeTime = clock.now();
         _schedulePresence();
       }
@@ -395,11 +402,16 @@ class SolarpassScrobbler {
         _commitPendingScrobble();
         _clearPresence();
       } else {
-        // Paused on track: debounce clearing activity by [_kPauseGrace]
+        // Paused on track. A pause is not an ending — the listener may come
+        // back — but it is the last moment this play can be counted: an app
+        // that closes, a queue never resumed, a track finished as the last
+        // one. Waiting for the *next* track to start is what left whole
+        // sessions of listening unrecorded, so the commit happens after the
+        // grace period, together with clearing presence.
         _pauseDebounceTimer ??= Timer(_kPauseGrace, () {
-          if (!_disposed && !_ref.read(playbackProvider).playing) {
-            _clearPresence();
-          }
+          if (_disposed || _ref.read(playbackProvider).playing) return;
+          _commitPendingScrobble();
+          _clearPresence();
         });
       }
     }

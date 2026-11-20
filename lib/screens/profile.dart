@@ -7,6 +7,7 @@ import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/pulsar/models.dart';
 import 'package:groovy_box/pulsar/providers.dart';
+import 'package:groovy_box/solarpass/login_dialog.dart';
 import 'package:groovy_box/solarpass/models.dart';
 import 'package:groovy_box/solarpass/providers.dart';
 import 'package:groovy_box/widgets/artwork.dart';
@@ -85,13 +86,11 @@ class ProfileScreen extends ConsumerWidget {
   }
 
   List<Widget> _taste(BuildContext context, WidgetRef ref) {
-    // A signed-out account has no fleet-side taste: the section folds away
-    // entirely rather than showing a spinner that can never resolve, since
-    // the provider stays empty without a session.
-    final signedIn = ref.watch(
-      pulsarSessionProvider.select((session) => session.value != null),
-    );
-    if (!signedIn) return const [];
+    final session = ref.watch(pulsarSessionProvider);
+    // Signed out has no fleet-side taste, and saying so beats an empty title:
+    // the provider answers null forever without a session, so a section that
+    // waited would wait for the lifetime of the app.
+    if (session.hasValue && session.value == null) return const [];
     final window = ref.watch(tasteWindowProvider);
     final taste = ref.watch(pulsarTasteProvider(window));
     return [
@@ -101,16 +100,34 @@ class ProfileScreen extends ConsumerWidget {
       ),
       ...switch (taste) {
         AsyncValue(value: final PulsarMediaStats stats?) => [
-          _TasteBody(stats: stats),
+          _TasteBody(
+            stats: stats,
+            scrobbling: ref.watch(
+              solarpassConfigProvider.select(
+                (config) => config.scrobbleEnabled,
+              ),
+            ),
+          ),
         ],
         AsyncValue(hasError: true) => [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: SolSpace.xxl),
-            child: Text(
-              'profileTasteError'.tr(),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    'profileTasteError'.tr(),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => ref.invalidate(pulsarTasteProvider(window)),
+                  child: Text('commonTryAgain'.tr()),
+                ),
+              ],
             ),
           ),
         ],
@@ -258,6 +275,44 @@ class _Identity extends StatelessWidget {
           color: theme.colorScheme.onSurfaceVariant,
         ),
       ),
+      // Signed out is a settled state, not a wait: the account layer answers
+      // `AsyncData(null)`. `hasValue` is what separates that from a loading
+      // state, whose value is also null — matching on the null alone left the
+      // skeleton bar on a signed-out page forever.
+      AsyncValue(hasValue: true, value: null) => Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        spacing: SolSpace.lg,
+        children: [
+          const _Avatar(name: '?'),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              spacing: SolSpace.xs,
+              children: [
+                Text(
+                  'profileSignedOutTitle'.tr(),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  'profileSignedOutSubtitle'.tr(),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: SolSpace.xs),
+                FilledButton.icon(
+                  onPressed: () => SolarpassLoginDialog.show(context),
+                  icon: const Icon(Symbols.login_rounded, size: 18),
+                  label: Text('solarpassConnectButton'.tr()),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
       _ => const Row(
         spacing: SolSpace.lg,
         children: [
@@ -353,7 +408,12 @@ class _Avatar extends StatelessWidget {
 class _TasteBody extends StatelessWidget {
   final PulsarMediaStats stats;
 
-  const _TasteBody({required this.stats});
+  /// Whether this device forwards plays at all. An empty window means one of
+  /// two very different things — nothing was played, or nothing was sent —
+  /// and the page must not leave the reader to guess which.
+  final bool scrobbling;
+
+  const _TasteBody({required this.stats, required this.scrobbling});
 
   @override
   Widget build(BuildContext context) {
@@ -362,7 +422,9 @@ class _TasteBody extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: SolSpace.xxl),
         child: Text(
-          'profileTasteEmpty'.tr(),
+          scrobbling
+              ? 'profileTasteEmpty'.tr()
+              : 'profileTasteScrobblingOff'.tr(),
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),

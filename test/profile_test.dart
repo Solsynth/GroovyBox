@@ -9,7 +9,11 @@ import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/player/player.dart';
+import 'package:groovy_box/pulsar/models.dart';
+import 'package:groovy_box/pulsar/providers.dart';
 import 'package:groovy_box/screens/profile.dart';
+import 'package:groovy_box/solarpass/models.dart';
+import 'package:groovy_box/solarpass/providers.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -40,6 +44,29 @@ class _Idle extends Playback {
   PlaybackState build() => const PlaybackState();
 }
 
+/// A settled signed-in session. The taste section only exists once the
+/// session layer has an answer, so the fake answers `build` directly instead
+/// of starting from `AsyncLoading`.
+class _SignedInSession extends SolarpassSessionNotifier {
+  @override
+  Future<OAuthSession?> build() async =>
+      const OAuthSession(accessToken: 'token');
+
+  @override
+  Future<OAuthSession?> validSession() async =>
+      const OAuthSession(accessToken: 'token');
+}
+
+/// A fixed account, so the identity block renders without a network fetch.
+class _SignedInAccount extends SolarpassAccountNotifier {
+  @override
+  Future<SolarpassAccount?> build() async => const SolarpassAccount(
+    id: 'acc-1',
+    name: 'littlesheep',
+    nick: 'LittleSheep',
+  );
+}
+
 LibrarySong _song(String id, String title, {String? artist}) => LibrarySong(
   sourceId: 'a',
   id: id,
@@ -53,9 +80,7 @@ LibrarySong _song(String id, String title, {String? artist}) => LibrarySong(
 /// a completion count, a distinct-track count and a most-recent order.
 Future<LibraryCatalog> _seed(LibraryDatabase db) async {
   final catalog = LibraryCatalog(db);
-  final yellow = await catalog.adopt(
-    _song('s1', 'Yellow', artist: 'Coldplay'),
-  );
+  final yellow = await catalog.adopt(_song('s1', 'Yellow', artist: 'Coldplay'));
   final fixYou = await catalog.adopt(
     _song('s2', 'Fix You', artist: 'Coldplay'),
   );
@@ -160,7 +185,10 @@ void main() {
 
     await _pumpScreen(tester, db);
 
-    expect(find.text('Profile'), findsOneWidget);
+    // The page names itself through the account block, not a bar: signed out,
+    // that block is the prompt instead of a skeleton that never resolves.
+    expect(find.text('Not signed in'), findsOneWidget);
+    expect(find.text('Sign in with Solarpass'), findsOneWidget);
     expect(find.text('4'), findsOneWidget);
     expect(find.text('plays'), findsOneWidget);
     expect(find.text('2'), findsWidgets);
@@ -220,7 +248,9 @@ void main() {
     await tester.tap(find.byIcon(Symbols.account_circle));
     await tester.pumpAndSettle();
 
-    expect(find.text('Profile'), findsOneWidget);
+    // The page names itself through the account block now that the header is
+    // gone; the history below it is what the tab opened onto.
+    expect(find.text('Not signed in'), findsOneWidget);
     expect(find.text('Yellow'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
@@ -228,17 +258,17 @@ void main() {
   group('formatting', () {
     test('listening time reads in the unit people say it in', () {
       expect(formatListeningTime(Duration.zero), 'Nothing yet');
-      expect(formatListeningTime(const Duration(seconds: 30)), 'Under a minute');
+      expect(
+        formatListeningTime(const Duration(seconds: 30)),
+        'Under a minute',
+      );
       expect(formatListeningTime(const Duration(minutes: 12)), '12 min');
       expect(
         formatListeningTime(const Duration(hours: 3, minutes: 12)),
         '3 h 12 min',
       );
       expect(formatListeningTime(const Duration(hours: 3)), '3 h');
-      expect(
-        formatListeningTime(const Duration(days: 2, hours: 4)),
-        '2 d 4 h',
-      );
+      expect(formatListeningTime(const Duration(days: 2, hours: 4)), '2 d 4 h');
     });
 
     test('relative time counts calendar days, not 24-hour spans', () {
@@ -265,5 +295,95 @@ void main() {
         '3 months ago',
       );
     });
+  });
+
+  group('taste window', () {
+    test('a month ago clamps to the target month, never rolls over', () {
+      // March 31 minus a month is February, which has no 31st. Building
+      // `DateTime(y, m - 1, 31)` instead answers March 3, so the window
+      // silently stopped covering a month.
+      expect(
+        tasteWindowStart(TasteWindow.month, DateTime.utc(2026, 3, 31)),
+        DateTime.utc(2026, 2, 28),
+      );
+      expect(
+        tasteWindowStart(TasteWindow.month, DateTime.utc(2026, 1, 31)),
+        DateTime.utc(2025, 12, 31),
+      );
+      expect(
+        tasteWindowStart(TasteWindow.month, DateTime.utc(2026, 5, 31)),
+        DateTime.utc(2026, 4, 30),
+      );
+    });
+
+    test('a year ago is the same date, leap days included', () {
+      expect(
+        tasteWindowStart(TasteWindow.year, DateTime.utc(2028, 2, 29)),
+        DateTime.utc(2027, 2, 28),
+      );
+      expect(
+        tasteWindowStart(TasteWindow.year, DateTime.utc(2026, 11, 20)),
+        DateTime.utc(2025, 11, 20),
+      );
+    });
+
+    test('all time has no start', () {
+      expect(
+        tasteWindowStart(TasteWindow.all, DateTime.utc(2026, 3, 1)),
+        isNull,
+      );
+    });
+  });
+
+  testWidgets('a signed-in account renders the fleet taste', (tester) async {
+    final db = LibraryDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+
+    tester.view.physicalSize = const Size(420, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          libraryDatabaseProvider.overrideWithValue(db),
+          playbackProvider.overrideWith(_Idle.new),
+          solarpassSessionProvider.overrideWith(_SignedInSession.new),
+          solarpassAccountProvider.overrideWith(_SignedInAccount.new),
+          pulsarTasteProvider.overrideWith(
+            (ref, window) async => const PulsarMediaStats(
+              totalScrobbles: 42,
+              totalSeconds: 3600,
+              daysActive: 7,
+              topItems: [
+                PulsarTopEntity(
+                  name: 'Yellow',
+                  subtitle: 'Coldplay',
+                  count: 9,
+                  seconds: 2100,
+                ),
+              ],
+              topCreators: [
+                PulsarTopEntity(name: 'Coldplay', count: 12, seconds: 2800),
+              ],
+            ),
+          ),
+        ],
+        child: MaterialApp(
+          theme: createAppThemeSet().light,
+          home: const Scaffold(body: ProfileScreen()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('YOUR TASTE'), findsOneWidget);
+    expect(find.text('42'), findsOneWidget);
+    expect(find.text('Yellow'), findsWidgets);
+    expect(find.text('Coldplay'), findsWidgets);
+    expect(tester.takeException(), isNull);
   });
 }

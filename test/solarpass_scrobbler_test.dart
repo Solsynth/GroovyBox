@@ -213,4 +213,48 @@ void main() {
       expect(client.presence, isEmpty);
     });
   });
+
+  test('a play that stops without a next track still reaches the account', () {
+    fakeAsync((async) {
+      start();
+
+      // The last track of a queue: nothing will ever start behind it, so a
+      // commit that waits for a track change waits forever. Whole listening
+      // sessions went unrecorded this way.
+      playback.startTrack(_song('1'));
+      async.elapse(const Duration(seconds: 60));
+      playback.hold();
+      async.elapse(const Duration(minutes: 1));
+
+      expect(client.scrobbles, hasLength(1));
+      expect(client.scrobbles.single.title, 'Song 1');
+      expect(client.scrobbles.single.listened, const Duration(seconds: 60));
+    });
+  });
+
+  test(
+    'resuming after that grace period opens a new play, not a banked gap',
+    () {
+      fakeAsync((async) {
+        start();
+
+        playback.startTrack(_song('1'));
+        async.elapse(const Duration(seconds: 60));
+        playback.hold();
+        async.elapse(const Duration(minutes: 5));
+        // Sixty more seconds after the long pause. The gap is silence, not
+        // listening time: the second play must be a minute, not the six
+        // minutes and twenty seconds a single banked play would claim, and it
+        // is long enough to pass the quarter threshold on its own.
+        playback.startTrack(_song('1'));
+        async.elapse(const Duration(seconds: 60));
+        playback.hold();
+        async.elapse(const Duration(minutes: 1));
+
+        expect(client.scrobbles, hasLength(2));
+        expect(client.scrobbles.first.listened, const Duration(seconds: 60));
+        expect(client.scrobbles.last.listened, const Duration(seconds: 60));
+      });
+    },
+  );
 }

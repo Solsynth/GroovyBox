@@ -347,6 +347,9 @@
   "profileTasteTitle": "你的口味",
   "profileTasteEmpty": "这段时间还没有听歌记录。放一首歌，就会有计数。",
   "profileTasteError": "无法从服务器加载你的收听统计。",
+  "profileTasteScrobblingOff": "这台设备没有把播放记录上报到你的账户，所以服务器没有可统计的内容。请在设置中开启在线状态上报。",
+  "profileSignedOutTitle": "尚未登录",
+  "profileSignedOutSubtitle": "登录后，你的口味、收藏和歌单会在各设备之间保持同步。",
   "profileDeviceTitle": "这台设备上",
   "profileDaysActive": {
     "one": "听歌 {} 天",

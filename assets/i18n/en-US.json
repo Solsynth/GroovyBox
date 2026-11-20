@@ -348,6 +348,9 @@
   "profileTasteTitle": "Your taste",
   "profileTasteEmpty": "Nothing scrobbled in this window yet. Play something and it counts.",
   "profileTasteError": "Could not load your listening stats from the server.",
+  "profileTasteScrobblingOff": "This device is not sending plays to your account, so the fleet has nothing to count. Turn on presence scrobbling in Settings.",
+  "profileSignedOutTitle": "Not signed in",
+  "profileSignedOutSubtitle": "Sign in to keep your taste, favourites and playlists in step across devices.",
   "profileDeviceTitle": "On this device",
   "profileDaysActive": {
     "one": "{} day listening",

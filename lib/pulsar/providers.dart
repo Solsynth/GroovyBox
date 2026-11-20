@@ -343,6 +343,28 @@ class FriendListeningFeed extends AsyncNotifier<List<FriendListening>> {
 /// How far back the taste summary reaches.
 enum TasteWindow { all, year, month }
 
+/// Where [window] starts, relative to [now].
+///
+/// Month and year are calendar shifts, not day counts: the 31st of March is
+/// "a month ago" on the 30th of April even though that day does not exist in
+/// the target month, so the day is clamped to the month's last. Building the
+/// date arithmetically instead rolls March 31 → May 1 and the window quietly
+/// stops covering a month.
+DateTime? tasteWindowStart(TasteWindow window, DateTime now) =>
+    switch (window) {
+      TasteWindow.all => null,
+      TasteWindow.year => _monthsBefore(now, 12),
+      TasteWindow.month => _monthsBefore(now, 1),
+    };
+
+DateTime _monthsBefore(DateTime now, int months) {
+  final total = now.year * 12 + (now.month - 1) - months;
+  final year = total ~/ 12;
+  final month = total % 12 + 1;
+  final lastDay = DateTime.utc(year, month + 1, 0).day;
+  return DateTime.utc(year, month, now.day > lastDay ? lastDay : now.day);
+}
+
 /// The account's taste, aggregated by Pulsar over every scrobble the fleet
 /// has. Empty-without-session is silence, not an error: the profile page
 /// still shows the local listening story when the account is signed out.
@@ -351,16 +373,9 @@ Future<PulsarMediaStats?> pulsarTaste(Ref ref, TasteWindow window) async {
   final session = ref.watch(pulsarSessionProvider).value;
   if (session == null) return null;
   final now = DateTime.now().toUtc();
-  final from = switch (window) {
-    TasteWindow.all => null,
-    TasteWindow.year => DateTime(now.year - 1, now.month, now.day),
-    TasteWindow.month => DateTime(
-      now.year,
-      now.month - 1 == 0 ? 12 : now.month - 1,
-      now.day,
-    ),
-  };
-  return ref.read(pulsarClientProvider).getStats(session, from: from, to: now);
+  return ref
+      .read(pulsarClientProvider)
+      .getStats(session, from: tasteWindowStart(window, now), to: now);
 }
 
 /// The account's favourites, as Pulsar holds them: the same heart the device

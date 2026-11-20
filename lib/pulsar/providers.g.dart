@@ -585,7 +585,7 @@ final class PulsarTasteProvider
   }
 }
 
-String _$pulsarTasteHash() => r'6b6a6e92f2f8ab15393c9b91e29d725bdad6a3ff';
+String _$pulsarTasteHash() => r'353bcc129daf44d26fca6203512d8d345dc5476e';
 
 /// The account's taste, aggregated by Pulsar over every scrobble the fleet
 /// has. Empty-without-session is silence, not an error: the profile page
