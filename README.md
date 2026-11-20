@@ -99,7 +99,12 @@ than block you behind a form.
   screen and headset buttons, and routes what they send back into the same
   transport the UI drives. The full player is also a keyboard surface — Space,
   Escape, arrows, Shift+arrows and `L` — bound on the page's own focus, so a
-  focused control keeps its keys.
+  focused control keeps its keys. When the queue ends and infinite playback is
+  on, the transport asks the library that served the last track for its
+  neighbours (`SimilarSource`: Subsonic's `getSimilarSongs2` with the older
+  `getSimilarSongs` as fallback, Jellyfin's `/Items/{id}/Similar`, NetEase's
+  `/simi/song`, an Apple genre station, and the local tags), then appends them;
+  the shuffle over the whole library is the fallback when no source can answer.
 - **Local library** — `lib/data/local/library_database.dart` (Drift, SQLite)
   is where the app remembers songs, whatever server serves them. A track is
   canonical — title, artist, album, duration and a fingerprint of them — and

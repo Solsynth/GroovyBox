@@ -74,7 +74,8 @@ const _apiVersion = '1.16.1';
 /// `subsonic-response` envelope, converts `status: failed` into a
 /// [LibraryException] and returns the inner map. That keeps the individual
 /// endpoints readable and means no caller ever sees the envelope.
-class SubsonicSource extends LibrarySource implements RatedSource {
+class SubsonicSource extends LibrarySource
+    implements RatedSource, SimilarSource {
   @override
   final SourceConfig config;
   final Dio _dio;
@@ -363,6 +364,44 @@ class SubsonicSource extends LibrarySource implements RatedSource {
       for (final song in random['song'] as List)
         if (song is Map) _songFromJson(_stringKeyed(song)),
     ];
+  }
+
+  /// `getSimilarSongs2`: the server's own neighbours for a track.
+  ///
+  /// OpenSubsonic's newer form takes the song id and answers with every kind
+  /// of neighbour it knows; the older `getSimilarSongs` names an artist or a
+  /// song. The newer endpoint is asked first and the older one is the fallback
+  /// for a server that predates it, which is every 1.16-era install.
+  ///
+  /// An empty answer is not a failure: a small library that has not analysed
+  /// its audio says so by returning nothing.
+  @override
+  Future<List<LibrarySong>> similarSongs(
+    LibrarySong song, {
+    int limit = 30,
+  }) async {
+    for (final endpoint in ['getSimilarSongs2', 'getSimilarSongs']) {
+      try {
+        final body = await _request(
+          endpoint,
+          query: {'id': song.id, 'count': limit},
+        );
+        final similar = body['similarSongs2'] ?? body['similarSongs'];
+        if (similar is! Map || similar['song'] is! List) continue;
+        return [
+          for (final item in similar['song'] as List)
+            if (item is Map) _songFromJson(_stringKeyed(item)),
+        ];
+      } on LibraryException catch (error) {
+        // A server without the extension answers with its own error (10 is
+        // "missing parameter" on an old server that does not know the newer
+        // name, 0 a generic unsupported request); the older endpoint is the
+        // next thing to try. Anything else is a real failure and travels up.
+        if (error.code == 0 || error.code == 10) continue;
+        rethrow;
+      }
+    }
+    return const [];
   }
 
   /// `/star` and `/unstar`, or the OpenSubsonic extension's identical pair.

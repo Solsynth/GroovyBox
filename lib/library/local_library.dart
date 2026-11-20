@@ -21,7 +21,7 @@ import 'source.dart';
 
 /// The directory the source joins: relative ids from the database resolve
 /// against it.
-class LocalLibrarySource extends LibrarySource {
+class LocalLibrarySource extends LibrarySource implements SimilarSource {
   LocalLibrarySource({required this.database, required this.directory});
 
   final LibraryDatabase database;
@@ -160,6 +160,49 @@ class LocalLibrarySource extends LibrarySource {
             (row.album?.toLowerCase().contains(needle) ?? false))
           _songOf(row),
     ].take(limit).toList();
+  }
+
+  /// Imported files that share a genre, an artist or an album with [song].
+  ///
+  /// There is nobody to ask over the network, but the tags are right here:
+  /// an imported track's neighbours are the files it was filed beside, which
+  /// is the same question a server answers from its own analysis. Ranked by
+  /// how much they share, so the same genre and artist wins over genre alone.
+  @override
+  Future<List<LibrarySong>> similarSongs(
+    LibrarySong seed, {
+    int limit = 30,
+  }) async {
+    final artist = seed.artist?.trim().toLowerCase();
+    final album = seed.albumId;
+    final genre = seed.genre?.trim().toLowerCase();
+    final rows = [
+      for (final row in await _rows())
+        if (row.path != seed.id) row,
+    ];
+    int score(LocalFileRow row) {
+      var shared = 0;
+      if (genre != null &&
+          genre.isNotEmpty &&
+          row.genre?.trim().toLowerCase() == genre) {
+        shared += 2;
+      }
+      if (artist != null &&
+          artist.isNotEmpty &&
+          row.artist?.trim().toLowerCase() == artist) {
+        shared += 2;
+      }
+      if (album != null && album.isNotEmpty && row.albumKey == album) {
+        shared += 3;
+      }
+      return shared;
+    }
+
+    final ranked = [
+      for (final row in rows)
+        if (score(row) > 0) (row: row, score: score(row)),
+    ]..sort((a, b) => b.score.compareTo(a.score));
+    return [for (final entry in ranked.take(limit)) _songOf(entry.row)];
   }
 
   @override

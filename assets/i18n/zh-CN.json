@@ -49,7 +49,7 @@
   "settingsLanguageSystem": "跟随系统",
   "settingsLanguageSubtitle": "界面语言。选择“跟随系统”时使用设备的语言设置。",
   "settingsInfinitePlayback": "无限播放",
-  "settingsInfinitePlaybackSubtitle": "队列播放结束后，继续从曲库中随机播放歌曲。",
+  "settingsInfinitePlaybackSubtitle": "队列播放结束后，向播放上一首的曲库请求相似歌曲，让音乐继续流动而不是停下。",
   "settingsLiquidGlass": "液态玻璃",
   "settingsLiquidGlassSubtitle": "悬浮的界面元素会折射其后的页面。关闭后同样的栏会以扁平表面绘制，在每一帧滚动中开销更低。",
   "settingsSectionPlayback": "播放",

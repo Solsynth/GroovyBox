@@ -129,7 +129,8 @@ class JellyfinAdapter implements LibraryAdapter {
 ///
 /// Jellyfin's item model is one flat `BaseItemDto` for albums, songs, artists
 /// and playlists, so mapping is a single pair of helpers over `/Items`.
-class JellyfinSource extends LibrarySource implements RatedSource {
+class JellyfinSource extends LibrarySource
+    implements RatedSource, SimilarSource {
   @override
   final SourceConfig config;
   final Dio _dio;
@@ -374,6 +375,33 @@ class JellyfinSource extends LibrarySource implements RatedSource {
     );
   }
 
+  /// `/Items/{id}/Similar`: the server's own neighbours for an item.
+  ///
+  /// Jellyfin scores its similar items from the same kinds of metadata this
+  /// page already reads (genres, tags, people), so asking it is the point of
+  /// the endpoint: the answer describes this server's holdings and plays from
+  /// it, rather than a random draw from the whole library.
+  @override
+  Future<List<LibrarySong>> similarSongs(
+    LibrarySong seed, {
+    int limit = 30,
+  }) async {
+    final body = await _request(
+      '/Items/${seed.id}/Similar',
+      query: {
+        'userId': _userId,
+        'Limit': limit,
+        'Fields': 'Genres,AlbumArtists,ArtistItems',
+      },
+    );
+    final items = body['Items'];
+    if (items is! List) return const [];
+    return [
+      for (final item in items)
+        if (item is Map) _song(Map<String, dynamic>.from(item)),
+    ];
+  }
+
   @override
   Future<List<LibrarySong>> randomSongs({int size = 40}) async {
     final items = await _items({
@@ -469,7 +497,9 @@ class JellyfinSource extends LibrarySource implements RatedSource {
     lines.sort((a, b) => a.at.compareTo(b.at));
 
     final metadata = body['Metadata'];
-    final language = metadata is Map ? metadata['ThreeLetterISOLanguageName'] : null;
+    final language = metadata is Map
+        ? metadata['ThreeLetterISOLanguageName']
+        : null;
     return Lyrics(
       lines: lines,
       synced: lines.any((line) => line.at > Duration.zero),

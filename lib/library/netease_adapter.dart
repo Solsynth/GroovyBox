@@ -207,9 +207,7 @@ class _NeteaseHttp {
       // connection without a source id falls back to the bridge's address.
       // Login endpoints are never cached (`CachePolicy.none` on every poll),
       // so no session state is replayed from disk.
-      _dio.interceptors.add(
-        cache.interceptorFor(scope ?? 'netease:$baseUrl'),
-      );
+      _dio.interceptors.add(cache.interceptorFor(scope ?? 'netease:$baseUrl'));
     }
   }
 
@@ -258,10 +256,7 @@ class _NeteaseHttp {
     final options = switch ((path.startsWith('/login/'), mutating)) {
       (true, _) => Options(extra: {kCachePolicyExtra: CachePolicy.none}),
       (_, true) => Options(
-        extra: {
-          kCachePolicyExtra: CachePolicy.none,
-          kCacheMutationExtra: true,
-        },
+        extra: {kCachePolicyExtra: CachePolicy.none, kCacheMutationExtra: true},
       ),
       _ => null,
     };
@@ -362,7 +357,8 @@ class NeteaseSource extends LibrarySource
         CuratedSource,
         ResolvedStreamSource,
         LyricsQuerySource,
-        ExtendableSource {
+        ExtendableSource,
+        SimilarSource {
   NeteaseSource(this.config, {ResponseCache? cache})
     : _http = _NeteaseHttp(
         config.baseUrl,
@@ -587,8 +583,7 @@ class NeteaseSource extends LibrarySource
   >
   _holds() async {
     final cached = _held;
-    if (cached != null &&
-        DateTime.now().difference(_heldAt) < holdsTtl) {
+    if (cached != null && DateTime.now().difference(_heldAt) < holdsTtl) {
       return cached;
     }
     final uid = await _uid();
@@ -630,6 +625,25 @@ class NeteaseSource extends LibrarySource
     _held = held;
     _heldAt = DateTime.now();
     return held;
+  }
+
+  /// `/simi/song`: NetEase's own "similar songs" list for a track.
+  ///
+  /// The bridge answers with the whole song objects, so no second
+  /// `/song/detail` request is needed. NetEase's neighbours are a
+  /// recommendation, not a holdings check: a similar row may be a track the
+  /// account has not added, which is fine here because it plays from the
+  /// cloud account itself.
+  @override
+  Future<List<LibrarySong>> similarSongs(
+    LibrarySong seed, {
+    int limit = 30,
+  }) async {
+    final body = await _call(
+      '/simi/song',
+      query: {'id': seed.id, 'limit': limit},
+    );
+    return _songs(body['songs']);
   }
 
   @override
@@ -857,10 +871,7 @@ class NeteaseSource extends LibrarySource
 
   /// Appends [song] to one of the account's own [playlist]s.
   @override
-  Future<void> addToPlaylist(
-    LibraryPlaylist playlist,
-    LibrarySong song,
-  ) async {
+  Future<void> addToPlaylist(LibraryPlaylist playlist, LibrarySong song) async {
     final body = await _http.post(
       '/playlist/tracks',
       query: {'op': 'add', 'pid': playlist.id, 'tracks': song.id},

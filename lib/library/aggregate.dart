@@ -39,19 +39,20 @@ class LibraryAggregator {
   Future<List<T>> _fanOut<T>(
     Future<List<T>> Function(LibrarySource source) task, {
     bool adopt = false,
+    List<LibrarySource>? overrides,
   }) async {
-    if (sources.isEmpty) return const [];
+    final targets = overrides ?? sources;
+    if (targets.isEmpty) return const [];
 
     final results = await Future.wait<Object?>([
-      for (final source in sources)
-        task(
-          source,
-        ).then<Object?>((items) => items, onError: (Object error) => error),
+      for (final source in targets)
+        task(source)
+            .then<Object?>((items) => items, onError: (Object error) => error),
     ], eagerError: false);
 
     final merged = <T>[];
     final failures = <(String, Object)>[];
-    for (var index = 0; index < sources.length; index++) {
+    for (var index = 0; index < targets.length; index++) {
       final result = results[index];
       if (result is List<T>) {
         // Sources keep their own ordering; concatenation is in source order
@@ -61,13 +62,13 @@ class LibraryAggregator {
           if (result case final List<LibrarySong> songs) onSongs?.call(songs);
         }
       } else if (result != null) {
-        failures.add((sources[index].id, result));
+        failures.add((targets[index].id, result));
       }
     }
 
-    if (failures.length == sources.length) throw failures.first.$2;
+    if (failures.length == targets.length) throw failures.first.$2;
     final failedIds = {for (final (sourceId, _) in failures) sourceId};
-    for (final source in sources) {
+    for (final source in targets) {
       if (!failedIds.contains(source.id)) onSuccess?.call(source.id);
     }
     for (final (sourceId, error) in failures) {
@@ -76,18 +77,14 @@ class LibraryAggregator {
     return merged;
   }
 
-  Future<List<LibraryAlbum>> recentlyAdded({int limit = 50}) => _fanOut(
-    (source) => source.recentlyAdded(limit: limit),
-    adopt: true,
-  );
+  Future<List<LibraryAlbum>> recentlyAdded({int limit = 50}) =>
+      _fanOut((source) => source.recentlyAdded(limit: limit), adopt: true);
 
   Future<List<LibraryAlbum>> albums({int limit = 60, int offset = 0}) =>
       _fanOut((source) => source.albums(limit: limit, offset: offset));
 
-  Future<List<LibrarySong>> albumSongs(String albumId) => _fanOut(
-    (source) => source.albumSongs(albumId),
-    adopt: true,
-  );
+  Future<List<LibrarySong>> albumSongs(String albumId) =>
+      _fanOut((source) => source.albumSongs(albumId), adopt: true);
 
   Future<List<LibraryArtist>> artists() =>
       _fanOut((source) => source.artists());
@@ -98,10 +95,8 @@ class LibraryAggregator {
   Future<List<LibraryPlaylist>> playlists() =>
       _fanOut((source) => source.playlists());
 
-  Future<List<LibrarySong>> playlistSongs(String playlistId) => _fanOut(
-    (source) => source.playlistSongs(playlistId),
-    adopt: true,
-  );
+  Future<List<LibrarySong>> playlistSongs(String playlistId) =>
+      _fanOut((source) => source.playlistSongs(playlistId), adopt: true);
 
   /// Everything the libraries **hold** that matches [query].
   ///
@@ -172,6 +167,45 @@ class LibraryAggregator {
   Future<List<LibrarySong>> randomSongs({int size = 40}) async {
     final songs = await _fanOut((source) => source.randomSongs(size: size));
     return _deduplicateSongs(songs);
+  }
+
+  /// Tracks that flow from [seed], asked of every library that knows how.
+  ///
+  /// The seed is addressed first to the library that served it: a provider's
+  /// neighbours are its own catalogue's, and a second server's answer would
+  /// describe a recording it may not even hold. Libraries that cannot answer
+  /// this question contribute nothing, and one server being down must not
+  /// cost the others' answers, so failures are swallowed exactly as the other
+  /// additive reads swallow them.
+  Future<List<LibrarySong>> similarSongs(
+    LibrarySong seed, {
+    int limit = 30,
+  }) async {
+    final knowers = [
+      for (final source in sources)
+        if (source is SimilarSource) source,
+    ];
+    if (knowers.isEmpty) return const [];
+
+    // The seed's own library leads the fan-out; its answer is weighted first
+    // by arriving first, because `_fanOut` keeps source order.
+    final ordered = [
+      for (final source in knowers)
+        if (source.id == seed.sourceId) source,
+      for (final source in knowers)
+        if (source.id != seed.sourceId) source,
+    ];
+
+    final songs = await _fanOut(
+      (source) => (source as SimilarSource).similarSongs(seed, limit: limit),
+      overrides: ordered,
+    );
+    final key = trackBaseFingerprint(title: seed.title, artist: seed.artist);
+    return [
+      for (final song in _deduplicateSongs(songs))
+        if (trackBaseFingerprint(title: song.title, artist: song.artist) != key)
+          song,
+    ];
   }
 
   List<LibrarySong> _deduplicateSongs(List<LibrarySong> songs) {

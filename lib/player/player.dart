@@ -146,6 +146,7 @@ class PlaybackState {
     stationIndex: stationIndex ?? this.stationIndex,
   );
 }
+
 /// Whether the transport has anywhere to go next, given the preferences.
 ///
 /// The dock and the player page both draw a Next button, and a disagreed pair
@@ -940,9 +941,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     // Undoing a shuffle sorts by the order the queue was handed over in; the
     // slot now holds a different item, so that order has to move with it or
     // the copy would sort to the front.
-    final sourceIndex = _sourceOrder.indexOf(
-      state.queue[index],
-    );
+    final sourceIndex = _sourceOrder.indexOf(state.queue[index]);
     if (sourceIndex >= 0) _sourceOrder[sourceIndex] = copy;
     state = state.copyWith(queue: queue);
   }
@@ -1329,10 +1328,24 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     try {
       final aggregator = ref.read(libraryAggregatorProvider);
       List<LibrarySong> songs = [];
-      try {
-        songs = await aggregator.randomSongs(size: 30);
-      } catch (_) {
-        // Network or source failure: try local database fallback
+      // The provider that served the last track is asked what comes next, so
+      // the queue sounds like the record it followed instead of like a random
+      // draw from the whole library. A source that cannot answer this (or a
+      // queue that ended on nothing) falls through to the shuffle below.
+      final seed = state.current;
+      if (seed != null && !seed.isRadio) {
+        try {
+          songs = await aggregator.similarSongs(seed, limit: 20);
+        } catch (_) {
+          // The neighbours read failed: the shuffle is next, not a stop.
+        }
+      }
+      if (songs.isEmpty) {
+        try {
+          songs = await aggregator.randomSongs(size: 30);
+        } catch (_) {
+          // Network or source failure: try local database fallback
+        }
       }
       if (songs.isEmpty) {
         final catalog = _catalog;

@@ -103,7 +103,11 @@ const kAppleMusicApiRoot = 'https://api.music.apple.com';
 /// plain [LibrarySource] reads. A future provider that is played by a platform
 /// player adds itself to exactly the same interfaces.
 class AppleMusicSource extends LibrarySource
-    implements PlatformPlayedSource, CuratedSource, ExtendableSource {
+    implements
+        PlatformPlayedSource,
+        CuratedSource,
+        ExtendableSource,
+        SimilarSource {
   @override
   final SourceConfig config;
   final Dio _dio;
@@ -239,11 +243,7 @@ class AppleMusicSource extends LibrarySource
   Future<List<LibraryAlbum>> albums({int limit = 60, int offset = 0}) async {
     final items = await _data(
       '/v1/me/library/albums',
-      query: {
-        'limit': limit,
-        'offset': offset,
-        'include': 'artists',
-      },
+      query: {'limit': limit, 'offset': offset, 'include': 'artists'},
     );
     return [for (final item in items) _album(item)];
   }
@@ -541,11 +541,7 @@ class AppleMusicSource extends LibrarySource
       '/v1/catalog/$storefront/search',
       // The store caps a search page at 25 per type; asking for more makes it
       // refuse the whole request rather than answer a shorter page.
-      query: {
-        'term': term,
-        'types': 'songs',
-        'limit': limit.clamp(1, 25),
-      },
+      query: {'term': term, 'types': 'songs', 'limit': limit.clamp(1, 25)},
     );
     final results = body['results'];
     final section = results is Map ? results['songs'] : null;
@@ -688,11 +684,7 @@ class AppleMusicSource extends LibrarySource
     while (true) {
       final body = await _get(
         '/v1/me/library/songs',
-        query: {
-          'limit': page,
-          'offset': offset,
-          'include': 'artists,albums',
-        },
+        query: {'limit': page, 'offset': offset, 'include': 'artists,albums'},
       );
       final items = _resources(body);
       if (items.isEmpty) break;
@@ -905,6 +897,34 @@ class AppleMusicSource extends LibrarySource
   /// The offset is bounded by the library's own `meta.total`: picking blind
   /// inside a fixed range returns nothing at all for a library smaller than
   /// that range.
+  /// A genre station built from [seed]'s own genres.
+  ///
+  /// Apple has no "similar tracks" list: the platform player's answer to
+  /// "more like this" is a station, and a station id is what a queue entry
+  /// can play (the transport resolves stations by `radioPlayParams`). The
+  /// station is all the caller gets — its running order is the system
+  /// player's — so this answers with the station as one row, which is exactly
+  /// what [LibrarySong.isRadio] means everywhere else.
+  @override
+  Future<List<LibrarySong>> similarSongs(
+    LibrarySong seed, {
+    int limit = 30,
+  }) async {
+    final genre = seed.genre?.trim();
+    if (genre == null || genre.isEmpty) return const [];
+    final storefront = await _storefront();
+    final term = Uri.encodeQueryComponent(genre);
+    final body = await _get(
+      '/v1/catalog/$storefront/search',
+      query: {'term': term, 'types': 'stations', 'limit': 1},
+    );
+    final results = body['results'];
+    final section = results is Map ? results['stations'] : null;
+    if (section is! Map) return const [];
+    final station = _resources(Map<String, dynamic>.from(section)).firstOrNull;
+    return station == null ? const [] : [_station(station)];
+  }
+
   @override
   Future<List<LibrarySong>> randomSongs({int size = 40}) async {
     final first = await _get(
@@ -917,11 +937,7 @@ class AppleMusicSource extends LibrarySource
     final offset = total > size ? Random().nextInt(total - size) : 0;
     final items = await _data(
       '/v1/me/library/songs',
-      query: {
-        'limit': size,
-        'offset': offset,
-        'include': 'artists,albums',
-      },
+      query: {'limit': size, 'offset': offset, 'include': 'artists,albums'},
       cache: CachePolicy.none,
     );
     return [for (final item in items) _song(item)]..shuffle();
@@ -1015,7 +1031,8 @@ class AppleMusicSource extends LibrarySource
       // library responses do not, and the artist page falls back to a
       // library lookup through the album when the id is missing.
       artistId:
-          attributes['artistId']?.toString() ?? _relationshipId(json, 'artists'),
+          attributes['artistId']?.toString() ??
+          _relationshipId(json, 'artists'),
       album: attributes['albumName'] as String?,
       albumId: albumId ?? _relationshipId(json, 'albums'),
       artId: _artTemplate(attributes),

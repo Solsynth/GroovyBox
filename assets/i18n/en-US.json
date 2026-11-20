@@ -50,7 +50,7 @@
   "settingsLanguageSystem": "System",
   "settingsLanguageSubtitle": "Language of the interface. System follows your device.",
   "settingsInfinitePlayback": "Infinite playback",
-  "settingsInfinitePlaybackSubtitle": "Keep the music playing with random tracks from the library when the queue ends.",
+  "settingsInfinitePlaybackSubtitle": "When the queue ends, ask the library that served the last track for similar songs, so the music keeps flowing instead of stopping.",
   "settingsLiquidGlass": "Liquid glass",
   "settingsLiquidGlassSubtitle": "Floating chrome refracts the page behind it. Turn off to paint the same bars as flat surfaces, which costs less on every scroll frame.",
   "settingsSectionPlayback": "Playback",

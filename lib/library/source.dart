@@ -210,6 +210,7 @@ abstract class LibrarySource {
       ].take(limit).toList(),
     );
   }
+
   Future<List<LibrarySong>> randomSongs({int size});
 
   /// Lyrics for [song], synced when the server has a timed version.
@@ -294,6 +295,27 @@ abstract interface class RatedSource implements LibrarySource {
   Future<List<LibrarySong>> favouriteSongs();
 }
 
+/// A library that can name tracks like [song], from its own service.
+///
+/// The capability behind the endless queue: when a queue runs out, the
+/// provider that served the last track is asked what to play after it, and it
+/// answers from its own catalogue rather than a random draw. Every kind the
+/// app speaks to has a version of this — a Subsonic server's
+/// `getSimilarSongs2`, a Jellyfin item's `/Similar`, NetEase's
+/// `/simi/song`, an Apple account's genre station — so the queue sounds like
+/// the track it followed instead of like the library's whole shelf.
+///
+/// Optional on purpose: a source without it (a plugin that only lists files)
+/// simply contributes nothing, and the queue falls back to the shuffle.
+abstract interface class SimilarSource implements LibrarySource {
+  /// Tracks [song] should lead into, in the service's own relevance order.
+  ///
+  /// [limit] is a ceiling, not a promise: a service that knows only five
+  /// neighbours answers five. The seed itself is filtered out by the caller,
+  /// so a service that echoes it back is harmless.
+  Future<List<LibrarySong>> similarSongs(LibrarySong song, {int limit = 30});
+}
+
 /// A library whose search can reach past what the account holds.
 ///
 /// A server's library and its search are the same set: a Subsonic `search3`
@@ -326,7 +348,6 @@ abstract interface class ResolvedStreamSource implements LibrarySource {
   /// Throws [LibraryException] when the provider refuses the track (no
   /// entitlement, or the region has no licence).
   Future<Uri> resolveStreamUri(LibrarySong song);
-
 }
 
 /// A library backed by a store the user can browse and add from.
