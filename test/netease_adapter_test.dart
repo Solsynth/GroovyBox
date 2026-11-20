@@ -31,6 +31,14 @@ class _FakeNetease {
   /// bridge marks with `freeTrialInfo` instead of refusing outright.
   bool trackPreviewOnly = false;
 
+  /// One quality that answers a trial while the others answer the track, as
+  /// an account without a subscription is answered for a VIP-quality master.
+  String? trialLevel;
+
+  /// Whether the trial flag arrives on a file that is the whole recording:
+  /// `freeTrialInfo` describes the entitlement, not always the file.
+  bool trialFlagOnFullFile = false;
+
   /// The scan states `/login/qr/check` walks through, one per call. The last
   /// value repeats if the list runs out.
   List<int> qrStates = [801, 802, 803];
@@ -309,6 +317,14 @@ class _FakeNetease {
           await response.close();
           return;
         }
+        final level = request.uri.queryParameters['level'];
+        final trial =
+            trackPreviewOnly ||
+            (trialLevel != null && trialLevel == level) ||
+            trialFlagOnFullFile;
+        // What the file actually is, which is what tells a trial from the
+        // track when the flag is set on both.
+        final length = trial && !trialFlagOnFullFile ? 30000 : 216000;
         response.write(
           jsonEncode({
             'code': 200,
@@ -318,9 +334,9 @@ class _FakeNetease {
                 'url': trackPlayable
                     ? 'http://m.example/stream/101.mp3'
                     : null,
-                'level': request.uri.queryParameters['level'],
-                if (trackPreviewOnly)
-                  'freeTrialInfo': {'start': 0, 'end': 30},
+                'level': level,
+                'time': length,
+                if (trial) 'freeTrialInfo': {'start': 0, 'end': 30},
               },
             ],
           }),
@@ -697,6 +713,38 @@ void main() {
     // A refusal is not cached: the next play asks again instead of replaying
     // a trial forever after the account upgrades.
     server.trackPreviewOnly = false;
+    expect(
+      (await source.resolveStreamUri(song)).toString(),
+      'http://m.example/stream/101.mp3',
+    );
+  });
+
+  test(
+    'a trial at one quality is re-minted at the next, not a paywall',
+    () async {
+      // The reported bug: an account without a subscription was handed a
+      // trial for the VIP *quality*, though the same recording plays in full
+      // at a lower one. Asking only for `exhigh` made an ordinary track look
+      // paywalled.
+      server.trialLevel = 'exhigh';
+      final source = signedIn();
+      final song = (await source.playlistSongs('1')).single;
+
+      expect(
+        (await source.resolveStreamUri(song)).toString(),
+        'http://m.example/stream/101.mp3',
+      );
+      expect(server.lastQuery['/song/url/v1']?['level'], 'standard');
+    },
+  );
+
+  test('a trial flag on the whole file is not a paywall', () async {
+    // `freeTrialInfo` is what the bridge says about the account's privilege;
+    // a full-length file has carried it too. The file's own length decides.
+    server.trialFlagOnFullFile = true;
+    final source = signedIn();
+    final song = (await source.playlistSongs('1')).single;
+
     expect(
       (await source.resolveStreamUri(song)).toString(),
       'http://m.example/stream/101.mp3',

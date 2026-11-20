@@ -207,6 +207,61 @@ void main() {
 
       expect(copies.map((copy) => copy.sourceId), ['first', 'second']);
     });
+
+    test('a copy tagged with a featured credit is still found', () async {
+      // The reported bug: the track is on another service with a featured
+      // artist spelled into both fields, and the strict fingerprint rejected
+      // it, so "other versions" claimed nobody had it.
+      final first = _FlakySource('first');
+      final second = _FlakySource('second')
+        ..catalogue = const [
+          // The studio take, credited with a guest the row's own tags omit.
+          LibrarySong(
+            sourceId: 'second',
+            id: 'studio',
+            title: 'Yellow (feat. a Guest)',
+            artist: 'Coldplay feat. a Guest',
+            duration: Duration(milliseconds: 267000),
+          ),
+          // The live take: same title, a length that rules it out.
+          LibrarySong(
+            sourceId: 'second',
+            id: 'live',
+            title: 'Yellow - Live',
+            artist: 'Coldplay',
+            duration: Duration(minutes: 5),
+          ),
+        ];
+      final container = await _container([first, second]);
+
+      final copies = await container.read(
+        songCopiesProvider(const TrackLookup(wanted)).future,
+      );
+
+      expect(copies.last.externalId, 'studio');
+    });
+
+    test('a different recording of the same title is not a copy', () async {
+      final first = _FlakySource('first');
+      final second = _FlakySource('second')
+        ..catalogue = const [
+          LibrarySong(
+            sourceId: 'second',
+            id: 'long',
+            title: 'Yellow',
+            artist: 'Coldplay',
+            // A concert recording that a search returns for the title.
+            duration: Duration(minutes: 6),
+          ),
+        ];
+      final container = await _container([first, second]);
+
+      final copies = await container.read(
+        songCopiesProvider(const TrackLookup(wanted)).future,
+      );
+
+      expect(copies.map((copy) => copy.sourceId), ['first']);
+    });
   });
 
   test('an album is read from its own source only', () async {

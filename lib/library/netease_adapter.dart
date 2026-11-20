@@ -875,14 +875,36 @@ class NeteaseSource extends LibrarySource
 
   /// The playback URL, minted per request by the bridge.
   ///
-  /// `/song/url/v1` answers `{data: [{url, freeTrialInfo, ...}]}`. A track
-  /// the account has no entitlement to still comes back with a URL — a
-  /// 30-second trial, flagged by `freeTrialInfo` — and that is a refusal, not
-  /// a playable answer: the caller is told with [PreviewOnlyException] so it
-  /// can look for the full recording in another library and fall back to the
+  /// `/song/url/v1` answers `{data: [{url, freeTrialInfo, time, level}]}`. A
+  /// track the account has no entitlement to still comes back with a URL — an
+  /// excerpt, flagged by `freeTrialInfo` — and that is a refusal, not a
+  /// playable answer: the caller is told with [PreviewOnlyException] so it can
+  /// look for the full recording in another library and fall back to the
   /// excerpt only when nobody has it. A `null` url is the plain refusal (no
   /// licence in the region, or the track is gone).
+  ///
+  /// Two things make the answer less clear-cut than that, and both were
+  /// reported as "the paywall check is wrong":
+  ///
+  /// * The quality asked for is part of the answer. An account without a
+  ///   subscription gets a trial for a VIP-*quality* track even when the same
+  ///   recording plays in full at a lower level, so asking only for `exhigh`
+  ///   turned ordinary tracks into paywall hits. The levels are therefore
+  ///   tried in order and the first full mint wins — at most one extra
+  ///   request, and only on the answer that would otherwise have been a
+  ///   refusal.
+  /// * `freeTrialInfo` is a flag, not the file. When the mint reports a length
+  ///   at least as long as the track, the URL is the whole recording and the
+  ///   flag says something about the *privilege* the account has rather than
+  ///   about what was handed over.
   final Map<String, (Uri, DateTime)> _streamCache = {};
+
+  /// The levels to ask for, best first.
+  ///
+  /// `standard` is last because it is the one a free account is entitled to:
+  /// it is what turns a false paywall into a playable track. A track shorter
+  /// than any excerpt check still goes through the same two answers.
+  static const _levels = ['exhigh', 'standard'];
 
   @override
   Future<Uri> resolveStreamUri(LibrarySong song) async {
@@ -890,40 +912,58 @@ class NeteaseSource extends LibrarySource
     if (cached != null && DateTime.now().isBefore(cached.$2)) {
       return cached.$1;
     }
-    final body = await _call(
-      '/song/url/v1',
-      query: {'id': song.id, 'level': 'exhigh'},
-    );
-    final data = body['data'];
-    final first = data is List && data.isNotEmpty ? data.first : null;
-    final url = first is Map ? first['url'] : null;
-    if (url is! String || url.isEmpty) {
-      throw const LibraryException(
-        'This track cannot be played with the current account.',
-        messageKey: 'libraryNeteaseUnavailable',
+    Uri? excerpt;
+    for (final level in _levels) {
+      final body = await _call(
+        '/song/url/v1',
+        query: {'id': song.id, 'level': level},
       );
-    }
-    final uri = Uri.parse(url);
-    // The trial flag is a signed-in-only answer: a signed-out bridge mints a
-    // trial for everything it can see, and the source refuses it before it
-    // gets here (an empty URL), so an account with no session never reaches
-    // this branch. `freeTrialInfo` is what the bridge adds when the excerpt
-    // is what was minted.
-    if (first is Map && first['freeTrialInfo'] != null) {
-      throw PreviewOnlyException(
+      final data = body['data'];
+      final first = data is List && data.isNotEmpty ? data.first : null;
+      final url = first is Map ? first['url'] : null;
+      if (url is! String || url.isEmpty) continue;
+      final uri = Uri.parse(url);
+      if (first is Map && _isExcerpt(first, song)) {
+        excerpt ??= uri;
+        continue;
+      }
+      // The minted URL is short-lived; ten minutes keeps one queue position
+      // from re-asking during a long listen without outliving the token.
+      _streamCache[song.id] = (
         uri,
+        DateTime.now().add(const Duration(minutes: 10)),
+      );
+      return uri;
+    }
+    if (excerpt != null) {
+      throw PreviewOnlyException(
+        excerpt,
         'This track is behind the NetEase paywall; only a preview is '
         'available.',
         messageKey: 'libraryNeteasePreviewOnly',
       );
     }
-    // The minted URL is short-lived; ten minutes keeps one queue position
-    // from re-asking during a long listen without outliving the token.
-    _streamCache[song.id] = (
-      uri,
-      DateTime.now().add(const Duration(minutes: 10)),
+    throw const LibraryException(
+      'This track cannot be played with the current account.',
+      messageKey: 'libraryNeteaseUnavailable',
     );
-    return uri;
+  }
+
+  /// Whether one minted `data` row is an excerpt rather than the track.
+  ///
+  /// The trial flag alone is not the answer: it is what the bridge reports
+  /// about the account's entitlement, and a full file has been seen carrying
+  /// it. The file's own length settles it when the track's length is known —
+  /// an excerpt is far shorter — and the flag decides the rest.
+  static bool _isExcerpt(Map<dynamic, dynamic> minted, LibrarySong song) {
+    final trial = minted['freeTrialInfo'];
+    if (trial == null) return false;
+    final length = (minted['time'] as num?)?.toInt();
+    final expected = song.duration.inMilliseconds;
+    if (length == null || expected <= 0) return true;
+    // A couple of seconds of slack: the file and the metadata are timed by
+    // two different services and neither is exact.
+    return length < expected - 2000;
   }
 
   /// Never called on this source: [Playback] asks [resolveStreamUri] first

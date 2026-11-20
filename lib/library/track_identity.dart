@@ -71,6 +71,12 @@ class TrackIdentity {
     artist: artist,
   );
 
+  /// The title alone, normalized: see [trackTitleKey].
+  String get titleKey => trackTitleKey(title);
+
+  /// The artist credit as normalized words: see [trackArtistWords].
+  Set<String> get artistWords => trackArtistWords(artist);
+
   /// Whether two identities describe the same canonical song.
   ///
   /// Matches if both share a MusicBrainz ID ([mbid]), or have matching
@@ -90,6 +96,40 @@ class TrackIdentity {
     }
     return false;
   }
+
+  /// Whether [other] could be the same recording under another library's tags.
+  ///
+  /// Looser than [matches] on purpose. [matches] is the rule the catalog
+  /// *stores* by, and it is right there: two rows are one song only when the
+  /// fingerprints — length bucket included — agree, or the lengths are within
+  /// a few seconds. A lookup asks a different question, and two services
+  /// describe one recording differently all the time: a featured credit on
+  /// one and not the other, a length a second or two apart, a title carrying
+  /// an edition credit the other drops. Answering "nothing found" for those
+  /// is the bug this exists to stop.
+  ///
+  /// The title must agree once normalized; beyond that a copy is accepted
+  /// when one artist's credits are all present in the other's (a duet
+  /// credited on one side only) or one is unknown, and the lengths are within
+  /// [copyDurationTolerance] whenever both are known. A different recording of
+  /// the same song — live, remixed, re-recorded — differs in length, which is
+  /// what the last rule keeps out.
+  bool couldBeSameRecording(TrackIdentity other) {
+    if (matches(other)) return true;
+    if (titleKey != other.titleKey) return false;
+    final credited = artistWords;
+    final theirs = other.artistWords;
+    if (credited.isNotEmpty &&
+        theirs.isNotEmpty &&
+        !credited.containsAll(theirs) &&
+        !theirs.containsAll(credited)) {
+      return false;
+    }
+    if (duration == Duration.zero || other.duration == Duration.zero) {
+      return true;
+    }
+    return (duration - other.duration).abs() <= copyDurationTolerance;
+  }
 }
 
 /// The artist and title portion of the fingerprint, independent of length.
@@ -101,6 +141,36 @@ String trackBaseFingerprint({
     _normalize(artist ?? '', isArtist: true),
     _normalize(title, isTitle: true),
   ].join('|');
+}
+
+/// How far two libraries' lengths may be apart and still be one recording.
+///
+/// Wider than [TrackIdentity.matches]'s four seconds: that compares two
+/// sightings of one item, while a lookup compares two services' metadata —
+/// one may time the master and the other a licensed copy.
+const copyDurationTolerance = Duration(seconds: 10);
+
+/// The title alone, normalized the way the fingerprints normalize it.
+///
+/// Public so a lookup can rank candidates by title without building a whole
+/// [TrackIdentity], and so `"Yellow - Live"` and `"Yellow"` meet.
+String trackTitleKey(String title) => _normalize(title, isTitle: true);
+
+/// The artist credit as its normalized words, for comparing two credits.
+///
+/// Not the squeezed fingerprint key: `"Simon & Garfunkel"` and `"Simon
+/// Garfunkel"` normalize to the same word set but not to the same letters-run,
+/// and a credit one service lists both halves of must still meet the other's
+/// shorter one.
+Set<String> trackArtistWords(String? artist) {
+  final credit = artist ?? '';
+  final stripped = _stripDiacritics(
+    credit.replaceAll(_featuredRegex, ' '),
+  ).toLowerCase();
+  return {
+    for (final word in stripped.split(RegExp(r'[^\p{L}\p{N}]+', unicode: true)))
+      if (word.isNotEmpty) word,
+  };
 }
 
 /// A stable key for "this same song", used to join two libraries' copies of

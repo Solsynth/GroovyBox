@@ -667,16 +667,21 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
   /// two copies of one recording differ by a second at most — so switching
   /// mid-track does not start over.
   ///
-  /// A copy of something *else* is not a switch: only a song whose canonical
-  /// identity matches ([TrackIdentity.matches]) is accepted, so a lookup
-  /// cannot quietly replace the track with a different one.
+  /// A copy of something *else* is not a switch: only a copy the lookup could
+  /// have offered for this recording ([TrackIdentity.couldBeSameRecording])
+  /// is accepted, so a row cannot quietly replace the track with a different
+  /// one. That rule is the lookup's own, not the catalog's stricter
+  /// fingerprint: the sheet offers copies whose tags a second library spells
+  /// differently, and a switch those rows cannot make would be a dead choice.
   Future<void> switchVersion(LibrarySong copy) async {
     final row = state.queueRow;
     final index = state.currentIndex;
     if (row == null || index == null) return;
     if (row.sourceId == copy.sourceId && row.id == copy.id) return;
     if (row.isRadio) return;
-    if (!TrackIdentity.of(row).matches(TrackIdentity.of(copy))) return;
+    if (!TrackIdentity.of(row).couldBeSameRecording(TrackIdentity.of(copy))) {
+      return;
+    }
 
     final position = state.position;
     final wasPlaying = state.playing;

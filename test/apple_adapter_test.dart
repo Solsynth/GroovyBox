@@ -97,6 +97,10 @@ class _FakeApple {
   bool forbid = false;
   final Map<String, String> lastAuthorization = {};
 
+  /// The query of the most recent catalog search, which the limit assertion
+  /// reads.
+  Map<String, String> lastCatalogQuery = const {};
+
   static Future<_FakeApple> start() async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final fake = _FakeApple(server);
@@ -137,7 +141,7 @@ class _FakeApple {
       '/v1/me/storefront' => _storefront(),
       '/v1/me/history/heavy-rotation' => _heavyRotation(),
       final p when p.startsWith('/v1/catalog/') && p.endsWith('/search') =>
-        _catalogSearch(),
+        _catalogSearch(request),
       _ => null,
     };
     if (body == null) {
@@ -341,7 +345,12 @@ class _FakeApple {
   };
 
   /// A catalog search: resources typed `songs`, whose ids are store ids.
-  Map<String, dynamic> _catalogSearch() => {
+  Map<String, dynamic> _catalogSearch(HttpRequest request) {
+    lastCatalogQuery = request.uri.queryParameters;
+    return _catalogBody();
+  }
+
+  Map<String, dynamic> _catalogBody() => {
     'results': {
       'songs': {
         'data': [
@@ -464,6 +473,17 @@ void main() {
       server.lastAuthorization['/v1/me/library/search'],
       'Bearer dev-token',
     );
+  });
+
+  test('the store search asks for songs at a page the store accepts', () async {
+    final source = AppleMusicSource(connected());
+    final songs = await source.searchCatalogue('Daytona', limit: 40);
+
+    expect(songs.single.id, 'c.1');
+    expect(server.lastCatalogQuery['types'], 'songs');
+    // The store refuses a page larger than 25 outright, so the ceiling is the
+    // adapter's, not the caller's.
+    expect(server.lastCatalogQuery['limit'], '25');
   });
 
   test('a forbidden account reports the subscription, not a crash', () async {

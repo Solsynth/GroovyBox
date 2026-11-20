@@ -75,13 +75,22 @@ than block you behind a form.
   `song/url/v1`, which is `ResolvedStreamSource` — the transport asks that
   capability before falling back to `streamUri`, so a refused mint falls
   through the cross-library fallback like a dead URL. A VIP track is not
-  refused, though: the bridge mints a 30-second trial and marks it with
+  refused, though: the bridge mints an excerpt and marks it with
   `freeTrialInfo`, so the source answers `PreviewOnlyException`, which carries
   the trial URL instead of playing it. The transport then looks the recording
   up in every connected library (`findCopies`, the same answer the "other
   versions" sheet shows), plays the first full copy it can resolve, rewrites
   the playing row to that copy, and opens the trial only when nobody has the
-  whole track.
+  whole track. Two details of that mint are what keep the check honest: the
+  quality asked for is part of the answer (a VIP-*quality* master comes back
+  as a trial to an account that may still stream it at a lower level, so the
+  levels are tried in order), and `freeTrialInfo` is a flag about the
+  account's privilege rather than the file, so a mint reporting the track's
+  full length is the track. The lookup itself is looser than the catalog's
+  fingerprint on purpose: `TrackIdentity.couldBeSameRecording` accepts the
+  same recording under another service's tags — a featured credit on one side
+  only, ten seconds of timing drift — while the length still rules out a live
+  or remixed take, and the closest length wins among candidates.
 - **Playback** — one `media_kit` player for the app's lifetime
   (`lib/player/player.dart`), exposed through Riverpod. Shuffle reorders the
   visible queue instead of hiding randomization underneath. The media session
