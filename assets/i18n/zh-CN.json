@@ -175,7 +175,6 @@
   "statsOrphaned": "其中 {} 首已不再由已连接的曲库提供",
   "libraryKindLocal": "本地文件",
   "playerNothingPlaying": "当前没有正在播放的歌曲",
-  "searchStoreSection": "来自 {}",
   "searchPlay": "立即播放",
   "catalogAdd": "添加到音乐库",
   "settingsRenameLibrary": "重命名音乐库",

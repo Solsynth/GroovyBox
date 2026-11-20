@@ -216,7 +216,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   ),
                 )
               else
-                SliverToBoxAdapter(child: _ExploreResults(query: _query)),
+                _ExploreResults(query: _query),
             ],
             SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
           ],
@@ -449,30 +449,71 @@ class _SeeAll extends StatelessWidget {
   }
 }
 
-/// What the stores have that the user does not.
+/// What the stores have that the user does not, as the same three folds the
+/// library tab uses: tracks, albums, playlists.
 ///
-/// Grouped by store, because adding is a per-store write and the store has to
-/// be named before the button means anything. Everything the library tab
-/// answers with is dropped here: a track on both tabs would answer "do I have
-/// this?" twice, and the Explore tab's whole premise is music the user does
-/// not have yet — hearts, playlist tracks and subscribed albums included,
-/// which is why the holdings search is what the comparison is made against.
-class _ExploreResults extends ConsumerWidget {
+/// Grouped by kind rather than by store, because the question this tab
+/// answers is "could I add this?" and a search for a record should open on
+/// records, not on twenty-five of its songs. The store a row came from is
+/// named on the row itself: a heading can only be as right as the map it
+/// looks a source up in, and two connections sharing an id made that map
+/// collapse them into one — which printed one store's hits under the other's
+/// name. A row carrying its own source cannot say the wrong store.
+///
+/// Everything the library tab answers with is dropped here: a track on both
+/// tabs would answer "do I have this?" twice, and the Explore tab's whole
+/// premise is music the user does not have yet — hearts, playlist tracks and
+/// subscribed albums included, which is why the holdings search is what the
+/// comparison is made against.
+class _ExploreResults extends ConsumerStatefulWidget {
   final String query;
 
   const _ExploreResults({required this.query});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ExploreResults> createState() => _ExploreResultsState();
+}
+
+class _ExploreResultsState extends ConsumerState<_ExploreResults> {
+  /// The same first page the library tab shows; "see all" widens one fold.
+  static const _initial = 5;
+  static const _widened = 40;
+
+  int _tracks = _initial;
+  int _albums = _initial;
+  int _playlists = _initial;
+
+  static const _page = 'search';
+  static const _tracksId = 'explore-tracks';
+  static const _albumsId = 'explore-albums';
+  static const _playlistsId = 'explore-playlists';
+
+  @override
+  void didUpdateWidget(_ExploreResults oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.query != widget.query) {
+      _tracks = _albums = _playlists = _initial;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = widget.query;
     final held =
         ref.watch(searchSongsProvider(query)).value ?? const <LibrarySong>[];
     // The library's own fingerprints, so a store result the user already has
-    // is not offered again. Album names are compared case-insensitively:
-    // there is no id to join on across two different services.
+    // is not offered again. Album names are compared case-insensitively and
+    // against the group search too: the album a song belongs to is not the
+    // whole answer, and a record the library holds would otherwise be offered
+    // back just because none of its tracks matched.
     final heldFingerprints = {
       for (final song in held) TrackIdentity.of(song).fingerprint,
     };
     final heldAlbums = {
+      for (final album
+          in ref.watch(searchGroupsProvider(query)).value?.albums ??
+              const <LibraryAlbum>[])
+        album.name.trim().toLowerCase(),
       for (final song in held)
         if (song.album != null) song.album!.trim().toLowerCase(),
     };
@@ -489,143 +530,225 @@ class _ExploreResults extends ConsumerWidget {
     return catalog.when(
       skipLoadingOnRefresh: true,
       data: (found) {
-        final byStore = <String, CatalogSearch>{};
-        // The merge in the provider pools every store's results; grouping
-        // them back by source is what lets each block name its store and
-        // route its own add.
+        // The merge in the provider pools every store's results; the seen sets
+        // keep a row from appearing twice when two connections answer with the
+        // same native id.
+        final songs = <LibrarySong>[];
+        final seenSongs = <String>{};
         for (final song in found.songs) {
           if (heldFingerprints.contains(TrackIdentity.of(song).fingerprint)) {
             continue;
           }
           final album = song.album?.trim().toLowerCase();
           if (album != null && heldAlbums.contains(album)) continue;
-          byStore.putIfAbsent(song.sourceId, CatalogSearch.new);
-          byStore[song.sourceId] = byStore[song.sourceId]!.merge(
-            CatalogSearch(songs: [song]),
-          );
+          if (!seenSongs.add('${song.sourceId}:${song.id}')) continue;
+          songs.add(song);
         }
+        final albums = <LibraryAlbum>[];
+        final seenAlbums = <String>{};
         for (final album in found.albums) {
           if (heldAlbums.contains(album.name.trim().toLowerCase())) continue;
-          byStore.putIfAbsent(album.sourceId, CatalogSearch.new);
-          byStore[album.sourceId] = byStore[album.sourceId]!.merge(
-            CatalogSearch(albums: [album]),
-          );
+          if (!seenAlbums.add('${album.sourceId}:${album.id}')) continue;
+          albums.add(album);
         }
+        final playlists = <LibraryPlaylist>[];
+        final seenPlaylists = <String>{};
         for (final playlist in found.playlists) {
-          if (heldPlaylists.contains(
-            '${playlist.sourceId}:${playlist.id}',
-          )) {
-            continue;
-          }
-          byStore.putIfAbsent(playlist.sourceId, CatalogSearch.new);
-          byStore[playlist.sourceId] = byStore[playlist.sourceId]!.merge(
-            CatalogSearch(playlists: [playlist]),
-          );
+          final key = '${playlist.sourceId}:${playlist.id}';
+          if (heldPlaylists.contains(key)) continue;
+          if (!seenPlaylists.add(key)) continue;
+          playlists.add(playlist);
         }
 
-        if (byStore.isEmpty) {
+        if (songs.isEmpty && albums.isEmpty && playlists.isEmpty) {
           // A store that answered entirely with things the library already
           // has is not a failed search; saying "no match" there would send
           // the user looking for a query that does not exist.
-          return _SectionNote(
-            text: found.isEmpty
-                ? 'searchInStoresEmpty'.tr(args: [query])
-                : 'searchExploreAllHeld'.tr(),
+          return SliverToBoxAdapter(
+            child: _SectionNote(
+              text: found.isEmpty
+                  ? 'searchInStoresEmpty'.tr(args: [query])
+                  : 'searchExploreAllHeld'.tr(),
+            ),
           );
         }
 
-        final sources = ref.watch(librarySourceByIdProvider);
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (final entry in byStore.entries) ...[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  SolSpace.xxl,
-                  SolSpace.sm,
-                  SolSpace.xxl,
-                  SolSpace.xs,
+        return SliverMainAxisGroup(
+          slivers: [
+            if (albums.isNotEmpty)
+              FoldableSection(
+                page: _page,
+                id: _albumsId,
+                title: 'libraryAlbums'.tr(),
+                trailing: _SeeAll(
+                  shown: _albums,
+                  total: albums.length,
+                  onTap: () => setState(() => _albums = _widened),
                 ),
-                child: Text(
-                  'searchStoreSection'.tr(
-                    args: [sources[entry.key]?.displayName ?? ''],
+                builder: () => [
+                  SliverList.builder(
+                    itemCount: albums.take(_albums).length,
+                    itemBuilder: (context, index) {
+                      final album = albums[index];
+                      return _StoreRow(
+                        key: ValueKey('album:${album.sourceId}:${album.id}'),
+                        title: album.name,
+                        subtitle: album.artist ?? '',
+                        store: _storeName(album.sourceId),
+                        artId: album.artId,
+                        sourceId: album.sourceId,
+                        kind: CatalogKind.albums,
+                        id: album.id,
+                        onOpen: () => context.router.push(
+                          AlbumDetailRoute(
+                            sourceId: album.sourceId,
+                            albumId: album.id,
+                            albumName: album.name,
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                ],
               ),
-              ..._storeRows(found: entry.value),
-            ],
+            if (playlists.isNotEmpty)
+              FoldableSection(
+                page: _page,
+                id: _playlistsId,
+                title: 'libraryPlaylists'.tr(),
+                trailing: _SeeAll(
+                  shown: _playlists,
+                  total: playlists.length,
+                  onTap: () => setState(() => _playlists = _widened),
+                ),
+                builder: () => [
+                  SliverList.builder(
+                    itemCount: playlists.take(_playlists).length,
+                    itemBuilder: (context, index) {
+                      final playlist = playlists[index];
+                      return _StoreRow(
+                        key: ValueKey(
+                          'playlist:${playlist.sourceId}:${playlist.id}',
+                        ),
+                        title: playlist.name,
+                        subtitle: [
+                          if (playlist.owner != null) playlist.owner!,
+                          if (playlist.songCount != null)
+                            queueSummary(playlist.songCount!, false),
+                        ].join('  ·  '),
+                        store: _storeName(playlist.sourceId),
+                        artId: playlist.artId,
+                        sourceId: playlist.sourceId,
+                        kind: CatalogKind.playlists,
+                        id: playlist.id,
+                        fallbackIcon: Symbols.playlist_play,
+                        onOpen: () => context.router.push(
+                          PlaylistDetailRoute(
+                            sourceId: playlist.sourceId,
+                            playlistId: playlist.id,
+                            playlistName: playlist.name,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            if (songs.isNotEmpty)
+              FoldableSection(
+                page: _page,
+                id: _tracksId,
+                title: 'libraryTracks'.tr(),
+                trailing: _SeeAll(
+                  shown: _tracks,
+                  total: songs.length,
+                  onTap: () => setState(() => _tracks = _widened),
+                ),
+                builder: () => [
+                  SliverList.builder(
+                    itemCount: songs.take(_tracks).length,
+                    itemBuilder: (context, index) {
+                      final song = songs[index];
+                      return _StoreRow(
+                        key: ValueKey('song:${song.sourceId}:${song.id}'),
+                        title: song.title,
+                        subtitle: song.subtitle,
+                        store: _storeName(song.sourceId),
+                        artId: song.artId,
+                        sourceId: song.sourceId,
+                        kind: CatalogKind.songs,
+                        id: song.id,
+                        playable: song,
+                      );
+                    },
+                  ),
+                ],
+              ),
           ],
         );
       },
-      loading: () => const Padding(
-        padding: EdgeInsets.symmetric(vertical: SolSpace.lg),
-        child: Center(child: CircularProgressIndicator.adaptive()),
+      loading: () => const SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: SolSpace.lg),
+          child: Center(child: CircularProgressIndicator.adaptive()),
+        ),
       ),
-      error: (error, _) => _SectionNote(text: describeServerError(error)),
+      error: (error, _) => SliverToBoxAdapter(
+        child: _SectionNote(text: describeServerError(error)),
+      ),
     );
   }
 
-  List<Widget> _storeRows({required CatalogSearch found}) {
-    final rows = <Widget>[
-      for (final song in found.songs)
-        _StoreRow(
-          title: song.title,
-          subtitle: song.subtitle,
-          artId: song.artId,
-          sourceId: song.sourceId,
-          kind: CatalogKind.songs,
-          id: song.id,
-          playable: song,
-        ),
-      for (final album in found.albums)
-        _StoreRow(
-          title: album.name,
-          subtitle: album.artist ?? '',
-          artId: album.artId,
-          sourceId: album.sourceId,
-          kind: CatalogKind.albums,
-          id: album.id,
-        ),
-      for (final playlist in found.playlists)
-        _StoreRow(
-          title: playlist.name,
-          subtitle: queueSummary(playlist.songCount ?? 0, false),
-          artId: playlist.artId,
-          sourceId: playlist.sourceId,
-          kind: CatalogKind.playlists,
-          id: playlist.id,
-        ),
-    ];
-    return rows;
+  /// The connected library that owns [sourceId], or null when it is gone.
+  ///
+  /// Read per row rather than per fold: a heading is one lookup for a block of
+  /// rows, so one wrong answer there mislabels all of them.
+  String? _storeName(String sourceId) {
+    final name = ref.watch(librarySourceByIdProvider)[sourceId]?.displayName;
+    final trimmed = name?.trim();
+    return trimmed == null || trimmed.isEmpty ? null : trimmed;
   }
 }
 
-/// A store result: what it is, a preview where it can be played, and the
-/// button that puts it in the library.
+/// A store result: what it is, which store it would come from, and the button
+/// that puts it in the library.
+///
+/// An album or a playlist opens its own page, because the store's page is how
+/// a reader decides whether to add it — the row's subtitle cannot say what a
+/// collection holds. A song is auditioned instead: tapping it plays the store
+/// copy, which costs nothing and is the whole point of a search row.
 class _StoreRow extends ConsumerStatefulWidget {
   final String title;
   final String subtitle;
+
+  /// The connected library this row would be added from. Null when the source
+  /// is no longer connected — a row that outlived its connection.
+  final String? store;
   final String? artId;
   final String sourceId;
   final CatalogKind kind;
   final String id;
+  final IconData fallbackIcon;
 
   /// A song result, which can be auditioned before it is added. Null for
   /// albums and playlists, which are lists rather than something to play.
   final LibrarySong? playable;
 
+  /// Opens a collection's own page. Null for songs, which play instead.
+  final VoidCallback? onOpen;
+
   const _StoreRow({
+    super.key,
     required this.title,
     required this.subtitle,
     required this.artId,
     required this.sourceId,
     required this.kind,
     required this.id,
+    this.store,
+    this.fallbackIcon = Symbols.music_note_rounded,
     this.playable,
+    this.onOpen,
   });
 
   @override
@@ -663,12 +786,13 @@ class _StoreRowState extends ConsumerState<_StoreRow> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final onTap = widget.onOpen ?? (widget.playable == null ? null : _preview);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: SolSpace.md, vertical: 2),
       child: Material(
         type: MaterialType.transparency,
         child: InkWell(
-          onTap: widget.playable == null ? null : _preview,
+          onTap: onTap,
           borderRadius: BorderRadius.circular(SolRadius.md),
           child: Padding(
             padding: const EdgeInsets.symmetric(
@@ -682,6 +806,7 @@ class _StoreRowState extends ConsumerState<_StoreRow> {
                   artId: widget.artId,
                   size: 44,
                   radius: SolRadius.xs,
+                  fallbackIcon: widget.fallbackIcon,
                 ),
                 const SizedBox(width: SolSpace.md),
                 Expanded(
@@ -697,7 +822,20 @@ class _StoreRowState extends ConsumerState<_StoreRow> {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      if (widget.subtitle.isNotEmpty)
+                      // The store rides on the row's own line: a fold heading
+                      // names a kind, and two stores can answer one query.
+                      if (widget.store case final store?)
+                        Text(
+                          widget.subtitle.isEmpty
+                              ? store
+                              : '${widget.subtitle}  ·  $store',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        )
+                      else if (widget.subtitle.isNotEmpty)
                         Text(
                           widget.subtitle,
                           maxLines: 1,
@@ -710,6 +848,12 @@ class _StoreRowState extends ConsumerState<_StoreRow> {
                   ),
                 ),
                 const SizedBox(width: SolSpace.sm),
+                if (widget.onOpen != null)
+                  Icon(
+                    Symbols.chevron_right_rounded,
+                    size: 20,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
                 if (widget.playable != null)
                   IconButton(
                     tooltip: 'searchPlay'.tr(),

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:groovy_box/core/app.dart';
+import 'package:groovy_box/core/router.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
@@ -101,7 +102,98 @@ const _held = LibrarySong(
   duration: Duration(seconds: 254),
 );
 
-Future<void> _pump(WidgetTester tester) async {
+/// A second store under the app's own account kind: two connections answer one
+/// query, which is what a fold heading cannot attribute correctly.
+class _SecondStore extends _Store {
+  @override
+  String get id => 'b';
+
+  @override
+  SourceConfig get config => const SourceConfig(
+    id: 'b',
+    kind: LibraryKind.netease,
+    baseUrl: 'https://netease.example.com',
+    displayName: 'NetEase Cloud Music',
+  );
+
+  @override
+  Future<CatalogSearch> searchCatalog(String query, {int limit = 20}) async =>
+      CatalogSearch(
+        songs: const [
+          LibrarySong(
+            sourceId: 'b',
+            id: 'netease-song',
+            title: 'NetEase Only',
+            artist: 'Someone',
+            duration: Duration(seconds: 200),
+          ),
+        ],
+        albums: const [
+          LibraryAlbum(
+            sourceId: 'b',
+            id: 'netease-album',
+            name: 'NetEase Record',
+            artist: 'Someone',
+            duration: Duration(minutes: 40),
+          ),
+        ],
+        playlists: const [
+          LibraryPlaylist(
+            sourceId: 'b',
+            id: 'netease-list',
+            name: 'NetEase List',
+            duration: Duration(minutes: 30),
+            songCount: 9,
+          ),
+        ],
+      );
+
+  @override
+  Future<List<LibrarySong>> searchCatalogue(
+    String query, {
+    int limit = 40,
+  }) async => const [];
+}
+
+/// Pumps the page inside the real router, so a store row can be followed to the
+/// page it opens.
+Future<void> _pumpRouted(WidgetTester tester) async {
+  tester.view.physicalSize = const Size(900, 1400);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  SharedPreferences.setMockInitialValues({});
+  final prefs = await SharedPreferences.getInstance();
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
+        librarySourcesProvider.overrideWithValue([_Store(), _SecondStore()]),
+        playbackProvider.overrideWith(_Idle.new),
+        libraryDatabaseProvider.overrideWithValue(null),
+        searchSongsProvider.overrideWith(
+          (ref, query) async => const <LibrarySong>[],
+        ),
+        searchGroupsProvider.overrideWith(
+          (ref, query) async => const LibraryGroups(),
+        ),
+        playlistSongsProvider.overrideWith((ref, ref0) async => const []),
+      ],
+      child: MaterialApp.router(
+        theme: createAppThemeSet().light,
+        routerConfig: AppRouter().config(),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  // The router starts on Explore; search is its own tab.
+  await tester.tap(find.byIcon(Symbols.search).last);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _pump(
+  WidgetTester tester, {
+  List<LibrarySong> held = const [_held],
+}) async {
   tester.view.physicalSize = const Size(900, 1400);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -115,9 +207,7 @@ Future<void> _pump(WidgetTester tester) async {
         librarySourcesProvider.overrideWithValue([_Store()]),
         playbackProvider.overrideWith(_Idle.new),
         libraryDatabaseProvider.overrideWithValue(null),
-        searchSongsProvider(
-          'sunset',
-        ).overrideWith((ref) async => const [_held]),
+        searchSongsProvider('sunset').overrideWith((ref) async => held),
         searchGroupsProvider.overrideWith(
           (ref, query) async => const LibraryGroups(),
         ),
@@ -170,11 +260,13 @@ void main() {
     // is only music the user can still add.
     expect(find.text('Sunset Overdrive'), findsNothing);
     expect(find.text('Sunset Overdrive (Live)'), findsOneWidget);
-    // The held album is not offered back either.
+    // The held album is not offered back either — the library holds it by its
+    // group search, even though none of its rows matched the query.
     expect(find.text('On the Corner Where You Live'), findsNothing);
     expect(find.byTooltip('Add to library'), findsWidgets);
-    // The rows are grouped under the store that sells them.
-    expect(find.text('From Home'), findsOneWidget);
+    // Each row names the store it would come from, so two connections
+    // answering one query cannot look like one store's hits.
+    expect(find.textContaining('Home'), findsWidgets);
   });
 
   testWidgets('adding a store result says so instead of offering again', (
@@ -255,5 +347,98 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Sunset Overdrive'), findsNothing);
     expect(find.text('Tracks'), findsOneWidget);
+  });
+
+  testWidgets('each Explore row names the store it would come from', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(900, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          librarySourcesProvider.overrideWithValue([_Store(), _SecondStore()]),
+          playbackProvider.overrideWith(_Idle.new),
+          libraryDatabaseProvider.overrideWithValue(null),
+          searchSongsProvider.overrideWith((ref, query) async => const [_held]),
+          searchGroupsProvider.overrideWith(
+            (ref, query) async => const LibraryGroups(),
+          ),
+        ],
+        child: MaterialApp(
+          theme: createAppThemeSet().light,
+          home: const SearchScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(SearchBar), 'sunset');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Explore'));
+    await tester.pumpAndSettle();
+
+    // Two stores, one query: the second store's rows must not be labelled
+    // with the first store's name. A heading over a merged block cannot tell
+    // them apart; the row can, because the row carries its own source.
+    expect(find.textContaining('NetEase Cloud Music'), findsWidgets);
+    expect(find.textContaining('Home'), findsOneWidget);
+    expect(find.text('NetEase Only'), findsOneWidget);
+    expect(find.text('Sunset Overdrive (Live)'), findsOneWidget);
+  });
+
+  testWidgets('a store album or playlist opens its own page', (tester) async {
+    await _pumpRouted(tester);
+    await tester.enterText(find.byType(SearchBar), 'sunset');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Explore'));
+    await tester.pumpAndSettle();
+
+    // The playlists fold lists the store's collection, and tapping it opens
+    // the playlist page rather than silently doing nothing — the reported
+    // defect: a searched NetEase playlist could not be opened at all.
+    expect(find.text('NetEase List'), findsOneWidget);
+    await tester.tap(find.text('NetEase List'));
+    await tester.pumpAndSettle();
+    // The page it landed on is the playlist's: the fake has no tracks, so it
+    // states that instead of falling back to the search page.
+    expect(find.text('This playlist is empty'), findsOneWidget);
+    expect(find.text('Sunset Overdrive (Live)'), findsNothing);
+  });
+
+  testWidgets('Explore searches albums and playlists, not just tracks', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      held: const [
+        // No album, so the store's record is not filtered out as one the
+        // library already holds.
+        LibrarySong(
+          sourceId: 'a',
+          id: 'held',
+          title: 'Sunset Overdrive',
+          artist: 'The Paper Kites',
+          duration: Duration(seconds: 254),
+        ),
+      ],
+    );
+    await tester.enterText(find.byType(SearchBar), 'sunset');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Explore'));
+    await tester.pumpAndSettle();
+
+    // One query answers three kinds, and each gets its own fold so a record is
+    // not buried under the songs that mention it.
+    expect(find.text('Albums'), findsOneWidget);
+    expect(find.text('Tracks'), findsOneWidget);
+    expect(find.text('On the Corner Where You Live'), findsOneWidget);
+    expect(find.text('Sunset Overdrive (Live)'), findsOneWidget);
   });
 }
