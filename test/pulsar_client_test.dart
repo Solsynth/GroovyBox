@@ -247,6 +247,46 @@ void main() {
       expect(data['duration_seconds'], 185);
     });
 
+    test('an album favourite sends its kind and survives the key', () async {
+      RequestOptions? recorded;
+      final dio = Dio();
+      dio.httpClientAdapter = _MockDioAdapter((options) async {
+        recorded = options;
+        return _MockDioAdapter.json('{}', 201);
+      });
+      final client = PulsarClient(dio: dio, baseUrl: 'https://fleet.example');
+
+      final favourite = CollectionFavourite(
+        kind: FavouriteKind.album,
+        // A source id with a colon in it, which is the normal shape here.
+        sourceId: 'subsonic:home',
+        id: 'l.1',
+        name: 'Bronco',
+        subtitle: 'Orville Peck',
+        decidedAt: DateTime.now(),
+      );
+      final key = pulsarCollectionKey(favourite);
+      await client.addFavourite(
+        _session,
+        PulsarTrackPayload(
+          title: favourite.name,
+          artist: favourite.subtitle,
+          providerKey: key,
+          kind: favourite.kind,
+        ),
+      );
+
+      final data = recorded!.data as Map<String, dynamic>;
+      expect(data['kind'], 'album');
+      expect(data['provider_key'], key);
+      // The key has to come back apart with the colon still in the source.
+      final parsed = parsePulsarCollectionKey(data['provider_key'] as String);
+      expect(parsed, favourite.key);
+      // A recording's key is not one of these, and neither is a bare id.
+      expect(parsePulsarCollectionKey('subsonic:home:tr-77'), isNull);
+      expect(parsePulsarCollectionKey('cat-1'), isNull);
+    });
+
     test('removeFavourite DELETEs by catalog id', () async {
       RequestOptions? recorded;
       final dio = Dio();

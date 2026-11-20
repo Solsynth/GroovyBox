@@ -45,4 +45,58 @@ void main() {
     expect(await catalog.favouriteOf(song), isFalse);
     expect(await catalog.favourites(), isEmpty);
   });
+
+  test('the device remembers albums and playlists apart from tracks', () async {
+    final db = LibraryDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final catalog = LibraryCatalog(db);
+
+    final album = CollectionFavourite(
+      kind: FavouriteKind.album,
+      sourceId: 'apple-1',
+      id: 'l.1',
+      name: 'Bronco',
+      subtitle: 'Orville Peck',
+      artId: 'https://x/{w}x{h}bb.jpg',
+      decidedAt: DateTime.now(),
+    );
+    final playlist = CollectionFavourite(
+      kind: FavouriteKind.playlist,
+      sourceId: kSolinkSourceId,
+      id: 'p.1',
+      name: 'A-team',
+      decidedAt: DateTime.now(),
+    );
+
+    expect(await catalog.collectionFavouriteOf(album.key), isNull);
+    await catalog.setCollectionFavourite(album, value: true);
+    await catalog.setCollectionFavourite(playlist, value: true);
+
+    // The kind is part of the identity: an album and a playlist that happen
+    // to share a string id are two opinions, not one.
+    expect(await catalog.collectionFavouriteOf(album.key), isTrue);
+    expect(await catalog.collectionFavouriteOf(playlist.key), isTrue);
+    expect(
+      await catalog.collectionFavouriteOf((
+        kind: FavouriteKind.track,
+        sourceId: 'apple-1',
+        id: 'l.1',
+      )),
+      isNull,
+    );
+    // Read back with what a row needs to draw itself, with no library asked.
+    final stored = await catalog.collectionFavourites();
+    expect(stored, hasLength(2));
+    final storedAlbum = stored.firstWhere(
+      (row) => row.kind == FavouriteKind.album,
+    );
+    expect(storedAlbum.name, 'Bronco');
+    expect(storedAlbum.subtitle, 'Orville Peck');
+    expect(storedAlbum.artId, contains('{w}'));
+
+    // Clearing removes the row rather than writing "not a favourite".
+    await catalog.setCollectionFavourite(album, value: false);
+    expect(await catalog.collectionFavouriteOf(album.key), isNull);
+    expect(await catalog.collectionFavourites(), hasLength(1));
+  });
 }

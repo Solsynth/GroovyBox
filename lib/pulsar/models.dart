@@ -7,6 +7,8 @@
 /// as the Go JSON tags spell them, no screen ever sees a Pulsar field name.
 library;
 
+import '../library/models.dart';
+
 /// Parses an ISO-8601 timestamp the way every Pulsar model does: absent or
 /// malformed stays null, never throws.
 DateTime? _parseTime(Object? raw) {
@@ -62,9 +64,13 @@ enum CollectionKind {
       value == null ? null : values.where((k) => k.value == value).firstOrNull;
 }
 
-/// One track as every Pulsar write spells it: a playlist upload, a favourite,
-/// a share. The catalog record is find-or-created server-side on
-/// `provider` + `provider_key`, so the same recording never duplicates.
+/// One thing as every Pulsar write spells it: a playlist upload, a favourite,
+/// a share. The catalog record is find-or-created server-side on `provider` +
+/// `provider_key`, so the same recording never duplicates.
+///
+/// [kind] is only meaningful on a favourites write: it says whether the
+/// record is a track, an album or a playlist, and the server stores it with
+/// the row so the list can be drawn correctly on any device.
 class PulsarTrackPayload {
   const PulsarTrackPayload({
     required this.title,
@@ -73,18 +79,25 @@ class PulsarTrackPayload {
     this.artworkUrl,
     this.durationSeconds,
     this.providerKey,
+    this.kind,
   });
 
-  /// The track's name — the one field the server cannot invent.
+  /// The name — the one field the server cannot invent.
   final String title;
   final String? artist;
+
+  /// The caption: a track's record, an album's artist, a playlist's owner.
   final String? album;
   final String? artworkUrl;
   final int? durationSeconds;
 
-  /// The track's identity inside its source, from [pulsarTrackKey]. Absent
+  /// The thing's identity inside its source, from [pulsarTrackKey]. Absent
   /// when a row is being written from a library that has no stable id.
   final String? providerKey;
+
+  /// What the record is, on a favourites write. Null on a playlist upload,
+  /// where every entry is a track.
+  final FavouriteKind? kind;
 
   Map<String, dynamic> toJson() => {
     'domain': 'music',
@@ -97,6 +110,7 @@ class PulsarTrackPayload {
     if (artworkUrl != null && artworkUrl!.isNotEmpty)
       'artwork_url': artworkUrl,
     'duration_seconds': ?durationSeconds,
+    if (kind != null) 'kind': kind!.value,
   };
 }
 
@@ -165,13 +179,14 @@ class CatalogItem {
   );
 }
 
-/// One track inside a [PulsarPlaylist].
+/// One entry inside a [PulsarPlaylist] or the account's favourites.
 class PlaylistItem {
   const PlaylistItem({
     required this.id,
     this.catalogId,
     this.position,
     this.catalogItem,
+    this.kind = FavouriteKind.track,
   });
 
   final String id;
@@ -179,10 +194,15 @@ class PlaylistItem {
   final int? position;
   final CatalogItem? catalogItem;
 
+  /// What the entry is. Only the favourites list fills it meaningfully; a
+  /// playlist's items are always tracks.
+  final FavouriteKind kind;
+
   factory PlaylistItem.fromJson(Map<String, dynamic> json) => PlaylistItem(
     id: json['id']?.toString() ?? '',
     catalogId: json['catalog_id']?.toString(),
     position: (json['position'] as num?)?.toInt(),
+    kind: FavouriteKind.parse(json['kind'] as String?),
     catalogItem: (json['catalog_item'] as Map<String, dynamic>?) == null
         ? null
         : CatalogItem.fromJson(json['catalog_item'] as Map<String, dynamic>),

@@ -4151,6 +4151,526 @@ class FavouriteTracksCompanion extends UpdateCompanion<FavouriteTrackRow> {
   }
 }
 
+class $CollectionFavouritesTable extends CollectionFavourites
+    with TableInfo<$CollectionFavouritesTable, CollectionFavouriteRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CollectionFavouritesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceId = GeneratedColumn<String>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _externalIdMeta = const VerificationMeta(
+    'externalId',
+  );
+  @override
+  late final GeneratedColumn<String> externalId = GeneratedColumn<String>(
+    'external_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _subtitleMeta = const VerificationMeta(
+    'subtitle',
+  );
+  @override
+  late final GeneratedColumn<String> subtitle = GeneratedColumn<String>(
+    'subtitle',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _artIdMeta = const VerificationMeta('artId');
+  @override
+  late final GeneratedColumn<String> artId = GeneratedColumn<String>(
+    'art_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _artworkUrlMeta = const VerificationMeta(
+    'artworkUrl',
+  );
+  @override
+  late final GeneratedColumn<String> artworkUrl = GeneratedColumn<String>(
+    'artwork_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    kind,
+    sourceId,
+    externalId,
+    name,
+    subtitle,
+    artId,
+    artworkUrl,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'collection_favourites';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CollectionFavouriteRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_kindMeta);
+    }
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceIdMeta);
+    }
+    if (data.containsKey('external_id')) {
+      context.handle(
+        _externalIdMeta,
+        externalId.isAcceptableOrUnknown(data['external_id']!, _externalIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_externalIdMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('subtitle')) {
+      context.handle(
+        _subtitleMeta,
+        subtitle.isAcceptableOrUnknown(data['subtitle']!, _subtitleMeta),
+      );
+    }
+    if (data.containsKey('art_id')) {
+      context.handle(
+        _artIdMeta,
+        artId.isAcceptableOrUnknown(data['art_id']!, _artIdMeta),
+      );
+    }
+    if (data.containsKey('artwork_url')) {
+      context.handle(
+        _artworkUrlMeta,
+        artworkUrl.isAcceptableOrUnknown(data['artwork_url']!, _artworkUrlMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {kind, sourceId, externalId};
+  @override
+  CollectionFavouriteRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CollectionFavouriteRow(
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
+      )!,
+      sourceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_id'],
+      )!,
+      externalId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}external_id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      subtitle: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}subtitle'],
+      ),
+      artId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}art_id'],
+      ),
+      artworkUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}artwork_url'],
+      ),
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $CollectionFavouritesTable createAlias(String alias) {
+    return $CollectionFavouritesTable(attachedDatabase, alias);
+  }
+}
+
+class CollectionFavouriteRow extends DataClass
+    implements Insertable<CollectionFavouriteRow> {
+  final String kind;
+  final String sourceId;
+  final String externalId;
+  final String name;
+  final String? subtitle;
+  final String? artId;
+  final String? artworkUrl;
+  final DateTime updatedAt;
+  const CollectionFavouriteRow({
+    required this.kind,
+    required this.sourceId,
+    required this.externalId,
+    required this.name,
+    this.subtitle,
+    this.artId,
+    this.artworkUrl,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['kind'] = Variable<String>(kind);
+    map['source_id'] = Variable<String>(sourceId);
+    map['external_id'] = Variable<String>(externalId);
+    map['name'] = Variable<String>(name);
+    if (!nullToAbsent || subtitle != null) {
+      map['subtitle'] = Variable<String>(subtitle);
+    }
+    if (!nullToAbsent || artId != null) {
+      map['art_id'] = Variable<String>(artId);
+    }
+    if (!nullToAbsent || artworkUrl != null) {
+      map['artwork_url'] = Variable<String>(artworkUrl);
+    }
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  CollectionFavouritesCompanion toCompanion(bool nullToAbsent) {
+    return CollectionFavouritesCompanion(
+      kind: Value(kind),
+      sourceId: Value(sourceId),
+      externalId: Value(externalId),
+      name: Value(name),
+      subtitle: subtitle == null && nullToAbsent
+          ? const Value.absent()
+          : Value(subtitle),
+      artId: artId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(artId),
+      artworkUrl: artworkUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(artworkUrl),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory CollectionFavouriteRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CollectionFavouriteRow(
+      kind: serializer.fromJson<String>(json['kind']),
+      sourceId: serializer.fromJson<String>(json['sourceId']),
+      externalId: serializer.fromJson<String>(json['externalId']),
+      name: serializer.fromJson<String>(json['name']),
+      subtitle: serializer.fromJson<String?>(json['subtitle']),
+      artId: serializer.fromJson<String?>(json['artId']),
+      artworkUrl: serializer.fromJson<String?>(json['artworkUrl']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'kind': serializer.toJson<String>(kind),
+      'sourceId': serializer.toJson<String>(sourceId),
+      'externalId': serializer.toJson<String>(externalId),
+      'name': serializer.toJson<String>(name),
+      'subtitle': serializer.toJson<String?>(subtitle),
+      'artId': serializer.toJson<String?>(artId),
+      'artworkUrl': serializer.toJson<String?>(artworkUrl),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  CollectionFavouriteRow copyWith({
+    String? kind,
+    String? sourceId,
+    String? externalId,
+    String? name,
+    Value<String?> subtitle = const Value.absent(),
+    Value<String?> artId = const Value.absent(),
+    Value<String?> artworkUrl = const Value.absent(),
+    DateTime? updatedAt,
+  }) => CollectionFavouriteRow(
+    kind: kind ?? this.kind,
+    sourceId: sourceId ?? this.sourceId,
+    externalId: externalId ?? this.externalId,
+    name: name ?? this.name,
+    subtitle: subtitle.present ? subtitle.value : this.subtitle,
+    artId: artId.present ? artId.value : this.artId,
+    artworkUrl: artworkUrl.present ? artworkUrl.value : this.artworkUrl,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  CollectionFavouriteRow copyWithCompanion(CollectionFavouritesCompanion data) {
+    return CollectionFavouriteRow(
+      kind: data.kind.present ? data.kind.value : this.kind,
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      externalId: data.externalId.present
+          ? data.externalId.value
+          : this.externalId,
+      name: data.name.present ? data.name.value : this.name,
+      subtitle: data.subtitle.present ? data.subtitle.value : this.subtitle,
+      artId: data.artId.present ? data.artId.value : this.artId,
+      artworkUrl: data.artworkUrl.present
+          ? data.artworkUrl.value
+          : this.artworkUrl,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CollectionFavouriteRow(')
+          ..write('kind: $kind, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('externalId: $externalId, ')
+          ..write('name: $name, ')
+          ..write('subtitle: $subtitle, ')
+          ..write('artId: $artId, ')
+          ..write('artworkUrl: $artworkUrl, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    kind,
+    sourceId,
+    externalId,
+    name,
+    subtitle,
+    artId,
+    artworkUrl,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CollectionFavouriteRow &&
+          other.kind == this.kind &&
+          other.sourceId == this.sourceId &&
+          other.externalId == this.externalId &&
+          other.name == this.name &&
+          other.subtitle == this.subtitle &&
+          other.artId == this.artId &&
+          other.artworkUrl == this.artworkUrl &&
+          other.updatedAt == this.updatedAt);
+}
+
+class CollectionFavouritesCompanion
+    extends UpdateCompanion<CollectionFavouriteRow> {
+  final Value<String> kind;
+  final Value<String> sourceId;
+  final Value<String> externalId;
+  final Value<String> name;
+  final Value<String?> subtitle;
+  final Value<String?> artId;
+  final Value<String?> artworkUrl;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const CollectionFavouritesCompanion({
+    this.kind = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.externalId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.subtitle = const Value.absent(),
+    this.artId = const Value.absent(),
+    this.artworkUrl = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CollectionFavouritesCompanion.insert({
+    required String kind,
+    required String sourceId,
+    required String externalId,
+    required String name,
+    this.subtitle = const Value.absent(),
+    this.artId = const Value.absent(),
+    this.artworkUrl = const Value.absent(),
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  }) : kind = Value(kind),
+       sourceId = Value(sourceId),
+       externalId = Value(externalId),
+       name = Value(name),
+       updatedAt = Value(updatedAt);
+  static Insertable<CollectionFavouriteRow> custom({
+    Expression<String>? kind,
+    Expression<String>? sourceId,
+    Expression<String>? externalId,
+    Expression<String>? name,
+    Expression<String>? subtitle,
+    Expression<String>? artId,
+    Expression<String>? artworkUrl,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (kind != null) 'kind': kind,
+      if (sourceId != null) 'source_id': sourceId,
+      if (externalId != null) 'external_id': externalId,
+      if (name != null) 'name': name,
+      if (subtitle != null) 'subtitle': subtitle,
+      if (artId != null) 'art_id': artId,
+      if (artworkUrl != null) 'artwork_url': artworkUrl,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CollectionFavouritesCompanion copyWith({
+    Value<String>? kind,
+    Value<String>? sourceId,
+    Value<String>? externalId,
+    Value<String>? name,
+    Value<String?>? subtitle,
+    Value<String?>? artId,
+    Value<String?>? artworkUrl,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return CollectionFavouritesCompanion(
+      kind: kind ?? this.kind,
+      sourceId: sourceId ?? this.sourceId,
+      externalId: externalId ?? this.externalId,
+      name: name ?? this.name,
+      subtitle: subtitle ?? this.subtitle,
+      artId: artId ?? this.artId,
+      artworkUrl: artworkUrl ?? this.artworkUrl,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
+    if (sourceId.present) {
+      map['source_id'] = Variable<String>(sourceId.value);
+    }
+    if (externalId.present) {
+      map['external_id'] = Variable<String>(externalId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (subtitle.present) {
+      map['subtitle'] = Variable<String>(subtitle.value);
+    }
+    if (artId.present) {
+      map['art_id'] = Variable<String>(artId.value);
+    }
+    if (artworkUrl.present) {
+      map['artwork_url'] = Variable<String>(artworkUrl.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CollectionFavouritesCompanion(')
+          ..write('kind: $kind, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('externalId: $externalId, ')
+          ..write('name: $name, ')
+          ..write('subtitle: $subtitle, ')
+          ..write('artId: $artId, ')
+          ..write('artworkUrl: $artworkUrl, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $LocalPlaylistsTable extends LocalPlaylists
     with TableInfo<$LocalPlaylistsTable, LocalPlaylistRow> {
   @override
@@ -5848,6 +6368,8 @@ abstract class _$LibraryDatabase extends GeneratedDatabase {
   late final $FavouriteTracksTable favouriteTracks = $FavouriteTracksTable(
     this,
   );
+  late final $CollectionFavouritesTable collectionFavourites =
+      $CollectionFavouritesTable(this);
   late final $LocalPlaylistsTable localPlaylists = $LocalPlaylistsTable(this);
   late final $LocalPlaylistEntriesTable localPlaylistEntries =
       $LocalPlaylistEntriesTable(this);
@@ -5893,6 +6415,7 @@ abstract class _$LibraryDatabase extends GeneratedDatabase {
     playbackSessions,
     localFiles,
     favouriteTracks,
+    collectionFavourites,
     localPlaylists,
     localPlaylistEntries,
     downloads,
@@ -8950,6 +9473,295 @@ typedef $$FavouriteTracksTableProcessedTableManager =
       FavouriteTrackRow,
       PrefetchHooks Function({bool trackId})
     >;
+typedef $$CollectionFavouritesTableCreateCompanionBuilder =
+    CollectionFavouritesCompanion Function({
+      required String kind,
+      required String sourceId,
+      required String externalId,
+      required String name,
+      Value<String?> subtitle,
+      Value<String?> artId,
+      Value<String?> artworkUrl,
+      required DateTime updatedAt,
+      Value<int> rowid,
+    });
+typedef $$CollectionFavouritesTableUpdateCompanionBuilder =
+    CollectionFavouritesCompanion Function({
+      Value<String> kind,
+      Value<String> sourceId,
+      Value<String> externalId,
+      Value<String> name,
+      Value<String?> subtitle,
+      Value<String?> artId,
+      Value<String?> artworkUrl,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$CollectionFavouritesTableFilterComposer
+    extends Composer<_$LibraryDatabase, $CollectionFavouritesTable> {
+  $$CollectionFavouritesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get subtitle => $composableBuilder(
+    column: $table.subtitle,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get artId => $composableBuilder(
+    column: $table.artId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get artworkUrl => $composableBuilder(
+    column: $table.artworkUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CollectionFavouritesTableOrderingComposer
+    extends Composer<_$LibraryDatabase, $CollectionFavouritesTable> {
+  $$CollectionFavouritesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceId => $composableBuilder(
+    column: $table.sourceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get subtitle => $composableBuilder(
+    column: $table.subtitle,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get artId => $composableBuilder(
+    column: $table.artId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get artworkUrl => $composableBuilder(
+    column: $table.artworkUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CollectionFavouritesTableAnnotationComposer
+    extends Composer<_$LibraryDatabase, $CollectionFavouritesTable> {
+  $$CollectionFavouritesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceId =>
+      $composableBuilder(column: $table.sourceId, builder: (column) => column);
+
+  GeneratedColumn<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get subtitle =>
+      $composableBuilder(column: $table.subtitle, builder: (column) => column);
+
+  GeneratedColumn<String> get artId =>
+      $composableBuilder(column: $table.artId, builder: (column) => column);
+
+  GeneratedColumn<String> get artworkUrl => $composableBuilder(
+    column: $table.artworkUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$CollectionFavouritesTableTableManager
+    extends
+        RootTableManager<
+          _$LibraryDatabase,
+          $CollectionFavouritesTable,
+          CollectionFavouriteRow,
+          $$CollectionFavouritesTableFilterComposer,
+          $$CollectionFavouritesTableOrderingComposer,
+          $$CollectionFavouritesTableAnnotationComposer,
+          $$CollectionFavouritesTableCreateCompanionBuilder,
+          $$CollectionFavouritesTableUpdateCompanionBuilder,
+          (
+            CollectionFavouriteRow,
+            BaseReferences<
+              _$LibraryDatabase,
+              $CollectionFavouritesTable,
+              CollectionFavouriteRow
+            >,
+          ),
+          CollectionFavouriteRow,
+          PrefetchHooks Function()
+        > {
+  $$CollectionFavouritesTableTableManager(
+    _$LibraryDatabase db,
+    $CollectionFavouritesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CollectionFavouritesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CollectionFavouritesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$CollectionFavouritesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> kind = const Value.absent(),
+                Value<String> sourceId = const Value.absent(),
+                Value<String> externalId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String?> subtitle = const Value.absent(),
+                Value<String?> artId = const Value.absent(),
+                Value<String?> artworkUrl = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CollectionFavouritesCompanion(
+                kind: kind,
+                sourceId: sourceId,
+                externalId: externalId,
+                name: name,
+                subtitle: subtitle,
+                artId: artId,
+                artworkUrl: artworkUrl,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String kind,
+                required String sourceId,
+                required String externalId,
+                required String name,
+                Value<String?> subtitle = const Value.absent(),
+                Value<String?> artId = const Value.absent(),
+                Value<String?> artworkUrl = const Value.absent(),
+                required DateTime updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => CollectionFavouritesCompanion.insert(
+                kind: kind,
+                sourceId: sourceId,
+                externalId: externalId,
+                name: name,
+                subtitle: subtitle,
+                artId: artId,
+                artworkUrl: artworkUrl,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<
+                    $CollectionFavouritesTable,
+                    CollectionFavouriteRow
+                  >(table),
+                  BaseReferences<
+                    _$LibraryDatabase,
+                    $CollectionFavouritesTable,
+                    CollectionFavouriteRow
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CollectionFavouritesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LibraryDatabase,
+      $CollectionFavouritesTable,
+      CollectionFavouriteRow,
+      $$CollectionFavouritesTableFilterComposer,
+      $$CollectionFavouritesTableOrderingComposer,
+      $$CollectionFavouritesTableAnnotationComposer,
+      $$CollectionFavouritesTableCreateCompanionBuilder,
+      $$CollectionFavouritesTableUpdateCompanionBuilder,
+      (
+        CollectionFavouriteRow,
+        BaseReferences<
+          _$LibraryDatabase,
+          $CollectionFavouritesTable,
+          CollectionFavouriteRow
+        >,
+      ),
+      CollectionFavouriteRow,
+      PrefetchHooks Function()
+    >;
 typedef $$LocalPlaylistsTableCreateCompanionBuilder =
     LocalPlaylistsCompanion Function({
       Value<int> id,
@@ -10208,6 +11020,8 @@ class $LibraryDatabaseManager {
       $$LocalFilesTableTableManager(_db, _db.localFiles);
   $$FavouriteTracksTableTableManager get favouriteTracks =>
       $$FavouriteTracksTableTableManager(_db, _db.favouriteTracks);
+  $$CollectionFavouritesTableTableManager get collectionFavourites =>
+      $$CollectionFavouritesTableTableManager(_db, _db.collectionFavourites);
   $$LocalPlaylistsTableTableManager get localPlaylists =>
       $$LocalPlaylistsTableTableManager(_db, _db.localPlaylists);
   $$LocalPlaylistEntriesTableTableManager get localPlaylistEntries =>

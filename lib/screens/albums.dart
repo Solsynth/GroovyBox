@@ -7,6 +7,7 @@ import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/pulsar/metadata.dart';
 import 'package:groovy_box/pulsar/providers.dart';
 import 'package:groovy_box/widgets/artwork.dart';
+import 'package:groovy_box/widgets/collection_favourite.dart';
 import 'package:groovy_box/widgets/collection_hero.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/download_actions.dart';
@@ -223,6 +224,29 @@ class AlbumDetailScreen extends ConsumerWidget {
                     ),
                     CollectionDownloadButton(songs: list),
                   ],
+                  // The heart is outside the playable guard: a record the
+                  // device cannot stream is still one the user may like, and
+                  // the account is where that opinion lives.
+                  CollectionFavouriteButton(
+                    favourite: albumFavourite(
+                      info ??
+                          LibraryAlbum(
+                            sourceId: sourceId,
+                            id: albumId,
+                            name:
+                                albumName ??
+                                title ??
+                                'albumsDetailTitleFallback'.tr(),
+                            duration: Duration.zero,
+                            artist: artist,
+                            artId: firstSong?.artId,
+                            year: firstSong?.year ?? info?.year,
+                          ),
+                      artworkUrl: (firstSong?.artId ?? info?.artId) == null
+                          ? profile?.artworkUrl
+                          : null,
+                    ),
+                  ),
                 ],
               ),
             ),

@@ -8,6 +8,7 @@ import '../solarpass/models.dart';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../library/catalog.dart';
 import '../library/models.dart';
 import '../library/providers.dart';
 import '../solarpass/providers.dart';
@@ -409,18 +410,56 @@ class PulsarFavourites extends AsyncNotifier<List<PlaylistItem>> {
         ),
       );
     } else {
-      // Removing needs the catalog id the server assigned, which only the
-      // favourites list carries; a track never pushed has nothing to remove.
-      final match = state.value?.where((item) {
-        final key = item.catalogItem?.providerKey;
-        return key != null && key == pulsarTrackKey(song);
-      }).firstOrNull;
-      final catalogId = match?.catalogId;
+      final catalogId = catalogIdForKey(pulsarTrackKey(song));
       if (catalogId == null) return;
       await client.removeFavourite(session, catalogId);
     }
     ref.invalidateSelf();
   }
+
+  /// Pushes one album or playlist heart to the account.
+  ///
+  /// The entry's own library key is the provider key, so a second device
+  /// reads the same album back and resolves it against its own copy of that
+  /// library. A Solink playlist has no library behind it, which is why its
+  /// key names [kSolinkSourceId] and its own id.
+  Future<void> setCollection(
+    CollectionFavourite favourite, {
+    required bool value,
+  }) async {
+    final session = ref.read(pulsarSessionProvider).value;
+    if (session == null) return;
+    final client = ref.read(pulsarClientProvider);
+    final key = pulsarCollectionKey(favourite);
+    if (value) {
+      await client.addFavourite(
+        session,
+        PulsarTrackPayload(
+          title: favourite.name,
+          artist: favourite.subtitle,
+          artworkUrl:
+              favourite.artworkUrl ??
+              ref
+                  .read(librarySourceByIdProvider)[favourite.sourceId]
+                  ?.artworkUri(favourite.artId)
+                  ?.toString(),
+          providerKey: key,
+          kind: favourite.kind,
+        ),
+      );
+    } else {
+      final catalogId = catalogIdForKey(key);
+      if (catalogId == null) return;
+      await client.removeFavourite(session, catalogId);
+    }
+    ref.invalidateSelf();
+  }
+
+  /// The catalog id the account assigned the entry spelled [providerKey].
+  String? catalogIdForKey(String providerKey) => state.value
+      ?.where((item) => item.catalogItem?.providerKey == providerKey)
+      .firstOrNull
+      ?.catalogId;
 
   /// Takes one recording back out of the fleet's favourites, by the catalog
   /// id the server assigned it.
@@ -485,7 +524,10 @@ Future<List<LibrarySong?>> solarFavouriteSongs(Ref ref) async {
   final songs = <LibrarySong?>[];
   for (final item in items) {
     final track = item.catalogItem;
-    if (track == null) {
+    // An album or a playlist is not a recording: there is nothing to resolve,
+    // and asking for one as a track would put an unrelated song on its row.
+    // The null keeps the list index-aligned with the account's order.
+    if (track == null || item.kind.isCollection) {
       songs.add(null);
       continue;
     }
@@ -501,6 +543,63 @@ Future<List<LibrarySong?>> solarFavouriteSongs(Ref ref) async {
   }
   return songs;
 }
+
+/// The account's favourite albums and playlists, newest decision first.
+///
+/// The same list [pulsarFavouritesProvider] holds, narrowed to the entries
+/// whose kind is a collection: one read is the truth for every heart in the
+/// app, and which of them a page shows is a filter, not a second request.
+@Riverpod(keepAlive: true)
+Future<List<CollectionFavourite>> solarCollectionFavourites(Ref ref) async {
+  final items = await ref.watch(pulsarFavouritesProvider.future);
+  return [
+    for (final item in items)
+      if (item.kind.isCollection)
+        if (item.catalogItem case final track?)
+          if (parsePulsarCollectionKey(track.providerKey) case final key?)
+            CollectionFavourite(
+              kind: key.kind,
+              sourceId: key.sourceId,
+              id: key.id,
+              name: track.title,
+              subtitle: track.subtitle,
+              artworkUrl: track.artworkUrl,
+              decidedAt: DateTime.now(),
+            ),
+  ];
+}
+
+/// Whether this album or playlist is a favourite.
+///
+/// The account is the record when signed in, exactly as it is for a track: a
+/// heart set on another device is what every surface draws. Signed out the
+/// device's own row answers, so the heart still works with no account.
+@riverpod
+Future<bool> collectionFavouriteState(
+  Ref ref,
+  CollectionFavouriteKey key,
+) async {
+  final session = ref.watch(pulsarSessionProvider).value;
+  if (session == null) {
+    return await ref.watch(deviceCollectionFavouriteStateProvider(key).future);
+  }
+  final favourites = await ref.watch(solarCollectionFavouritesProvider.future);
+  return favourites.any(
+    (favourite) =>
+        favourite.kind == key.kind &&
+        favourite.sourceId == key.sourceId &&
+        favourite.id == key.id,
+  );
+}
+
+/// The device's own heart for one album or playlist.
+@riverpod
+Future<bool> deviceCollectionFavouriteState(
+  Ref ref,
+  CollectionFavouriteKey key,
+) async =>
+    await ref.watch(libraryCatalogProvider)?.collectionFavouriteOf(key) ??
+    false;
 
 
 /// What the fleet knows about one artist, as the artist page draws it.

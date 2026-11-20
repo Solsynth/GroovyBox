@@ -934,6 +934,30 @@ class Favourites {
 @Riverpod(keepAlive: true)
 Favourites favourites(Ref ref) => Favourites(ref);
 
+/// Albums and playlists this device remembers liking.
+///
+/// The same shape as [Favourites] and for the same reason: the database is
+/// the record, the widget asks a provider, and the fleet copy is forwarded by
+/// the caller that is allowed to know about Pulsar.
+@Riverpod(keepAlive: true)
+CollectionFavourites collectionFavourites(Ref ref) =>
+    CollectionFavourites(ref);
+
+class CollectionFavourites {
+  const CollectionFavourites(this._ref);
+
+  final Ref _ref;
+
+  /// Writes the device's answer. Nothing is forwarded here: an album's own
+  /// service has no album rating the app writes, and the account's copy is
+  /// the other half, pushed by the surface that tapped the heart.
+  Future<void> set(CollectionFavourite favourite, {required bool value}) async {
+    await _ref
+        .read(libraryCatalogProvider)
+        ?.setCollectionFavourite(favourite, value: value);
+  }
+}
+
 /// The device's own playlists, and the source's when the account has any.
 ///
 /// Device playlists exist before a library does and survive every server being

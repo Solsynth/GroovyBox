@@ -15,6 +15,78 @@ typedef LibraryRef = ({String sourceId, String id});
 /// a device-local link without importing the source implementation.
 const kLocalSourceId = 'local';
 
+/// The source id a Solink (Pulsar) collection lives under. A cloud playlist
+/// has no library behind it, and a heart on one still has to say where the
+/// thing it names lives.
+const kSolinkSourceId = 'solink';
+
+/// What a favourite names: a recording, a record, or a list.
+///
+/// Albums and playlists are not rows in the local track table — they are
+/// catalog records the account likes in their own right — so the kind is part
+/// of a favourite's identity rather than a decoration on it.
+enum FavouriteKind {
+  track('track'),
+  album('album'),
+  playlist('playlist');
+
+  const FavouriteKind(this.value);
+
+  /// The wire value the fleet stores.
+  final String value;
+
+  /// Absent or unknown reads as [track]: what every entry written before
+  /// albums and playlists could be hearts meant.
+  static FavouriteKind parse(String? value) =>
+      values.where((kind) => kind.value == value).firstOrNull ?? track;
+
+  /// Whether this kind is a container of tracks rather than one.
+  bool get isCollection => this != track;
+}
+
+/// One album or playlist the account likes.
+///
+/// Carries enough to draw its row without asking a library again: the account
+/// is the record, and a row read on a second device has no other source to
+/// describe it from.
+class CollectionFavourite {
+  final FavouriteKind kind;
+  final String sourceId;
+  final String id;
+  final String name;
+  final String? subtitle;
+
+  /// A cover as the owning library spells the handle.
+  final String? artId;
+
+  /// A cover URL, for a thing no library can resolve (a Solink playlist's own
+  /// `artwork_url`).
+  final String? artworkUrl;
+  final DateTime decidedAt;
+
+  const CollectionFavourite({
+    required this.kind,
+    required this.sourceId,
+    required this.id,
+    required this.name,
+    this.subtitle,
+    this.artId,
+    this.artworkUrl,
+    required this.decidedAt,
+  });
+
+  /// The identity a heart is asked about.
+  CollectionFavouriteKey get key =>
+      (kind: kind, sourceId: sourceId, id: id);
+}
+
+/// A [CollectionFavourite]'s identity, usable as a riverpod family argument.
+typedef CollectionFavouriteKey = ({
+  FavouriteKind kind,
+  String sourceId,
+  String id,
+});
+
 class LibrarySong {
   /// Which [LibrarySource] owns this item.
   final String sourceId;

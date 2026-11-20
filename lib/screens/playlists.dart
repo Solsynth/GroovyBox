@@ -1,9 +1,11 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:groovy_box/core/theme.dart';
+import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/widgets/artwork.dart';
+import 'package:groovy_box/widgets/collection_favourite.dart';
 import 'package:groovy_box/widgets/collection_hero.dart';
 import 'package:groovy_box/widgets/download_actions.dart';
 import 'package:groovy_box/widgets/common.dart';
@@ -111,6 +113,21 @@ class PlaylistDetailScreen extends ConsumerWidget {
                               suggestedName:
                                   playlistName ?? 'playlistsKind'.tr(),
                               songs: (_) async => list,
+                            ),
+                            // The heart is the list's own, not its tracks':
+                            // a playlist is the thing the account keeps.
+                            CollectionFavouriteButton(
+                              favourite: serverPlaylistFavourite(
+                                playlist ??
+                                    LibraryPlaylist(
+                                      sourceId: sourceId,
+                                      id: playlistId,
+                                      name: title,
+                                      duration: Duration.zero,
+                                      artId: list.first.artId,
+                                    ),
+                                artId: list.first.artId,
+                              ),
                             ),
                           ],
                         ),

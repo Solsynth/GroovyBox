@@ -535,10 +535,14 @@ class _PlaylistRows extends ConsumerWidget {
         CloudPlaylistEntry(playlist, cover: covers[playlist.id]),
       // The account's hearts close the list: they follow the account rather
       // than a library, and they are one collection, not a drawer.
+      //
+      // The count is recordings only. The same list also holds favourite
+      // albums and playlists, and the row's line says "N tracks" — counting
+      // them in would make it claim more titles than the page lists.
       if (favourites.value case final list?)
-        if (list.isNotEmpty)
+        if (list.any((item) => !item.kind.isCollection))
           CloudFavouritesEntry(
-            count: list.length,
+            count: list.where((item) => !item.kind.isCollection).length,
             cover: list
                 .map((item) => item.catalogItem?.artworkUrl)
                 .whereType<String>()

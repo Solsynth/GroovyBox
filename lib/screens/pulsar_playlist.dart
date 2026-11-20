@@ -9,6 +9,7 @@ import 'package:groovy_box/pulsar/models.dart';
 import 'package:groovy_box/pulsar/providers.dart';
 import 'package:groovy_box/solarpass/providers.dart';
 import 'package:groovy_box/widgets/artwork.dart';
+import 'package:groovy_box/widgets/collection_favourite.dart';
 import 'package:groovy_box/widgets/collection_hero.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/format.dart';
@@ -405,6 +406,15 @@ class _PulsarPlaylistDetailScreenState
                                 icon: const Icon(Symbols.delete_rounded),
                               ),
                               SelectionToggleButton(selection: _selection),
+                              // A Solink playlist is a favourite in its own
+                              // right: its source is [kSolinkSourceId], since
+                              // no library behind it can be asked.
+                              CollectionFavouriteButton(
+                                favourite: solinkPlaylistFavourite(
+                                  playlist,
+                                  cover: cover,
+                                ),
+                              ),
                             ],
                           ),
                         ),

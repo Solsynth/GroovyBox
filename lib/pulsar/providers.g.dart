@@ -644,7 +644,7 @@ final class PulsarFavouritesProvider
   PulsarFavourites create() => PulsarFavourites();
 }
 
-String _$pulsarFavouritesHash() => r'f93a84749b0d702434524420f66617237f1048c5';
+String _$pulsarFavouritesHash() => r'44139fe67e6fab1d49e51bd4160ab6675fb9fd98';
 
 /// The account's favourites, as Pulsar holds them: the same heart the device
 /// keeps, in the fleet where a second device can read it.
@@ -881,6 +881,246 @@ final class SolarFavouriteSongsProvider
 
 String _$solarFavouriteSongsHash() =>
     r'392572d8a485ef28983f32c0e3ca6228d517b575';
+
+/// The account's favourite albums and playlists, newest decision first.
+///
+/// The same list [pulsarFavouritesProvider] holds, narrowed to the entries
+/// whose kind is a collection: one read is the truth for every heart in the
+/// app, and which of them a page shows is a filter, not a second request.
+
+@ProviderFor(solarCollectionFavourites)
+final solarCollectionFavouritesProvider = SolarCollectionFavouritesProvider._();
+
+/// The account's favourite albums and playlists, newest decision first.
+///
+/// The same list [pulsarFavouritesProvider] holds, narrowed to the entries
+/// whose kind is a collection: one read is the truth for every heart in the
+/// app, and which of them a page shows is a filter, not a second request.
+
+final class SolarCollectionFavouritesProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<List<CollectionFavourite>>,
+          List<CollectionFavourite>,
+          FutureOr<List<CollectionFavourite>>
+        >
+    with
+        $FutureModifier<List<CollectionFavourite>>,
+        $FutureProvider<List<CollectionFavourite>> {
+  /// The account's favourite albums and playlists, newest decision first.
+  ///
+  /// The same list [pulsarFavouritesProvider] holds, narrowed to the entries
+  /// whose kind is a collection: one read is the truth for every heart in the
+  /// app, and which of them a page shows is a filter, not a second request.
+  SolarCollectionFavouritesProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'solarCollectionFavouritesProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$solarCollectionFavouritesHash();
+
+  @$internal
+  @override
+  $FutureProviderElement<List<CollectionFavourite>> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<List<CollectionFavourite>> create(Ref ref) {
+    return solarCollectionFavourites(ref);
+  }
+}
+
+String _$solarCollectionFavouritesHash() =>
+    r'4504de559a57f6f717b8f94f44171313cd9bee87';
+
+/// Whether this album or playlist is a favourite.
+///
+/// The account is the record when signed in, exactly as it is for a track: a
+/// heart set on another device is what every surface draws. Signed out the
+/// device's own row answers, so the heart still works with no account.
+
+@ProviderFor(collectionFavouriteState)
+final collectionFavouriteStateProvider = CollectionFavouriteStateFamily._();
+
+/// Whether this album or playlist is a favourite.
+///
+/// The account is the record when signed in, exactly as it is for a track: a
+/// heart set on another device is what every surface draws. Signed out the
+/// device's own row answers, so the heart still works with no account.
+
+final class CollectionFavouriteStateProvider
+    extends $FunctionalProvider<AsyncValue<bool>, bool, FutureOr<bool>>
+    with $FutureModifier<bool>, $FutureProvider<bool> {
+  /// Whether this album or playlist is a favourite.
+  ///
+  /// The account is the record when signed in, exactly as it is for a track: a
+  /// heart set on another device is what every surface draws. Signed out the
+  /// device's own row answers, so the heart still works with no account.
+  CollectionFavouriteStateProvider._({
+    required CollectionFavouriteStateFamily super.from,
+    required CollectionFavouriteKey super.argument,
+  }) : super(
+         retry: null,
+         name: r'collectionFavouriteStateProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$collectionFavouriteStateHash();
+
+  @override
+  String toString() {
+    return r'collectionFavouriteStateProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<bool> $createElement($ProviderPointer pointer) =>
+      $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<bool> create(Ref ref) {
+    final argument = this.argument as CollectionFavouriteKey;
+    return collectionFavouriteState(ref, argument);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is CollectionFavouriteStateProvider &&
+        other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$collectionFavouriteStateHash() =>
+    r'dae70bc9df1afaaf0eea8c50b213ca87b645cb07';
+
+/// Whether this album or playlist is a favourite.
+///
+/// The account is the record when signed in, exactly as it is for a track: a
+/// heart set on another device is what every surface draws. Signed out the
+/// device's own row answers, so the heart still works with no account.
+
+final class CollectionFavouriteStateFamily extends $Family
+    with $FunctionalFamilyOverride<FutureOr<bool>, CollectionFavouriteKey> {
+  CollectionFavouriteStateFamily._()
+    : super(
+        retry: null,
+        name: r'collectionFavouriteStateProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  /// Whether this album or playlist is a favourite.
+  ///
+  /// The account is the record when signed in, exactly as it is for a track: a
+  /// heart set on another device is what every surface draws. Signed out the
+  /// device's own row answers, so the heart still works with no account.
+
+  CollectionFavouriteStateProvider call(CollectionFavouriteKey key) =>
+      CollectionFavouriteStateProvider._(argument: key, from: this);
+
+  @override
+  String toString() => r'collectionFavouriteStateProvider';
+}
+
+/// The device's own heart for one album or playlist.
+
+@ProviderFor(deviceCollectionFavouriteState)
+final deviceCollectionFavouriteStateProvider =
+    DeviceCollectionFavouriteStateFamily._();
+
+/// The device's own heart for one album or playlist.
+
+final class DeviceCollectionFavouriteStateProvider
+    extends $FunctionalProvider<AsyncValue<bool>, bool, FutureOr<bool>>
+    with $FutureModifier<bool>, $FutureProvider<bool> {
+  /// The device's own heart for one album or playlist.
+  DeviceCollectionFavouriteStateProvider._({
+    required DeviceCollectionFavouriteStateFamily super.from,
+    required CollectionFavouriteKey super.argument,
+  }) : super(
+         retry: null,
+         name: r'deviceCollectionFavouriteStateProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$deviceCollectionFavouriteStateHash();
+
+  @override
+  String toString() {
+    return r'deviceCollectionFavouriteStateProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<bool> $createElement($ProviderPointer pointer) =>
+      $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<bool> create(Ref ref) {
+    final argument = this.argument as CollectionFavouriteKey;
+    return deviceCollectionFavouriteState(ref, argument);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is DeviceCollectionFavouriteStateProvider &&
+        other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$deviceCollectionFavouriteStateHash() =>
+    r'd6a783f6610eeadd3b3ad0125586baf7f8c9ac76';
+
+/// The device's own heart for one album or playlist.
+
+final class DeviceCollectionFavouriteStateFamily extends $Family
+    with $FunctionalFamilyOverride<FutureOr<bool>, CollectionFavouriteKey> {
+  DeviceCollectionFavouriteStateFamily._()
+    : super(
+        retry: null,
+        name: r'deviceCollectionFavouriteStateProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  /// The device's own heart for one album or playlist.
+
+  DeviceCollectionFavouriteStateProvider call(CollectionFavouriteKey key) =>
+      DeviceCollectionFavouriteStateProvider._(argument: key, from: this);
+
+  @override
+  String toString() => r'deviceCollectionFavouriteStateProvider';
+}
 
 /// The fleet's view of [name]. Null when signed out, when nothing matches,
 /// or when the fleet is unreachable — each a reason the section stays quiet,

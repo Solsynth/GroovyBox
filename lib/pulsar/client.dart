@@ -23,6 +23,45 @@ import 'models.dart';
 /// merge.
 String pulsarTrackKey(LibrarySong song) => '${song.sourceId}:${song.id}';
 
+/// The same stable identity for an album or a playlist.
+///
+/// `album:<source>:<id>`, each part percent-encoded: a source id and an item
+/// id may both contain a colon (a plugin's, a server's key), and a key that
+/// cannot be split back apart would lose the page a favourite opens. The kind
+/// is part of it because the id spaces are separate — one service's album id
+/// and another's playlist id could coincide. A Solink playlist names
+/// [kSolinkSourceId], since no library stands behind it.
+String pulsarCollectionKeyOf(CollectionFavouriteKey key) =>
+    '${key.kind.value}:${Uri.encodeComponent(key.sourceId)}:'
+    '${Uri.encodeComponent(key.id)}';
+
+/// [pulsarCollectionKeyOf] over a whole favourite.
+String pulsarCollectionKey(CollectionFavourite favourite) =>
+    pulsarCollectionKeyOf(favourite.key);
+
+/// The inverse of [pulsarCollectionKeyOf], or null for a key that is not one:
+/// a track's, or an id the fleet itself invented.
+CollectionFavouriteKey? parsePulsarCollectionKey(String? key) {
+  if (key == null || key.isEmpty) return null;
+  final parts = key.split(':');
+  if (parts.length != 3) return null;
+  final kind = FavouriteKind.values
+      .where((candidate) => candidate.value == parts[0])
+      .firstOrNull;
+  if (kind == null || !kind.isCollection) return null;
+  try {
+    return (
+      kind: kind,
+      sourceId: Uri.decodeComponent(parts[1]),
+      id: Uri.decodeComponent(parts[2]),
+    );
+  } on ArgumentError {
+    // A key written by hand without escaping is still readable as it stands;
+    // taking it literally loses nothing that the row did not already lose.
+    return (kind: kind, sourceId: parts[1], id: parts[2]);
+  }
+}
+
 class PulsarClient {
   PulsarClient({required this.dio, required String baseUrl})
     : _basePath = '${baseUrl.replaceAll(RegExp(r'/+$'), '')}/pulsar',

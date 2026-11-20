@@ -471,6 +471,55 @@ extension FavouritesAndPlaylists on LibraryCatalog {
     );
   }
 
+  /// The device's own answer for one album or playlist, or null when it has
+  /// never been set.
+  Future<bool?> collectionFavouriteOf(CollectionFavouriteKey key) async {
+    final row = await _db.collectionFavouriteOf(
+      key.kind.value,
+      key.sourceId,
+      key.id,
+    );
+    return row == null ? null : true;
+  }
+
+  /// Writes the device's answer for one album or playlist.
+  ///
+  /// Clearing deletes the row; the fleet copy is forwarded by the caller,
+  /// exactly as it is for a track. [decidedAt] lets a sync keep the account's
+  /// own decision time instead of the moment this device happened to read it.
+  Future<void> setCollectionFavourite(
+    CollectionFavourite favourite, {
+    required bool value,
+    DateTime? decidedAt,
+  }) => _db.setCollectionFavourite(
+    CollectionFavouritesCompanion.insert(
+      kind: favourite.kind.value,
+      sourceId: favourite.sourceId,
+      externalId: favourite.id,
+      name: favourite.name,
+      subtitle: Value.absentIfNull(favourite.subtitle),
+      artId: Value.absentIfNull(favourite.artId),
+      artworkUrl: Value.absentIfNull(favourite.artworkUrl),
+      updatedAt: decidedAt ?? DateTime.now(),
+    ),
+    value: value,
+  );
+
+  /// Every album and playlist this device likes, newest decision first.
+  Future<List<CollectionFavourite>> collectionFavourites() async => [
+    for (final row in await _db.allCollectionFavourites())
+      CollectionFavourite(
+        kind: FavouriteKind.parse(row.kind),
+        sourceId: row.sourceId,
+        id: row.externalId,
+        name: row.name,
+        subtitle: row.subtitle,
+        artId: row.artId,
+        artworkUrl: row.artworkUrl,
+        decidedAt: row.updatedAt,
+      ),
+  ];
+
   /// The song one source's item is, built from what the catalog already
   /// knows. Null when this device has never seen that item.
   ///

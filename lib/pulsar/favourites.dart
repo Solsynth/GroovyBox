@@ -263,6 +263,33 @@ class SolarFavouritesSync {
         debugPrint('[Solar] Could not push "${song.title}": $error');
       }
     }
+
+    for (final favourite in await catalog.collectionFavourites()) {
+      final key = pulsarCollectionKey(favourite);
+      if (known.contains(key)) continue;
+      try {
+        await client.addFavourite(
+          session,
+          PulsarTrackPayload(
+            title: favourite.name,
+            artist: favourite.subtitle,
+            artworkUrl:
+                favourite.artworkUrl ??
+                sources[favourite.sourceId]
+                    ?.artworkUri(favourite.artId)
+                    ?.toString(),
+            providerKey: key,
+            kind: favourite.kind,
+          ),
+        );
+        known.add(key);
+        pushed++;
+      } catch (error) {
+        // One album a server no longer knows must not stop the rest of the
+        // taste from travelling.
+        debugPrint('[Solar] Could not push "${favourite.name}": $error');
+      }
+    }
     return pushed;
   }
 
@@ -273,6 +300,29 @@ class SolarFavouritesSync {
     for (final item in account) {
       final track = item.catalogItem;
       if (track == null) continue;
+
+      // An album or a playlist is not resolved to a track: the entry already
+      // says what it is, and the device keeps the row so the heart is drawn
+      // offline and on a library that is no longer connected.
+      if (item.kind.isCollection) {
+        final key = parsePulsarCollectionKey(track.providerKey);
+        if (key == null) continue;
+        if (await catalog.collectionFavouriteOf(key) == true) continue;
+        await catalog.setCollectionFavourite(
+          CollectionFavourite(
+            kind: key.kind,
+            sourceId: key.sourceId,
+            id: key.id,
+            name: track.title,
+            subtitle: track.subtitle,
+            artworkUrl: track.artworkUrl,
+            decidedAt: DateTime.now(),
+          ),
+          value: true,
+        );
+        pulled++;
+        continue;
+      }
       // A search is the only expensive step, so only a search spends the
       // budget: links and known tracks cost a local query.
       final maySearch = searches < solarFavouriteSearchBudget;

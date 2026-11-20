@@ -117,6 +117,29 @@ class FavouriteTracks extends Table {
   Set<Column> get primaryKey => {trackId};
 }
 
+/// Whether this device likes one album or playlist.
+///
+/// The same record as [FavouriteTracks] for the other two kinds, kept apart
+/// because the row is not a track: there is no canonical song to hang it on,
+/// and no library has to still exist for the answer to mean something. [kind]
+/// and [sourceId] are the identity — an album id is native to its library,
+/// and a Solink playlist has no library at all.
+@DataClassName('CollectionFavouriteRow')
+class CollectionFavourites extends Table {
+  TextColumn get kind => text()();
+  TextColumn get sourceId => text()();
+  TextColumn get externalId => text()();
+  TextColumn get name => text()();
+  TextColumn get subtitle => text().nullable()();
+  TextColumn get artId => text().nullable()();
+  TextColumn get artworkUrl => text().nullable()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  /// One answer per thing: the row is the answer, not a log of answers.
+  @override
+  Set<Column> get primaryKey => {kind, sourceId, externalId};
+}
+
 /// A playlist this device owns.
 ///
 /// Device-owned rather than a server's: a playlist made here exists before any
@@ -337,6 +360,7 @@ class HttpCache extends Table {
     PlaybackSessions,
     LocalFiles,
     FavouriteTracks,
+    CollectionFavourites,
     LocalPlaylists,
     LocalPlaylistEntries,
     Downloads,
@@ -361,7 +385,7 @@ class LibraryDatabase extends _$LibraryDatabase {
   }
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -395,6 +419,9 @@ class LibraryDatabase extends _$LibraryDatabase {
       }
       if (from < 9) {
         await m.addColumn(lyricsEntries, lyricsEntries.translationEngine);
+      }
+      if (from < 10) {
+        await m.createTable(collectionFavourites);
       }
     },
     beforeOpen: (details) async {
@@ -1327,6 +1354,54 @@ extension FavouriteQuery on LibraryDatabase {
   Future<List<FavouriteTrackRow>> allFavourites() =>
       (select(favouriteTracks)
             ..where((row) => row.favourite.equals(true))
+            ..orderBy([(row) => OrderingTerm.desc(row.updatedAt)]))
+          .get();
+}
+
+/// Whether this device likes one album or playlist.
+///
+/// The record is the row's own: no track is adopted, no library has to still
+/// be connected, and a Solink playlist (which no library can describe) is
+/// stored the same way an album is.
+extension CollectionFavouriteQuery on LibraryDatabase {
+  /// The device's answer for one thing, or null when it has never been set.
+  Future<CollectionFavouriteRow?> collectionFavouriteOf(
+    String kind,
+    String sourceId,
+    String externalId,
+  ) => (select(collectionFavourites)..where(
+        (row) =>
+            row.kind.equals(kind) &
+            row.sourceId.equals(sourceId) &
+            row.externalId.equals(externalId),
+      ))
+      .getSingleOrNull();
+
+  /// Writes or clears the device's answer for one thing.
+  ///
+  /// One row per thing, so this replaces rather than appends; clearing
+  /// deletes, because "not a favourite" is the absence of an opinion and a
+  /// row saying so would have to be filtered out of every read.
+  Future<void> setCollectionFavourite(
+    CollectionFavouritesCompanion row, {
+    required bool value,
+  }) async {
+    if (!value) {
+      await (delete(collectionFavourites)..where(
+            (candidate) =>
+                candidate.kind.equals(row.kind.value) &
+                candidate.sourceId.equals(row.sourceId.value) &
+                candidate.externalId.equals(row.externalId.value),
+          ))
+          .go();
+      return;
+    }
+    await into(collectionFavourites).insertOnConflictUpdate(row);
+  }
+
+  /// Every album and playlist this device likes, newest decision first.
+  Future<List<CollectionFavouriteRow>> allCollectionFavourites() =>
+      (select(collectionFavourites)
             ..orderBy([(row) => OrderingTerm.desc(row.updatedAt)]))
           .get();
 }

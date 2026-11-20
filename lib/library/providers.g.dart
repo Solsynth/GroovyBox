@@ -3016,6 +3016,71 @@ final class FavouritesProvider
 
 String _$favouritesHash() => r'e24140a5aac76425baf6f8072789915c19f3e024';
 
+/// Albums and playlists this device remembers liking.
+///
+/// The same shape as [Favourites] and for the same reason: the database is
+/// the record, the widget asks a provider, and the fleet copy is forwarded by
+/// the caller that is allowed to know about Pulsar.
+
+@ProviderFor(collectionFavourites)
+final collectionFavouritesProvider = CollectionFavouritesProvider._();
+
+/// Albums and playlists this device remembers liking.
+///
+/// The same shape as [Favourites] and for the same reason: the database is
+/// the record, the widget asks a provider, and the fleet copy is forwarded by
+/// the caller that is allowed to know about Pulsar.
+
+final class CollectionFavouritesProvider
+    extends
+        $FunctionalProvider<
+          CollectionFavourites,
+          CollectionFavourites,
+          CollectionFavourites
+        >
+    with $Provider<CollectionFavourites> {
+  /// Albums and playlists this device remembers liking.
+  ///
+  /// The same shape as [Favourites] and for the same reason: the database is
+  /// the record, the widget asks a provider, and the fleet copy is forwarded by
+  /// the caller that is allowed to know about Pulsar.
+  CollectionFavouritesProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'collectionFavouritesProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$collectionFavouritesHash();
+
+  @$internal
+  @override
+  $ProviderElement<CollectionFavourites> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  CollectionFavourites create(Ref ref) {
+    return collectionFavourites(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(CollectionFavourites value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<CollectionFavourites>(value),
+    );
+  }
+}
+
+String _$collectionFavouritesHash() =>
+    r'3af55c1ede9fffbe27beed087b4b4b0fe8bb4651';
+
 /// The device's own playlists, and the source's when the account has any.
 ///
 /// Device playlists exist before a library does and survive every server being
