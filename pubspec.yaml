@@ -70,6 +70,7 @@ dependencies:
     path: packages/music_kit
   skeletonizer: ^3.0.0
   marqueer: ^2.7.0
+  package_info_plus: ^10.2.2
 dev_dependencies:
   flutter_test:
     sdk: flutter
