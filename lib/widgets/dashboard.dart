@@ -382,9 +382,10 @@ class PinnedPlaylistShelf extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final songs = switch (pin.kind) {
-      DashboardPinKind.owned => ref
-          .watch(ownedPlaylistEntriesProvider(int.parse(pin.id)))
-          .whenData((entries) => [for (final entry in entries) entry.song]),
+      DashboardPinKind.owned =>
+        ref
+            .watch(ownedPlaylistEntriesProvider(int.parse(pin.id)))
+            .whenData((entries) => [for (final entry in entries) entry.song]),
       DashboardPinKind.server => ref.watch(
         playlistSongsProvider((sourceId: pin.sourceId, id: pin.id)),
       ),
@@ -481,18 +482,14 @@ class _DashboardCustomizeSheetState
   /// widgets, and the catalog is keyed by language.
   List<String>? _order;
 
-  @override
-  void initState() {
-    super.initState();
-    // Pins extend the built-in order: a pinned playlist can sit anywhere on
-    // the page, including above the shelves the app offers.
-    final pins = ref.read(dashboardLayoutProvider).pins;
-    _order = [...widget.initialOrder];
-    for (final key in pins.keys) {
-      if (!_order.contains(key)) {
-        _order.add(key);
-      }
-    }
+  /// The language the rows are spelled in. `tr()` resolves against the
+  /// process-wide catalog, so the sheet asks the same catalog the page did.
+  /// A test that mounts the sheet without an EasyLocalization ancestor still
+  /// gets the widget locale rather than a null dereference.
+  String get _language {
+    final easy = EasyLocalization.of(context);
+    return easy?.locale.languageCode ??
+        Localizations.localeOf(context).languageCode;
   }
 
   DashboardLayout get _layout => ref.read(dashboardLayoutProvider);
@@ -533,7 +530,7 @@ class _DashboardCustomizeSheetState
 
   Future<void> _removePin(String key) async {
     await ref.read(dashboardLayoutProvider.notifier).removePin(key);
-    setState(() => _order = _order.where((k) => k != key).toList());
+    setState(() => _order = _order?.where((k) => k != key).toList());
   }
 
   Future<void> _reset() async {
@@ -557,7 +554,8 @@ class _DashboardCustomizeSheetState
     await ref.read(dashboardLayoutProvider.notifier).addPin(pin);
     if (!mounted) return;
     setState(() {
-      if (!_order.contains(pin.key)) _order.add(pin.key);
+      final order = _order;
+      if (order != null && !order.contains(pin.key)) order.add(pin.key);
     });
   }
 
@@ -710,7 +708,6 @@ class _DashboardCustomizeSheetState
       ),
     );
   }
-
 }
 
 /// The playlists a section can be made from, wherever they live. The same

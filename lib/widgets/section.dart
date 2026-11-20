@@ -52,9 +52,7 @@ class SectionHeader extends StatelessWidget {
     final theme = Theme.of(context);
     final name = Text(
       title,
-      style: theme.textTheme.titleMedium?.copyWith(
-        fontWeight: FontWeight.w700,
-      ),
+      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
     );
     // The source line is a quiet second line, not a second title: it answers
     // "where is this from", while the name answers "what is this".
@@ -155,9 +153,7 @@ class FoldableSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final collapsed = ref.watch(
-      collapsedSectionsProvider.select(
-        (set) => set.contains(keyOf(page, id)),
-      ),
+      collapsedSectionsProvider.select((set) => set.contains(keyOf(page, id))),
     );
     return SliverMainAxisGroup(
       slivers: [
@@ -167,9 +163,8 @@ class FoldableSection extends ConsumerWidget {
             subtitle: subtitle,
             trailing: trailing,
             collapsed: collapsed,
-            onToggle: () => ref
-                .read(collapsedSectionsProvider.notifier)
-                .toggle(page, id),
+            onToggle: () =>
+                ref.read(collapsedSectionsProvider.notifier).toggle(page, id),
           ),
         ),
         if (!collapsed) ...builder(),

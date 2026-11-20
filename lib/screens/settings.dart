@@ -20,6 +20,7 @@ import 'pulsar_section.dart';
 import 'plugins_section.dart';
 import 'package:groovy_box/solarpass/solarpass_section.dart';
 import 'package:groovy_box/widgets/common.dart';
+import 'package:groovy_box/widgets/dashboard.dart';
 import 'package:groovy_box/widgets/format.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';

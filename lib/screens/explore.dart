@@ -267,18 +267,3 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   /// bar make.
   void _openLibrary(BuildContext context) => activateTab(context, 'library');
 }
-
-/// The customize sheet: the page's sections in the user's order, each with
-/// the two moves that make a dashboard personal — take it off the page, and
-/// move it up or down — plus the two ways to add one (a shelf the page offers
-/// again, and a playlist pinned as a section of its own).
-///
-/// A sheet rather than a settings page: the changes are visible on the page
-/// behind it as they are made, and closing it shows the result.
-  showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    backgroundColor: Theme.of(context).colorScheme.surface,
-  );
-}
