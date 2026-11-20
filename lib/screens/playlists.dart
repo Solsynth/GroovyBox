@@ -1,6 +1,5 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
@@ -49,15 +48,10 @@ class PlaylistDetailScreen extends ConsumerWidget {
     );
     final title =
         playlistName ?? playlist?.name ?? 'playlistsDetailTitleFallback'.tr();
-    // One boolean, not the transport: rows decide their own selection.
-    final hasSong = ref.watch(
-      playbackProvider.select((state) => state.current != null),
-    );
-    final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: ContentFrame(
-        child: CustomScrollView(
+        child: PageScrollView(
           slivers: [
             SliverToBoxAdapter(
               child: BackButtonRow(onBack: () => context.router.maybePop()),
@@ -170,7 +164,6 @@ class PlaylistDetailScreen extends ConsumerWidget {
                 ),
               ],
             ),
-            SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
           ],
         ),
       ),

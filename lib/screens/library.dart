@@ -1,12 +1,10 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/router.gr.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/catalog.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
-import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/screens/albums.dart';
 import 'package:groovy_box/pulsar/models.dart';
 import 'package:groovy_box/pulsar/providers.dart';
@@ -63,10 +61,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   Widget build(BuildContext context) {
     final albums = ref.watch(recentAlbumsProvider);
     final artists = ref.watch(libraryArtistsProvider);
-    final hasSong = ref.watch(
-      playbackProvider.select((state) => state.current != null),
-    );
-    final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -76,7 +70,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           await ref.read(playlistsProvider.notifier).refresh();
         },
         child: ContentFrame(
-          child: CustomScrollView(
+          child: PageScrollView(
             slivers: [
               // The page's name scrolls with the collection, and the refresh
               // action lives beside it: nothing floats over the shelves.
@@ -182,7 +176,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                 trailing: const _NewPlaylistButton(),
                 builder: () => const [_PlaylistRows()],
               ),
-              SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
             ],
           ),
         ),

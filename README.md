@@ -250,8 +250,10 @@ Two surface languages, deliberately kept apart:
 - **Liquid glass** (`lib/core/glass.dart`, `GlassSurface`) is used in exactly
   two places, both of which float over a scrolling page on the compact
   layout: the tab capsule and the now-playing dock. They refract the content
-  underneath, share one backdrop capture via `BackdropGroup`, and pages reserve
-  clearance with `solBottomChromeInset` so content scrolls beneath them.
+  underneath, share one backdrop capture via `BackdropGroup`, and the shell
+  publishes their height — plus the home indicator — as `SolChromeInset`, so
+  every page reserves it with one `PageScrollView`/`PageListView` instead of
+  re-deriving the geometry from playback state.
   Everything else — the wide rail, settings, panels, the player's transport —
   is tonal. A persistent navigation column or a panel holding live controls and
   artwork is where glass costs frames and legibility without adding anything.

@@ -1,6 +1,5 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/catalog.dart';
 import 'package:groovy_box/library/providers.dart';
@@ -34,12 +33,6 @@ class ProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final account = ref.watch(solarpassAccountProvider);
-    // Select the identity, not the state: watching the whole transport would
-    // rebuild this page on every position tick, once a second.
-    final hasSong = ref.watch(
-      playbackProvider.select((state) => state.current != null),
-    );
-    final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -52,8 +45,7 @@ class ProfileScreen extends ConsumerWidget {
           }
         },
         child: ContentFrame(
-          child: ListView(
-            padding: EdgeInsets.only(bottom: bottomInset),
+          child: PageListView(
             children: [
               // The account block is the page's name: an avatar, a display
               // name and a handle say "this is you" better than the word
@@ -256,7 +248,7 @@ class _Identity extends StatelessWidget {
                   const SizedBox(height: SolSpace.xs),
                   Text(
                     value.bio!.trim(),
-                    maxLines: 3,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,

@@ -1,7 +1,6 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:groovy_box/core/dashboard_layout.dart';
-import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/router.gr.dart';
 import 'package:groovy_box/core/tab_navigation.dart';
 import 'package:groovy_box/core/theme.dart';
@@ -60,10 +59,6 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     // nothing here and the shelves below carry it.
     final curated = ref.watch(landingShelvesProvider);
     final servers = ref.watch(librarySourcesProvider);
-    final hasSong = ref.watch(
-      playbackProvider.select((state) => state.current != null),
-    );
-    final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
 
     void refreshAll() {
       ref.read(recentAlbumsProvider.notifier).refresh();
@@ -93,7 +88,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
           await ref.read(landingShelvesProvider.notifier).refresh();
         },
         child: ContentFrame(
-          child: CustomScrollView(
+          child: PageScrollView(
             slivers: [
               SliverToBoxAdapter(
                 child: PageHeadline(
@@ -140,7 +135,6 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                         curated: curated,
                       ),
                     ),
-              SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
             ],
           ),
         ),

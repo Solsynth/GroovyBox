@@ -1,6 +1,5 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/router.gr.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/models.dart';
@@ -49,12 +48,6 @@ class ArtistDetailScreen extends ConsumerWidget {
     final albums = ref.watch(
       artistAlbumsProvider((sourceId: sourceId, id: artistId)),
     );
-    // One boolean, not the transport: a position tick must not rebuild a
-    // page of album cards.
-    final hasSong = ref.watch(
-      playbackProvider.select((state) => state.current != null),
-    );
-    final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
 
     return albums.when(
       data: (list) => _Body(
@@ -62,7 +55,6 @@ class ArtistDetailScreen extends ConsumerWidget {
         artistId: artistId,
         name: artistName,
         albums: list,
-        bottomInset: bottomInset,
       ),
       loading: () => const Scaffold(
         backgroundColor: Colors.transparent,
@@ -95,14 +87,12 @@ class _Body extends ConsumerStatefulWidget {
   final String artistId;
   final String? name;
   final List<LibraryAlbum> albums;
-  final double bottomInset;
 
   const _Body({
     required this.sourceId,
     required this.artistId,
     required this.name,
     required this.albums,
-    required this.bottomInset,
   });
 
   @override
@@ -178,7 +168,7 @@ class _BodyState extends ConsumerState<_Body> {
         child: RefreshIndicator(
           onRefresh: () async =>
               ref.read(libraryArtistsProvider.notifier).refresh(),
-          child: CustomScrollView(
+          child: PageScrollView(
             slivers: [
               SliverToBoxAdapter(
                 child: BackButtonRow(onBack: () => context.router.maybePop()),
@@ -359,7 +349,6 @@ class _BodyState extends ConsumerState<_Body> {
               // is a footnote to the artist, not a second discography.
               if (artist != null)
                 SliverToBoxAdapter(child: _FleetSection(name: artist)),
-              SliverToBoxAdapter(child: SizedBox(height: widget.bottomInset)),
             ],
           ),
         ),
@@ -441,9 +430,9 @@ class _FleetSection extends ConsumerWidget {
                           ),
                           style: Theme.of(context).textTheme.labelSmall
                               ?.copyWith(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
                               ),
                         ),
                 ),

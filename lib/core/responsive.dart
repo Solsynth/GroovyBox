@@ -56,18 +56,41 @@ EdgeInsets solContentPadding(
   return EdgeInsets.fromLTRB(gutter, top, gutter, bottom);
 }
 
-/// Bottom clearance a scrolling page needs to keep its last row tappable
-/// under the floating chrome.
+/// Raw bottom-chrome geometry, for the shell that draws the chrome.
 ///
-/// The chrome floats *over* the page (so the glass has something to refract),
-/// which means the page has to reserve the space itself. [dockVisible] adds
-/// the now-playing capsule's height; the compact layout also stacks the tab
-/// capsule under it, while the wide layout keeps navigation in the rail.
-double solBottomChromeInset(BuildContext context, {required bool dockVisible}) {
+/// [dockVisible] adds the now-playing capsule's height; the compact layout
+/// also stacks the tab capsule under it, while the wide layout keeps
+/// navigation in the rail. Pages never call this: they read the shell's
+/// answer through [solBottomChromeInset] and [solFloatingBarOffset].
+({double inset, double barOffset}) solChromeGeometry(
+  BuildContext context, {
+  required bool dockVisible,
+}) {
   final safeBottom = MediaQuery.viewPaddingOf(context).bottom;
   final dock = dockVisible ? kNowPlayingDockHeight + SolSpace.sm : 0.0;
   final nav = isWideScreen(context) ? 0.0 : kBottomNavHeight + SolSpace.md;
-  return dock + nav + SolSpace.xl + safeBottom;
+  return (
+    inset: dock + nav + SolSpace.xl + safeBottom,
+    barOffset: dock + nav + SolSpace.sm + safeBottom,
+  );
+}
+
+/// Bottom clearance a page needs to keep its last row tappable under the
+/// shell's floating chrome.
+///
+/// The chrome floats *over* the page (so the glass has something to refract),
+/// so each page reserves the space at the end of its scroll. The shell
+/// publishes the measurement through [SolChromeInset] once, so a page cannot
+/// forget the dock, the tab capsule or the home indicator — every page reads
+/// the same number, and pages pushed above the shell (the player) are
+/// unaffected.
+///
+/// Outside the shell — a page pumped on its own — nothing floats over it, so
+/// only the device's own inset and the page's bottom runway are reserved.
+double solBottomChromeInset(BuildContext context) {
+  final published = SolChromeInset.maybeOf(context);
+  if (published != null) return published.inset;
+  return MediaQuery.viewPaddingOf(context).bottom + SolSpace.xl;
 }
 
 /// Height of the floating now-playing capsule's content box.
@@ -84,12 +107,35 @@ const double kChromeGutter = SolSpace.md;
 /// tab capsule on the compact layout. A page that adds a bar of its own
 /// stacks it here rather than at a guessed offset, so it never covers the
 /// chrome the shell already floats.
-double solFloatingBarOffset(
-  BuildContext context, {
-  required bool dockVisible,
-}) {
-  final safeBottom = MediaQuery.viewPaddingOf(context).bottom;
-  final dock = dockVisible ? kNowPlayingDockHeight + SolSpace.sm : 0.0;
-  final nav = isWideScreen(context) ? 0.0 : kBottomNavHeight + SolSpace.md;
-  return dock + nav + SolSpace.sm + safeBottom;
+double solFloatingBarOffset(BuildContext context) {
+  final published = SolChromeInset.maybeOf(context);
+  if (published != null) return published.barOffset;
+  return MediaQuery.viewPaddingOf(context).bottom + SolSpace.sm;
+}
+
+/// The shell's bottom chrome, published to every page under it.
+///
+/// Two measurements, both from the shell so they cannot drift apart:
+/// [inset] is the clearance a page's scroll content reserves at its end, and
+/// [barOffset] is where a page's own floating bar sits above the chrome.
+class SolChromeInset extends InheritedWidget {
+  /// Space the last scrolling row keeps clear of the floating chrome.
+  final double inset;
+
+  /// Distance from the page's bottom edge to a page-level floating bar.
+  final double barOffset;
+
+  const SolChromeInset({
+    super.key,
+    required this.inset,
+    required this.barOffset,
+    required super.child,
+  });
+
+  static SolChromeInset? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<SolChromeInset>();
+
+  @override
+  bool updateShouldNotify(SolChromeInset oldWidget) =>
+      inset != oldWidget.inset || barOffset != oldWidget.barOffset;
 }

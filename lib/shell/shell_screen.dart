@@ -82,19 +82,41 @@ class _ShellFrameState extends ConsumerState<_ShellFrame> {
   Widget build(BuildContext context) {
     final tabs = AutoTabsRouter.of(context);
     final isDesktop = DesktopWindowFrame.isPlatformDesktop;
-    final page = Stack(
-      children: [
-        widget.child,
-        // Mounted for keeps: the dock folds itself away when nothing
-        // is playing, so the frame never swaps it out from under that
-        // animation.
-        const Positioned(
-          bottom: SolSpace.sm,
-          left: SolSpace.sm,
-          right: SolSpace.sm,
-          child: NowPlayingDock(),
-        ),
-      ],
+    // One measurement for every page under the shell: the dock and the tab
+    // capsule float over them, so each page only has to reserve this at the
+    // end of its scroll. Watched here rather than per page — the number
+    // changes when a song starts or ends, and no page should have to know
+    // that the dock exists to get its last row back above it.
+    final hasSong = ref.watch(
+      playbackProvider.select((state) => state.current != null),
+    );
+    final chrome = solChromeGeometry(context, dockVisible: hasSong);
+    final page = SolChromeInset(
+      inset: chrome.inset,
+      barOffset: chrome.barOffset,
+      child: Stack(
+        children: [
+          widget.child,
+          // Mounted for keeps: the dock folds itself away when nothing
+          // is playing, so the frame never swaps it out from under that
+          // animation.
+          const Positioned(
+            bottom: SolSpace.sm,
+            left: SolSpace.sm,
+            right: SolSpace.sm,
+            child: NowPlayingDock(),
+          ),
+        ],
+      ),
+    );
+
+    // The compact layout's dock and tab capsule live in one bottom column
+    // rather than in `page`, so its page gets the same published measurement
+    // without the wide layout's floating stack.
+    final compactPage = SolChromeInset(
+      inset: chrome.inset,
+      barOffset: chrome.barOffset,
+      child: widget.child,
     );
 
     if (isWideScreen(context)) {
@@ -136,7 +158,7 @@ class _ShellFrameState extends ConsumerState<_ShellFrame> {
         top: !isDesktop,
         child: Stack(
           children: [
-            Positioned.fill(child: widget.child),
+            Positioned.fill(child: compactPage),
             Positioned(
               left: 0,
               right: 0,

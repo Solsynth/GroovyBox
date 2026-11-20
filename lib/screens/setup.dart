@@ -150,7 +150,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
             backgroundColor: Colors.transparent,
             body: ContentFrame(
               maxWidth: kReadingMaxWidth,
-              child: ListView(
+              child: PageListView(
                 // The headline keeps the page's own gutter, as it does on
                 // every other page: the list itself is unpadded, and the
                 // form below is inset once. Padding the list too indented

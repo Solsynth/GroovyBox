@@ -1,6 +1,5 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
@@ -139,12 +138,6 @@ class AlbumDetailScreen extends ConsumerWidget {
     // name, a year and a cover, and the hero needs them even when nothing in
     // the list can be played.
     final info = ref.watch(albumInfoProvider(ref0)).value;
-    // One boolean, not the transport: a position tick must not rebuild an
-    // album of twelve rows. Each row decides its own selection.
-    final hasSong = ref.watch(
-      playbackProvider.select((state) => state.current != null),
-    );
-    final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
     final firstSong = tracks.value?.firstOrNull;
     final artist = firstSong?.artist ?? info?.artist;
     final title = info?.name ?? albumName ?? firstSong?.album;
@@ -168,7 +161,7 @@ class AlbumDetailScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: ContentFrame(
-        child: CustomScrollView(
+        child: PageScrollView(
           slivers: [
             // The way back is the only chrome an album keeps: the hero below
             // names the record, its artist and its year, so a bar repeating
@@ -387,7 +380,6 @@ class AlbumDetailScreen extends ConsumerWidget {
                 ),
               ),
             ],
-            SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
           ],
         ),
       ),

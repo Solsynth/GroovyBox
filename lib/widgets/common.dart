@@ -38,6 +38,81 @@ class ContentFrame extends StatelessWidget {
   }
 }
 
+/// A page's scroll view, with the floor the shell's floating chrome needs.
+///
+/// Every page under the shell ends its scroll with this instead of a bare
+/// [CustomScrollView]. The shell measures what the now-playing dock and the
+/// tab capsule cover — plus the device's home indicator — and publishes it
+/// through [SolChromeInset]; the scroll view reserves exactly that, so the
+/// last row always clears the glass.
+///
+/// Pages therefore never ask whether a song is playing to lay themselves
+/// out. Answering that in thirteen places is how a page ends up with its last
+/// row behind the dock, and it made the clearance a page-local decision the
+/// shell could not change.
+class PageScrollView extends StatelessWidget {
+  final List<Widget> slivers;
+
+  /// Clearance a page adds on top of the chrome's own — a selection bar it
+  /// floats, say. It stacks under [slivers] like the chrome's does.
+  final double extraBottom;
+
+  const PageScrollView({
+    super.key,
+    required this.slivers,
+    this.extraBottom = 0.0,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // A bare [CustomScrollView] does not consume MediaQuery's bottom padding
+    // (unlike [ListView]), so the trailing clearance below is the page's
+    // whole floor: the dock, the tab capsule and the home indicator, once.
+    return CustomScrollView(
+      slivers: [
+        ...slivers,
+        SliverToBoxAdapter(
+          child: SizedBox(height: solBottomChromeInset(context) + extraBottom),
+        ),
+      ],
+    );
+  }
+}
+
+/// [PageScrollView] for a page built from a plain list of children.
+///
+/// [padding] is the page's own inset (its sides and its top); the chrome's
+/// clearance is added below it, so a page never has to know the dock's height
+/// to keep its last row reachable.
+class PageListView extends StatelessWidget {
+  final List<Widget> children;
+  final EdgeInsets padding;
+  final ScrollPhysics? physics;
+
+  const PageListView({
+    super.key,
+    required this.children,
+    this.padding = EdgeInsets.zero,
+    this.physics,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // The clearance below already carries the home indicator. Zeroing the
+    // MediaQuery padding tells [ListView] not to add it a second time.
+    return MediaQuery(
+      data: MediaQuery.of(context).removePadding(removeBottom: true),
+      child: ListView(
+        padding: padding.copyWith(
+          bottom: padding.bottom + solBottomChromeInset(context),
+        ),
+        physics: physics,
+        children: children,
+      ),
+    );
+  }
+}
+
 /// The card primitive: a tonal island of the same paper, no border, no
 /// glass. Same tone family as Solian's `ExploreCard`, so the two apps' cards
 /// read as one system.
@@ -237,6 +312,7 @@ class SectionLabel extends StatelessWidget {
     );
   }
 }
+
 /// The page's name in the content, not a bar pinned over it.
 ///
 /// Tab roots name themselves here and keep any page-level action beside the

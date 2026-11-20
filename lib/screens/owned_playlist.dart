@@ -207,16 +207,12 @@ class _OwnedPlaylistDetailScreenState
       ),
     );
     final entries = ref.watch(ownedPlaylistEntriesProvider(playlistId));
-    // One boolean, not the transport: rows decide their own selection.
-    final hasSong = ref.watch(
-      playbackProvider.select((state) => state.current != null),
-    );
     // The bar floats above the page, so the list reserves its height too:
     // the last row must be able to scroll out from under it.
-    final barOffset = solFloatingBarOffset(context, dockVisible: hasSong);
-    final bottomInset =
-        solBottomChromeInset(context, dockVisible: hasSong) +
-        (_selection.active ? kSelectionBarHeight + SolSpace.md : 0);
+    final barOffset = solFloatingBarOffset(context);
+    final extraBottom = _selection.active
+        ? kSelectionBarHeight + SolSpace.md
+        : 0.0;
     final list = entries.value ?? const <OwnedPlaylistEntry>[];
     final keys = [for (final e in list) '${e.entryId}'];
 
@@ -236,7 +232,8 @@ class _OwnedPlaylistDetailScreenState
           onRemove: () => _removeSelected(list),
         ),
         child: ContentFrame(
-          child: CustomScrollView(
+          child: PageScrollView(
+            extraBottom: extraBottom,
             slivers: [
               SliverToBoxAdapter(
                 child: BackButtonRow(onBack: () => context.router.maybePop()),
@@ -405,7 +402,6 @@ class _OwnedPlaylistDetailScreenState
                   ),
                 ],
               ),
-              SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
             ],
           ),
         ),

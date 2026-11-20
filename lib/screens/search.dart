@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:auto_route/auto_route.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/router.gr.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/models.dart';
@@ -87,17 +86,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final hasSong = ref.watch(
-      playbackProvider.select((state) => state.current != null),
-    );
-    final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
     final sources = ref.watch(librarySourcesWithLocalProvider);
     final stores = ref.watch(extendableSourcesProvider);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: ContentFrame(
-        child: CustomScrollView(
+        child: PageScrollView(
           slivers: [
             // The field is the page, not a control on a bar: a search page
             // whose header is its own query box should open with the box at
@@ -142,27 +137,24 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   SolSpace.xl,
                   SolSpace.sm,
                 ),
-                child: Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: SegmentedButton<_SearchTab>(
-                    segments: [
-                      ButtonSegment(
-                        value: _SearchTab.library,
-                        icon: const Icon(Symbols.library_music_rounded),
-                        label: Text('searchTabLibrary'.tr()),
-                      ),
-                      ButtonSegment(
-                        value: _SearchTab.explore,
-                        icon: const Icon(Symbols.travel_explore_rounded),
-                        label: Text('searchTabExplore'.tr()),
-                      ),
-                    ],
-                    selected: {_tab},
-                    showSelectedIcon: false,
-                    onSelectionChanged: (selection) {
-                      setState(() => _tab = selection.first);
-                    },
-                  ),
+                child: SegmentedButton<_SearchTab>(
+                  segments: [
+                    ButtonSegment(
+                      value: _SearchTab.library,
+                      icon: const Icon(Symbols.library_music_rounded),
+                      label: Text('searchTabLibrary'.tr()),
+                    ),
+                    ButtonSegment(
+                      value: _SearchTab.explore,
+                      icon: const Icon(Symbols.travel_explore_rounded),
+                      label: Text('searchTabExplore'.tr()),
+                    ),
+                  ],
+                  selected: {_tab},
+                  showSelectedIcon: false,
+                  onSelectionChanged: (selection) {
+                    setState(() => _tab = selection.first);
+                  },
                 ),
               ),
             ),
@@ -218,7 +210,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               else
                 _ExploreResults(query: _query),
             ],
-            SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
           ],
         ),
       ),

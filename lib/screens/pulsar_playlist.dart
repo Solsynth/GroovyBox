@@ -263,16 +263,12 @@ class _PulsarPlaylistDetailScreenState
   @override
   Widget build(BuildContext context) {
     final detail = ref.watch(pulsarPlaylistDetailProvider(widget.playlistId));
-    // One boolean, not the transport: rows decide their own selection.
-    final hasSong = ref.watch(
-      playbackProvider.select((state) => state.current != null),
-    );
     // The bar floats above the page, so the list reserves its height too:
     // the last row must be able to scroll out from under it.
-    final barOffset = solFloatingBarOffset(context, dockVisible: hasSong);
-    final bottomInset =
-        solBottomChromeInset(context, dockVisible: hasSong) +
-        (_selection.active ? kSelectionBarHeight + SolSpace.md : 0);
+    final barOffset = solFloatingBarOffset(context);
+    final extraBottom = _selection.active
+        ? kSelectionBarHeight + SolSpace.md
+        : 0.0;
     final creator = ref.watch(solarpassAccountProvider).value?.displayName;
 
     // The bar floats outside the scroll view, so it reads the same resolved
@@ -313,7 +309,8 @@ class _PulsarPlaylistDetailScreenState
           },
         ),
         child: ContentFrame(
-          child: CustomScrollView(
+          child: PageScrollView(
+            extraBottom: extraBottom,
             slivers: [
               SliverToBoxAdapter(
                 child: BackButtonRow(onBack: () => context.router.maybePop()),
@@ -529,7 +526,6 @@ class _PulsarPlaylistDetailScreenState
                   ),
                 ],
               ),
-              SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
             ],
           ),
         ),

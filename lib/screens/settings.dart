@@ -55,19 +55,12 @@ class SettingsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Select the identity, not the state: watching the whole transport would
-    // rebuild this page on every position tick, once a second.
-    final hasSong = ref.watch(
-      playbackProvider.select((state) => state.current != null),
-    );
-    final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: ContentFrame(
         maxWidth: kReadingMaxWidth,
-        child: ListView(
-          padding: EdgeInsets.only(bottom: bottomInset),
+        child: PageListView(
           children: [
             PageHeadline(title: 'tabSettings'.tr()),
             const _AppearanceSection(),
@@ -1076,9 +1069,6 @@ class _LyricsLlmTile extends ConsumerWidget {
                   if (!value) {
                     await ref.read(lyricsLlmModelProvider.notifier).set(null);
                     // The pane already on screen holds the old engine's layer;
-                    // dropping the family entry re-reads the stored words and
-                    // re-runs only the translation pass for them.
-                    ref.invalidate(songLyricsProvider);
                     // dropping the translation family re-runs that pass over
                     // the words the pane is already showing.
                     ref.invalidate(songLyricsTranslationProvider);
@@ -1091,7 +1081,6 @@ class _LyricsLlmTile extends ConsumerWidget {
                       : await _firstAvailableModel(ref);
                   if (model != null) {
                     await ref.read(lyricsLlmModelProvider.notifier).set(model);
-                    ref.invalidate(songLyricsProvider);
                     ref.invalidate(songLyricsTranslationProvider);
                   }
                 },
@@ -1138,7 +1127,6 @@ class _LyricsLlmTile extends ConsumerWidget {
                 await ref
                     .read(lyricsLlmModelProvider.notifier)
                     .set(value == null || value == _googleValue ? null : value);
-                ref.invalidate(songLyricsProvider);
                 ref.invalidate(songLyricsTranslationProvider);
               },
             ),

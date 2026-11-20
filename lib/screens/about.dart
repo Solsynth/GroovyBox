@@ -45,7 +45,7 @@ class AboutScreen extends ConsumerWidget {
       backgroundColor: Colors.transparent,
       body: ContentFrame(
         maxWidth: kReadingMaxWidth,
-        child: ListView(
+        child: PageListView(
           padding: const EdgeInsets.only(bottom: SolSpace.huge),
           children: [
             BackButtonRow(onBack: () => context.router.maybePop()),

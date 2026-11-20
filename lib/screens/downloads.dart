@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:auto_route/auto_route.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/downloads.dart';
 import 'package:groovy_box/library/models.dart';
@@ -27,15 +26,11 @@ class DownloadsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final downloads = ref.watch(downloadedTracksProvider);
-    final hasSong = ref.watch(
-      playbackProvider.select((state) => state.current != null),
-    );
-    final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: ContentFrame(
-        child: CustomScrollView(
+        child: PageScrollView(
           slivers: [
             SliverToBoxAdapter(
               child: BackButtonRow(onBack: () => context.router.maybePop()),
@@ -101,7 +96,6 @@ class DownloadsScreen extends ConsumerWidget {
                 ),
               ],
             ),
-            SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
           ],
         ),
       ),

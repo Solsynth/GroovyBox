@@ -132,16 +132,12 @@ class _SolinkFavouritesScreenState
   Widget build(BuildContext context) {
     final favourites = ref.watch(pulsarFavouritesProvider);
     final songs = ref.watch(solarFavouriteSongsProvider);
-    // One boolean, not the transport: rows decide their own selection.
-    final hasSong = ref.watch(
-      playbackProvider.select((state) => state.current != null),
-    );
     // The bar floats above the page, so the list reserves its height too:
     // the last row must be able to scroll out from under it.
-    final barOffset = solFloatingBarOffset(context, dockVisible: hasSong);
-    final bottomInset =
-        solBottomChromeInset(context, dockVisible: hasSong) +
-        (_selection.active ? kSelectionBarHeight + SolSpace.md : 0);
+    final barOffset = solFloatingBarOffset(context);
+    final extraBottom = _selection.active
+        ? kSelectionBarHeight + SolSpace.md
+        : 0.0;
     final creator = ref.watch(solarpassAccountProvider).value?.displayName;
 
     // Index-aligned with the account's order: a null is a track no connected
@@ -172,7 +168,8 @@ class _SolinkFavouritesScreenState
           onRemove: () => _removeSelected(list),
         ),
         child: ContentFrame(
-          child: CustomScrollView(
+          child: PageScrollView(
+            extraBottom: extraBottom,
             slivers: [
               SliverToBoxAdapter(
                 child: BackButtonRow(onBack: () => context.router.maybePop()),
@@ -307,7 +304,6 @@ class _SolinkFavouritesScreenState
                   ),
                 ],
               ),
-              SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
             ],
           ),
         ),
