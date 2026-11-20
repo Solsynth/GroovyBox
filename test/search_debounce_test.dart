@@ -103,7 +103,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
     expect(
-      find.text('Nothing in your libraries matches “sunset”.'),
+      find.text('You don’t have a match for “sunset”.'),
       findsOneWidget,
     );
 
@@ -111,7 +111,7 @@ void main() {
     await tester.pump();
 
     expect(
-      find.text('Nothing in your libraries matches “sunset”.'),
+      find.text('You don’t have a match for “sunset”.'),
       findsNothing,
     );
   });

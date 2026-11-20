@@ -63,7 +63,15 @@ than block you behind a form.
   signed-in account can find words for a song it does not hold — a local file,
   a Subsonic track — by searching its catalogue and reading the matching row's
   `/lyric`, so it joins LRCLIB in the resolver's chain and in the manual
-  picker. Playback URLs are minted per request by
+  picker. It is an `ExtendableSource` too: the account's own playlists,
+  subscribed albums and hearts are its library, and `searchCatalog` is the
+  store search the Explore tab reads. That split is the reason
+  `LibrarySource.search` is defined as *holdings* and
+  `CatalogueSource.searchCatalogue` as the whole service: `/cloudsearch` only
+  answers the latter, so the library tab filters its hits against the held set
+  (hearts, playlist `trackIds`, subscribed albums) instead of listing tracks
+  the user never added.
+  Playback URLs are minted per request by
   `song/url/v1`, which is `ResolvedStreamSource` — the transport asks that
   capability before falling back to `streamUri`, so a refused mint falls
   through the cross-library fallback like a dead URL. A VIP track is not

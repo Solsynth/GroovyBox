@@ -17,19 +17,25 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// One search, over everything at once: what the libraries hold and what
-/// their stores could add.
+/// The two questions a search asks, kept apart because their answers differ
+/// in kind: one is music the user already has, the other is music they could
+/// get.
+enum _SearchTab { library, explore }
+
+/// One field, two tabs.
 ///
-/// A page rather than a field inside Browse. The field there searched one
-/// direction — the libraries' own rows — and the store was a sheet behind a
-/// separate button, so answering "do I have this, and could I?" took two
-/// searches in two places. Here both are asked at once and answered in one
-/// list: a row that is already playable sits beside the same track offered by
-/// a store.
+/// The page used to answer both at once, in one list: the library's hits,
+/// then the stores'. That reads as one answer, but the two are not the same
+/// answer — the top half is "what you have", the bottom half is "what you
+/// could add" — and a provider whose search reaches its whole catalogue made
+/// the top half lie outright: a NetEase account's `/cloudsearch` returns
+/// tracks the user never added, sitting under a heading promising the
+/// opposite.
 ///
-/// The library hits come first because they cost nothing to play. A store
-/// result whose track the library already holds is dropped rather than
-/// repeated: the answer to "do I have this?" is the row above it.
+/// So the field is shared and the tabs are the split. Library asks only what
+/// the connected libraries **hold**; Explore asks their stores and drops
+/// everything the library already answers with, so a track cannot appear on
+/// both tabs and "Explore" never offers the user their own music.
 @RoutePage()
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
@@ -48,6 +54,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   String _draft = '';
   String _query = '';
   Timer? _debounce;
+
+  _SearchTab _tab = _SearchTab.library;
 
   /// Long enough to swallow the gaps inside a typed word.
   static const _searchDelay = Duration(milliseconds: 260);
@@ -119,6 +127,42 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 ),
               ),
             ),
+            // Directly under the field, because it is a property of the
+            // search rather than of the results: it stays put while the page
+            // below it changes, and it is the only control that decides what
+            // "search" means.
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  SolSpace.xl,
+                  SolSpace.xs,
+                  SolSpace.xl,
+                  SolSpace.sm,
+                ),
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: SegmentedButton<_SearchTab>(
+                    segments: [
+                      ButtonSegment(
+                        value: _SearchTab.library,
+                        icon: const Icon(Symbols.library_music_rounded),
+                        label: Text('searchTabLibrary'.tr()),
+                      ),
+                      ButtonSegment(
+                        value: _SearchTab.explore,
+                        icon: const Icon(Symbols.travel_explore_rounded),
+                        label: Text('searchTabExplore'.tr()),
+                      ),
+                    ],
+                    selected: {_tab},
+                    showSelectedIcon: false,
+                    onSelectionChanged: (selection) {
+                      setState(() => _tab = selection.first);
+                    },
+                  ),
+                ),
+              ),
+            ),
             if (sources.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
@@ -137,79 +181,44 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: EmptyState(
-                  icon: Symbols.travel_explore_rounded,
-                  title: 'searchIdleTitle'.tr(),
-                  message: 'searchIdleMessage'.tr(),
+                  icon: _tab == _SearchTab.library
+                      ? Symbols.manage_search_rounded
+                      : Symbols.travel_explore_rounded,
+                  title: _tab == _SearchTab.library
+                      ? 'searchIdleTitle'.tr()
+                      : 'searchExploreIdleTitle'.tr(),
+                  message: _tab == _SearchTab.library
+                      ? 'searchIdleMessage'.tr()
+                      : 'searchExploreIdleMessage'.tr(),
                 ),
               )
+            else if (_tab == _SearchTab.library)
+              SliverToBoxAdapter(child: _LibraryResults(query: _query))
             else ...[
-              SliverToBoxAdapter(
-                child: _ResultSection(
-                  title: 'searchInLibraries'.tr(),
-                  query: _query,
-                  // Both directions are asked with the same term; each section
-                  // draws its own three states rather than one spinner over a
-                  // page that is already useful.
-                  child: _LibraryResults(query: _query),
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: _ResultSection(
-                  title: 'searchInStores'.tr(),
-                  query: _query,
-                  child: stores.isEmpty
-                      ? Padding(
-                          padding: const EdgeInsets.fromLTRB(
-                            SolSpace.xxl,
-                            SolSpace.xs,
-                            SolSpace.xxl,
-                            SolSpace.md,
-                          ),
-                          child: Text(
-                            'searchStoresUnavailable'.tr(),
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
-                                ),
-                          ),
-                        )
-                      : _StoreResults(query: _query),
-                ),
-              ),
+              if (stores.isEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      SolSpace.xxl,
+                      SolSpace.sm,
+                      SolSpace.xxl,
+                      SolSpace.md,
+                    ),
+                    child: Text(
+                      'searchStoresUnavailable'.tr(),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                SliverToBoxAdapter(child: _ExploreResults(query: _query)),
             ],
             SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
           ],
         ),
       ),
-    );
-  }
-}
-
-/// A labelled block of results: the section's name and its own load state.
-class _ResultSection extends StatelessWidget {
-  final String title;
-  final String query;
-  final Widget child;
-
-  const _ResultSection({
-    required this.title,
-    required this.query,
-    required this.child,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // A section with nothing in it still says so, in one quiet line: a
-    // heading with no body under it reads as a broken page.
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SectionLabel(title),
-        child,
-        const SizedBox(height: SolSpace.sm),
-      ],
     );
   }
 }
@@ -255,16 +264,18 @@ class _LibraryResults extends ConsumerWidget {
   }
 }
 
-/// What the stores have that the libraries do not, grouped by store.
+/// What the stores have that the user does not.
 ///
-/// Mixed into the same page as the library hits, so one scan of the list
-/// answers both questions; the rows are kept in a store's own block because
-/// adding is a per-store write and the store has to be named before a button
-/// can mean anything.
-class _StoreResults extends ConsumerWidget {
+/// Grouped by store, because adding is a per-store write and the store has to
+/// be named before the button means anything. Everything the library tab
+/// answers with is dropped here: a track on both tabs would answer "do I have
+/// this?" twice, and the Explore tab's whole premise is music the user does
+/// not have yet — hearts, playlist tracks and subscribed albums included,
+/// which is why the holdings search is what the comparison is made against.
+class _ExploreResults extends ConsumerWidget {
   final String query;
 
-  const _StoreResults({required this.query});
+  const _ExploreResults({required this.query});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -279,6 +290,14 @@ class _StoreResults extends ConsumerWidget {
     final heldAlbums = {
       for (final song in held)
         if (song.album != null) song.album!.trim().toLowerCase(),
+    };
+    // Playlists the account already has, by their own identity. A collected
+    // playlist is in the library; offering to "add" it again is offering a
+    // no-op.
+    final heldPlaylists = {
+      for (final playlist
+          in ref.watch(playlistsProvider).value ?? const <LibraryPlaylist>[])
+        '${playlist.sourceId}:${playlist.id}',
     };
 
     final catalog = ref.watch(catalogSearchProvider(query));
@@ -308,6 +327,11 @@ class _StoreResults extends ConsumerWidget {
           );
         }
         for (final playlist in found.playlists) {
+          if (heldPlaylists.contains(
+            '${playlist.sourceId}:${playlist.id}',
+          )) {
+            continue;
+          }
           byStore.putIfAbsent(playlist.sourceId, CatalogSearch.new);
           byStore[playlist.sourceId] = byStore[playlist.sourceId]!.merge(
             CatalogSearch(playlists: [playlist]),
@@ -315,7 +339,14 @@ class _StoreResults extends ConsumerWidget {
         }
 
         if (byStore.isEmpty) {
-          return _SectionNote(text: 'searchInStoresEmpty'.tr(args: [query]));
+          // A store that answered entirely with things the library already
+          // has is not a failed search; saying "no match" there would send
+          // the user looking for a query that does not exist.
+          return _SectionNote(
+            text: found.isEmpty
+                ? 'searchInStoresEmpty'.tr(args: [query])
+                : 'searchExploreAllHeld'.tr(),
+          );
         }
 
         final sources = ref.watch(librarySourceByIdProvider);
@@ -532,7 +563,7 @@ class _StoreRowState extends ConsumerState<_StoreRow> {
   }
 }
 
-/// One quiet line where a section has nothing to show.
+/// One quiet line where a tab has nothing to show.
 class _SectionNote extends StatelessWidget {
   final String text;
 
@@ -544,7 +575,7 @@ class _SectionNote extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         SolSpace.xxl,
-        SolSpace.xs,
+        SolSpace.sm,
         SolSpace.xxl,
         SolSpace.md,
       ),

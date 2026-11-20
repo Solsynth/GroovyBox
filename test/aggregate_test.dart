@@ -143,6 +143,23 @@ void main() {
     expect(results.last.id, 's3');
   });
 
+  test('the wide search asks each source for its catalogue', () async {
+    // Playback and the Explore tab need the set a library can *reach*, not
+    // just what the account owns: a cloud account's own search answers its
+    // whole service and its holdings search is a filtered subset of it.
+    final source = _WideSource('a');
+    final aggregator = LibraryAggregator([source]);
+
+    final reachable = await aggregator.searchCatalogue('Song');
+    expect(source.asked, ['catalogue:Song']);
+    expect(reachable.map((song) => song.id), ['catalogue-hit']);
+
+    // The library question stays on the holdings read.
+    final held = await aggregator.search('Song');
+    expect(source.asked, ['catalogue:Song', 'holdings:Song']);
+    expect(held.map((song) => song.id), ['holdings-hit']);
+  });
+
   /// One song per read, so a test can tell which read adopted what.
   ({LibrarySong album, LibrarySong playlist, LibrarySong search, LibrarySong random})
   oneOfEach(String sourceId) => (
@@ -236,6 +253,57 @@ class _CountingSource extends LibrarySource {
   Future<List<LibrarySong>> randomSongs({int size = 40}) async => [
     _songs.random,
   ];
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
+}
+
+/// A source whose two searches answer differently, and which records which
+/// one was asked: the whole point of the holdings/catalogue split.
+class _WideSource extends LibrarySource implements CatalogueSource {
+  _WideSource(this.id);
+
+  @override
+  final String id;
+
+  final List<String> asked = [];
+
+  @override
+  SourceConfig get config => SourceConfig(
+    id: id,
+    kind: LibraryKind.netease,
+    baseUrl: 'https://$id.example.com',
+    displayName: id,
+  );
+
+  @override
+  Future<List<LibrarySong>> search(String query, {int limit = 40}) async {
+    asked.add('holdings:$query');
+    return [
+      LibrarySong(
+        sourceId: id,
+        id: 'holdings-hit',
+        title: 'Owned',
+        duration: const Duration(seconds: 200),
+      ),
+    ];
+  }
+
+  @override
+  Future<List<LibrarySong>> searchCatalogue(
+    String query, {
+    int limit = 40,
+  }) async {
+    asked.add('catalogue:$query');
+    return [
+      LibrarySong(
+        sourceId: id,
+        id: 'catalogue-hit',
+        title: 'Reachable',
+        duration: const Duration(seconds: 200),
+      ),
+    ];
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();

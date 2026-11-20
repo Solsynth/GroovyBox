@@ -294,7 +294,10 @@ Future<List<LibrarySong?>> pulsarPlaylistSongs(
       continue;
     }
     final artist = track.subtitle;
-    final matches = await aggregator.search(
+    // A cloud playlist names tracks by catalogue id, so the row is resolved
+    // through the wide search: a track the account never added is still the
+    // right answer if it is the one the playlist means.
+    final matches = await aggregator.searchCatalogue(
       [track.title, if (artist != null && artist.isNotEmpty) artist].join(' '),
       limit: 5,
     );

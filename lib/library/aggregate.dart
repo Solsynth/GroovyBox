@@ -101,8 +101,33 @@ class LibraryAggregator {
     adopt: true,
   );
 
+  /// Everything the libraries **hold** that matches [query].
+  ///
+  /// The question a page's "in your library" section asks, and the reason
+  /// [LibrarySource.search] is defined as the holdings set: a cloud account's
+  /// own search endpoint answers its whole service, which would put tracks
+  /// the user never added under a heading promising the opposite.
   Future<List<LibrarySong>> search(String query, {int limit = 40}) async {
     final songs = await _fanOut((source) => source.search(query, limit: limit));
+    return _deduplicateSongs(songs);
+  }
+
+  /// The same question asked of everything each library can *reach*.
+  ///
+  /// Used where the point is finding this exact recording somewhere playable
+  /// — playback's cross-library fallback, a cloud playlist naming a track —
+  /// rather than listing what the account owns. A source with no wider reach
+  /// than its own holdings answers with them: for a server, the two sets are
+  /// the same thing.
+  Future<List<LibrarySong>> searchCatalogue(
+    String query, {
+    int limit = 40,
+  }) async {
+    final songs = await _fanOut(
+      (source) => source is CatalogueSource
+          ? source.searchCatalogue(query, limit: limit)
+          : source.search(query, limit: limit),
+    );
     return _deduplicateSongs(songs);
   }
 

@@ -237,28 +237,40 @@ class _NeteaseHttp {
   Future<Map<String, dynamic>> post(
     String path, {
     Map<String, dynamic>? query,
-  }) => _send(path, query: query, method: 'post');
+    bool mutating = false,
+  }) => _send(path, query: query, method: 'post', mutating: mutating);
 
   Future<Map<String, dynamic>> _send(
     String path, {
     Map<String, dynamic>? query,
     String method = 'get',
+    bool mutating = false,
   }) async {
     final fullQuery = <String, dynamic>{...?query};
     // The bridge takes the session as a `cookie` parameter (URL-encoded) —
     // sending it on every call is what keeps a stateless client signed in.
     if (cookie != null) fullQuery['cookie'] = cookie;
     final Response<dynamic> response;
-    // The sign-in poll is the one thing that must never be replayed: its
-    // answer is the code's state, and a cached 803 would sign in twice.
-    final options = path.startsWith('/login/')
-        ? Options(extra: {kCachePolicyExtra: CachePolicy.none})
-        : null;
+    // Login answers are the one thing that must never be replayed: the poll's
+    // code is state, and a cached 803 would sign in twice. A write is not
+    // stored either — its answer matters once — and dropping the scope keeps
+    // a later read from replaying the account as it was before the write.
+    final options = switch ((path.startsWith('/login/'), mutating)) {
+      (true, _) => Options(extra: {kCachePolicyExtra: CachePolicy.none}),
+      (_, true) => Options(
+        extra: {
+          kCachePolicyExtra: CachePolicy.none,
+          kCacheMutationExtra: true,
+        },
+      ),
+      _ => null,
+    };
     try {
       response = method == 'post'
           ? await _dio.post<dynamic>(
               '$baseUrl$path',
               queryParameters: fullQuery,
+              options: options,
             )
           : await _dio.get<dynamic>(
               '$baseUrl$path',
@@ -335,12 +347,22 @@ class _NeteaseHttp {
 /// Every read the merged library performs is answered in the app's neutral
 /// models; nothing in the app knows this source came from NetEase except the
 /// setup row that names it.
+///
+/// This is the widest capability set of any source: the red-heart list
+/// ([RatedSource]), the daily mix ([CuratedSource]), per-request playback
+/// URLs ([ResolvedStreamSource]), lyrics lookups, and — because the account
+/// can subscribe to albums and playlists and add tracks to its own lists —
+/// a store ([ExtendableSource]). That last one is also what makes the
+/// catalogue search explicit: [search] answers what the account holds and
+/// [searchCatalogue] answers the whole service, which are different sets
+/// here and the same set everywhere else.
 class NeteaseSource extends LibrarySource
     implements
         RatedSource,
         CuratedSource,
         ResolvedStreamSource,
-        LyricsQuerySource {
+        LyricsQuerySource,
+        ExtendableSource {
   NeteaseSource(this.config, {ResponseCache? cache})
     : _http = _NeteaseHttp(
         config.baseUrl,
@@ -359,6 +381,25 @@ class NeteaseSource extends LibrarySource
   /// The user id the session belongs to. Most reads take `uid`; the account
   /// endpoint states it once and the source keeps it.
   int? _userId;
+
+  /// What the account holds, for the holdings search.
+  ///
+  /// `/cloudsearch` only answers the catalogue; the bridge has no endpoint
+  /// that searches *this account's* lists. So "in your library" is the
+  /// catalogue rows filtered against this set, which is the union of the
+  /// three things a library page shows: the red-heart list, every playlist's
+  /// `trackIds`, and the track ids of every subscribed album. It costs a
+  /// handful of reads the first time and is kept for [holdsTtl]; every write
+  /// the source performs drops it, so an add is visible on the next search.
+  ({
+    Set<String> songs,
+    Set<String> albums,
+    Set<String> playlists,
+    Set<String> ownPlaylists,
+  })?
+  _held;
+  DateTime _heldAt = DateTime.fromMillisecondsSinceEpoch(0);
+  static const holdsTtl = Duration(minutes: 10);
 
   static const _malformed = LibraryException(
     'Malformed NetEase response.',
@@ -481,8 +522,43 @@ class NeteaseSource extends LibrarySource
     return _albums(body['hotAlbums']);
   }
 
+  /// What this account holds that matches [query].
+  ///
+  /// The bridge has no endpoint that searches an account's own lists, and
+  /// its only search answers the whole service. So the catalogue is asked
+  /// once and the answer is filtered against what the account actually has:
+  /// a track on a heart or a playlist, or any track of a subscribed album.
+  /// A row that merely "exists" on NetEase is exactly what this question
+  /// must not answer — the user never added it, and a search page headed
+  /// "in your library" listing it is wrong in the one way that matters.
   @override
   Future<List<LibrarySong>> search(String query, {int limit = 40}) async {
+    // A held track can rank well below the first page of the catalogue's own
+    // relevance order, so the pool it is filtered from is wider than the
+    // answer. Four times is a guess, but a cheap one: it is one request
+    // either way, and the alternative is a row the account owns quietly
+    // missing from its own library search.
+    final found = await searchCatalogue(query, limit: limit * 4);
+    if (found.isEmpty) return const [];
+    final held = await _holds();
+    return [
+      for (final song in found)
+        if (held.songs.contains(song.id) ||
+            (song.albumId != null && held.albums.contains(song.albumId)))
+          song,
+    ].take(limit).toList();
+  }
+
+  /// The service's whole catalogue, held or not.
+  ///
+  /// The wide question, asked by playback's "does anyone have this recording"
+  /// fallback and by the Explore tab. It is also the base of [search]: the
+  /// only search the bridge offers is this one.
+  @override
+  Future<List<LibrarySong>> searchCatalogue(
+    String query, {
+    int limit = 40,
+  }) async {
     final term = query.trim();
     if (term.isEmpty) return const [];
     final body = await _call(
@@ -491,6 +567,69 @@ class NeteaseSource extends LibrarySource
     );
     final result = body['result'];
     return _songs(result is Map ? result['songs'] : null);
+  }
+
+  /// The held set, read once and kept for [holdsTtl].
+  ///
+  /// Three reads make it, and each is the account's own answer to "what do I
+  /// have": `/likelist` (ids), `/user/playlist` (every playlist the account
+  /// can see, each carrying its id-only `trackIds`), and `/album/sublist` for
+  /// the subscribed albums. Only ids are kept — a held song needs no shape,
+  /// because the catalogue row that matched it is what gets shown — so this
+  /// costs three requests, not one per album.
+  Future<
+    ({
+      Set<String> songs,
+      Set<String> albums,
+      Set<String> playlists,
+      Set<String> ownPlaylists,
+    })
+  >
+  _holds() async {
+    final cached = _held;
+    if (cached != null &&
+        DateTime.now().difference(_heldAt) < holdsTtl) {
+      return cached;
+    }
+    final uid = await _uid();
+    final songs = {...await _likes()};
+    final playlistsBody = await _call('/user/playlist', query: {'uid': uid});
+    final list = playlistsBody['playlist'];
+    final playlists = <String>{};
+    final own = <String>{};
+    if (list is List) {
+      for (final item in list) {
+        if (item is! Map || item['id'] == null) continue;
+        playlists.add('${item['id']}');
+        // Only a playlist the account created can take a track; a collected
+        // one belongs to somebody else, and NetEase refuses the write.
+        if (item['userId'] == uid) own.add('${item['id']}');
+        final trackIds = item['trackIds'];
+        if (trackIds is! List) continue;
+        for (final track in trackIds) {
+          // Newer answers send `{id, v}`; older ones send the bare id.
+          final id = track is Map ? track['id'] : track;
+          if (id != null) songs.add('$id');
+        }
+      }
+    }
+    final albumsBody = await _call('/album/sublist', query: {'limit': 60});
+    final data = albumsBody['data'];
+    final albums = <String>{};
+    if (data is List) {
+      for (final item in data) {
+        if (item is Map && item['id'] != null) albums.add('${item['id']}');
+      }
+    }
+    final held = (
+      songs: songs,
+      albums: albums,
+      playlists: playlists,
+      ownPlaylists: own,
+    );
+    _held = held;
+    _heldAt = DateTime.now();
+    return held;
   }
 
   @override
@@ -559,8 +698,9 @@ class NeteaseSource extends LibrarySource
   /// The red-heart list, answered as a set of ids.
   ///
   /// `/likelist` returns ids only, so whether one song is in it costs one
-  /// read of the whole list. It is cached for a short window: the heart on
-  /// one row does not need the service asked again for each redraw.
+  /// read of the whole list. It is cached for a short window of its own —
+  /// shorter than the held set's — because a heart write is the most common
+  /// write and the next redraw asks again.
   Set<String>? _likedIds;
   DateTime _likedAt = DateTime.fromMillisecondsSinceEpoch(0);
 
@@ -592,14 +732,19 @@ class NeteaseSource extends LibrarySource
 
   @override
   Future<void> setFavourite(LibrarySong song, {required bool value}) async {
-    final body = await _call('/like', query: {'id': song.id, 'like': value});
+    final body = await _http.post(
+      '/like',
+      query: {'id': song.id, 'like': value},
+      mutating: true,
+    );
     final code = (body['code'] as num?)?.toInt();
     if (code != 200) {
       throw _http.errorOf(body);
     }
-    // The cached list is now wrong by one entry; the next read within the
-    // window must not answer the old state.
+    // Both sets are now wrong by one entry: the heart's own list and the
+    // held set that a search filters by.
     _likedIds = null;
+    _held = null;
   }
 
   /// The red-heart list, resolved to songs in one `/song/detail` read.
@@ -620,6 +765,110 @@ class NeteaseSource extends LibrarySource
       songs.addAll(_songs(body['songs']));
     }
     return songs;
+  }
+
+  // ---- store ---------------------------------------------------------------
+
+  /// The store search behind Explore: songs, albums and playlists the
+  /// service sells, whether or not the account has them.
+  ///
+  /// One `/cloudsearch` per kind, because the bridge takes a single `type`
+  /// per call: pooling them would make the per-kind limit meaningless (a
+  /// query with fifty matching albums and two tracks would return two
+  /// tracks).
+  ///
+  /// A playlist row is a collection, not a track: the store's playlists are
+  /// other people's lists, and the write for one is collecting it
+  /// (`/playlist/subscribe`), which is why the row's button still adds.
+  @override
+  Future<CatalogSearch> searchCatalog(String query, {int limit = 25}) async {
+    final term = query.trim();
+    if (term.isEmpty) return const CatalogSearch();
+    final bodies = await Future.wait([
+      for (final type in const [1, 10, 1000])
+        _call(
+          '/cloudsearch',
+          query: {'keywords': term, 'type': type, 'limit': limit},
+        ),
+    ]);
+    Object? section(Map<String, dynamic> body, String key) {
+      final result = body['result'];
+      return result is Map ? result[key] : null;
+    }
+
+    return CatalogSearch(
+      songs: _songs(section(bodies[0], 'songs')),
+      albums: _albums(section(bodies[1], 'albums')),
+      playlists: _playlists(section(bodies[2], 'playlists')),
+    );
+  }
+
+  /// Puts a store result into the account.
+  ///
+  /// NetEase has no "add a track to my library" of its own: a song becomes
+  /// held by being hearted or put in a playlist. The store maps each kind
+  /// onto the write the service actually has — a liked song, a subscribed
+  /// album, a collected playlist — and reports how many it accepted.
+  @override
+  Future<int> addToLibrary(CatalogKind kind, List<String> ids) async {
+    if (ids.isEmpty) return 0;
+    var added = 0;
+    for (final id in ids) {
+      final body = await _http.post(
+        switch (kind) {
+          CatalogKind.songs => '/like',
+          CatalogKind.albums => '/album/sub',
+          CatalogKind.playlists => '/playlist/subscribe',
+        },
+        query: switch (kind) {
+          CatalogKind.songs => {'id': id, 'like': true},
+          CatalogKind.albums || CatalogKind.playlists => {'id': id, 't': 1},
+        },
+        mutating: true,
+      );
+      final code = (body['code'] as num?)?.toInt();
+      if (code == 200) {
+        added++;
+        continue;
+      }
+      // A song the account cannot heart is a refusal worth showing; an album
+      // or playlist the service already had answers a non-200 as well, and
+      // the row's own state says it was collected.
+      if (kind == CatalogKind.songs) throw _http.errorOf(body);
+    }
+    // The account grew, so the set the library search filters by did.
+    _held = null;
+    return added;
+  }
+
+  /// The playlists the account can still add to: its own.
+  ///
+  /// A collected playlist is somebody else's list; `/playlist/tracks` refuses
+  /// a write to it, so the picker must not offer one.
+  @override
+  Future<List<LibraryPlaylist>> editablePlaylists() async {
+    final own = (await _holds()).ownPlaylists;
+    if (own.isEmpty) return const [];
+    return [
+      for (final playlist in await playlists())
+        if (own.contains(playlist.id)) playlist,
+    ];
+  }
+
+  /// Appends [song] to one of the account's own [playlist]s.
+  @override
+  Future<void> addToPlaylist(
+    LibraryPlaylist playlist,
+    LibrarySong song,
+  ) async {
+    final body = await _http.post(
+      '/playlist/tracks',
+      query: {'op': 'add', 'pid': playlist.id, 'tracks': song.id},
+      mutating: true,
+    );
+    final code = (body['code'] as num?)?.toInt();
+    if (code != null && code != 200) throw _http.errorOf(body);
+    _held = null;
   }
 
   // ---- playback ------------------------------------------------------------
@@ -734,7 +983,9 @@ class NeteaseSource extends LibrarySource
 
     final List<LibrarySong> candidates;
     try {
-      candidates = await search(query, limit: 10);
+      // The catalogue, not the account: a local file or a Subsonic track
+      // whose words only NetEase knows is exactly what this is for.
+      candidates = await searchCatalogue(query, limit: 10);
     } on LibraryException {
       // An expired session or a refusal is "could not ask", not "no such
       // lyric": caching it would blank every matching track.
@@ -786,7 +1037,7 @@ class NeteaseSource extends LibrarySource
     if (term.isEmpty) return const [];
     final List<LibrarySong> songs;
     try {
-      songs = await search(term, limit: 12);
+      songs = await searchCatalogue(term, limit: 12);
     } on LibraryException {
       return null;
     }
@@ -910,6 +1161,12 @@ class NeteaseSource extends LibrarySource
     duration: Duration.zero,
     artId: _picUrl(json),
   );
+  List<LibraryPlaylist> _playlists(Object? raw) => raw is List
+      ? [
+          for (final item in raw)
+            if (item is Map) _playlist(Map<String, dynamic>.from(item)),
+        ]
+      : const [];
 
   /// The cover URL, whichever of the shapes the endpoints answer with.
   ///

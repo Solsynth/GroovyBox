@@ -61,6 +61,12 @@ class _Store extends LibrarySource implements ExtendableSource {
       );
 
   @override
+  Future<List<LibrarySong>> searchCatalogue(
+    String query, {
+    int limit = 40,
+  }) async => const [];
+
+  @override
   Future<int> addToLibrary(CatalogKind kind, List<String> ids) async => 1;
 
   @override
@@ -123,7 +129,7 @@ Future<void> _pump(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('one search answers from the libraries and their stores', (
+  testWidgets('the Library tab answers only what the libraries hold', (
     tester,
   ) async {
     await _pump(tester);
@@ -132,23 +138,40 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
 
-    // Both directions are on one page, under their own headings. Section
-    // labels are set in small caps by the app's one label widget.
-    expect(find.text('IN YOUR LIBRARIES'), findsOneWidget);
-    expect(find.text('AVAILABLE IN THE STORES'), findsOneWidget);
+    // The two tabs sit under the field, and Library is the one open.
+    expect(find.text('Library'), findsOneWidget);
+    expect(find.text('Explore'), findsOneWidget);
 
-    // The track the library already holds, once — the store's copy of it is
-    // not offered a second time.
+    // The held track is here; nothing the store offers is. That separation is
+    // the point of the split: a store row under "Library" is the bug the
+    // tabs exist to fix.
     expect(find.text('Sunset Overdrive'), findsOneWidget);
-
-    // The store's actual addition: a version the library does not hold, and
-    // an album it does not hold. The held album is not repeated.
-    expect(find.text('Sunset Overdrive (Live)'), findsOneWidget);
-    expect(find.text('On the Corner Where You Live'), findsNothing);
-
-    // A store row says what can be done with it.
-    expect(find.byTooltip('Add to library'), findsWidgets);
+    expect(find.text('Sunset Overdrive (Live)'), findsNothing);
+    expect(find.byTooltip('Add to library'), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the Explore tab offers what the library does not have', (
+    tester,
+  ) async {
+    await _pump(tester);
+
+    await tester.enterText(find.byType(SearchBar), 'sunset');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Explore'));
+    await tester.pumpAndSettle();
+
+    // The store's offer of the held track is dropped, not repeated: Explore
+    // is only music the user can still add.
+    expect(find.text('Sunset Overdrive'), findsNothing);
+    expect(find.text('Sunset Overdrive (Live)'), findsOneWidget);
+    // The held album is not offered back either.
+    expect(find.text('On the Corner Where You Live'), findsNothing);
+    expect(find.byTooltip('Add to library'), findsWidgets);
+    // The rows are grouped under the store that sells them.
+    expect(find.text('From Home'), findsOneWidget);
   });
 
   testWidgets('adding a store result says so instead of offering again', (
@@ -158,6 +181,8 @@ void main() {
 
     await tester.enterText(find.byType(SearchBar), 'sunset');
     await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Explore'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('Add to library').first);

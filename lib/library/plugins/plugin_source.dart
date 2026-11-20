@@ -11,18 +11,19 @@ import 'plugin_schema.dart';
 ///
 /// Everything a provider knows arrives as JSON from [PluginHost.call] and is
 /// mapped onto the neutral models here, so no screen ever learns a plugin's
-/// vocabulary. The three capabilities it advertises are the three the app asks
-/// of a streaming provider: it resolves playback URLs per request
+/// vocabulary. The capabilities it advertises are the ones the app asks of a
+/// streaming provider: it resolves playback URLs per request
 /// ([ResolvedStreamSource]), it may carry per-stream headers (Bilibili's CDN
-/// wants a `Referer`), and it can say something about the account it serves
-/// ([CuratedSource]).
+/// wants a `Referer`), it can say something about the account it serves
+/// ([CuratedSource]), and its one search is the whole catalogue
+/// ([CatalogueSource]) because a plugin has no separate holdings list.
 ///
 /// A read whose function the provider does not declare answers empty instead
 /// of throwing: merged reads call every method, and a plugin that only streams
 /// must not litter the landing page with failures. Only a declared function
 /// that fails surfaces an error.
 class PluginSource extends LibrarySource
-    implements ResolvedStreamSource, CuratedSource {
+    implements ResolvedStreamSource, CuratedSource, CatalogueSource {
   PluginSource(
     this.config, {
     required this.host,
@@ -182,8 +183,19 @@ class PluginSource extends LibrarySource
   Future<List<LibrarySong>> playlistSongs(String playlistId) =>
       _songs('playlistSongs', {'playlistId': playlistId});
 
+  /// A plugin's search, which is its library as far as the app can tell.
+  ///
+  /// A plugin provider has no account of its own: there are no hearts, no
+  /// playlists and no subscribed albums to filter against, and the plugin's
+  /// one search is the only way its catalogue is reachable at all. So both
+  /// questions answer with it — unlike a cloud account, where "held" is a real
+  /// subset and the two answers differ.
   @override
   Future<List<LibrarySong>> search(String query, {int limit = 40}) =>
+      searchCatalogue(query, limit: limit);
+
+  @override
+  Future<List<LibrarySong>> searchCatalogue(String query, {int limit = 40}) =>
       _songs('search', {'query': query, 'limit': limit});
 
   @override

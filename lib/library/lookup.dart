@@ -84,8 +84,13 @@ Future<List<TrackCopy>> findCopies(
   return ordered;
 }
 
-/// A library's search, with a failure (thrown now or later) answered as
-/// nothing found.
+/// A library's search for **this recording**, with a failure (thrown now or
+/// later) answered as nothing found.
+///
+/// The wide question, not the holdings one: a copy a library can stream is a
+/// candidate whether or not the account ever added it, and a source whose
+/// search stops at its own holdings (a server) simply answers the same set
+/// either way.
 ///
 /// Playback reaches this when a track has to be found elsewhere, so one
 /// library that is down must not cost the answer for the others.
@@ -94,7 +99,9 @@ Future<List<LibrarySong>> _searchQuietly(
   String query,
 ) async {
   try {
-    return await source.search(query, limit: 20);
+    return await (source is CatalogueSource
+        ? source.searchCatalogue(query, limit: 20)
+        : source.search(query, limit: 20));
   } catch (error) {
     debugPrint('[Library] lookup on ${source.id}: $error');
     return const [];

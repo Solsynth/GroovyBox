@@ -507,6 +507,32 @@ class AppleMusicSource extends LibrarySource
     };
   }
 
+  /// The store's whole catalogue, held or not.
+  ///
+  /// The same request [searchCatalog] makes, narrowed to songs: this is
+  /// asked when the question is "is this exact recording anywhere I can
+  /// stream from", where albums and playlists are not candidates.
+  @override
+  Future<List<LibrarySong>> searchCatalogue(
+    String query, {
+    int limit = 40,
+  }) async {
+    final term = query.trim();
+    if (term.isEmpty) return const [];
+    final storefront = await _storefront();
+    final body = await _get(
+      '/v1/catalog/$storefront/search',
+      query: {'term': term, 'types': 'songs', 'limit': limit},
+    );
+    final results = body['results'];
+    final section = results is Map ? results['songs'] : null;
+    if (section is! Map) return const [];
+    return [
+      for (final item in _resources(Map<String, dynamic>.from(section)))
+        _song(item),
+    ];
+  }
+
   /// Searches the store, not just the account.
   ///
   /// `/v1/me/library/search` only answers with what is already added; the

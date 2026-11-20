@@ -158,10 +158,23 @@ class _FakeNetease {
                 'name': 'My list',
                 'userId': 42,
                 'trackCount': 2,
+                // The listing carries id-only track ids, which is what the
+                // holdings search filters the catalogue by.
+                'trackIds': [
+                  {'id': 101, 'v': 1},
+                ],
                 'coverImgUrl': 'https://p.example/cover.jpg',
                 'creator': {'nickname': 'Someone'},
               },
-              {'id': 2, 'name': 'Collected', 'userId': 99, 'trackCount': 5},
+              {
+                'id': 2,
+                'name': 'Collected',
+                'userId': 99,
+                'trackCount': 5,
+                'trackIds': [
+                  {'id': 17177324, 'v': 1},
+                ],
+              },
             ],
           }),
         );
@@ -234,14 +247,47 @@ class _FakeNetease {
           }),
         );
       case '/cloudsearch':
+        // One type per call, exactly as the bridge takes it: the store
+        // search is built from three of these.
+        final type = request.uri.queryParameters['type'] ?? '1';
         response.write(
           jsonEncode({
             'code': 200,
-            'result': {
-              'songs': [
-                _song(101, 'Song One'),
-                _song(17177324, 'Yellow', artist: 'Coldplay', ms: 266773),
-              ],
+            'result': switch (type) {
+              '10' => {
+                'albums': [
+                  {
+                    'id': 21,
+                    'name': 'Store Album',
+                    'artist': {'id': 6, 'name': 'Someone Else'},
+                    'picUrl': 'https://p.example/store.jpg',
+                  },
+                ],
+              },
+              '1000' => {
+                'playlists': [
+                  {
+                    'id': 31,
+                    'name': 'Store Playlist',
+                    'trackCount': 12,
+                    'creator': {'nickname': 'A Curator'},
+                  },
+                ],
+              },
+              _ => {
+                'songs': [
+                  _song(101, 'Song One'),
+                  _song(17177324, 'Yellow', artist: 'Coldplay', ms: 266773),
+                  // In no playlist and not hearted: the catalogue has it,
+                  // this account does not.
+                  _song(
+                    555,
+                    'Not In The Library',
+                    album: 77,
+                    albumName: 'Some Other Record',
+                  ),
+                ],
+              },
             },
           }),
         );
@@ -253,6 +299,9 @@ class _FakeNetease {
           }),
         );
       case '/like':
+      case '/album/sub':
+      case '/playlist/subscribe':
+      case '/playlist/tracks':
         response.write(jsonEncode({'code': 200}));
       case '/song/url/v1':
         if (_rejectUnsigned(request)) {
@@ -325,6 +374,8 @@ class _FakeNetease {
     String name, {
     String artist = 'An Artist',
     int ms = 216000,
+    int album = 11,
+    String albumName = 'An Album',
   }) => {
     'id': id,
     'name': name,
@@ -334,8 +385,8 @@ class _FakeNetease {
       {'id': 5, 'name': artist},
     ],
     'al': {
-      'id': 11,
-      'name': 'An Album',
+      'id': album,
+      'name': albumName,
       'picUrl': 'https://p.example/song.jpg',
     },
   };
@@ -509,10 +560,57 @@ void main() {
     expect(artists.single.name, 'An Artist');
     expect(artists.single.artId, 'https://p.example/ar.jpg');
 
+    // The fake catalogue answers three rows for any term. "In your library"
+    // keeps the two the account holds — one on a heart, one in a collected
+    // playlist — and drops the third, which exists only in the service.
     final search = await source.search('Song One');
-    // The fake catalogue answers two rows for any term; what matters is that
-    // each one maps onto the neutral model in the service's own order.
     expect(search.map((song) => song.id), ['101', '17177324']);
+
+    // The wide question keeps all three: that is the set playback falls back
+    // through, and the set Explore offers.
+    final catalogue = await source.searchCatalogue('Song One');
+    expect(catalogue.map((song) => song.id), ['101', '17177324', '555']);
+  });
+
+  test('the store search asks once per kind and maps every kind', () async {
+    final source = signedIn();
+    final found = await source.searchCatalog('Yellow');
+
+    expect(found.songs.map((song) => song.id), ['101', '17177324', '555']);
+    expect(found.albums.single.name, 'Store Album');
+    expect(found.playlists.single.name, 'Store Playlist');
+    expect(found.playlists.single.owner, 'A Curator');
+    // The bridge takes one type per call, so three searches were made.
+    expect(server.lastQuery['/cloudsearch']?['type'], '1000');
+  });
+
+  test('a store result is put in the account by the write its kind has', () async {
+    final source = signedIn();
+
+    expect(await source.addToLibrary(CatalogKind.songs, ['555']), 1);
+    expect(server.lastQuery['/like']?['like'], 'true');
+    expect(server.lastQuery['/like']?['id'], '555');
+
+    expect(await source.addToLibrary(CatalogKind.albums, ['21']), 1);
+    expect(server.lastQuery['/album/sub']?['t'], '1');
+    expect(server.lastQuery['/album/sub']?['id'], '21');
+
+    expect(await source.addToLibrary(CatalogKind.playlists, ['31']), 1);
+    expect(server.lastQuery['/playlist/subscribe']?['t'], '1');
+  });
+
+  test('only the account’s own playlists can take a track', () async {
+    final source = signedIn();
+
+    final editable = await source.editablePlaylists();
+    // The fake has one playlist the account created and one it collected;
+    // NetEase refuses a write to the collected one, so it is not offered.
+    expect(editable.map((playlist) => playlist.name), ['My list']);
+
+    await source.addToPlaylist(editable.single, (await source.playlistSongs('1')).single);
+    expect(server.lastQuery['/playlist/tracks']?['op'], 'add');
+    expect(server.lastQuery['/playlist/tracks']?['pid'], '1');
+    expect(server.lastQuery['/playlist/tracks']?['tracks'], '101');
   });
 
   test('reads carry the session cookie', () async {

@@ -169,9 +169,12 @@ class SolarFavouriteResolver {
     final query = [item.title, ?item.subtitle].join(' ');
     if (query.trim().isEmpty) return null;
     try {
+      // A favourited entry from another device names a track that may not be
+      // in any connected library's holdings: the wide search is what turns it
+      // into one this device can play.
       final matches = await _ref
           .read(libraryAggregatorProvider)
-          .search(query, limit: 5);
+          .searchCatalogue(query, limit: 5);
       return matches.firstOrNull;
     } catch (error) {
       debugPrint('[Solar] Could not resolve "${item.title}": $error');

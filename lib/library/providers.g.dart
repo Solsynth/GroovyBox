@@ -1065,7 +1065,7 @@ final class LibraryEditorProvider
   }
 }
 
-String _$libraryEditorHash() => r'79e4326bf5a6ff510cf34c60376ff3c9904f9bbd';
+String _$libraryEditorHash() => r'9b0b2ae37726c8dc5475901b69dbe4cd1f4be002';
 
 /// Adds catalog items to the account that owns the store they came from.
 ///

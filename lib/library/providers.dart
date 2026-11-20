@@ -339,10 +339,17 @@ class LibraryEditor extends Notifier<void> {
     if (library is! ExtendableSource) return 0;
     final added = await library.addToLibrary(kind, ids);
     // The read providers would otherwise keep serving the library as it was:
-    // what was just added has to appear without a restart.
-    ref.invalidate(libraryAggregatorProvider);
-    ref.invalidate(recentAlbumsProvider);
-    ref.invalidate(landingShelvesProvider);
+    // what was just added has to appear without a restart. The search
+    // families are in the list because a held track is what the Library tab
+    // answers with and what the Explore tab filters out — the two must not
+    // disagree about the row that was just added.
+    ref
+      ..invalidate(libraryAggregatorProvider)
+      ..invalidate(recentAlbumsProvider)
+      ..invalidate(landingShelvesProvider)
+      ..invalidate(playlistsProvider)
+      ..invalidate(searchSongsProvider)
+      ..invalidate(catalogSearchProvider);
     return added;
   }
 }

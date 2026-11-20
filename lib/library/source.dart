@@ -170,6 +170,16 @@ abstract class LibrarySource {
   Future<List<LibraryAlbum>> artistAlbums(String artistId);
   Future<List<LibraryPlaylist>> playlists();
   Future<List<LibrarySong>> playlistSongs(String playlistId);
+
+  /// Everything [query] matches among what this library **holds**: the
+  /// account's own playlists, favourites and albums, plus the device's files.
+  ///
+  /// Never the store's wider catalogue: a provider whose search endpoint
+  /// answers the whole cloud (NetEase's `/cloudsearch`) would otherwise offer
+  /// rows the user cannot play and never added, and an "in your library"
+  /// section full of them is a lie. The wide question is
+  /// [CatalogueSource.searchCatalogue], and only the callers that mean it —
+  /// playback's fallback, a cloud playlist naming a track — ask it.
   Future<List<LibrarySong>> search(String query, {int limit});
   Future<List<LibrarySong>> randomSongs({int size});
 
@@ -255,6 +265,24 @@ abstract interface class RatedSource implements LibrarySource {
   Future<List<LibrarySong>> favouriteSongs();
 }
 
+/// A library whose search can reach past what the account holds.
+///
+/// A server's library and its search are the same set: a Subsonic `search3`
+/// only answers the files the server carries, which is exactly what the user
+/// connected it for. A cloud account is the other shape — NetEase's
+/// `/cloudsearch` answers the whole service, so its hits include tracks the
+/// user never added and may not be able to play at all. Asking the two the
+/// same question is what made "In your libraries" list strangers.
+///
+/// This capability is the wide question, asked only where "find this exact
+/// recording somewhere I can play it from" is the point: playback's fallback
+/// through `findCopies`, and resolving a track a cloud playlist names. The
+/// library search a page shows does not read it.
+abstract interface class CatalogueSource implements LibrarySource {
+  /// Everything [query] matches in the service's catalogue, held or not.
+  Future<List<LibrarySong>> searchCatalogue(String query, {int limit});
+}
+
 /// A stream URL that has to be fetched before it exists.
 ///
 /// Subsonic and Jellyfin answer [LibrarySource.streamUri] from the item they
@@ -281,7 +309,12 @@ abstract interface class ResolvedStreamSource implements LibrarySource {
 ///
 /// Adding is a *write*: it changes the user's account, so it is never done
 /// implicitly by a read or a play.
-abstract interface class ExtendableSource implements RatedSource {
+///
+/// A store always answers the wide question too: what it sells is the set
+/// [CatalogueSource.searchCatalogue] reads, and [searchCatalog] is the same
+/// search shaped for the page that offers adds.
+abstract interface class ExtendableSource
+    implements RatedSource, CatalogueSource {
   /// Search the store, not just the account. [limit] is per kind.
   Future<CatalogSearch> searchCatalog(String query, {int limit});
 
