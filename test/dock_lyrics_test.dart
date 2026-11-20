@@ -110,22 +110,27 @@ void main() {
     await playback.seek(const Duration(seconds: 10));
     await tester.pumpAndSettle();
 
-    // The line being sung is heavier and fuller; the earlier one dims.
-    TextStyle styleOf(String text) => tester
-        .widget<AnimatedDefaultTextStyle>(
-          find
-              .ancestor(
-                of: find.text(text),
-                matching: find.byType(AnimatedDefaultTextStyle),
-              )
-              .first,
-        )
-        .style;
-    expect(styleOf('And I say').fontWeight, FontWeight.w800);
-    expect(styleOf('Here comes the sun').fontWeight, FontWeight.w700);
+    // The line being sung is the selected one; the earlier one is not. The
+    // row does not restyle its text per state any more — it is always laid
+    // out at the active size and the fill is what moves — so the state it
+    // reports is the contract, not a weight.
+    LyricLineItem rowOf(String text) => tester.widget<LyricLineItem>(
+      find
+          .ancestor(of: find.text(text), matching: find.byType(LyricLineItem))
+          .first,
+    );
+    expect(rowOf('And I say').isActive, isTrue);
+    expect(rowOf('Here comes the sun').isActive, isFalse);
     expect(
-      styleOf('And I say').color!.a,
-      greaterThan(styleOf('Here comes the sun').color!.a),
+      tester.getSemantics(
+        find
+            .ancestor(
+              of: find.text('And I say'),
+              matching: find.byType(LyricLineItem),
+            )
+            .first,
+      ),
+      isSemantics(isSelected: true),
     );
 
     // A line is a seek target.
