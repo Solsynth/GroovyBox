@@ -101,6 +101,11 @@ class _FakeApple {
   /// reads.
   Map<String, String> lastCatalogQuery = const {};
 
+  /// Every query the recently-added endpoint was asked with, in order: the
+  /// adapter must not send `include` (Apple documents none for the endpoint
+  /// and can refuse the whole request), and must follow the page's `next`.
+  final recentlyAddedQueries = <Map<String, String>>[];
+
   static Future<_FakeApple> start() async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final fake = _FakeApple(server);
@@ -127,7 +132,7 @@ class _FakeApple {
     final path = request.uri.path;
     final body = switch (path) {
       '/v1/me/library/artists' => _artists(),
-      '/v1/me/library/recently-added' => _recentlyAdded(),
+      '/v1/me/library/recently-added' => _recentlyAddedPage(request),
       '/v1/me/library/albums' => _albums(),
       final p
           when p.startsWith('/v1/me/library/albums/') &&
@@ -168,20 +173,36 @@ class _FakeApple {
     'meta': {'total': 1},
   };
 
-  Map<String, dynamic> _recentlyAdded() => {
-    'data': [
-      _albumResource('l.1', 'Bronco', added: '2022-08-06T02:18:57Z'),
-      // Recently-added mixes playlists in; the adapter must drop them.
-      {
-        'id': 'p.1',
-        'type': 'library-playlists',
-        'attributes': {
-          'name': 'A-team',
-          'playParams': {'id': 'p.1', 'kind': 'playlist', 'isLibrary': true},
+  /// Two pages: the first is ten entries of which two are albums, the second
+  /// carries one more album and no `next`. The adapter must follow the
+  /// response's own subpath, which is where Apple puts the offset.
+  Map<String, dynamic> _recentlyAddedPage(HttpRequest request) {
+    final query = request.uri.queryParameters;
+    recentlyAddedQueries.add(query);
+    if (query['offset'] == '10') {
+      return {
+        'data': [
+          _albumResource('l.3', 'Pony', added: '2022-08-01T00:00:00Z'),
+        ],
+      };
+    }
+    return {
+      'next': '/v1/me/library/recently-added?offset=10',
+      'data': [
+        _albumResource('l.1', 'Bronco', added: '2022-08-06T02:18:57Z'),
+        // Recently-added mixes playlists in; the adapter must drop them.
+        {
+          'id': 'p.1',
+          'type': 'library-playlists',
+          'attributes': {
+            'name': 'A-team',
+            'playParams': {'id': 'p.1', 'kind': 'playlist', 'isLibrary': true},
+          },
         },
-      },
-    ],
-  };
+        _albumResource('l.2', 'Show Pony', added: '2022-08-02T00:00:00Z'),
+      ],
+    };
+  }
 
   Map<String, dynamic> _albums() => {
     'data': [_albumResource('l.1', 'Bronco')],
@@ -481,9 +502,17 @@ void main() {
     expect(albums.single.name, 'Bronco');
     expect(albums.single.songCount, 2);
 
-    // Recently added drops the playlists mixed into the same list.
-    final recent = await source.recentlyAdded();
-    expect(recent.single.id, 'l.1');
+    // Recently added drops the playlists mixed into the same list, follows
+    // the page's own `next`, and asks for nothing the endpoint does not
+    // document — an unsupported `include` is a 400, and an empty shelf.
+    final recent = await source.recentlyAdded(limit: 10);
+    expect(recent.map((album) => album.id), ['l.1', 'l.2', 'l.3']);
+    expect(server.recentlyAddedQueries, hasLength(2));
+    for (final query in server.recentlyAddedQueries) {
+      expect(query.containsKey('include'), isFalse);
+      expect(query.containsKey('limit'), isFalse);
+    }
+    expect(server.recentlyAddedQueries.last['offset'], '10');
   });
 
   test('resizes a cover by substituting its size template', () async {

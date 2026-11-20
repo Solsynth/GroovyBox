@@ -225,18 +225,60 @@ class AppleMusicSource extends LibrarySource
     ];
   }
 
+  /// The newest records the account added.
+  ///
+  /// Two details of this endpoint decided its shape. Apple documents no
+  /// `include` for it, and an unsupported relationship is refused outright —
+  /// a 400 that failed the whole shelf, which is exactly what a device whose
+  /// only library is Apple Music saw as an empty Library page. And the
+  /// default page is ten entries, half of them playlists: the shelf means
+  /// "the newest fifty records", so its pages are walked until enough albums
+  /// are in hand.
+  ///
+  /// Nothing is lost by not asking for the relationship: a library album
+  /// carries `artistName` in its own attributes, and its artist *id* has no
+  /// page on the account — the artist page is addressed inside that library.
   @override
   Future<List<LibraryAlbum>> recentlyAdded({int limit = 50}) async {
     // `recently-added` mixes albums and playlists; only albums belong on the
     // "newest" shelf.
-    final items = await _data(
+    final items = await _paged(
       '/v1/me/library/recently-added',
-      query: {'limit': limit, 'include': 'artists'},
+      limit: limit,
+      keep: (item) => item['type'] == 'library-albums',
     );
-    return [
-      for (final item in items)
-        if (item['type'] == 'library-albums') _album(item),
-    ];
+    return [for (final item in items) _album(item)];
+  }
+
+  /// Reads [path] page by page, keeping the resources [keep] accepts, until
+  /// [limit] are collected or the service stops offering a `next` subpath.
+  ///
+  /// Follows the response's own `next`, which already carries the `offset`.
+  /// The page ceiling keeps a long library from turning one shelf into an
+  /// unbounded chain of requests.
+  Future<List<Map<String, dynamic>>> _paged(
+    String path, {
+    required int limit,
+    required bool Function(Map<String, dynamic> item) keep,
+    int maxPages = 6,
+  }) async {
+    final kept = <Map<String, dynamic>>[];
+    var body = await _get(path);
+    for (var page = 0; page < maxPages; page++) {
+      for (final item in _resources(body)) {
+        if (keep(item)) kept.add(item);
+        if (kept.length >= limit) return kept;
+      }
+      final next = body['next'];
+      if (next is! String || next.isEmpty) break;
+      final uri = Uri.tryParse(next);
+      if (uri == null) break;
+      body = await _get(
+        uri.path,
+        query: uri.queryParameters.isEmpty ? null : uri.queryParameters,
+      );
+    }
+    return kept;
   }
 
   @override
