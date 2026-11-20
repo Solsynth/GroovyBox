@@ -11,6 +11,14 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
+/// Widest the panel's column gets.
+///
+/// A wide window's sheet is as wide as the capsule, and a queue row is a
+/// title on the left and a length on the right: spread over a desktop window,
+/// the two ends sit a thousand pixels apart and the list stops reading as a
+/// list. One column keeps the header's toggles above the rows they act on.
+const double _kQueuePanelWidth = 640;
+
 /// The queue, as a panel: a sheet in the now-playing capsule, a page-wide
 /// list in the player.
 ///
@@ -25,7 +33,9 @@ import 'package:material_ui/material_ui.dart';
 ///
 /// It fills the height the dock gives it. A list that measured itself would
 /// make the capsule's `AnimatedSize` chase its own output, so the header is
-/// fixed and the rows take the rest.
+/// fixed and the rows take the rest. Its column is capped at
+/// [_kQueuePanelWidth] and centred, so a wide sheet is a list rather than two
+/// far-apart columns.
 class QueuePanel extends ConsumerWidget {
   /// Extra room under the last row.
   ///
@@ -62,154 +72,166 @@ class QueuePanel extends ConsumerWidget {
     final rows = station ? state.stationTracks : state.queue;
     final currentRow = station ? state.stationIndex : state.currentIndex;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            SolSpace.sm,
-            SolSpace.xs,
-            SolSpace.sm,
-            SolSpace.sm,
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-                      child: Text(
-                        'queueTitle'.tr(),
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
+    // Centred, not stretched: [Center] keeps the pane's height (the list is
+    // given the rest of it) and only caps its width.
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _kQueuePanelWidth),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // One header row, at the same inset as the rows' artwork below it,
+            // so the title and the list share a left edge. Its height is the
+            // toggles' own; the title used to carry a sheet's worth of padding
+            // on top of this row's, which pushed the first row a header and a
+            // half down the pane.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                SolSpace.xxl,
+                SolSpace.sm,
+                SolSpace.md,
+                SolSpace.xs,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'queueTitle'.tr(),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
+                        // What this list *is*: a station's generated run is not
+                        // the app's queue, and saying so is the only thing that
+                        // explains why its rows cannot be tapped.
+                        if (station)
+                          Text(
+                            'queueRadioFrom'.tr(
+                              args: [
+                                ref
+                                        .watch(
+                                          librarySourceByIdProvider,
+                                        )[stationRow!.sourceId]
+                                        ?.displayName ??
+                                    '',
+                                stationRow.title,
+                              ],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    queueSummary(rows.length, station ? false : state.shuffle),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  // Shuffle and repeat live here rather than on the transport:
+                  // they are statements about this list, and the header is the
+                  // list's own row. Off in the transport they were reachable
+                  // only from the player page, while this pane opens from the
+                  // dock too. Compact, like the dock's own buttons: a header
+                  // is a caption, not a row of controls to fill.
+                  if (!station) ...[
+                    IconButton(
+                      tooltip: 'playerShuffle'.tr(),
+                      visualDensity: VisualDensity.compact,
+                      isSelected: state.shuffle,
+                      onPressed: () => controller.setShuffle(!state.shuffle),
+                      icon: const Icon(Symbols.shuffle_rounded),
+                    ),
+                    IconButton(
+                      tooltip: state.repeatMode == PlaybackRepeatMode.single
+                          ? 'playerRepeatSong'.tr()
+                          : 'playerRepeat'.tr(),
+                      visualDensity: VisualDensity.compact,
+                      isSelected: state.repeatMode != PlaybackRepeatMode.off,
+                      onPressed: controller.cycleRepeatMode,
+                      icon: Icon(
+                        state.repeatMode == PlaybackRepeatMode.single
+                            ? Symbols.repeat_one_rounded
+                            : Symbols.repeat_rounded,
                       ),
                     ),
-                    // What this list *is*: a station's generated run is not
-                    // the app's queue, and saying so is the only thing that
-                    // explains why its rows cannot be tapped.
-                    if (station)
-                      Text(
-                        'queueRadioFrom'.tr(
-                          args: [
-                            ref
-                                    .watch(
-                                      librarySourceByIdProvider,
-                                    )[stationRow!.sourceId]
-                                    ?.displayName ??
-                                '',
-                            stationRow.title,
-                          ],
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
                   ],
-                ),
+                ],
               ),
-              Text(
-                queueSummary(rows.length, station ? false : state.shuffle),
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              // Shuffle and repeat live here rather than on the transport:
-              // they are statements about this list, and the header is the
-              // list's own row. Off in the transport they were reachable only
-              // from the player page, while this pane opens from the dock too.
-              if (!station) ...[
-                IconButton(
-                  tooltip: 'playerShuffle'.tr(),
-                  isSelected: state.shuffle,
-                  onPressed: () =>
-                      controller.setShuffle(!state.shuffle),
-                  icon: const Icon(Symbols.shuffle_rounded),
-                ),
-                IconButton(
-                  tooltip: state.repeatMode == PlaybackRepeatMode.single
-                      ? 'playerRepeatSong'.tr()
-                      : 'playerRepeat'.tr(),
-                  isSelected: state.repeatMode != PlaybackRepeatMode.off,
-                  onPressed: controller.cycleRepeatMode,
-                  icon: Icon(
-                    state.repeatMode == PlaybackRepeatMode.single
-                        ? Symbols.repeat_one_rounded
-                        : Symbols.repeat_rounded,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-        // The fade lives on the list, not the whole pane: the header's own
-        // words — the title, the summary, the toggles — are never on their way
-        // out, so masking them would dim them for no reason. A row cut off at
-        // the slot's edge still reads as "more".
-        Expanded(
-          child: ShaderMask(
-            shaderCallback: (rect) => const LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.transparent,
-                Colors.black,
-                Colors.black,
-                Colors.transparent,
-              ],
-              stops: [0, 0.06, 0.94, 1],
-            ).createShader(rect),
-            blendMode: BlendMode.dstIn,
-            child: rows.isEmpty
-                ? EmptyState(
-                    compact: true,
-                    icon: Symbols.queue_music,
-                    title: 'queueEmptyTitle'.tr(),
-                    message: 'queueEmptyMessage'.tr(),
-                  )
-                : ListView.builder(
-                    // Room under the last row, so a short pane does not end
-                    // with a row flush against its bottom edge, plus whatever
-                    // floats over the bottom of this pane.
-                    padding: EdgeInsets.only(
-                      bottom: SolSpace.sm + bottomInset,
-                    ),
-                    itemCount: rows.length,
-                    itemBuilder: (context, index) {
-                      final song = rows[index];
-                      return TrackRow(
-                        // A station's row is rewritten with what it is
-                        // playing, so the queue says what is on the air, not
-                        // the name of the station it started from.
-                        title: song.playing.title,
-                        subtitle: songRowSubtitle(ref, song.playing),
-                        selected: currentRow == index,
-                        trailing: formatDuration(song.duration),
-                        artwork: LibraryArtwork(
-                          sourceId: song.sourceId,
-                          artId: song.playing.artId,
-                          size: 40,
-                          radius: SolRadius.xs,
+            ),
+            // The fade lives on the list, not the whole pane: the header's own
+            // words — the title, the summary, the toggles — are never on their
+            // way out, so masking them would dim them for no reason. A row cut
+            // off at the slot's edge still reads as "more".
+            Expanded(
+              child: ShaderMask(
+                shaderCallback: (rect) => const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black,
+                    Colors.black,
+                    Colors.transparent,
+                  ],
+                  stops: [0, 0.06, 0.94, 1],
+                ).createShader(rect),
+                blendMode: BlendMode.dstIn,
+                child: rows.isEmpty
+                    ? EmptyState(
+                        compact: true,
+                        icon: Symbols.queue_music,
+                        title: 'queueEmptyTitle'.tr(),
+                        message: 'queueEmptyMessage'.tr(),
+                      )
+                    : ListView.builder(
+                        // Room under the last row, so a short pane does not end
+                        // with a row flush against its bottom edge, plus whatever
+                        // floats over the bottom of this pane.
+                        padding: EdgeInsets.only(
+                          bottom: SolSpace.sm + bottomInset,
                         ),
-                        // Inside a station, a row is reached by skipping to
-                        // it; the run is the platform player's to advance.
-                        onTap: station
-                            ? null
-                            : () => controller.playQueue(
-                                state.queue,
-                                startIndex: index,
-                              ),
-                      );
-                    },
-                  ),
-          ),
+                        itemCount: rows.length,
+                        itemBuilder: (context, index) {
+                          final song = rows[index];
+                          return TrackRow(
+                            // A station's row is rewritten with what it is
+                            // playing, so the queue says what is on the air, not
+                            // the name of the station it started from.
+                            title: song.playing.title,
+                            subtitle: songRowSubtitle(ref, song.playing),
+                            selected: currentRow == index,
+                            trailing: formatDuration(song.duration),
+                            artwork: LibraryArtwork(
+                              sourceId: song.sourceId,
+                              artId: song.playing.artId,
+                              size: 40,
+                              radius: SolRadius.xs,
+                            ),
+                            // Inside a station, a row is reached by skipping to
+                            // it; the run is the platform player's to advance.
+                            onTap: station
+                                ? null
+                                : () => controller.playQueue(
+                                    state.queue,
+                                    startIndex: index,
+                                  ),
+                          );
+                        },
+                      ),
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
