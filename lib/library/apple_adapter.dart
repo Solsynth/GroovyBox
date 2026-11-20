@@ -892,11 +892,6 @@ class AppleMusicSource extends LibrarySource
     return null;
   }
 
-  /// There is no random endpoint, so a page from a random offset is shuffled.
-  ///
-  /// The offset is bounded by the library's own `meta.total`: picking blind
-  /// inside a fixed range returns nothing at all for a library smaller than
-  /// that range.
   /// A genre station built from [seed]'s own genres.
   ///
   /// Apple has no "similar tracks" list: the platform player's answer to
@@ -925,6 +920,11 @@ class AppleMusicSource extends LibrarySource
     return station == null ? const [] : [_station(station)];
   }
 
+  /// There is no random endpoint, so a page from a random offset is shuffled.
+  ///
+  /// The offset is bounded by the library's own `meta.total`: picking blind
+  /// inside a fixed range returns nothing at all for a library smaller than
+  /// that range.
   @override
   Future<List<LibrarySong>> randomSongs({int size = 40}) async {
     final first = await _get(
