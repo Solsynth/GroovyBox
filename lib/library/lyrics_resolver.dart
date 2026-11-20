@@ -35,7 +35,22 @@ class LyricsResolver {
     required this.queries,
     this.sourceFor,
     LyricsEnricher? enricher,
-  }) : enricher = enricher ?? LyricsEnricher();
+    this.enricherFor,
+  }) : _enricher = enricher;  // ignore: prefer_initializing_formals
+
+  /// A fixed enricher, for tests and for the guest engine. Null in the app,
+  /// where [enricherFor] builds one per lookup.
+  final LyricsEnricher? _enricher;
+
+  /// Builds the enricher for one lookup — normally one that carries the
+  /// opt-in translator when the account has one. Read per call rather than
+  /// captured, so picking a model mid-session joins the next lookup without
+  /// the long-lived resolver being rebuilt.
+  final Future<LyricsEnricher> Function()? enricherFor;
+
+  /// The enricher this lookup uses.
+  Future<LyricsEnricher> resolveEnricher() async =>
+      _enricher ?? await enricherFor?.call() ?? LyricsEnricher();
 
   /// Null when the local database could not be opened. Lyrics still resolve;
   /// they are simply fetched again on every play.
@@ -51,7 +66,6 @@ class LyricsResolver {
   /// must join the chain without the long-lived resolver being rebuilt.
   final List<LyricsQuerySource> Function() queries;
   final LibrarySource? Function(String sourceId)? sourceFor;
-  final LyricsEnricher enricher;
 
   /// The library's answer, or null when it has none or cannot be reached.
   Future<Lyrics?> _fromLibrary(LyricsRequest song) async {
@@ -86,6 +100,7 @@ class LyricsResolver {
     bool refresh = false,
     String? languageCode,
   }) async {
+    final enricher = await resolveEnricher();
     final trackId = await _trackId(song);
     // One target for the whole call, so the cache key it reads with is the
     // same one it writes with.
@@ -99,11 +114,24 @@ class LyricsResolver {
         translationLanguage: targetLang,
       );
       if (stored != null) {
-        if (enricher.needsEnrichment(stored.lyrics)) {
-          final enriched = await enricher.enrich(
-            stored.lyrics,
-            targetLanguage: targetLang,
-          );
+        // A layer from the other engine is not a miss: the words and readings
+        // are right, only their translation is in the wrong voice. One
+        // translation pass replaces it, where a full lookup would walk the
+        // network for lyrics it already has.
+        final staleEngine =
+            stored.lyrics.translationEngine != null &&
+            stored.lyrics.translationEngine != enricher.engine &&
+            stored.lyrics.translationLanguage == targetLang;
+        if (staleEngine || enricher.needsEnrichment(stored.lyrics)) {
+          final enriched = staleEngine
+              ? await enricher.retranslate(
+                  stored.lyrics,
+                  targetLanguage: targetLang,
+                )
+              : await enricher.enrich(
+                  stored.lyrics,
+                  targetLanguage: targetLang,
+                );
           await store?.write(
             trackId,
             enriched,
@@ -207,6 +235,7 @@ class LyricsResolver {
     Lyrics lyrics, {
     String? languageCode,
   }) async {
+    final enricher = await resolveEnricher();
     final trackId = await _trackId(song);
     final targetLang = languageCode == null
         ? null

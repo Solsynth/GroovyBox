@@ -25,6 +25,9 @@ import '../library_sync/queue.dart';
 import 'store.dart';
 import 'track_identity.dart';
 
+import 'lyrics_enricher.dart';
+import 'lyrics_translator.dart';
+
 part 'providers.g.dart';
 
 /// Where imported files live, injected by `main` once the platform has told
@@ -670,6 +673,11 @@ Future<LyricsResolver> lyricsResolver(Ref ref) async => LyricsResolver(
   // Called per lookup, so a service connected mid-session joins the chain
   // without the long-lived resolver being rebuilt.
   queries: () => ref.read(lyricsQuerySourcesProvider),
+  // Read per lookup, not watched: picking a model, or signing in, changes
+  // which engine the next translation uses without rebuilding the resolver.
+  enricherFor: () async => LyricsEnricher(
+    translator: await ref.read(personaLyricsTranslatorProvider.future),
+  ),
   // Read, not watch: the resolver is long-lived and must see the library list
   // as it is at the moment of a lookup, including one added mid-session.
   sourceFor: (sourceId) => ref.read(librarySourceByIdProvider)[sourceId],

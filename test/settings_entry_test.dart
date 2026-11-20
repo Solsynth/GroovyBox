@@ -107,6 +107,37 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('the AI translation row is off, and says what turns it on', (
+    tester,
+  ) async {
+    await _pumpShell(tester, const Size(430, 860));
+    await tester.tap(find.byIcon(Symbols.settings));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    await tester.scrollUntilVisible(
+      find.text('Translate with Solink AI'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+
+    // No account on this device, so the switch cannot be flipped and the row
+    // names the step that would enable it instead of going quietly inert.
+    final row = tester.widget<SwitchListTile>(
+      find.ancestor(
+        of: find.text('Translate with Solink AI'),
+        matching: find.byType(SwitchListTile),
+      ),
+    );
+    expect(row.value, isFalse);
+    expect(row.onChanged, isNull);
+    expect(
+      find.text('Sign in with Solarpass under Solink to choose a model.'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('settings drives the transport volume', (tester) async {
     await _pumpShell(tester, const Size(430, 860));
     await tester.tap(find.byIcon(Symbols.settings));

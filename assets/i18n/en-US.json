@@ -74,6 +74,12 @@
   "settingsPronunciationSubtitle": "Show Romaji, Pinyin or Hangul readings under CJK lyrics.",
   "settingsTranslation": "Translation",
   "settingsTranslationSubtitle": "Show translated lines under foreign lyrics.",
+  "settingsTranslationLlm": "Translate with Solink AI",
+  "settingsTranslationLlmSubtitle": "Song lines are sent to your Solar Network AI service for a translation in your own model's voice. Off uses Google Translate.",
+  "settingsTranslationLlmModel": "Translation model",
+  "settingsTranslationLlmModelNone": "Google Translate",
+  "settingsTranslationLlmNoSession": "Sign in with Solarpass under Solink to choose a model.",
+  "settingsTranslationLlmNoModels": "No chat models are available to this account.",
   "settingsStoredLyrics": "Stored lyrics",
   "settingsStoredLyricsCached": {
     "one": "{} song cached on this device. They show without asking the server again, and stay available offline.",

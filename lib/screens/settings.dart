@@ -9,6 +9,7 @@ import 'package:groovy_box/library/artwork_cache.dart';
 import 'package:groovy_box/library/downloads.dart';
 import 'package:groovy_box/library/local_import.dart';
 import 'package:groovy_box/library/models.dart';
+import 'package:groovy_box/library/lyrics_translator.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/library/store.dart';
@@ -18,6 +19,7 @@ import 'package:groovy_box/screens/library_sync_section.dart';
 import 'pulsar_section.dart';
 
 import 'plugins_section.dart';
+import 'package:groovy_box/solarpass/providers.dart';
 import 'package:groovy_box/solarpass/solarpass_section.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/dashboard.dart';
@@ -399,6 +401,7 @@ class SettingsScreen extends ConsumerWidget {
                     title: Text('settingsTranslation'.tr()),
                     subtitle: Text('settingsTranslationSubtitle'.tr()),
                   ),
+                  const _LyricsLlmTile(),
                   ListTile(
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: SolSpace.lg,
@@ -861,3 +864,133 @@ class _PreferredSourceTile extends ConsumerWidget {
 /// Not the empty string: [DropdownButton] reads `''` as "nothing selected",
 /// and not null, for the same reason `_systemValue` is a word of its own.
 const _rowSourceValue = 'row';
+
+/// The opt-in switch and model picker for LLM lyric translation.
+///
+/// Off until a model is named, and a device with no account has nothing to
+/// name: the row explains that instead of offering an empty dropdown, so the
+/// way to turn it on is visible from here.
+class _LyricsLlmTile extends ConsumerWidget {
+  const _LyricsLlmTile();
+
+  /// The dropdown value that means "Google Translate".
+  ///
+  /// A word rather than the empty string: [DropdownButton] reads `''` as
+  /// "nothing selected", and an item's value must be one of the list.
+  static const _googleValue = 'google';
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final session = ref.watch(solarpassSessionProvider).value;
+    final models = ref.watch(personaLyricsModelsProvider).value ?? const [];
+    final current = ref.watch(lyricsLlmModelProvider);
+    // A saved model the catalogue no longer lists stays selected: the account
+    // may simply have failed to list it this time, and silently switching the
+    // reader back to Google would lose their choice.
+    final selected = current ?? _googleValue;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SwitchListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: SolSpace.lg),
+          value: current != null,
+          onChanged: session == null
+              ? null
+              : (value) async {
+                  if (!value) {
+                    await ref.read(lyricsLlmModelProvider.notifier).set(null);
+                    // The pane already on screen holds the old engine's layer;
+                    // dropping the family entry re-reads the stored words and
+                    // re-runs only the translation pass for them.
+                    ref.invalidate(songLyricsProvider);
+                    return;
+                  }
+                  // Turning it on names a model in the same gesture: a switch
+                  // with no model behind it would be on, and inert.
+                  final model = models.isNotEmpty
+                      ? models.first.id
+                      : await _firstAvailableModel(ref);
+                  if (model != null) {
+                    await ref.read(lyricsLlmModelProvider.notifier).set(model);
+                    ref.invalidate(songLyricsProvider);
+                  }
+                },
+          secondary: const Icon(Symbols.auto_awesome_rounded),
+          title: Text('settingsTranslationLlm'.tr()),
+          subtitle: Text(
+            session == null
+                ? 'settingsTranslationLlmNoSession'.tr()
+                : 'settingsTranslationLlmSubtitle'.tr(),
+          ),
+        ),
+        if (current != null)
+          Padding(
+            padding: const EdgeInsetsDirectional.only(
+              start: SolSpace.lg + 40,
+              end: SolSpace.lg,
+              bottom: SolSpace.md,
+            ),
+            child: DropdownButton<String>(
+              value: selected,
+              isExpanded: true,
+              underline: const SizedBox.shrink(),
+              borderRadius: SolRadius.controlRadius,
+              items: [
+                DropdownMenuItem(
+                  value: _googleValue,
+                  child: Text('settingsTranslationLlmModelNone'.tr()),
+                ),
+                for (final model in models)
+                  DropdownMenuItem(
+                    value: model.id,
+                    child: Text(model.id, overflow: TextOverflow.ellipsis),
+                  ),
+                // Already saved but no longer listed: it stays selectable, so
+                // a catalogue that failed to load cannot silently reset the
+                // reader's choice.
+                if (models.every((model) => model.id != current))
+                  DropdownMenuItem(
+                    value: current,
+                    child: Text(current, overflow: TextOverflow.ellipsis),
+                  ),
+              ],
+              onChanged: (value) async {
+                await ref
+                    .read(lyricsLlmModelProvider.notifier)
+                    .set(value == null || value == _googleValue ? null : value);
+                ref.invalidate(songLyricsProvider);
+              },
+            ),
+          )
+        else if (session != null && models.isEmpty)
+          Padding(
+            padding: const EdgeInsetsDirectional.only(
+              start: SolSpace.lg + 40,
+              end: SolSpace.lg,
+              bottom: SolSpace.md,
+            ),
+            child: Text(
+              'settingsTranslationLlmNoModels'.tr(),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// Asks the catalogue once, for a switch flipped before the provider had
+  /// finished loading.
+  static Future<String?> _firstAvailableModel(WidgetRef ref) async {
+    try {
+      final models = await ref.read(personaLyricsModelsProvider.future);
+      return models.isEmpty ? null : models.first.id;
+    } catch (_) {
+      return null;
+    }
+  }
+}

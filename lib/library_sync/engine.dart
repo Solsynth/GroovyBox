@@ -635,6 +635,9 @@ class LibrarySyncEngine {
               translationLanguage: Value.absentIfNull(
                 lyrics.translationLanguage,
               ),
+              translationEngine: Value.absentIfNull(
+                lyrics.translationEngine,
+              ),
             ),
           );
       return true;
@@ -655,6 +658,7 @@ class LibrarySyncEngine {
         remoteId: Value(lyrics.remoteId),
         fetchedAt: Value(fetchedAt),
         translationLanguage: Value(lyrics.translationLanguage),
+        translationEngine: Value(lyrics.translationEngine),
       ),
     );
     return true;

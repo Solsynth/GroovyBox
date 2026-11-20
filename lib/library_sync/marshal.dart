@@ -71,6 +71,7 @@ SyncChange lyricsChange(LyricsRow row, String fingerprint) => SyncChange(
     remoteId: row.remoteId,
     fetchedAt: wireTime(row.fetchedAt),
     translationLanguage: row.translationLanguage,
+    translationEngine: row.translationEngine,
   ),
 );
 

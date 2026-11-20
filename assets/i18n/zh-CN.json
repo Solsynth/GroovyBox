@@ -73,6 +73,12 @@
   "settingsPronunciationSubtitle": "在日文、韩文歌词下方显示罗马音、拼音或谚文读音。",
   "settingsTranslation": "翻译",
   "settingsTranslationSubtitle": "在外文歌词下方显示翻译行。",
+  "settingsTranslationLlm": "使用 Solink AI 翻译",
+  "settingsTranslationLlmSubtitle": "将歌词行发送至你的太阳能网络 AI 服务，由你选择的模型翻译。关闭时使用谷歌翻译。",
+  "settingsTranslationLlmModel": "翻译模型",
+  "settingsTranslationLlmModelNone": "谷歌翻译",
+  "settingsTranslationLlmNoSession": "请先在 Solink 下使用 Solarpass 登录，然后再选择模型。",
+  "settingsTranslationLlmNoModels": "此账户没有可用的对话模型。",
   "settingsStoredLyrics": "已存歌词",
   "settingsStoredLyricsCached": {
     "one": "本设备已缓存 {} 首歌曲的歌词。显示时无需再次请求服务器，并可离线使用。",

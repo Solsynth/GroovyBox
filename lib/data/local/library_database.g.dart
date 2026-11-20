@@ -1481,6 +1481,18 @@ class $LyricsEntriesTable extends LyricsEntries
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _translationEngineMeta = const VerificationMeta(
+    'translationEngine',
+  );
+  @override
+  late final GeneratedColumn<String> translationEngine =
+      GeneratedColumn<String>(
+        'translation_engine',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   @override
   List<GeneratedColumn> get $columns => [
     trackId,
@@ -1491,6 +1503,7 @@ class $LyricsEntriesTable extends LyricsEntries
     remoteId,
     fetchedAt,
     translationLanguage,
+    translationEngine,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1563,6 +1576,15 @@ class $LyricsEntriesTable extends LyricsEntries
         ),
       );
     }
+    if (data.containsKey('translation_engine')) {
+      context.handle(
+        _translationEngineMeta,
+        translationEngine.isAcceptableOrUnknown(
+          data['translation_engine']!,
+          _translationEngineMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -1604,6 +1626,10 @@ class $LyricsEntriesTable extends LyricsEntries
         DriftSqlType.string,
         data['${effectivePrefix}translation_language'],
       ),
+      translationEngine: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}translation_engine'],
+      ),
     );
   }
 
@@ -1627,6 +1653,11 @@ class LyricsRow extends DataClass implements Insertable<LyricsRow> {
   /// their target language so a row written for English is not served to a
   /// reader who has since switched to Chinese.
   final String? translationLanguage;
+
+  /// Which engine wrote it: `'google'` or `'llm'`. Kept with the layer so
+  /// turning the opt-in model on (or off) re-translates from the stored words
+  /// instead of serving the other engine's voice until the row expires.
+  final String? translationEngine;
   const LyricsRow({
     required this.trackId,
     required this.lines,
@@ -1636,6 +1667,7 @@ class LyricsRow extends DataClass implements Insertable<LyricsRow> {
     this.remoteId,
     required this.fetchedAt,
     this.translationLanguage,
+    this.translationEngine,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1653,6 +1685,9 @@ class LyricsRow extends DataClass implements Insertable<LyricsRow> {
     map['fetched_at'] = Variable<DateTime>(fetchedAt);
     if (!nullToAbsent || translationLanguage != null) {
       map['translation_language'] = Variable<String>(translationLanguage);
+    }
+    if (!nullToAbsent || translationEngine != null) {
+      map['translation_engine'] = Variable<String>(translationEngine);
     }
     return map;
   }
@@ -1673,6 +1708,9 @@ class LyricsRow extends DataClass implements Insertable<LyricsRow> {
       translationLanguage: translationLanguage == null && nullToAbsent
           ? const Value.absent()
           : Value(translationLanguage),
+      translationEngine: translationEngine == null && nullToAbsent
+          ? const Value.absent()
+          : Value(translationEngine),
     );
   }
 
@@ -1692,6 +1730,9 @@ class LyricsRow extends DataClass implements Insertable<LyricsRow> {
       translationLanguage: serializer.fromJson<String?>(
         json['translationLanguage'],
       ),
+      translationEngine: serializer.fromJson<String?>(
+        json['translationEngine'],
+      ),
     );
   }
   @override
@@ -1706,6 +1747,7 @@ class LyricsRow extends DataClass implements Insertable<LyricsRow> {
       'remoteId': serializer.toJson<int?>(remoteId),
       'fetchedAt': serializer.toJson<DateTime>(fetchedAt),
       'translationLanguage': serializer.toJson<String?>(translationLanguage),
+      'translationEngine': serializer.toJson<String?>(translationEngine),
     };
   }
 
@@ -1718,6 +1760,7 @@ class LyricsRow extends DataClass implements Insertable<LyricsRow> {
     Value<int?> remoteId = const Value.absent(),
     DateTime? fetchedAt,
     Value<String?> translationLanguage = const Value.absent(),
+    Value<String?> translationEngine = const Value.absent(),
   }) => LyricsRow(
     trackId: trackId ?? this.trackId,
     lines: lines ?? this.lines,
@@ -1729,6 +1772,9 @@ class LyricsRow extends DataClass implements Insertable<LyricsRow> {
     translationLanguage: translationLanguage.present
         ? translationLanguage.value
         : this.translationLanguage,
+    translationEngine: translationEngine.present
+        ? translationEngine.value
+        : this.translationEngine,
   );
   LyricsRow copyWithCompanion(LyricsEntriesCompanion data) {
     return LyricsRow(
@@ -1742,6 +1788,9 @@ class LyricsRow extends DataClass implements Insertable<LyricsRow> {
       translationLanguage: data.translationLanguage.present
           ? data.translationLanguage.value
           : this.translationLanguage,
+      translationEngine: data.translationEngine.present
+          ? data.translationEngine.value
+          : this.translationEngine,
     );
   }
 
@@ -1755,7 +1804,8 @@ class LyricsRow extends DataClass implements Insertable<LyricsRow> {
           ..write('origin: $origin, ')
           ..write('remoteId: $remoteId, ')
           ..write('fetchedAt: $fetchedAt, ')
-          ..write('translationLanguage: $translationLanguage')
+          ..write('translationLanguage: $translationLanguage, ')
+          ..write('translationEngine: $translationEngine')
           ..write(')'))
         .toString();
   }
@@ -1770,6 +1820,7 @@ class LyricsRow extends DataClass implements Insertable<LyricsRow> {
     remoteId,
     fetchedAt,
     translationLanguage,
+    translationEngine,
   );
   @override
   bool operator ==(Object other) =>
@@ -1782,7 +1833,8 @@ class LyricsRow extends DataClass implements Insertable<LyricsRow> {
           other.origin == this.origin &&
           other.remoteId == this.remoteId &&
           other.fetchedAt == this.fetchedAt &&
-          other.translationLanguage == this.translationLanguage);
+          other.translationLanguage == this.translationLanguage &&
+          other.translationEngine == this.translationEngine);
 }
 
 class LyricsEntriesCompanion extends UpdateCompanion<LyricsRow> {
@@ -1794,6 +1846,7 @@ class LyricsEntriesCompanion extends UpdateCompanion<LyricsRow> {
   final Value<int?> remoteId;
   final Value<DateTime> fetchedAt;
   final Value<String?> translationLanguage;
+  final Value<String?> translationEngine;
   const LyricsEntriesCompanion({
     this.trackId = const Value.absent(),
     this.lines = const Value.absent(),
@@ -1803,6 +1856,7 @@ class LyricsEntriesCompanion extends UpdateCompanion<LyricsRow> {
     this.remoteId = const Value.absent(),
     this.fetchedAt = const Value.absent(),
     this.translationLanguage = const Value.absent(),
+    this.translationEngine = const Value.absent(),
   });
   LyricsEntriesCompanion.insert({
     this.trackId = const Value.absent(),
@@ -1813,6 +1867,7 @@ class LyricsEntriesCompanion extends UpdateCompanion<LyricsRow> {
     this.remoteId = const Value.absent(),
     required DateTime fetchedAt,
     this.translationLanguage = const Value.absent(),
+    this.translationEngine = const Value.absent(),
   }) : lines = Value(lines),
        synced = Value(synced),
        origin = Value(origin),
@@ -1826,6 +1881,7 @@ class LyricsEntriesCompanion extends UpdateCompanion<LyricsRow> {
     Expression<int>? remoteId,
     Expression<DateTime>? fetchedAt,
     Expression<String>? translationLanguage,
+    Expression<String>? translationEngine,
   }) {
     return RawValuesInsertable({
       if (trackId != null) 'track_id': trackId,
@@ -1837,6 +1893,7 @@ class LyricsEntriesCompanion extends UpdateCompanion<LyricsRow> {
       if (fetchedAt != null) 'fetched_at': fetchedAt,
       if (translationLanguage != null)
         'translation_language': translationLanguage,
+      if (translationEngine != null) 'translation_engine': translationEngine,
     });
   }
 
@@ -1849,6 +1906,7 @@ class LyricsEntriesCompanion extends UpdateCompanion<LyricsRow> {
     Value<int?>? remoteId,
     Value<DateTime>? fetchedAt,
     Value<String?>? translationLanguage,
+    Value<String?>? translationEngine,
   }) {
     return LyricsEntriesCompanion(
       trackId: trackId ?? this.trackId,
@@ -1859,6 +1917,7 @@ class LyricsEntriesCompanion extends UpdateCompanion<LyricsRow> {
       remoteId: remoteId ?? this.remoteId,
       fetchedAt: fetchedAt ?? this.fetchedAt,
       translationLanguage: translationLanguage ?? this.translationLanguage,
+      translationEngine: translationEngine ?? this.translationEngine,
     );
   }
 
@@ -1889,6 +1948,9 @@ class LyricsEntriesCompanion extends UpdateCompanion<LyricsRow> {
     if (translationLanguage.present) {
       map['translation_language'] = Variable<String>(translationLanguage.value);
     }
+    if (translationEngine.present) {
+      map['translation_engine'] = Variable<String>(translationEngine.value);
+    }
     return map;
   }
 
@@ -1902,7 +1964,8 @@ class LyricsEntriesCompanion extends UpdateCompanion<LyricsRow> {
           ..write('origin: $origin, ')
           ..write('remoteId: $remoteId, ')
           ..write('fetchedAt: $fetchedAt, ')
-          ..write('translationLanguage: $translationLanguage')
+          ..write('translationLanguage: $translationLanguage, ')
+          ..write('translationEngine: $translationEngine')
           ..write(')'))
         .toString();
   }
@@ -7154,6 +7217,7 @@ typedef $$LyricsEntriesTableCreateCompanionBuilder =
       Value<int?> remoteId,
       required DateTime fetchedAt,
       Value<String?> translationLanguage,
+      Value<String?> translationEngine,
     });
 typedef $$LyricsEntriesTableUpdateCompanionBuilder =
     LyricsEntriesCompanion Function({
@@ -7165,6 +7229,7 @@ typedef $$LyricsEntriesTableUpdateCompanionBuilder =
       Value<int?> remoteId,
       Value<DateTime> fetchedAt,
       Value<String?> translationLanguage,
+      Value<String?> translationEngine,
     });
 
 final class $$LyricsEntriesTableReferences
@@ -7237,6 +7302,11 @@ class $$LyricsEntriesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get translationEngine => $composableBuilder(
+    column: $table.translationEngine,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$TracksTableFilterComposer get trackId {
     final $$TracksTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -7305,6 +7375,11 @@ class $$LyricsEntriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get translationEngine => $composableBuilder(
+    column: $table.translationEngine,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$TracksTableOrderingComposer get trackId {
     final $$TracksTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -7358,6 +7433,11 @@ class $$LyricsEntriesTableAnnotationComposer
 
   GeneratedColumn<String> get translationLanguage => $composableBuilder(
     column: $table.translationLanguage,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get translationEngine => $composableBuilder(
+    column: $table.translationEngine,
     builder: (column) => column,
   );
 
@@ -7423,6 +7503,7 @@ class $$LyricsEntriesTableTableManager
                 Value<int?> remoteId = const Value.absent(),
                 Value<DateTime> fetchedAt = const Value.absent(),
                 Value<String?> translationLanguage = const Value.absent(),
+                Value<String?> translationEngine = const Value.absent(),
               }) => LyricsEntriesCompanion(
                 trackId: trackId,
                 lines: lines,
@@ -7432,6 +7513,7 @@ class $$LyricsEntriesTableTableManager
                 remoteId: remoteId,
                 fetchedAt: fetchedAt,
                 translationLanguage: translationLanguage,
+                translationEngine: translationEngine,
               ),
           createCompanionCallback:
               ({
@@ -7443,6 +7525,7 @@ class $$LyricsEntriesTableTableManager
                 Value<int?> remoteId = const Value.absent(),
                 required DateTime fetchedAt,
                 Value<String?> translationLanguage = const Value.absent(),
+                Value<String?> translationEngine = const Value.absent(),
               }) => LyricsEntriesCompanion.insert(
                 trackId: trackId,
                 lines: lines,
@@ -7452,6 +7535,7 @@ class $$LyricsEntriesTableTableManager
                 remoteId: remoteId,
                 fetchedAt: fetchedAt,
                 translationLanguage: translationLanguage,
+                translationEngine: translationEngine,
               ),
           withReferenceMapper: (p0) => p0
               .map(

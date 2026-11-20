@@ -83,6 +83,7 @@ const _kVolumeKey = 'app_volume';
 const _kGlassEffectsKey = 'app_glass_effects';
 const _kLyricsPronunciationKey = 'app_lyrics_pronunciation';
 const _kLyricsTranslationKey = 'app_lyrics_translation';
+const _kLyricsLlmModelKey = 'app_lyrics_llm_model';
 const _kInfinitePlaybackKey = 'app_infinite_playback';
 const _kDynamicColorKey = 'app_dynamic_color';
 const _kPreferredPlaybackSourceKey = 'app_preferred_playback_source';
@@ -221,6 +222,36 @@ class LyricsTranslationEnabled extends Notifier<bool> {
     await ref
         .read(sharedPreferencesProvider)
         .setBool(_kLyricsTranslationKey, enabled);
+  }
+}
+
+/// The Persona model (`provider/model-name`) that translates lyrics, or null
+/// for Google Translate.
+///
+/// This one pref *is* the opt-in: nothing optional is sent anywhere until a
+/// model is named here, and clearing it returns the device to the free engine.
+/// Stored as the catalogue id rather than a display name so the same choice
+/// survives a friendly rename of the agent.
+@Riverpod(keepAlive: true)
+class LyricsLlmModel extends Notifier<String?> {
+  @override
+  String? build() {
+    final model = ref
+        .watch(sharedPreferencesProvider)
+        .getString(_kLyricsLlmModelKey)
+        ?.trim();
+    return model == null || model.isEmpty ? null : model;
+  }
+
+  Future<void> set(String? model) async {
+    final clean = model?.trim();
+    state = clean == null || clean.isEmpty ? null : clean;
+    final prefs = ref.read(sharedPreferencesProvider);
+    if (state == null) {
+      await prefs.remove(_kLyricsLlmModelKey);
+    } else {
+      await prefs.setString(_kLyricsLlmModelKey, state!);
+    }
   }
 }
 

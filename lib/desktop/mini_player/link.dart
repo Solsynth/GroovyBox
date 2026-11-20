@@ -57,6 +57,7 @@ Map<String, dynamic> encodeLyrics(Lyrics lyrics) => {
   'synced': lyrics.synced,
   'language': lyrics.language,
   'translationLanguage': lyrics.translationLanguage,
+  'translationEngine': lyrics.translationEngine,
   'lines': [
     for (final line in lyrics.lines)
       {
@@ -73,6 +74,7 @@ Lyrics decodeLyrics(Map<String, dynamic> json) => Lyrics(
   synced: json['synced'] as bool? ?? false,
   language: json['language'] as String?,
   translationLanguage: json['translationLanguage'] as String?,
+  translationEngine: json['translationEngine'] as String?,
   lines: [
     for (final line in (json['lines'] as List<dynamic>? ?? const []))
       LyricLine(

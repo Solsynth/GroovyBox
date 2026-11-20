@@ -150,6 +150,17 @@ than block you behind a form.
   play — and any play offline — never asks the network, and a re-tagged or
   re-linked song keeps its words. A confirmed miss is cached for a day; a
   timeout never is.
+  Translation is two engines behind one setting (`lib/library/lyrics_enricher.dart`):
+  Google's free web endpoint, or — opt-in, once a model is picked under
+  Settings → Lyrics — the account's own Solar Network AI, through Persona's
+  stateless OpenAI-compatible route (`lib/library/lyrics_translator.dart`,
+  `POST /persona/v1/chat/completions` with the `raw` agent, so the request
+  writes no conversation, run or memory). The model answers numbered lines and
+  a line it drops stays untranslated rather than shifting the rest. Either way
+  the layer is stored with the language *and* the engine that wrote it, so
+  turning the opt-in engine on or off re-translates from the cached words
+  instead of serving the other engine's voice; a model that refuses falls back
+  to Google and is labelled accordingly, so it is asked again next time.
 - **Import** — `LocalImportService` copies picked audio into the app's support
   directory, reads ID3/Vorbis/MP4 tags off the UI isolate, extracts an embedded
   cover next to the file, writes synced or plain lyrics from the tags onto the

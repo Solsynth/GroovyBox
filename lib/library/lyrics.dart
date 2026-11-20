@@ -58,11 +58,19 @@ class Lyrics {
   /// translation, or when a server supplied one in a language it did not name.
   final String? translationLanguage;
 
+  /// Which engine wrote the translation layer: `'google'`, `'llm'`, or null
+  /// for a layer the app did not generate (a server's own translation).
+  ///
+  /// Cached with the layer so switching engines re-translates from the stored
+  /// words instead of serving the old engine's voice until the row expires.
+  final String? translationEngine;
+
   const Lyrics({
     required this.lines,
     required this.synced,
     this.language,
     this.translationLanguage,
+    this.translationEngine,
   });
 
   static const empty = Lyrics(lines: [], synced: false);
@@ -107,6 +115,7 @@ Lyrics mergeLyricLayers({
     synced: main.synced,
     language: main.language,
     translationLanguage: main.translationLanguage,
+    translationEngine: main.translationEngine,
   );
 }
 

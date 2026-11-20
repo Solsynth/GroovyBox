@@ -516,6 +516,88 @@ abstract class _$LyricsTranslationEnabled extends $Notifier<bool> {
   }
 }
 
+/// The Persona model (`provider/model-name`) that translates lyrics, or null
+/// for Google Translate.
+///
+/// This one pref *is* the opt-in: nothing optional is sent anywhere until a
+/// model is named here, and clearing it returns the device to the free engine.
+/// Stored as the catalogue id rather than a display name so the same choice
+/// survives a friendly rename of the agent.
+
+@ProviderFor(LyricsLlmModel)
+final lyricsLlmModelProvider = LyricsLlmModelProvider._();
+
+/// The Persona model (`provider/model-name`) that translates lyrics, or null
+/// for Google Translate.
+///
+/// This one pref *is* the opt-in: nothing optional is sent anywhere until a
+/// model is named here, and clearing it returns the device to the free engine.
+/// Stored as the catalogue id rather than a display name so the same choice
+/// survives a friendly rename of the agent.
+final class LyricsLlmModelProvider
+    extends $NotifierProvider<LyricsLlmModel, String?> {
+  /// The Persona model (`provider/model-name`) that translates lyrics, or null
+  /// for Google Translate.
+  ///
+  /// This one pref *is* the opt-in: nothing optional is sent anywhere until a
+  /// model is named here, and clearing it returns the device to the free engine.
+  /// Stored as the catalogue id rather than a display name so the same choice
+  /// survives a friendly rename of the agent.
+  LyricsLlmModelProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'lyricsLlmModelProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$lyricsLlmModelHash();
+
+  @$internal
+  @override
+  LyricsLlmModel create() => LyricsLlmModel();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(String? value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<String?>(value),
+    );
+  }
+}
+
+String _$lyricsLlmModelHash() => r'897f68444528c4ba77907eb1e6e806ed6bfe2501';
+
+/// The Persona model (`provider/model-name`) that translates lyrics, or null
+/// for Google Translate.
+///
+/// This one pref *is* the opt-in: nothing optional is sent anywhere until a
+/// model is named here, and clearing it returns the device to the free engine.
+/// Stored as the catalogue id rather than a display name so the same choice
+/// survives a friendly rename of the agent.
+
+abstract class _$LyricsLlmModel extends $Notifier<String?> {
+  String? build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<String?, String?>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<String?, String?>,
+              String?,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
 /// Whether playback continues indefinitely with random library tracks when
 /// the queue reaches the end. On by default.
 

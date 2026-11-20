@@ -63,6 +63,27 @@ void main() {
     expect(stored.lyrics.lines.last.pronunciation, isNull);
   });
 
+  test('the translation engine round-trips with its layer', () async {
+    final (:db, :store) = _open();
+    final trackId = await _track(db);
+
+    await store.write(
+      trackId,
+      const Lyrics(
+        lines: [LyricLine(Duration.zero, '静かに', translation: 'quietly')],
+        synced: true,
+        language: 'ja',
+        translationLanguage: 'en',
+        translationEngine: 'llm',
+      ),
+      origin: LyricsOrigin.lrclib,
+    );
+
+    final stored = await store.read(trackId, translationLanguage: 'en');
+    expect(stored!.lyrics.translationEngine, 'llm');
+    expect(stored.lyrics.translationLanguage, 'en');
+  });
+
   test('a rewrite replaces the row instead of adding one', () async {
     final (:db, :store) = _open();
     final trackId = await _track(db);

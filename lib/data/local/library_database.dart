@@ -169,6 +169,11 @@ class LyricsEntries extends Table {
   /// reader who has since switched to Chinese.
   TextColumn get translationLanguage => text().nullable()();
 
+  /// Which engine wrote it: `'google'` or `'llm'`. Kept with the layer so
+  /// turning the opt-in model on (or off) re-translates from the stored words
+  /// instead of serving the other engine's voice until the row expires.
+  TextColumn get translationEngine => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {trackId};
 }
@@ -356,7 +361,7 @@ class LibraryDatabase extends _$LibraryDatabase {
   }
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -387,6 +392,9 @@ class LibraryDatabase extends _$LibraryDatabase {
       if (from < 8) {
         await m.createTable(downloads);
         await m.createTable(httpCache);
+      }
+      if (from < 9) {
+        await m.addColumn(lyricsEntries, lyricsEntries.translationEngine);
       }
     },
     beforeOpen: (details) async {
@@ -972,6 +980,7 @@ class LibraryDatabase extends _$LibraryDatabase {
             'remoteId': e.remoteId,
             'fetchedAt': e.fetchedAt.toIso8601String(),
             'translationLanguage': e.translationLanguage,
+            'translationEngine': e.translationEngine,
           },
       ],
       'plays': [
@@ -1172,6 +1181,7 @@ class LibraryDatabase extends _$LibraryDatabase {
               ? DateTime.tryParse(fetchedAtStr) ?? DateTime.now()
               : DateTime.now();
           final translationLanguage = raw['translationLanguage'] as String?;
+          final translationEngine = raw['translationEngine'] as String?;
 
           final existing = await (select(
             lyricsEntries,
@@ -1188,6 +1198,7 @@ class LibraryDatabase extends _$LibraryDatabase {
                 remoteId: Value.absentIfNull(remoteId),
                 fetchedAt: fetchedAt,
                 translationLanguage: Value.absentIfNull(translationLanguage),
+                translationEngine: Value.absentIfNull(translationEngine),
               ),
             );
             lyricsCount++;
@@ -1206,6 +1217,7 @@ class LibraryDatabase extends _$LibraryDatabase {
                   remoteId: Value(remoteId),
                   fetchedAt: Value(fetchedAt),
                   translationLanguage: Value(translationLanguage),
+                  translationEngine: Value(translationEngine),
                 ),
               );
               lyricsCount++;
@@ -1222,6 +1234,7 @@ class LibraryDatabase extends _$LibraryDatabase {
                   remoteId: Value(remoteId),
                   fetchedAt: Value(fetchedAt),
                   translationLanguage: Value(translationLanguage),
+                  translationEngine: Value(translationEngine),
                 ),
               );
               lyricsCount++;

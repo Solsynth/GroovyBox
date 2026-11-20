@@ -211,6 +211,7 @@ class SyncLyrics {
     this.remoteId,
     required this.fetchedAt,
     this.translationLanguage,
+    this.translationEngine,
   });
 
   final String trackFingerprint;
@@ -221,6 +222,7 @@ class SyncLyrics {
   final int? remoteId;
   final String fetchedAt;
   final String? translationLanguage;
+  final String? translationEngine;
 
   Map<String, dynamic> toJson() => {
     'track_fingerprint': trackFingerprint,
@@ -231,6 +233,7 @@ class SyncLyrics {
     'remote_id': remoteId,
     'fetched_at': fetchedAt,
     'translation_language': translationLanguage,
+    'translation_engine': translationEngine,
   };
 
   factory SyncLyrics.fromJson(Map<String, dynamic> json) => SyncLyrics(
@@ -242,6 +245,7 @@ class SyncLyrics {
     remoteId: (json['remote_id'] as num?)?.toInt(),
     fetchedAt: json['fetched_at'] as String? ?? '',
     translationLanguage: json['translation_language'] as String?,
+    translationEngine: json['translation_engine'] as String?,
   );
 
   static SyncLyrics? tryFromJson(Object? raw) =>

@@ -245,6 +245,7 @@ Map<String, dynamic> _readSettings(Ref ref) {
     'dynamicColor': ref.read(dynamicColorEnabledProvider),
     'lyricsPronunciation': ref.read(lyricsPronunciationEnabledProvider),
     'lyricsTranslation': ref.read(lyricsTranslationEnabledProvider),
+    'lyricsLlmModel': ref.read(lyricsLlmModelProvider),
     'infinitePlayback': ref.read(infinitePlaybackEnabledProvider),
   };
 }
@@ -281,6 +282,10 @@ Future<void> _applySettings(Ref ref, Map<String, dynamic> values) async {
   final translation = values['lyricsTranslation'];
   if (translation is bool) {
     await ref.read(lyricsTranslationEnabledProvider.notifier).set(translation);
+  }
+  final llmModel = values['lyricsLlmModel'];
+  if (llmModel is String) {
+    await ref.read(lyricsLlmModelProvider.notifier).set(llmModel);
   }
   final infinite = values['infinitePlayback'];
   if (infinite is bool) {

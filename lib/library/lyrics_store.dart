@@ -86,7 +86,10 @@ class LyricsStore {
   ///
   /// [translationLanguage] is the language the caller needs its translation
   /// layer in. A row translated into a different language is a miss: serving
-  /// it would show the reader the language they just switched away from.
+  /// it would show the reader the language they just switched away from. A row
+  /// translated into the right language by a different engine is *not* a miss:
+  /// the stored words are kept, and the caller re-runs only the translation
+  /// pass instead of the whole lookup.
   Future<CachedLyrics?> read(
     int trackId, {
     String? translationLanguage,
@@ -117,6 +120,7 @@ class LyricsStore {
         synced: row.synced,
         language: row.language,
         translationLanguage: row.translationLanguage,
+        translationEngine: row.translationEngine,
       ),
       origin: origin,
       fetchedAt: row.fetchedAt,
@@ -141,6 +145,7 @@ class LyricsStore {
             synced: lyrics.synced,
             language: Value(lyrics.language),
             translationLanguage: Value(lyrics.translationLanguage),
+            translationEngine: Value(lyrics.translationEngine),
             origin: origin.name,
             remoteId: Value(remoteId),
             fetchedAt: _clock(),

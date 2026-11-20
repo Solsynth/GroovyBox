@@ -13,11 +13,17 @@ import 'package:kuromoji/src/tokenizer.dart';
 import 'package:romanize/romanize.dart';
 
 import 'lyrics.dart';
+import 'lyrics_translator.dart';
 
 /// Detects CJK text, generates Romanization (Romaji for Japanese, Pinyin for
-/// Chinese, Hangul Romanization for Korean), and fetches translations.
+/// Chinese, Hangul Romanization for Korean), and translates lines.
+///
+/// Translation runs on Google's free web endpoint unless the caller hands in a
+/// [LineTranslator] — the opt-in LLM path — and falls back to Google when that
+/// translator fails, so a refused or unreachable model costs a worse
+/// translation rather than none.
 class LyricsEnricher {
-  LyricsEnricher({Dio? dio})
+  LyricsEnricher({Dio? dio, this.translator})
       : _dio = dio ??
             Dio(
               BaseOptions(
@@ -27,6 +33,13 @@ class LyricsEnricher {
             );
 
   final Dio _dio;
+
+  /// The opt-in engine, or null for Google Translate alone.
+  final LineTranslator? translator;
+
+  /// Which engine a translation written by this enricher is labelled with:
+  /// what the stored layer is cached under and compared against later.
+  String get engine => translator == null ? 'google' : 'llm';
 
   static Tokenizer? _tokenizer;
   static bool _initialized = false;
@@ -244,12 +257,43 @@ class LyricsEnricher {
     }
   }
 
-  /// Translates a batch of lyric lines via Google Translate Web endpoint.
-  Future<List<String?>> _translateBatch(
+  /// Translates lyric lines, preferring the opt-in [translator] and falling
+  /// back to Google's web endpoint.
+  ///
+  /// The engine that answered is returned with the lines: the layer is cached
+  /// under it, so a song translated by the fallback is re-translated when the
+  /// chosen engine works again instead of being served as the model's.
+  Future<({String engine, List<String?> lines})> _translateBatch(
     List<String> lines,
     String targetLang,
   ) async {
-    if (lines.isEmpty) return const [];
+    if (lines.isEmpty) {
+      return (engine: engine, lines: const <String?>[]);
+    }
+    final llm = translator;
+    if (llm != null) {
+      try {
+        final translated = await llm.translate(lines, targetLang);
+        if (translated.length == lines.length &&
+            translated.any((line) => line != null && line.trim().isNotEmpty)) {
+          return (engine: 'llm', lines: translated);
+        }
+      } catch (_) {
+        // Refused, unreachable or empty: Google still gets a turn, and the
+        // layer is labelled `google`, so the model is asked again next time.
+      }
+    }
+    return (
+      engine: 'google',
+      lines: await _translateWithGoogle(lines, targetLang),
+    );
+  }
+
+  /// Google Translate's free web endpoint, one joined request per batch.
+  Future<List<String?>> _translateWithGoogle(
+    List<String> lines,
+    String targetLang,
+  ) async {
     try {
       final response = await _dio.get(
         'https://translate.googleapis.com/translate_a/single',
@@ -346,18 +390,20 @@ class LyricsEnricher {
         synced: lyrics.synced,
         language: songLang,
         // Nothing was generated, so the row keeps whatever translation it
-        // already had (and the language that one was written in).
+        // already had (its language, and the engine that wrote it).
         translationLanguage: lyrics.translationLanguage,
+        translationEngine: lyrics.translationEngine,
       );
     }
 
     // Batch translate
-    final translations = await _translateBatch(textsToTranslate, targetLang);
+    final batch = await _translateBatch(textsToTranslate, targetLang);
     final finalLines = List<LyricLine>.from(withPronunciation);
+    var applied = 0;
     for (var i = 0; i < indicesToTranslate.length; i++) {
       final index = indicesToTranslate[i];
       final original = textsToTranslate[i].trim().toLowerCase();
-      final translated = translations[i]?.trim();
+      final translated = batch.lines[i]?.trim();
       if (translated != null &&
           translated.isNotEmpty &&
           translated.toLowerCase() != original &&
@@ -365,18 +411,60 @@ class LyricsEnricher {
               finalLines[index].pronunciation?.trim().toLowerCase()) {
         finalLines[index] =
             finalLines[index].withLayers(translation: translated);
+        applied++;
       }
     }
 
+    // A line that already carried a translation is not evidence this batch
+    // worked: only a line this pass filled counts as a landing. Claiming the
+    // engine off an old line would cache a Google layer as the model's and
+    // never ask the model again.
+    final landed = applied > 0;
     return Lyrics(
       lines: finalLines,
       synced: lyrics.synced,
       language: songLang,
-      // Only claim the language when a translation actually landed: a batch
-      // that failed should not mark the row as translated.
-      translationLanguage: finalLines.any((line) => line.translation != null)
-          ? targetLang
-          : lyrics.translationLanguage,
+      // Only claim the language (and the engine) when a translation actually
+      // landed: a batch that failed should not mark the row as translated.
+      translationLanguage: landed ? targetLang : lyrics.translationLanguage,
+      translationEngine: landed ? batch.engine : lyrics.translationEngine,
     );
+  }
+
+  /// Re-runs only the translation pass over [lyrics], replacing every layer
+  /// this app generated with one in [targetLanguage] and the current engine's
+  /// voice.
+  ///
+  /// Used when the stored layer came from another engine: the words and their
+  /// readings are already there and are kept, so switching translators costs
+  /// one translation request, not another lyric lookup.
+  Future<Lyrics> retranslate(
+    Lyrics lyrics, {
+    String? targetLanguage,
+  }) async {
+    if (lyrics.isEmpty) return lyrics;
+    final retranslated = await enrich(
+      Lyrics(
+        lines: [
+          for (final line in lyrics.lines)
+            line.translation == null
+                ? line
+                : LyricLine(
+                    line.at,
+                    line.text,
+                    pronunciation: line.pronunciation,
+                  ),
+        ],
+        synced: lyrics.synced,
+        language: lyrics.language,
+      ),
+      targetLanguage: targetLanguage ?? resolveTargetLanguage(),
+    );
+    // Neither engine answered — offline, refused, expired token. The stored
+    // layer is still readable, and losing it would make flipping the switch
+    // on a bad connection cost the reader their translation; the stale engine
+    // stays labelled, so the re-translation is tried again on the next play.
+    final landed = retranslated.lines.any((line) => line.translation != null);
+    return landed ? retranslated : lyrics;
   }
 }

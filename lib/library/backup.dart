@@ -77,6 +77,7 @@ class BackupService {
       'dynamicColor': _ref.read(dynamicColorEnabledProvider),
       'lyricsPronunciation': _ref.read(lyricsPronunciationEnabledProvider),
       'lyricsTranslation': _ref.read(lyricsTranslationEnabledProvider),
+      'lyricsLlmModel': _ref.read(lyricsLlmModelProvider),
       'infinitePlayback': _ref.read(infinitePlaybackEnabledProvider),
     };
 
@@ -168,6 +169,11 @@ class BackupService {
         await _ref
             .read(lyricsTranslationEnabledProvider.notifier)
             .set(settings['lyricsTranslation'] as bool);
+      }
+      if (settings['lyricsLlmModel'] is String) {
+        await _ref
+            .read(lyricsLlmModelProvider.notifier)
+            .set(settings['lyricsLlmModel'] as String);
       }
       if (settings['infinitePlayback'] is bool) {
         await _ref

@@ -2373,7 +2373,7 @@ final class LyricsResolverProvider
   }
 }
 
-String _$lyricsResolverHash() => r'db718b125d8054a2549232105e508cf996682e6b';
+String _$lyricsResolverHash() => r'38edbd2717af832b8df648cb966558d07aa80959';
 
 /// Lyrics of one song, from the local library or the network.
 ///
