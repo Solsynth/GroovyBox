@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -89,6 +91,14 @@ LyricsEnricher _enricherWithGoogle(LineTranslator? translator, String answer) {
   final dio = Dio();
   dio.httpClientAdapter = _GoogleAdapter(answer);
   return LyricsEnricher(dio: dio, translator: translator);
+}
+
+/// A translation pass that never finishes, to prove the words are not gated
+/// on it.
+class _StalledTranslator implements LineTranslator {
+  @override
+  Future<List<String?>> translate(List<String> lines, String targetLanguage) =>
+      Completer<List<String?>>().future;
 }
 
 /// Answers with a fixed, numbered translation and records what it was asked.
@@ -223,6 +233,33 @@ void main() {
 
       expect(kept.lines.single.translation, 'silently');
       expect(kept.translationEngine, 'google');
+    });
+
+    test('a stalled translator still leaves the words readable', () async {
+      final (:db, :store) = _open();
+      final resolver = _resolver(
+        db,
+        store,
+        enricher: LyricsEnricher(translator: _StalledTranslator()),
+      );
+
+      await store.write(
+        await LibraryCatalog(db).requestTrackId(_song),
+        const Lyrics(
+          lines: [LyricLine(Duration.zero, '静かに')],
+          synced: true,
+          language: 'ja',
+        ),
+        origin: LyricsOrigin.lrclib,
+      );
+
+      // `resolve` is the words: it answers while the translation is still
+      // outstanding, which is what lets the pane draw at once.
+      final words = await resolver
+          .resolve(_song)
+          .timeout(const Duration(seconds: 2));
+      expect(words.lines.single.text, '静かに');
+      expect(words.lines.single.translation, isNull);
     });
 
     test('retranslate keeps readings and replaces only the layer', () async {
@@ -397,7 +434,12 @@ void main() {
         origin: LyricsOrigin.lrclib,
       );
 
-      final lyrics = await resolver.resolve(_song, languageCode: 'en');
+      final words = await resolver.resolve(_song);
+      final lyrics = await resolver.translate(
+        _song,
+        words,
+        languageCode: 'en',
+      );
 
       expect(lyrics.lines.single.translation, 'quietly');
       expect(lyrics.translationEngine, 'llm');
@@ -425,11 +467,18 @@ void main() {
         origin: LyricsOrigin.lrclib,
       );
 
-      final lyrics = await resolver.resolve(_song, languageCode: 'en');
+      final words = await resolver.resolve(_song);
+      // The words are right, so the pane shows them; only their layer is in
+      // the wrong language.
+      expect(words.lines.single.text, '静かに');
 
-      // The stored words cannot answer an English request, and the library
-      // has none: the resolver reports the miss rather than the Chinese layer.
-      expect(lyrics.lines, isEmpty);
+      final lyrics = await resolver.translate(
+        _song,
+        words,
+        languageCode: 'en',
+      );
+      expect(lyrics.lines.single.translation, 'quietly');
+      expect(lyrics.translationLanguage, 'en');
     });
   });
 }

@@ -104,7 +104,8 @@ class _LyricsPickerSheetState extends ConsumerState<LyricsPickerSheet> {
     // after that throws instead of doing the invalidation.
     final languageCode = Localizations.localeOf(context).languageCode;
     final request = LyricsRequest.of(widget.song);
-    final lyricsProvider = songLyricsProvider(
+    final wordsProvider = songLyricsProvider(request);
+    final translationProvider = songLyricsTranslationProvider(
       request,
       languageCode: languageCode,
     );
@@ -112,7 +113,8 @@ class _LyricsPickerSheetState extends ConsumerState<LyricsPickerSheet> {
     await resolver.adopt(request, lyrics, languageCode: languageCode);
     if (!mounted) return;
     ref
-      ..invalidate(lyricsProvider)
+      ..invalidate(wordsProvider)
+      ..invalidate(translationProvider)
       ..invalidate(storedLyricsProvider);
     Navigator.of(context).maybePop();
   }

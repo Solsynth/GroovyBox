@@ -91,54 +91,34 @@ class LyricsResolver {
     }
   }
 
-  /// The song's lyrics, never failing and never returning null.
+  /// The song's words and their readings, never failing and never null.
+  ///
+  /// Deliberately no translation: the words come from a stored row or one
+  /// network lookup, while a translation is a second round trip (or an LLM
+  /// completion) that can take seconds. A pane draws this at once and folds
+  /// [translate]'s answer in when it lands.
   ///
   /// [refresh] skips the stored answer for this call: the user asked for the
   /// lyrics again because the ones on screen are wrong.
-  Future<Lyrics> resolve(
-    LyricsRequest song, {
-    bool refresh = false,
-    String? languageCode,
-  }) async {
+  Future<Lyrics> resolve(LyricsRequest song, {bool refresh = false}) async {
     final enricher = await resolveEnricher();
     final trackId = await _trackId(song);
-    // One target for the whole call, so the cache key it reads with is the
-    // same one it writes with.
-    final targetLang = languageCode == null
-        ? null
-        : LyricsEnricher.targetLanguageFor(languageCode);
 
     if (!refresh && trackId != null) {
-      final stored = await store?.read(
-        trackId,
-        translationLanguage: targetLang,
-      );
+      // Read without a language: which language the layers are in is the
+      // translation pass's business, and a row whose translation is missing
+      // or stale still holds the right words.
+      final stored = await store?.read(trackId);
       if (stored != null) {
-        // A layer from the other engine is not a miss: the words and readings
-        // are right, only their translation is in the wrong voice. One
-        // translation pass replaces it, where a full lookup would walk the
-        // network for lyrics it already has.
-        final staleEngine =
-            stored.lyrics.translationEngine != null &&
-            stored.lyrics.translationEngine != enricher.engine &&
-            stored.lyrics.translationLanguage == targetLang;
-        if (staleEngine || enricher.needsEnrichment(stored.lyrics)) {
-          final enriched = staleEngine
-              ? await enricher.retranslate(
-                  stored.lyrics,
-                  targetLanguage: targetLang,
-                )
-              : await enricher.enrich(
-                  stored.lyrics,
-                  targetLanguage: targetLang,
-                );
+        if (enricher.needsLayers(stored.lyrics)) {
+          final withReadings = await enricher.addPronunciation(stored.lyrics);
           await store?.write(
             trackId,
-            enriched,
+            withReadings,
             origin: stored.origin,
             remoteId: stored.remoteId,
           );
-          return enriched;
+          return withReadings;
         }
         return stored.lyrics;
       }
@@ -156,12 +136,9 @@ class LyricsResolver {
 
     final library = await _fromLibrary(song);
     if (library != null && library.synced) {
-      final enriched = await enricher.enrich(
-        library,
-        targetLanguage: targetLang,
-      );
-      await remember(enriched, LyricsOrigin.library);
-      return enriched;
+      final withReadings = await enricher.addPronunciation(library);
+      await remember(withReadings, LyricsOrigin.library);
+      return withReadings;
     }
 
     // Each service is asked in turn and the first timed answer wins: a lookup
@@ -189,26 +166,21 @@ class LyricsResolver {
       // A plain block from the library is still a lyric worth keeping; a timed
       // answer from a service only wins because its version follows the audio.
       final useRemote = remote.lyrics.synced || library == null;
-      final lyrics = useRemote ? remote.lyrics : library;
-      final enriched = await enricher.enrich(
-        lyrics,
-        targetLanguage: targetLang,
+      final withReadings = await enricher.addPronunciation(
+        useRemote ? remote.lyrics : library,
       );
       await remember(
-        enriched,
+        withReadings,
         useRemote ? remote.origin : LyricsOrigin.library,
         remoteId: useRemote ? remote.id : null,
       );
-      return enriched;
+      return withReadings;
     }
 
     if (library != null) {
-      final enriched = await enricher.enrich(
-        library,
-        targetLanguage: targetLang,
-      );
-      await remember(enriched, LyricsOrigin.library);
-      return enriched;
+      final withReadings = await enricher.addPronunciation(library);
+      await remember(withReadings, LyricsOrigin.library);
+      return withReadings;
     }
 
     // Only a miss every service confirmed is worth remembering; one that could
@@ -217,6 +189,56 @@ class LyricsResolver {
       await remember(Lyrics.empty, LyricsOrigin.none);
     }
     return Lyrics.empty;
+  }
+
+  /// The translation layer for what [resolve] put on screen.
+  ///
+  /// A stored layer in [languageCode] from this device's engine is served as
+  /// is; anything else costs one translation pass, written back to the row so
+  /// the next play is answered from the cache. Returns [lyrics] untouched when
+  /// there was nothing to do, and declines to drop an existing layer when
+  /// neither engine answers.
+  Future<Lyrics> translate(
+    LyricsRequest song,
+    Lyrics lyrics, {
+    String? languageCode,
+  }) async {
+    if (lyrics.isEmpty) return lyrics;
+    final enricher = await resolveEnricher();
+    final targetLang = languageCode == null
+        ? null
+        : LyricsEnricher.targetLanguageFor(languageCode);
+    if (!enricher.needsTranslation(
+      lyrics,
+      targetLanguage: targetLang,
+      engine: enricher.engine,
+    )) {
+      return lyrics;
+    }
+    // A layer from another language or another engine is replaced, not filled
+    // in: `translate` leaves a translated line alone, which would let the old
+    // engine's sentence survive the switch.
+    final stale = enricher.translationIsStale(
+      lyrics,
+      targetLanguage: targetLang,
+      engine: enricher.engine,
+    );
+    final translated = stale
+        ? await enricher.retranslate(lyrics, targetLanguage: targetLang)
+        : await enricher.translate(lyrics, targetLanguage: targetLang);
+    final trackId = await _trackId(song);
+    if (trackId == null) return translated;
+    // The stored row decides the origin: a translation must never turn a
+    // hand-picked lyric into an automatic one.
+    final stored = await store?.read(trackId);
+    if (stored == null) return translated;
+    await store?.write(
+      trackId,
+      translated,
+      origin: stored.origin,
+      remoteId: stored.remoteId,
+    );
+    return translated;
   }
 
   /// Forgets one song so the next play asks the network again.

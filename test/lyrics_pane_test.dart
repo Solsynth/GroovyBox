@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/core/theme.dart';
@@ -56,7 +58,11 @@ class _Playback extends Playback {
   );
 }
 
-Future<void> _pump(WidgetTester tester, _Source source) async {
+Future<void> _pump(
+  WidgetTester tester,
+  _Source source, {
+  bool translate = true,
+}) async {
   tester.view.physicalSize = const Size(420, 860);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -72,6 +78,10 @@ Future<void> _pump(WidgetTester tester, _Source source) async {
         // No cache: this test is about what the pane does when the network
         // is the only source of an answer.
         libraryDatabaseProvider.overrideWithValue(null),
+        if (!translate)
+          songLyricsTranslationProvider.overrideWith(
+            (ref, song, {languageCode}) => Completer<Lyrics>().future,
+          ),
       ],
       child: MaterialApp(
         theme: createAppThemeSet().light,
@@ -83,6 +93,19 @@ Future<void> _pump(WidgetTester tester, _Source source) async {
 }
 
 void main() {
+  testWidgets('the words draw before the translation lands', (tester) async {
+    // A source that answers with foreign words at once, and a translation pass
+    // that never finishes: the pane must still show the lyric rather than a
+    // spinner waiting on a second round trip.
+    final source = _Source()
+      ..answer = parseLrc('[00:03.00]静かに消えていく思い出');
+    await tester.pumpWidget(const SizedBox.shrink());
+    await _pump(tester, source, translate: false);
+
+    expect(find.text('静かに消えていく思い出'), findsOneWidget);
+    expect(find.text('Loading lyrics'), findsNothing);
+  });
+
   testWidgets('an empty answer offers a retry that fetches again', (
     tester,
   ) async {

@@ -683,22 +683,39 @@ Future<LyricsResolver> lyricsResolver(Ref ref) async => LyricsResolver(
   sourceFor: (sourceId) => ref.read(librarySourceByIdProvider)[sourceId],
 );
 
-/// Lyrics of one song, from the local library or the network.
+/// The words of one song, and their readings: from the local library or the
+/// network, never waiting for a translation.
 ///
 /// Kept for the session as well as on disk: the pane is rebuilt on every
 /// position tick's parent rebuild, and a family entry means it never asks
 /// twice for the track it is already showing.
-/// [languageCode] is the app's current language, so a translation is generated
-/// in the language the interface is actually in. A language change gives the
-/// family a new argument, which refetches instead of serving the old one.
 @Riverpod(keepAlive: true)
-Future<Lyrics> songLyrics(
+Future<Lyrics> songLyrics(Ref ref, LyricsRequest song) async {
+  final resolver = await ref.watch(lyricsResolverProvider.future);
+  return resolver.resolve(song);
+}
+
+/// The translation layer for [songLyrics]'s words, in the app's language.
+///
+/// Auto-disposed: the pane watching it is the only thing that wants it, and a
+/// finished translation is already in the stored row, so the next read is a
+/// cache hit rather than a second request. Kept out of [songLyrics] on purpose
+/// — a model completing a page of lyrics takes seconds, and the words must not
+/// wait behind that.
+///
+/// [languageCode] is the app's current language: a language change gives the
+/// family a new argument, which translates again instead of serving the old
+/// language.
+@riverpod
+Future<Lyrics> songLyricsTranslation(
   Ref ref,
   LyricsRequest song, {
   String? languageCode,
 }) async {
+  final words = await ref.watch(songLyricsProvider(song).future);
+  if (words.isEmpty) return words;
   final resolver = await ref.watch(lyricsResolverProvider.future);
-  return resolver.resolve(song, languageCode: languageCode);
+  return resolver.translate(song, words, languageCode: languageCode);
 }
 
 /// How many tracks have a stored lyric, for the settings row.
@@ -832,12 +849,14 @@ class LyricsMaintenance extends Notifier<void> {
   /// Forgets one song and rebuilds its pane, so a wrong or missing lyric is
   /// fetched again instead of served from disk.
   ///
-  /// [languageCode] must match the one the pane watches with, or the family
-  /// entry holding what is on screen is not the one invalidated.
+  /// Both halves of the pane go: the words and the translation are separate
+  /// families, and leaving the second one up would show the old track's
+  /// translation over the new words.
   Future<void> refresh(LyricsRequest song, {String? languageCode}) async {
     final resolver = await ref.read(lyricsResolverProvider.future);
     await resolver.forget(song);
-    ref.invalidate(songLyricsProvider(song, languageCode: languageCode));
+    ref.invalidate(songLyricsProvider(song));
+    ref.invalidate(songLyricsTranslationProvider(song, languageCode: languageCode));
     ref.invalidate(storedLyricsProvider);
   }
 

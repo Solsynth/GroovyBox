@@ -84,24 +84,15 @@ class LyricsStore {
 
   /// The stored answer for [trackId], or null when there is none worth using.
   ///
-  /// [translationLanguage] is the language the caller needs its translation
-  /// layer in. A row translated into a different language is a miss: serving
-  /// it would show the reader the language they just switched away from. A row
-  /// translated into the right language by a different engine is *not* a miss:
-  /// the stored words are kept, and the caller re-runs only the translation
-  /// pass instead of the whole lookup.
-  Future<CachedLyrics?> read(
-    int trackId, {
-    String? translationLanguage,
-  }) async {
+  /// The row is returned whatever language its translation layer is in: the
+  /// *words* are right either way, and a pane wants those at once. Whether the
+  /// layer still fits the reader is the translation pass's question, answered
+  /// from [Lyrics.translationLanguage] and [Lyrics.translationEngine].
+  Future<CachedLyrics?> read(int trackId) async {
     final row = await (_db.select(
       _db.lyricsEntries,
     )..where((entry) => entry.trackId.equals(trackId))).getSingleOrNull();
     if (row == null) return null;
-    if (row.translationLanguage != null &&
-        row.translationLanguage != translationLanguage) {
-      return null;
-    }
     final origin = LyricsOrigin.values.firstWhere(
       (value) => value.name == row.origin,
       orElse: () => LyricsOrigin.library,

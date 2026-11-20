@@ -79,7 +79,7 @@ void main() {
       origin: LyricsOrigin.lrclib,
     );
 
-    final stored = await store.read(trackId, translationLanguage: 'en');
+    final stored = await store.read(trackId);
     expect(stored!.lyrics.translationEngine, 'llm');
     expect(stored.lyrics.translationLanguage, 'en');
   });

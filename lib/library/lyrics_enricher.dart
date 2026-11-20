@@ -113,27 +113,98 @@ class LyricsEnricher {
     return 'en';
   }
 
-  /// Whether the lyrics have CJK text, missing translations, or duplicate layers
-  /// that can be cleaned and enriched.
-  bool needsEnrichment(Lyrics lyrics) {
-    if (lyrics.isEmpty) return false;
-    // Check if there are dirty duplicate layers from earlier stores that need cleaning
-    final hasDuplicates = lyrics.lines.any((l) {
-      final t = l.text.trim().toLowerCase();
-      if (t.isEmpty) return false;
-      final p = l.pronunciation?.trim().toLowerCase();
-      final x = l.translation?.trim().toLowerCase();
-      return (p != null && p == t) || (x != null && (x == t || x == p));
-    });
-    if (hasDuplicates) return true;
+  /// Whether the lyrics carry layers that are dirty or missing, so a full
+  /// enrichment pass has work to do.
+  bool needsEnrichment(Lyrics lyrics) =>
+      needsLayers(lyrics) || needsTranslation(lyrics);
 
-    final hasCjkLines = lyrics.lines.any((l) => hasCjk(l.text));
-    final needsPronunciation =
-        hasCjkLines && lyrics.lines.any((l) => l.pronunciation == null && hasCjk(l.text));
-    final needsTranslation = lyrics.lines.any(
+  /// Whether the readings pass has work: Romanization for CJK lines, or a
+  /// duplicate layer left behind by an earlier store.
+  ///
+  /// Split from [needsTranslation] so a caller can show the words at once and
+  /// let the translation arrive behind them: the readings are local work
+  /// measured in milliseconds, the translation is a network round trip.
+  bool needsLayers(Lyrics lyrics) {
+    if (lyrics.isEmpty) return false;
+    if (_hasDuplicateLayers(lyrics)) return true;
+    return lyrics.lines.any((l) => l.pronunciation == null && hasCjk(l.text));
+  }
+
+  /// Whether a translation is missing, or stale because the engine that wrote
+  /// the stored layer is not the one this device translates with now.
+  ///
+  /// [targetLanguage] is the language the reader wants. A layer in another
+  /// language is stale too — and left alone by [needsLayers], which says
+  /// nothing about the language it is layered over.
+  bool needsTranslation(Lyrics lyrics, {String? targetLanguage, String? engine}) {
+    if (lyrics.isEmpty) return false;
+    if (_hasDuplicateLayers(lyrics)) return true;
+    if (translationIsStale(lyrics, targetLanguage: targetLanguage, engine: engine)) {
+      return true;
+    }
+    return lyrics.lines.any(
       (l) => l.translation == null && l.text.trim().isNotEmpty,
     );
-    return needsPronunciation || needsTranslation;
+  }
+
+  /// Whether the stored layer is in another language, or was written by an
+  /// engine this device no longer translates with.
+  ///
+  /// A stale layer is replaced, not filled in: [translate] leaves an existing
+  /// line alone, so a Google sentence would survive a switch to the model.
+  /// A layer this app did not generate has no engine and is left to the
+  /// translation pass to fill around, never to throw away.
+  bool translationIsStale(
+    Lyrics lyrics, {
+    String? targetLanguage,
+    String? engine,
+  }) {
+    if (lyrics.translationLanguage == null) return false;
+    if (targetLanguage != null &&
+        lyrics.translationLanguage != targetLanguage) {
+      return true;
+    }
+    return engine != null &&
+        lyrics.translationEngine != null &&
+        lyrics.translationEngine != engine;
+  }
+
+  /// A layer that merely repeats the words (or the reading beside them) is
+  /// leftover from a store that wrote duplicates, not a translation.
+  static bool _hasDuplicateLayers(Lyrics lyrics) => lyrics.lines.any((l) {
+    final t = l.text.trim().toLowerCase();
+    if (t.isEmpty) return false;
+    final p = l.pronunciation?.trim().toLowerCase();
+    final x = l.translation?.trim().toLowerCase();
+    return (p != null && p == t) || (x != null && (x == t || x == p));
+  });
+
+  /// One line without layers that only repeat its words.
+  ///
+  /// A reading identical to the words it reads is not a reading, and a
+  /// "translation" identical to either is not a translation; both are what an
+  /// earlier store wrote when it duplicated instead of annotating.
+  static LyricLine _withoutDuplicates(LyricLine line) {
+    final text = line.text.trim().toLowerCase();
+    String? clean(String? layer, String? also) {
+      final value = layer?.trim();
+      if (value == null || value.isEmpty) return null;
+      final lower = value.toLowerCase();
+      return lower == text || lower == also ? null : value;
+    }
+
+    final pronunciation = clean(line.pronunciation, null);
+    final translation = clean(line.translation, pronunciation?.toLowerCase());
+    if (pronunciation == line.pronunciation &&
+        translation == line.translation) {
+      return line;
+    }
+    return LyricLine(
+      line.at,
+      line.text,
+      pronunciation: pronunciation,
+      translation: translation,
+    );
   }
 
   /// Normalizes punctuation that Kuromoji treats as sentence separators.
@@ -324,11 +395,23 @@ class LyricsEnricher {
   /// lines into the user's preferred language.
   Future<Lyrics> enrich(Lyrics lyrics, {String? targetLanguage}) async {
     if (lyrics.isEmpty) return lyrics;
+    final targetLang = targetLanguage ?? resolveTargetLanguage();
+    final withPronunciation = await addPronunciation(lyrics);
+    return translate(withPronunciation, targetLanguage: targetLang);
+  }
+
+  /// The words with their readings, and no translation pass.
+  ///
+  /// This is what a lyric pane can draw at once: Romanization runs off the
+  /// local dictionaries, so it costs milliseconds where a translation costs a
+  /// network round trip. A duplicate layer left by an earlier store is removed
+  /// here, because it is a reading-side defect and not a translation.
+  Future<Lyrics> addPronunciation(Lyrics lyrics) async {
+    if (lyrics.isEmpty) return lyrics;
 
     final songLang = lyrics.language ?? detectLanguage(lyrics.lines);
-    final targetLang = targetLanguage ?? resolveTargetLanguage();
 
-    // 1. Romanization for CJK lines only (and clean up any identical
+    // Romanization for CJK lines only (and clean up any identical
     // pronunciations). Short workloads stay inline; heavy ones — a whole
     // page of CJK lines, or a single huge line — run on a background
     // isolate so a lyric pane loading never holds the UI isolate. The
@@ -342,12 +425,29 @@ class LyricsEnricher {
     final withPronunciation =
         _needsIsolate(lyrics.lines) ? await Isolate.run(romanizeAll) : await romanizeAll();
 
-    // 2. Translation
+    return Lyrics(
+      lines: [for (final line in withPronunciation) _withoutDuplicates(line)],
+      synced: lyrics.synced,
+      language: songLang,
+      translationLanguage: lyrics.translationLanguage,
+      translationEngine: lyrics.translationEngine,
+    );
+  }
+
+  /// The translation pass over words that already carry their readings.
+  ///
+  /// Split from [enrich] so a pane can draw [addPronunciation]'s answer at once
+  /// and fold this one in when it lands.
+  Future<Lyrics> translate(Lyrics lyrics, {String? targetLanguage}) async {
+    if (lyrics.isEmpty) return lyrics;
+    final songLang = lyrics.language ?? detectLanguage(lyrics.lines);
+    final targetLang = targetLanguage ?? resolveTargetLanguage();
     // Identify lines that actually need a translation
     final indicesToTranslate = <int>[];
     final textsToTranslate = <String>[];
-    for (var i = 0; i < withPronunciation.length; i++) {
-      final line = withPronunciation[i];
+    final lines = List<LyricLine>.from(lyrics.lines);
+    for (var i = 0; i < lines.length; i++) {
+      final line = lines[i];
       final trimmed = line.text.trim();
       final lowerText = trimmed.toLowerCase();
       if (trimmed.isEmpty) continue;
@@ -357,7 +457,7 @@ class LyricsEnricher {
         final transLower = line.translation!.trim().toLowerCase();
         if (transLower == lowerText ||
             transLower == line.pronunciation?.trim().toLowerCase()) {
-          withPronunciation[i] = LyricLine(
+          lines[i] = LyricLine(
             line.at,
             line.text,
             pronunciation: line.pronunciation,
@@ -386,7 +486,7 @@ class LyricsEnricher {
 
     if (textsToTranslate.isEmpty) {
       return Lyrics(
-        lines: withPronunciation,
+        lines: lines,
         synced: lyrics.synced,
         language: songLang,
         // Nothing was generated, so the row keeps whatever translation it
@@ -398,7 +498,7 @@ class LyricsEnricher {
 
     // Batch translate
     final batch = await _translateBatch(textsToTranslate, targetLang);
-    final finalLines = List<LyricLine>.from(withPronunciation);
+    final finalLines = lines;
     var applied = 0;
     for (var i = 0; i < indicesToTranslate.length; i++) {
       final index = indicesToTranslate[i];
@@ -443,7 +543,7 @@ class LyricsEnricher {
     String? targetLanguage,
   }) async {
     if (lyrics.isEmpty) return lyrics;
-    final retranslated = await enrich(
+    final retranslated = await translate(
       Lyrics(
         lines: [
           for (final line in lyrics.lines)

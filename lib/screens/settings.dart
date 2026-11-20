@@ -1079,6 +1079,9 @@ class _LyricsLlmTile extends ConsumerWidget {
                     // dropping the family entry re-reads the stored words and
                     // re-runs only the translation pass for them.
                     ref.invalidate(songLyricsProvider);
+                    // dropping the translation family re-runs that pass over
+                    // the words the pane is already showing.
+                    ref.invalidate(songLyricsTranslationProvider);
                     return;
                   }
                   // Turning it on names a model in the same gesture: a switch
@@ -1089,6 +1092,7 @@ class _LyricsLlmTile extends ConsumerWidget {
                   if (model != null) {
                     await ref.read(lyricsLlmModelProvider.notifier).set(model);
                     ref.invalidate(songLyricsProvider);
+                    ref.invalidate(songLyricsTranslationProvider);
                   }
                 },
           secondary: const Icon(Symbols.auto_awesome_rounded),
@@ -1135,6 +1139,7 @@ class _LyricsLlmTile extends ConsumerWidget {
                     .read(lyricsLlmModelProvider.notifier)
                     .set(value == null || value == _googleValue ? null : value);
                 ref.invalidate(songLyricsProvider);
+                ref.invalidate(songLyricsTranslationProvider);
               },
             ),
           )

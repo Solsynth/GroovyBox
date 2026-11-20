@@ -265,9 +265,13 @@ class _SongLyricsPaneState extends ConsumerState<SongLyricsPane>
       return status(Symbols.lyrics_rounded, 'lyricsNothingPlaying'.tr());
     }
 
-    final lyrics = ref.watch(
-      songLyricsProvider(
-        LyricsRequest.of(song),
+    final request = LyricsRequest.of(song);
+    final lyrics = ref.watch(songLyricsProvider(request));
+    // A separate family so the words never wait behind the translation: the
+    // pane draws what `songLyrics` answered, and this fold lands later.
+    final translation = ref.watch(
+      songLyricsTranslationProvider(
+        request,
         languageCode: Localizations.localeOf(context).languageCode,
       ),
     );
@@ -285,8 +289,8 @@ class _SongLyricsPaneState extends ConsumerState<SongLyricsPane>
         retry: true,
         rescue: true,
       ),
-      data: (lyrics) {
-        if (lyrics.isEmpty) {
+      data: (words) {
+        if (words.isEmpty) {
           return status(
             Symbols.lyrics_rounded,
             'lyricsEmpty'.tr(),
@@ -295,15 +299,19 @@ class _SongLyricsPaneState extends ConsumerState<SongLyricsPane>
             rescue: true,
           );
         }
+        // The translation answers with the same words plus the layer; while it
+        // is still loading — or if it failed — the words on screen are the
+        // whole pane rather than a spinner over a lyric already in hand.
+        final shown = translation.value ?? words;
         return SizedBox(
           height: widget.height,
           child: LyricsView(
-            lyrics: lyrics,
+            lyrics: shown,
             positionListenable: _positionNotifier,
             trackDuration: duration > Duration.zero ? duration : null,
             padding: widget.padding,
             fade: widget.fade,
-            onSeek: lyrics.synced ? controller.seek : null,
+            onSeek: shown.synced ? controller.seek : null,
             showPronunciation: showPronunciation,
             showTranslation: showTranslation,
           ),

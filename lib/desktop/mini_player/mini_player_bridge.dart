@@ -120,9 +120,19 @@ class MiniPlayerBridge extends Notifier<void> {
         final lyrics = await resolver.resolve(
           decodeLyricsRequest(args),
           refresh: args['refresh'] as bool? ?? false,
-          languageCode: args['languageCode'] as String?,
         );
         return encodeLyrics(lyrics);
+      // The guest's pane asks for the translation after the words are up, so
+      // the words never wait behind the host's model.
+      case 'translateLyrics':
+        final args = Map<String, dynamic>.from(call.arguments as Map);
+        final resolver = await ref.read(lyricsResolverProvider.future);
+        final translated = await resolver.translate(
+          decodeLyricsRequest(args),
+          decodeLyrics(Map<String, dynamic>.from(args['lyrics'] as Map)),
+          languageCode: args['languageCode'] as String?,
+        );
+        return encodeLyrics(translated);
       case 'forgetLyrics':
         final args = Map<String, dynamic>.from(call.arguments as Map);
         final resolver = await ref.read(lyricsResolverProvider.future);
@@ -141,6 +151,7 @@ class MiniPlayerBridge extends Notifier<void> {
         // The host's own pane is showing the family entry for this track, so
         // it is the host that rebuilds it; the guest does the same locally.
         ref.invalidate(songLyricsProvider(request));
+        ref.invalidate(songLyricsTranslationProvider(request));
         ref.invalidate(storedLyricsProvider);
         return encodeLyrics(stored);
       // The guest has no sources and no cover cache, so a cover is resolved

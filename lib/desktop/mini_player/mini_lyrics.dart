@@ -25,18 +25,32 @@ class HostLyricsResolver extends LyricsResolver {
   final Future<Object?> Function(String method, [Object? arguments]) _command;
 
   @override
-  Future<Lyrics> resolve(
-    LyricsRequest song, {
-    bool refresh = false,
-    String? languageCode,
-  }) async {
+  Future<Lyrics> resolve(LyricsRequest song, {bool refresh = false}) async {
     final reply = await _command('resolveLyrics', {
-      ...encodeLyricsRequest(song, languageCode: languageCode),
+      ...encodeLyricsRequest(song),
       'refresh': refresh,
     });
     // A host that is not there yet answers nothing: an empty pane is a
     // normal state, and the next rebuild asks again.
     if (reply is! Map) return Lyrics.empty;
+    return decodeLyrics(Map<String, dynamic>.from(reply));
+  }
+
+  /// The translation pass, asked of the host after its words are on screen.
+  ///
+  /// A second hop rather than a wait inside [resolve]: the pane draws the
+  /// host's words at once and folds this in when the host's model answers.
+  @override
+  Future<Lyrics> translate(
+    LyricsRequest song,
+    Lyrics lyrics, {
+    String? languageCode,
+  }) async {
+    final reply = await _command('translateLyrics', {
+      ...encodeLyricsRequest(song, languageCode: languageCode),
+      'lyrics': encodeLyrics(lyrics),
+    });
+    if (reply is! Map) return lyrics;
     return decodeLyrics(Map<String, dynamic>.from(reply));
   }
 

@@ -2375,41 +2375,35 @@ final class LyricsResolverProvider
 
 String _$lyricsResolverHash() => r'38edbd2717af832b8df648cb966558d07aa80959';
 
-/// Lyrics of one song, from the local library or the network.
+/// The words of one song, and their readings: from the local library or the
+/// network, never waiting for a translation.
 ///
 /// Kept for the session as well as on disk: the pane is rebuilt on every
 /// position tick's parent rebuild, and a family entry means it never asks
 /// twice for the track it is already showing.
-/// [languageCode] is the app's current language, so a translation is generated
-/// in the language the interface is actually in. A language change gives the
-/// family a new argument, which refetches instead of serving the old one.
 
 @ProviderFor(songLyrics)
 final songLyricsProvider = SongLyricsFamily._();
 
-/// Lyrics of one song, from the local library or the network.
+/// The words of one song, and their readings: from the local library or the
+/// network, never waiting for a translation.
 ///
 /// Kept for the session as well as on disk: the pane is rebuilt on every
 /// position tick's parent rebuild, and a family entry means it never asks
 /// twice for the track it is already showing.
-/// [languageCode] is the app's current language, so a translation is generated
-/// in the language the interface is actually in. A language change gives the
-/// family a new argument, which refetches instead of serving the old one.
 
 final class SongLyricsProvider
     extends $FunctionalProvider<AsyncValue<Lyrics>, Lyrics, FutureOr<Lyrics>>
     with $FutureModifier<Lyrics>, $FutureProvider<Lyrics> {
-  /// Lyrics of one song, from the local library or the network.
+  /// The words of one song, and their readings: from the local library or the
+  /// network, never waiting for a translation.
   ///
   /// Kept for the session as well as on disk: the pane is rebuilt on every
   /// position tick's parent rebuild, and a family entry means it never asks
   /// twice for the track it is already showing.
-  /// [languageCode] is the app's current language, so a translation is generated
-  /// in the language the interface is actually in. A language change gives the
-  /// family a new argument, which refetches instead of serving the old one.
   SongLyricsProvider._({
     required SongLyricsFamily super.from,
-    required (LyricsRequest, {String? languageCode}) super.argument,
+    required LyricsRequest super.argument,
   }) : super(
          retry: null,
          name: r'songLyricsProvider',
@@ -2425,7 +2419,7 @@ final class SongLyricsProvider
   String toString() {
     return r'songLyricsProvider'
         ''
-        '$argument';
+        '($argument)';
   }
 
   @$internal
@@ -2435,8 +2429,8 @@ final class SongLyricsProvider
 
   @override
   FutureOr<Lyrics> create(Ref ref) {
-    final argument = this.argument as (LyricsRequest, {String? languageCode});
-    return songLyrics(ref, argument.$1, languageCode: argument.languageCode);
+    final argument = this.argument as LyricsRequest;
+    return songLyrics(ref, argument);
   }
 
   @override
@@ -2450,23 +2444,17 @@ final class SongLyricsProvider
   }
 }
 
-String _$songLyricsHash() => r'b6899bce9a05c28a0b1d8a37a99111164d1049fd';
+String _$songLyricsHash() => r'36ca3c44f6de75e42431107451ad13b0d337507e';
 
-/// Lyrics of one song, from the local library or the network.
+/// The words of one song, and their readings: from the local library or the
+/// network, never waiting for a translation.
 ///
 /// Kept for the session as well as on disk: the pane is rebuilt on every
 /// position tick's parent rebuild, and a family entry means it never asks
 /// twice for the track it is already showing.
-/// [languageCode] is the app's current language, so a translation is generated
-/// in the language the interface is actually in. A language change gives the
-/// family a new argument, which refetches instead of serving the old one.
 
 final class SongLyricsFamily extends $Family
-    with
-        $FunctionalFamilyOverride<
-          FutureOr<Lyrics>,
-          (LyricsRequest, {String? languageCode})
-        > {
+    with $FunctionalFamilyOverride<FutureOr<Lyrics>, LyricsRequest> {
   SongLyricsFamily._()
     : super(
         retry: null,
@@ -2476,23 +2464,160 @@ final class SongLyricsFamily extends $Family
         isAutoDispose: false,
       );
 
-  /// Lyrics of one song, from the local library or the network.
+  /// The words of one song, and their readings: from the local library or the
+  /// network, never waiting for a translation.
   ///
   /// Kept for the session as well as on disk: the pane is rebuilt on every
   /// position tick's parent rebuild, and a family entry means it never asks
   /// twice for the track it is already showing.
-  /// [languageCode] is the app's current language, so a translation is generated
-  /// in the language the interface is actually in. A language change gives the
-  /// family a new argument, which refetches instead of serving the old one.
 
-  SongLyricsProvider call(LyricsRequest song, {String? languageCode}) =>
-      SongLyricsProvider._(
-        argument: (song, languageCode: languageCode),
-        from: this,
-      );
+  SongLyricsProvider call(LyricsRequest song) =>
+      SongLyricsProvider._(argument: song, from: this);
 
   @override
   String toString() => r'songLyricsProvider';
+}
+
+/// The translation layer for [songLyrics]'s words, in the app's language.
+///
+/// Auto-disposed: the pane watching it is the only thing that wants it, and a
+/// finished translation is already in the stored row, so the next read is a
+/// cache hit rather than a second request. Kept out of [songLyrics] on purpose
+/// — a model completing a page of lyrics takes seconds, and the words must not
+/// wait behind that.
+///
+/// [languageCode] is the app's current language: a language change gives the
+/// family a new argument, which translates again instead of serving the old
+/// language.
+
+@ProviderFor(songLyricsTranslation)
+final songLyricsTranslationProvider = SongLyricsTranslationFamily._();
+
+/// The translation layer for [songLyrics]'s words, in the app's language.
+///
+/// Auto-disposed: the pane watching it is the only thing that wants it, and a
+/// finished translation is already in the stored row, so the next read is a
+/// cache hit rather than a second request. Kept out of [songLyrics] on purpose
+/// — a model completing a page of lyrics takes seconds, and the words must not
+/// wait behind that.
+///
+/// [languageCode] is the app's current language: a language change gives the
+/// family a new argument, which translates again instead of serving the old
+/// language.
+
+final class SongLyricsTranslationProvider
+    extends $FunctionalProvider<AsyncValue<Lyrics>, Lyrics, FutureOr<Lyrics>>
+    with $FutureModifier<Lyrics>, $FutureProvider<Lyrics> {
+  /// The translation layer for [songLyrics]'s words, in the app's language.
+  ///
+  /// Auto-disposed: the pane watching it is the only thing that wants it, and a
+  /// finished translation is already in the stored row, so the next read is a
+  /// cache hit rather than a second request. Kept out of [songLyrics] on purpose
+  /// — a model completing a page of lyrics takes seconds, and the words must not
+  /// wait behind that.
+  ///
+  /// [languageCode] is the app's current language: a language change gives the
+  /// family a new argument, which translates again instead of serving the old
+  /// language.
+  SongLyricsTranslationProvider._({
+    required SongLyricsTranslationFamily super.from,
+    required (LyricsRequest, {String? languageCode}) super.argument,
+  }) : super(
+         retry: null,
+         name: r'songLyricsTranslationProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$songLyricsTranslationHash();
+
+  @override
+  String toString() {
+    return r'songLyricsTranslationProvider'
+        ''
+        '$argument';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<Lyrics> $createElement($ProviderPointer pointer) =>
+      $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<Lyrics> create(Ref ref) {
+    final argument = this.argument as (LyricsRequest, {String? languageCode});
+    return songLyricsTranslation(
+      ref,
+      argument.$1,
+      languageCode: argument.languageCode,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is SongLyricsTranslationProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$songLyricsTranslationHash() =>
+    r'15537d1bd1e8f1b65f019230d3c32f903a416397';
+
+/// The translation layer for [songLyrics]'s words, in the app's language.
+///
+/// Auto-disposed: the pane watching it is the only thing that wants it, and a
+/// finished translation is already in the stored row, so the next read is a
+/// cache hit rather than a second request. Kept out of [songLyrics] on purpose
+/// — a model completing a page of lyrics takes seconds, and the words must not
+/// wait behind that.
+///
+/// [languageCode] is the app's current language: a language change gives the
+/// family a new argument, which translates again instead of serving the old
+/// language.
+
+final class SongLyricsTranslationFamily extends $Family
+    with
+        $FunctionalFamilyOverride<
+          FutureOr<Lyrics>,
+          (LyricsRequest, {String? languageCode})
+        > {
+  SongLyricsTranslationFamily._()
+    : super(
+        retry: null,
+        name: r'songLyricsTranslationProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  /// The translation layer for [songLyrics]'s words, in the app's language.
+  ///
+  /// Auto-disposed: the pane watching it is the only thing that wants it, and a
+  /// finished translation is already in the stored row, so the next read is a
+  /// cache hit rather than a second request. Kept out of [songLyrics] on purpose
+  /// — a model completing a page of lyrics takes seconds, and the words must not
+  /// wait behind that.
+  ///
+  /// [languageCode] is the app's current language: a language change gives the
+  /// family a new argument, which translates again instead of serving the old
+  /// language.
+
+  SongLyricsTranslationProvider call(
+    LyricsRequest song, {
+    String? languageCode,
+  }) => SongLyricsTranslationProvider._(
+    argument: (song, languageCode: languageCode),
+    from: this,
+  );
+
+  @override
+  String toString() => r'songLyricsTranslationProvider';
 }
 
 /// How many tracks have a stored lyric, for the settings row.
@@ -2827,7 +2952,7 @@ final class LyricsMaintenanceProvider
   }
 }
 
-String _$lyricsMaintenanceHash() => r'2f223327c32c1535924e176ba108e4ca4b3205cf';
+String _$lyricsMaintenanceHash() => r'9cb37d9a134c147bce0965793ca9e8648897a553';
 
 /// Actions the library UI needs beyond reading: re-ask the network, forget a
 /// removed source, empty the stored lyrics.

@@ -26,11 +26,10 @@ void main() {
       return encodeLyrics(_guestAnswer);
     });
 
-    final lyrics = await resolver.resolve(_request, languageCode: 'zh-CN');
+    final lyrics = await resolver.resolve(_request);
 
     expect(calls, ['resolveLyrics']);
     expect(sent['id'], 's1');
-    expect(sent['languageCode'], 'zh-CN');
     expect(sent['refresh'], false);
     expect(lyrics.lines.single.text, 'host line');
   });

@@ -150,6 +150,12 @@ than block you behind a form.
   play — and any play offline — never asks the network, and a re-tagged or
   re-linked song keeps its words. A confirmed miss is cached for a day; a
   timeout never is.
+  The pane is two phases: `resolve` answers the words and their readings
+  (Romanization is local dictionary work), and the translation is a separate
+  auto-disposed family (`songLyricsTranslationProvider`) the pane folds in when
+  it lands. A lyric therefore draws immediately — a model completing a page can
+  take seconds, and nothing on screen waits behind it — and a stalled or failed
+  translation leaves the words, not a spinner.
   Translation is two engines behind one setting (`lib/library/lyrics_enricher.dart`):
   Google's free web endpoint, or — opt-in, once a model is picked under
   Settings → Lyrics — the account's own Solar Network AI, through Persona's

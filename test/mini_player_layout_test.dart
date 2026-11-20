@@ -184,7 +184,7 @@ void main() {
           libraryDatabaseProvider.overrideWithValue(null),
           playbackProvider.overrideWith(_Mini.new),
           songLyricsProvider.overrideWith(
-            (ref, song, {languageCode}) async => const Lyrics(
+            (ref, song) async => const Lyrics(
               lines: [LyricLine(Duration(seconds: 1), 'first line')],
               synced: true,
             ),
