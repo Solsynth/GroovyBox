@@ -1831,6 +1831,11 @@ final class SearchSongsFamily extends $Family
 /// kinds, and only the songs were ever asked for. Kept as its own provider so
 /// a page section can fold without costing the songs their answer, and so the
 /// two requests can land in either order.
+///
+/// Additive by design: a library that cannot enumerate its artists (a plugin
+/// without the capability, a server mid-restart) answers here with nothing
+/// rather than failing the page. The songs still carry the failure, and the
+/// search field still answered the question the reader asked.
 
 @ProviderFor(searchGroups)
 final searchGroupsProvider = SearchGroupsFamily._();
@@ -1841,6 +1846,11 @@ final searchGroupsProvider = SearchGroupsFamily._();
 /// kinds, and only the songs were ever asked for. Kept as its own provider so
 /// a page section can fold without costing the songs their answer, and so the
 /// two requests can land in either order.
+///
+/// Additive by design: a library that cannot enumerate its artists (a plugin
+/// without the capability, a server mid-restart) answers here with nothing
+/// rather than failing the page. The songs still carry the failure, and the
+/// search field still answered the question the reader asked.
 
 final class SearchGroupsProvider
     extends
@@ -1856,6 +1866,11 @@ final class SearchGroupsProvider
   /// kinds, and only the songs were ever asked for. Kept as its own provider so
   /// a page section can fold without costing the songs their answer, and so the
   /// two requests can land in either order.
+  ///
+  /// Additive by design: a library that cannot enumerate its artists (a plugin
+  /// without the capability, a server mid-restart) answers here with nothing
+  /// rather than failing the page. The songs still carry the failure, and the
+  /// search field still answered the question the reader asked.
   SearchGroupsProvider._({
     required SearchGroupsFamily super.from,
     required String super.argument,
@@ -1900,7 +1915,7 @@ final class SearchGroupsProvider
   }
 }
 
-String _$searchGroupsHash() => r'a9b6611b77a38b518bc07591c55f626e05d01257';
+String _$searchGroupsHash() => r'a2903d42c4c2f6c77b7f00461996c883ce159e20';
 
 /// The artists and albums the libraries hold that match [query].
 ///
@@ -1908,6 +1923,11 @@ String _$searchGroupsHash() => r'a9b6611b77a38b518bc07591c55f626e05d01257';
 /// kinds, and only the songs were ever asked for. Kept as its own provider so
 /// a page section can fold without costing the songs their answer, and so the
 /// two requests can land in either order.
+///
+/// Additive by design: a library that cannot enumerate its artists (a plugin
+/// without the capability, a server mid-restart) answers here with nothing
+/// rather than failing the page. The songs still carry the failure, and the
+/// search field still answered the question the reader asked.
 
 final class SearchGroupsFamily extends $Family
     with $FunctionalFamilyOverride<FutureOr<LibraryGroups>, String> {
@@ -1926,6 +1946,11 @@ final class SearchGroupsFamily extends $Family
   /// kinds, and only the songs were ever asked for. Kept as its own provider so
   /// a page section can fold without costing the songs their answer, and so the
   /// two requests can land in either order.
+  ///
+  /// Additive by design: a library that cannot enumerate its artists (a plugin
+  /// without the capability, a server mid-restart) answers here with nothing
+  /// rather than failing the page. The songs still carry the failure, and the
+  /// search field still answered the question the reader asked.
 
   SearchGroupsProvider call(String query) =>
       SearchGroupsProvider._(argument: query, from: this);
@@ -2542,6 +2567,77 @@ final class ListeningStatsProvider
 }
 
 String _$listeningStatsHash() => r'793553a868ec243c59e38e569d130ffb81505740';
+
+/// What the smart shuffle draws from: every playable track the device knows,
+/// its hearts and its play history, plus the account's own recommendations.
+///
+/// Kept alive because it is a whole-library read and a queue is planned from
+/// it: rebuilding it on every press would make the second press as slow as
+/// the first.
+
+@ProviderFor(ShuffleSeeds)
+final shuffleSeedsProvider = ShuffleSeedsProvider._();
+
+/// What the smart shuffle draws from: every playable track the device knows,
+/// its hearts and its play history, plus the account's own recommendations.
+///
+/// Kept alive because it is a whole-library read and a queue is planned from
+/// it: rebuilding it on every press would make the second press as slow as
+/// the first.
+final class ShuffleSeedsProvider
+    extends $AsyncNotifierProvider<ShuffleSeeds, List<ShuffleSeed>> {
+  /// What the smart shuffle draws from: every playable track the device knows,
+  /// its hearts and its play history, plus the account's own recommendations.
+  ///
+  /// Kept alive because it is a whole-library read and a queue is planned from
+  /// it: rebuilding it on every press would make the second press as slow as
+  /// the first.
+  ShuffleSeedsProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'shuffleSeedsProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$shuffleSeedsHash();
+
+  @$internal
+  @override
+  ShuffleSeeds create() => ShuffleSeeds();
+}
+
+String _$shuffleSeedsHash() => r'5dd07e8081d816bf523661d1bde1788df2713247';
+
+/// What the smart shuffle draws from: every playable track the device knows,
+/// its hearts and its play history, plus the account's own recommendations.
+///
+/// Kept alive because it is a whole-library read and a queue is planned from
+/// it: rebuilding it on every press would make the second press as slow as
+/// the first.
+
+abstract class _$ShuffleSeeds extends $AsyncNotifier<List<ShuffleSeed>> {
+  FutureOr<List<ShuffleSeed>> build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref =
+        this.ref as $Ref<AsyncValue<List<ShuffleSeed>>, List<ShuffleSeed>>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<AsyncValue<List<ShuffleSeed>>, List<ShuffleSeed>>,
+              AsyncValue<List<ShuffleSeed>>,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
 
 /// Actions the library UI needs beyond reading: re-ask the network, forget a
 /// removed source, empty the stored lyrics.

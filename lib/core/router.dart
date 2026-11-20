@@ -32,6 +32,7 @@ List<AutoRoute> _tabChildren(AutoRoute root) => [
     path: 'solink-favourites',
   ),
   AutoRoute(page: DownloadsRoute.page, path: 'downloads'),
+  AutoRoute(page: SmartShuffleRoute.page, path: 'smart-shuffle'),
 ];
 
 /// The app's route table.

@@ -107,6 +107,12 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                         icon: const Icon(Symbols.tune_rounded),
                       ),
                       IconButton(
+                        tooltip: 'shuffleTitle'.tr(),
+                        onPressed: () =>
+                            context.router.push(const SmartShuffleRoute()),
+                        icon: const Icon(Symbols.shuffle_rounded),
+                      ),
+                      IconButton(
                         tooltip: 'commonRefresh'.tr(),
                         onPressed: refreshAll,
                         icon: const Icon(Symbols.refresh_rounded),

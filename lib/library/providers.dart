@@ -17,11 +17,13 @@ import 'lyrics_resolver.dart';
 import 'lyrics_store.dart';
 import 'models.dart';
 import 'netease_adapter.dart';
+import 'smart_shuffle.dart';
 import 'source.dart';
 import 'plugins/plugin_host.dart';
 import 'plugins/plugin_schema.dart';
 import '../library_sync/queue.dart';
 import 'store.dart';
+import 'track_identity.dart';
 
 part 'providers.g.dart';
 
@@ -86,7 +88,6 @@ Map<String, LibrarySource> librarySourceById(Ref ref) => {
   for (final source in ref.watch(librarySourcesWithLocalProvider))
     source.id: source,
 };
-
 
 /// The device's copy of every library's answers: what makes a screen show
 /// what it last showed when the network is gone.
@@ -397,6 +398,7 @@ Future<LibraryAlbum?> albumInfo(Ref ref, LibraryRef album) async {
     return null;
   }
 }
+
 /// The tracks of one album, from wherever they can be played.
 ///
 /// A cloud account is the case this exists for: Apple Music and NetEase hand
@@ -447,6 +449,7 @@ Future<List<LibrarySong>> playlistSongs(Ref ref, LibraryRef playlist) async {
   if (source == null) return const [];
   return source.playlistSongs(playlist.id);
 }
+
 /// Every artist the connected libraries list, merged in source order.
 ///
 /// An artist is a native id plus a name, and ids are only unique within one
@@ -632,6 +635,66 @@ Future<ListeningStats> listeningStats(Ref ref) async {
   final catalog = ref.watch(libraryCatalogProvider);
   if (catalog == null) return ListeningStats.none;
   return catalog.listeningStats();
+}
+
+/// Which recording a row is, across two libraries' copies: the fingerprint's
+/// artist-and-title half, which ignores length so a slightly different timing
+/// still meets the other copy of the same recording.
+String _shuffleKey(LibrarySong song) =>
+    trackBaseFingerprint(title: song.title, artist: song.artist);
+
+/// What the smart shuffle draws from: every playable track the device knows,
+/// its hearts and its play history, plus the account's own recommendations.
+///
+/// Kept alive because it is a whole-library read and a queue is planned from
+/// it: rebuilding it on every press would make the second press as slow as
+/// the first.
+@Riverpod(keepAlive: true)
+class ShuffleSeeds extends AsyncNotifier<List<ShuffleSeed>> {
+  /// How far back a play counts as recent, so a mix rotates instead of
+  /// replaying the queue the listener just heard.
+  static const recentWindow = Duration(days: 2);
+
+  @override
+  Future<List<ShuffleSeed>> build() => _fetch();
+
+  Future<List<ShuffleSeed>> _fetch() async {
+    final database = ref.watch(libraryDatabaseProvider);
+    if (database == null) return const [];
+    final rows = await database.shuffleCandidates();
+    final cutoff = DateTime.now().subtract(recentWindow);
+    final recent = [
+      for (final row in rows)
+        if (row.lastPlayed != null && row.lastPlayed!.isAfter(cutoff))
+          _shuffleKey(row.song),
+    ];
+
+    // The account's own shelves are recommendations, not holdings: they enter
+    // the mix weighted like a heart's lesser cousin, without being adopted
+    // into the local library (a station is not a track the user owns).
+    final curated = ref.watch(landingShelvesProvider).value ?? const [];
+    final recommended = [
+      for (final shelf in curated)
+        for (final song in shelf.songs) song,
+    ];
+
+    return [
+      for (final row in rows)
+        ShuffleSeed(
+          song: row.song,
+          favourite: row.favourite,
+          plays: row.plays,
+          recentlyPlayed: recent.contains(_shuffleKey(row.song)),
+        ),
+      for (final song in recommended)
+        ShuffleSeed(song: song, recommended: true),
+    ];
+  }
+
+  Future<void> refresh() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(_fetch);
+  }
 }
 
 /// Actions the library UI needs beyond reading: re-ask the network, forget a

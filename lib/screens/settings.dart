@@ -202,6 +202,15 @@ class SettingsScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: SolSpace.lg),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Symbols.shuffle_rounded),
+                    title: Text('settingsSmartShuffle'.tr()),
+                    subtitle: Text('settingsSmartShuffleSubtitle'.tr()),
+                    trailing: const Icon(Symbols.chevron_right_rounded),
+                    onTap: () =>
+                        context.router.push(const SmartShuffleRoute()),
+                  ),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     value: infinitePlayback,

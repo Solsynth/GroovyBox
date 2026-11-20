@@ -214,6 +214,7 @@ class PlaybackSessions extends Table {
   @override
   Set<Column> get primaryKey => {id};
 }
+
 /// One audio file this device owns: copied into the app's own storage on
 /// import, so the library keeps playing after the picker's source folder is
 /// moved, unplugged or deleted.
@@ -246,6 +247,7 @@ class LocalFiles extends Table {
   TextColumn get artPath => text().nullable()();
   DateTimeColumn get addedAt => dateTime()();
 }
+
 /// One track kept on this device for offline play: a stream copied out of a
 /// connected library into the app's own storage.
 ///
@@ -429,9 +431,8 @@ class LibraryDatabase extends _$LibraryDatabase {
   }
 
   /// Every link of one track, i.e. every source that can play it.
-  Future<List<TrackLinkRow>> linksOf(int trackId) => (select(
-    trackLinks,
-  )..where((link) => link.trackId.equals(trackId))).get();
+  Future<List<TrackLinkRow>> linksOf(int trackId) =>
+      (select(trackLinks)..where((link) => link.trackId.equals(trackId))).get();
 
   /// Adopts one item seen on one source and returns the canonical track.
   ///
@@ -532,8 +533,9 @@ class LibraryDatabase extends _$LibraryDatabase {
   ///
   /// Tracks, their lyrics and their play history outlive the link: the same
   /// server re-added, or a different one, re-adopts them by fingerprint.
-  Future<void> unlinkSource(String sourceId) =>
-      (delete(trackLinks)..where((link) => link.sourceId.equals(sourceId))).go();
+  Future<void> unlinkSource(String sourceId) => (delete(
+    trackLinks,
+  )..where((link) => link.sourceId.equals(sourceId))).go();
 
   /// Every external id one source is linked under, read before
   /// [unlinkSource] deletes them: a synced tombstone needs the pair.
@@ -546,9 +548,9 @@ class LibraryDatabase extends _$LibraryDatabase {
 
   /// The fingerprint of one track, or null when the row is gone.
   Future<String?> fingerprintOf(int trackId) async {
-    final row =
-        await (select(tracks)..where((track) => track.id.equals(trackId)))
-            .getSingleOrNull();
+    final row = await (select(
+      tracks,
+    )..where((track) => track.id.equals(trackId))).getSingleOrNull();
     return row?.fingerprint;
   }
 
@@ -571,9 +573,9 @@ class LibraryDatabase extends _$LibraryDatabase {
     return row.read<int>('n');
   }
 
-  Future<int> trackCount() async =>
-      (await customSelect('SELECT COUNT(*) AS n FROM tracks').getSingle())
-          .read<int>('n');
+  Future<int> trackCount() async => (await customSelect(
+    'SELECT COUNT(*) AS n FROM tracks',
+  ).getSingle()).read<int>('n');
 
   /// When [trackId] was last played, or null if it never was.
   Future<DateTime?> lastPlayedAt(int trackId) async {
@@ -587,11 +589,10 @@ class LibraryDatabase extends _$LibraryDatabase {
   }
 
   Future<int> playCountOf(int trackId) async {
-    final row =
-        await customSelect(
-          'SELECT COUNT(*) AS n FROM play_events WHERE track_id = ?',
-          variables: [Variable.withInt(trackId)],
-        ).getSingle();
+    final row = await customSelect(
+      'SELECT COUNT(*) AS n FROM play_events WHERE track_id = ?',
+      variables: [Variable.withInt(trackId)],
+    ).getSingle();
     return row.read<int>('n');
   }
 
@@ -716,8 +717,9 @@ class LibraryDatabase extends _$LibraryDatabase {
   }
 
   /// The saved active playback session, or null if none was saved.
-  Future<PlaybackSessionRow?> loadPlaybackSession() =>
-      (select(playbackSessions)..where((s) => s.id.equals(1))).getSingleOrNull();
+  Future<PlaybackSessionRow?> loadPlaybackSession() => (select(
+    playbackSessions,
+  )..where((s) => s.id.equals(1))).getSingleOrNull();
 
   /// Persists the active playback session in a single row.
   Future<void> savePlaybackSession({
@@ -790,32 +792,86 @@ class LibraryDatabase extends _$LibraryDatabase {
     ];
   }
 
+  /// Every known track the device can still play, with the signals the smart
+  /// shuffle ranks by: whether it is a heart, how often it played, and when.
+  ///
+  /// One query rather than one per signal: a mix is drawn from the whole
+  /// library, and joining three tables per track would make a large library
+  /// pay for the page's first frame.
+  Future<
+    List<({LibrarySong song, bool favourite, int plays, DateTime? lastPlayed})>
+  >
+  shuffleCandidates() async {
+    final rows = await customSelect(
+      'SELECT t.title, t.artist, t.album, t.genre, t.year, '
+      't.track_number, t.disc_number, t.duration_ms, t.mbid, '
+      'l.source_id, l.external_id, l.album_external_id, '
+      'l.artist_external_id, l.art_id, '
+      'COALESCE(f.favourite, 0) AS favourite, '
+      'COALESCE(p.plays, 0) AS plays, p.last_played '
+      'FROM tracks t '
+      'JOIN track_links l ON t.id = l.track_id '
+      'LEFT JOIN favourite_tracks f ON f.track_id = t.id '
+      'LEFT JOIN ('
+      '  SELECT track_id, COUNT(*) AS plays, MAX(started_at) AS last_played '
+      '  FROM play_events GROUP BY track_id'
+      ') p ON p.track_id = t.id '
+      'GROUP BY t.id',
+    ).get();
+    return [
+      for (final row in rows)
+        (
+          song: LibrarySong(
+            sourceId: row.read<String>('source_id'),
+            id: row.read<String>('external_id'),
+            title: row.read<String>('title'),
+            artist: row.readNullable<String>('artist'),
+            album: row.readNullable<String>('album'),
+            albumId: row.readNullable<String>('album_external_id'),
+            artistId: row.readNullable<String>('artist_external_id'),
+            artId: row.readNullable<String>('art_id'),
+            duration: Duration(milliseconds: row.read<int>('duration_ms')),
+            track: row.readNullable<int>('track_number'),
+            discNumber: row.readNullable<int>('disc_number'),
+            year: row.readNullable<int>('year'),
+            genre: row.readNullable<String>('genre'),
+            mbid: row.readNullable<String>('mbid'),
+          ),
+          favourite: row.read<int>('favourite') != 0,
+          plays: row.read<int>('plays'),
+          lastPlayed: row.readNullable<DateTime>('last_played'),
+        ),
+    ];
+  }
+
   /// Finds an existing canonical track matching [identity], using:
   /// 1) MusicBrainz ID (if present)
   /// 2) Exact fingerprint
   /// 3) Fingerprint base prefix with continuous duration window
   Future<TrackRow?> findMatchingTrack(TrackIdentity identity) async {
     if (identity.mbid != null && identity.mbid!.isNotEmpty) {
-      final matched = await (select(tracks)
-            ..where((track) => track.mbid.equals(identity.mbid!)))
-          .getSingleOrNull();
+      final matched = await (select(
+        tracks,
+      )..where((track) => track.mbid.equals(identity.mbid!))).getSingleOrNull();
       if (matched != null) return matched;
     }
 
-    final byFp = await (select(tracks)
-          ..where((track) => track.fingerprint.equals(identity.fingerprint)))
-        .getSingleOrNull();
+    final byFp =
+        await (select(
+              tracks,
+            )..where((track) => track.fingerprint.equals(identity.fingerprint)))
+            .getSingleOrNull();
     if (byFp != null) return byFp;
 
     if (identity.duration > Duration.zero) {
       final base = identity.baseFingerprint;
-      final candidates = await (select(tracks)
-            ..where(
-              (track) =>
-                  track.fingerprint.equals(base) |
-                  track.fingerprint.like('$base|%'),
-            ))
-          .get();
+      final candidates =
+          await (select(tracks)..where(
+                (track) =>
+                    track.fingerprint.equals(base) |
+                    track.fingerprint.like('$base|%'),
+              ))
+              .get();
       for (final candidate in candidates) {
         final candidateIdentity = TrackIdentity(
           title: candidate.title,
@@ -845,14 +901,14 @@ class LibraryDatabase extends _$LibraryDatabase {
     return existing == null;
   }
 
-  Future<List<LocalFileRow>> localFileRows() => (select(
-    localFiles,
-  )..orderBy([
-    (file) => OrderingTerm(expression: file.album),
-    (file) => OrderingTerm(expression: file.discNumber),
-    (file) => OrderingTerm(expression: file.trackNumber),
-    (file) => OrderingTerm(expression: file.title),
-  ])).get();
+  Future<List<LocalFileRow>> localFileRows() =>
+      (select(localFiles)..orderBy([
+            (file) => OrderingTerm(expression: file.album),
+            (file) => OrderingTerm(expression: file.discNumber),
+            (file) => OrderingTerm(expression: file.trackNumber),
+            (file) => OrderingTerm(expression: file.title),
+          ]))
+          .get();
 
   Future<LocalFileRow?> localFileRow(String path) => (select(
     localFiles,
@@ -962,7 +1018,8 @@ class LibraryDatabase extends _$LibraryDatabase {
           final discNumber = raw['discNumber'] as int?;
           final durationMs = (raw['durationMs'] as num?)?.toInt() ?? 0;
           final mbid = raw['mbid'] as String?;
-          final fingerprint = raw['fingerprint'] as String? ??
+          final fingerprint =
+              raw['fingerprint'] as String? ??
               trackFingerprint(
                 title: title,
                 artist: artist,
@@ -993,7 +1050,8 @@ class LibraryDatabase extends _$LibraryDatabase {
           final matched = await findMatchingTrack(identity);
           if (matched != null) {
             idMap[oldId] = matched.id;
-            final needsUpdate = (matched.album == null && album != null) ||
+            final needsUpdate =
+                (matched.album == null && album != null) ||
                 (matched.albumArtist == null && albumArtist != null) ||
                 (matched.genre == null && genre != null) ||
                 (matched.year == null && year != null) ||
@@ -1001,8 +1059,9 @@ class LibraryDatabase extends _$LibraryDatabase {
                 (matched.discNumber == null && discNumber != null) ||
                 (matched.mbid == null && mbid != null);
             if (needsUpdate) {
-              await (update(tracks)..where((t) => t.id.equals(matched.id)))
-                  .write(
+              await (update(
+                tracks,
+              )..where((t) => t.id.equals(matched.id))).write(
                 TracksCompanion(
                   albumArtist: Value.absentIfNull(albumArtist),
                   album: Value.absentIfNull(album),
@@ -1114,9 +1173,9 @@ class LibraryDatabase extends _$LibraryDatabase {
               : DateTime.now();
           final translationLanguage = raw['translationLanguage'] as String?;
 
-          final existing = await (select(lyricsEntries)
-                ..where((e) => e.trackId.equals(localTrackId)))
-              .getSingleOrNull();
+          final existing = await (select(
+            lyricsEntries,
+          )..where((e) => e.trackId.equals(localTrackId))).getSingleOrNull();
 
           if (existing == null) {
             await into(lyricsEntries).insert(
@@ -1136,9 +1195,9 @@ class LibraryDatabase extends _$LibraryDatabase {
             final existingOrigin = existing.origin;
             final incomingHasLyrics = origin != 'none';
             if (existingOrigin == 'none' && incomingHasLyrics) {
-              await (update(lyricsEntries)
-                    ..where((e) => e.trackId.equals(localTrackId)))
-                  .write(
+              await (update(
+                lyricsEntries,
+              )..where((e) => e.trackId.equals(localTrackId))).write(
                 LyricsEntriesCompanion(
                   lines: Value(lines),
                   synced: Value(synced),
@@ -1150,10 +1209,11 @@ class LibraryDatabase extends _$LibraryDatabase {
                 ),
               );
               lyricsCount++;
-            } else if (fetchedAt.isAfter(existing.fetchedAt) && incomingHasLyrics) {
-              await (update(lyricsEntries)
-                    ..where((e) => e.trackId.equals(localTrackId)))
-                  .write(
+            } else if (fetchedAt.isAfter(existing.fetchedAt) &&
+                incomingHasLyrics) {
+              await (update(
+                lyricsEntries,
+              )..where((e) => e.trackId.equals(localTrackId))).write(
                 LyricsEntriesCompanion(
                   lines: Value(lines),
                   synced: Value(synced),
@@ -1189,13 +1249,13 @@ class LibraryDatabase extends _$LibraryDatabase {
           final positionMs = (raw['positionMs'] as num?)?.toInt() ?? 0;
           final completed = raw['completed'] == true;
 
-          final existing = await (select(playEvents)
-                ..where(
-                  (p) =>
-                      p.trackId.equals(localTrackId) &
-                      p.startedAt.equals(startedAt),
-                ))
-              .getSingleOrNull();
+          final existing =
+              await (select(playEvents)..where(
+                    (p) =>
+                        p.trackId.equals(localTrackId) &
+                        p.startedAt.equals(startedAt),
+                  ))
+                  .getSingleOrNull();
 
           if (existing == null) {
             await into(playEvents).insert(
@@ -1226,9 +1286,9 @@ class LibraryDatabase extends _$LibraryDatabase {
 /// Whether this device likes one track, and when that answer last changed.
 extension FavouriteQuery on LibraryDatabase {
   /// The device's own answer for [trackId]. Null when it has never been set.
-  Future<FavouriteTrackRow?> favouriteOf(int trackId) =>
-      (select(favouriteTracks)..where((row) => row.trackId.equals(trackId)))
-          .getSingleOrNull();
+  Future<FavouriteTrackRow?> favouriteOf(int trackId) => (select(
+    favouriteTracks,
+  )..where((row) => row.trackId.equals(trackId))).getSingleOrNull();
 
   /// Writes the device's answer and returns it.
   ///
@@ -1302,19 +1362,15 @@ extension LocalPlaylistQuery on LibraryDatabase {
           ),
         );
       }
-      await (update(
-        localPlaylists,
-      )..where((row) => row.id.equals(playlistId))).write(
-        LocalPlaylistsCompanion(updatedAt: Value(now)),
-      );
+      await (update(localPlaylists)..where((row) => row.id.equals(playlistId)))
+          .write(LocalPlaylistsCompanion(updatedAt: Value(now)));
     });
   }
 
   /// Every device-owned playlist, newest change first.
-  Future<List<LocalPlaylistRow>> localPlaylists_() =>
-      (select(localPlaylists)
-            ..orderBy([(row) => OrderingTerm.desc(row.updatedAt)]))
-          .get();
+  Future<List<LocalPlaylistRow>> localPlaylists_() => (select(
+    localPlaylists,
+  )..orderBy([(row) => OrderingTerm.desc(row.updatedAt)])).get();
 
   /// The entries of one device-owned playlist, in position order.
   Future<List<LocalPlaylistEntryRow>> playlistEntries(int playlistId) =>
@@ -1340,35 +1396,25 @@ extension LocalPlaylistQuery on LibraryDatabase {
   /// not renumber, or a later reorder would move tracks the user did not
   /// touch (the same rule [appendToPlaylist] follows at the tail).
   Future<void> removePlaylistEntry(int playlistId, int entryId) async {
-    await (delete(localPlaylistEntries)
-          ..where(
-            (row) => row.id.equals(entryId) & row.playlistId.equals(playlistId),
-          ))
+    await (delete(localPlaylistEntries)..where(
+          (row) => row.id.equals(entryId) & row.playlistId.equals(playlistId),
+        ))
         .go();
-    await (update(
-      localPlaylists,
-    )..where((row) => row.id.equals(playlistId))).write(
-      LocalPlaylistsCompanion(updatedAt: Value(DateTime.now())),
-    );
+    await (update(localPlaylists)..where((row) => row.id.equals(playlistId)))
+        .write(LocalPlaylistsCompanion(updatedAt: Value(DateTime.now())));
   }
 
   /// Removes several entries in one transaction, keeping the survivors at
   /// their positions for the same reason a single removal does.
-  Future<void> removePlaylistEntries(
-    int playlistId,
-    List<int> entryIds,
-  ) async {
+  Future<void> removePlaylistEntries(int playlistId, List<int> entryIds) async {
     if (entryIds.isEmpty) return;
     await transaction(() async {
       await (delete(localPlaylistEntries)..where(
             (row) => row.id.isIn(entryIds) & row.playlistId.equals(playlistId),
           ))
           .go();
-      await (update(
-        localPlaylists,
-      )..where((row) => row.id.equals(playlistId))).write(
-        LocalPlaylistsCompanion(updatedAt: Value(DateTime.now())),
-      );
+      await (update(localPlaylists)..where((row) => row.id.equals(playlistId)))
+          .write(LocalPlaylistsCompanion(updatedAt: Value(DateTime.now())));
     });
   }
 }
@@ -1385,10 +1431,9 @@ extension DownloadQuery on LibraryDatabase {
           .getSingleOrNull();
 
   /// Every download, newest first.
-  Future<List<DownloadRow>> allDownloads() =>
-      (select(downloads)
-            ..orderBy([(row) => OrderingTerm.desc(row.downloadedAt)]))
-          .get();
+  Future<List<DownloadRow>> allDownloads() => (select(
+    downloads,
+  )..orderBy([(row) => OrderingTerm.desc(row.downloadedAt)])).get();
 
   /// Writes the row for one downloaded item, replacing any earlier copy of
   /// the same library item rather than keeping two files for one track.
@@ -1426,14 +1471,13 @@ extension DownloadQuery on LibraryDatabase {
 /// Cached API responses, so a screen reads what it last saw when the network
 /// is gone.
 extension HttpCacheQuery on LibraryDatabase {
-  Future<HttpCacheRow?> cachedResponse(String key) =>
-      (select(httpCache)..where((row) => row.key.equals(key)))
-          .getSingleOrNull();
+  Future<HttpCacheRow?> cachedResponse(String key) => (select(
+    httpCache,
+  )..where((row) => row.key.equals(key))).getSingleOrNull();
 
   /// Writes an answer, replacing the previous one for the same request.
-  Future<void> putCachedResponse(HttpCacheRow row) => into(
-    httpCache,
-  ).insert(row, onConflict: DoUpdate((old) => row, target: [httpCache.key]));
+  Future<void> putCachedResponse(HttpCacheRow row) => into(httpCache)
+      .insert(row, onConflict: DoUpdate((old) => row, target: [httpCache.key]));
 
   /// Marks an expired-but-usable answer as having been served from disk, so a
   /// later offline read knows the difference between "never fetched" and
@@ -1444,17 +1488,16 @@ extension HttpCacheQuery on LibraryDatabase {
       );
 
   /// Drops answers that expired before [before].
-  Future<int> pruneCache(DateTime before) => (delete(httpCache)
-        ..where((row) => row.expiresAt.isSmallerThanValue(before)))
-      .go();
+  Future<int> pruneCache(DateTime before) => (delete(
+    httpCache,
+  )..where((row) => row.expiresAt.isSmallerThanValue(before))).go();
 
   Future<void> clearCache() => delete(httpCache).go();
 
   /// Drops every entry one library stored: keys are `'<scope> GET …'`, so the
   /// scope is a prefix and needs no second column.
-  Future<int> clearScope(String scope) => (delete(httpCache)
-        ..where((row) => row.key.like('$scope %')))
-      .go();
+  Future<int> clearScope(String scope) =>
+      (delete(httpCache)..where((row) => row.key.like('$scope %'))).go();
 
   /// How many answers are stored and how many bytes their bodies take.
   Future<({int count, int bytes})> cacheTotals() async {

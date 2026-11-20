@@ -174,6 +174,17 @@ than block you behind a form.
   `page:section`), and a customize sheet reorders them, removes them, and pins
   a playlist as a section of its own (`lib/core/dashboard_layout.dart`,
   `lib/widgets/dashboard.dart`). The arrangement is one JSON value in prefs.
+  Every section names the library that provided it, and the same sheet opens
+  from Settings, so the dashboard is arranged in either place.
+- **Smart shuffle** — one mix from the device's whole library, planned in
+  `lib/library/smart_shuffle.dart` from hearts, play history and the account's
+  curated shelves (`ShuffleSeeds`). One recording is one entry however many
+  libraries hold it; a heart outranks a recommendation, which outranks a plain
+  row, and play count adds taste while a recent play subtracts. The queue
+  interleaves artists so a shuffle does not become an album, and genres and
+  moods (six buckets, matched on words because services spell them
+  differently) are shown as shelves of their own on `/smart-shuffle`, opened
+  from Explore and Settings.
 - **Screens** — Explore (curated shelves, random draw, recently added), Search,
   the Library (albums, artists and one merged Playlists list), album and
   playlist detail, Profile, Player, Setup, Settings. Every collection page opens
