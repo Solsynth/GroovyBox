@@ -15,10 +15,6 @@ import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/library/store.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/screens/library_sync_section.dart';
-
-import 'pulsar_section.dart';
-
-import 'plugins_section.dart';
 import 'package:groovy_box/solarpass/providers.dart';
 import 'package:groovy_box/solarpass/solarpass_section.dart';
 import 'package:groovy_box/widgets/common.dart';
@@ -28,45 +24,41 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// Settings: theme, glass, connected libraries, and the only way to
-/// disconnect one.
+import 'plugins_section.dart';
+import 'pulsar_section.dart';
+
+/// One card's outside inset, and one row's inside inset.
+///
+/// Both repeated a dozen times before; naming them keeps every card on the
+/// page aligned with its neighbours if the scale moves, and keeps a row from
+/// drifting off its card's gutter on the next edit.
+const _cardMargin = EdgeInsets.symmetric(horizontal: SolSpace.xl);
+const _rowPadding = EdgeInsets.symmetric(horizontal: SolSpace.lg);
+
+/// A card made of rows: the card keeps the hairline of space above and below
+/// its first and last row that it always had, and the rows own their sides.
+const _listCardPadding = EdgeInsets.symmetric(vertical: SolSpace.sm);
+
+/// Settings: theme, playback, connected libraries, stored data, and about.
 ///
 /// Groups are tonal cards separated by space. Dividers are deliberately not
 /// used: a card already says "these rows belong together", and a hairline
 /// between two of them would just be a third edge.
+///
+/// Each card is its own [ConsumerWidget] and watches only what it draws. The
+/// page itself watches one boolean for the dock inset; dragging the volume
+/// slider, or a library reporting a fresh track count, rebuilds that card and
+/// nothing else.
 @RoutePage()
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final themeMode = ref.watch(themeModeProvider);
-    final glass = ref.watch(glassEffectsEnabledProvider);
-    final infinitePlayback = ref.watch(infinitePlaybackEnabledProvider);
-    final sources = ref.watch(librarySourcesProvider);
-    final failures = ref.watch(sourceFailuresProvider);
-    // The accounts' own sizes, beside the rows that name them: an account's
-    // track count is a property of the connection, which is what this page
-    // manages, and the landing page is the wrong place to report it.
-    final digests = {
-      for (final digest
-          in ref.watch(libraryDigestsProvider).value ?? const <LibraryDigest>[])
-        digest.sourceId: digest,
-    };
-    final theme = Theme.of(context);
     // Select the identity, not the state: watching the whole transport would
     // rebuild this page on every position tick, once a second.
     final hasSong = ref.watch(
       playbackProvider.select((state) => state.current != null),
-    );
-    // Read once, live: the slider must reflect a nudge from the player's
-    // arrow keys, and the player page no longer shows a level of its own.
-    final volume = ref.watch(playbackProvider.select((state) => state.volume));
-    // MusicKit has no volume API: while a platform-played track is on, the
-    // slider would move without changing anything, so it says whose the level
-    // is instead of lying.
-    final volumeIsSystem = ref.watch(
-      playbackProvider.select((state) => state.volumeIsSystemControlled),
     );
     final bottomInset = solBottomChromeInset(context, dockVisible: hasSong);
 
@@ -78,463 +70,370 @@ class SettingsScreen extends ConsumerWidget {
           padding: EdgeInsets.only(bottom: bottomInset),
           children: [
             PageHeadline(title: 'tabSettings'.tr()),
-            SectionLabel('settingsSectionAppearance'.tr()),
-            IslandCard(
-              margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
-              padding: const EdgeInsets.all(SolSpace.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'settingsThemeLabel'.tr(),
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: SolSpace.md),
-                  SegmentedButton<AppThemeMode>(
-                    segments: [
-                      ButtonSegment(
-                        value: AppThemeMode.system,
-                        icon: const Icon(Symbols.brightness_auto_rounded),
-                        label: Text('settingsThemeSystem'.tr()),
-                      ),
-                      ButtonSegment(
-                        value: AppThemeMode.light,
-                        icon: const Icon(Symbols.light_mode_rounded),
-                        label: Text('settingsThemeLight'.tr()),
-                      ),
-                      ButtonSegment(
-                        value: AppThemeMode.dark,
-                        icon: const Icon(Symbols.dark_mode_rounded),
-                        label: Text('settingsThemeDark'.tr()),
-                      ),
-                    ],
-                    selected: {themeMode},
-                    onSelectionChanged: (selection) => ref
-                        .read(themeModeProvider.notifier)
-                        .set(selection.first),
-                  ),
-                  const SizedBox(height: SolSpace.lg),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: ref.watch(dynamicColorEnabledProvider),
-                    onChanged: (value) => ref
-                        .read(dynamicColorEnabledProvider.notifier)
-                        .set(value),
-                    secondary: const Icon(Symbols.palette_rounded),
-                    title: Text('settingsDynamicColor'.tr()),
-                    subtitle: Text('settingsDynamicColorSubtitle'.tr()),
-                  ),
-                  const SizedBox(height: SolSpace.sm),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: glass,
-                    onChanged: (value) => ref
-                        .read(glassEffectsEnabledProvider.notifier)
-                        .set(value),
-                    secondary: const Icon(Symbols.blur_on_rounded),
-                    title: Text('settingsLiquidGlass'.tr()),
-                    subtitle: Text('settingsLiquidGlassSubtitle'.tr()),
-                  ),
-                  const SizedBox(height: SolSpace.lg),
-                  _LanguageTile(),
-                ],
-              ),
-            ),
-            SectionLabel('settingsSectionDashboard'.tr()),
-            IslandCard(
-              margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
-              padding: const EdgeInsets.all(SolSpace.lg),
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Symbols.dashboard_customize_rounded),
-                title: Text('dashboardCustomize'.tr()),
-                subtitle: Text('settingsDashboardSubtitle'.tr()),
-                trailing: const Icon(Symbols.chevron_right_rounded),
-                onTap: () => showDashboardCustomize(context),
-              ),
-            ),
-            SectionLabel('settingsSectionPlayback'.tr()),
-            IslandCard(
-              margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
-              padding: const EdgeInsets.all(SolSpace.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'settingsVolumeLabel'.tr(),
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: SolSpace.md),
-                  Row(
-                    children: [
-                      Icon(
-                        volume <= 0
-                            ? Symbols.volume_off_rounded
-                            : Symbols.volume_up_rounded,
-                        size: 20,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                      Expanded(
-                        child: Slider(
-                          value: volume.clamp(0, 100),
-                          max: 100,
-                          onChanged: volumeIsSystem
-                              ? null
-                              : (value) => ref
-                                    .read(playbackProvider.notifier)
-                                    .setVolume(value),
-                          onChangeEnd: volumeIsSystem
-                              ? null
-                              : (value) => saveVolume(ref, value),
-                        ),
-                      ),
-                    ],
-                  ),
-                  Text(
-                    volumeIsSystem
-                        ? 'settingsVolumeSystemHint'.tr()
-                        : 'settingsVolumeHint'.tr(),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                      height: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: SolSpace.lg),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Symbols.shuffle_rounded),
-                    title: Text('settingsSmartShuffle'.tr()),
-                    subtitle: Text('settingsSmartShuffleSubtitle'.tr()),
-                    trailing: const Icon(Symbols.chevron_right_rounded),
-                    onTap: () =>
-                        context.router.push(const SmartShuffleRoute()),
-                  ),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: infinitePlayback,
-                    onChanged: (value) => ref
-                        .read(infinitePlaybackEnabledProvider.notifier)
-                        .set(value),
-                    secondary: const Icon(Symbols.all_inclusive_rounded),
-                    title: Text('settingsInfinitePlayback'.tr()),
-                    subtitle: Text('settingsInfinitePlaybackSubtitle'.tr()),
-                  ),
-                  const _PreferredSourceTile(),
-                ],
-              ),
-            ),
+            const _AppearanceSection(),
+            const _DashboardSection(),
+            const _PlaybackSection(),
             // Plugins first: one is what makes certain libraries available at
             // all, so the section that installs them comes before the list
             // that connects them.
             const PluginsSection(),
-            SectionLabel('settingsSectionLibraries'.tr()),
-            IslandCard(
-              margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
-              child: Column(
-                children: [
-                  for (final source in sources)
-                    // The full identity on hover: two installs of one kind
-                    // are told apart by their host, and a row wide enough to
-                    // spell it out is a row that has no room for the name.
-                    Tooltip(
-                      message: source.identityLabel,
-                      waitDuration: const Duration(milliseconds: 500),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: SolSpace.lg,
-                        ),
-                        leading: Icon(
-                          source.kind.mark ?? Symbols.cloud_rounded,
-                        ),
-                        title: Text(source.displayName),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              [
-                                source.kind.label,
-                                if (source.addressLabel.isNotEmpty)
-                                  source.addressLabel,
-                                if (failures[source.id] != null)
-                                  failures[source.id]!,
-                              ].join(' · '),
-                            ),
-                            if (digests[source.id] case final digest?) ...[
-                              const SizedBox(height: 2),
-                              Text(
-                                _describeDigest(digest),
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                        isThreeLine:
-                            failures[source.id] != null ||
-                            digests[source.id] != null,
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              tooltip: 'settingsRenameLibrary'.tr(),
-                              onPressed: () =>
-                                  _renameSource(context, ref, source),
-                              icon: const Icon(Symbols.edit_rounded),
-                            ),
-                            IconButton(
-                              tooltip: 'settingsRemoveLibrary'.tr(),
-                              onPressed: () =>
-                                  _confirmRemove(context, ref, source.id),
-                              icon: const Icon(Symbols.delete_outline_rounded),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  if (sources.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: SolSpace.lg,
-                        vertical: SolSpace.md,
-                      ),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text('settingsNoLibraries'.tr()),
-                      ),
-                    ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      SolSpace.md,
-                      0,
-                      SolSpace.md,
-                      SolSpace.sm,
-                    ),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton.icon(
-                        onPressed: () =>
-                            context.router.push(const SetupRoute()),
-                        icon: const Icon(Symbols.add_rounded),
-                        label: Text('settingsAddLibrary'.tr()),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SectionLabel('settingsSectionLibrary'.tr()),
-            IslandCard(
-              margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
-              child: Column(
-                children: [
-                  ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: SolSpace.lg,
-                    ),
-                    leading: const Icon(Symbols.storage_rounded),
-                    title: Text('settingsOnThisDevice'.tr()),
-                    subtitle: Text(switch (ref
-                        .watch(libraryStatsProvider)
-                        .value) {
-                      final stats? => _describeLibrary(stats),
-                      null => 'settingsOnThisDeviceSubtitleEmpty'.tr(),
-                    }),
-                  ),
-                  ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: SolSpace.lg,
-                    ),
-                    leading: const Icon(Symbols.library_music_rounded),
-                    title: Text('settingsImportMusic'.tr()),
-                    subtitle: Text('settingsImportMusicSubtitle'.tr()),
-                    onTap: () => importMusicFiles(context, ref),
-                  ),
-                  ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: SolSpace.lg,
-                    ),
-                    leading: const Icon(Symbols.refresh_rounded),
-                    title: Text('settingsRefreshEverything'.tr()),
-                    subtitle: Text('settingsRefreshEverythingSubtitle'.tr()),
-                    onTap: () {
-                      ref.invalidate(recentAlbumsProvider);
-                      ref.invalidate(randomSongsProvider);
-                      ref.invalidate(playlistsProvider);
-                      ref.invalidate(libraryDigestsProvider);
-                    },
-                  ),
-                ],
-              ),
-            ),
-            SectionLabel('settingsSectionLyrics'.tr()),
-            IslandCard(
-              margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
-              child: Column(
-                children: [
-                  SwitchListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: SolSpace.lg,
-                    ),
-                    value: ref.watch(lyricsPronunciationEnabledProvider),
-                    onChanged: (value) => ref
-                        .read(lyricsPronunciationEnabledProvider.notifier)
-                        .set(value),
-                    secondary: const Icon(Symbols.subtitles_rounded),
-                    title: Text('settingsPronunciation'.tr()),
-                    subtitle: Text('settingsPronunciationSubtitle'.tr()),
-                  ),
-                  SwitchListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: SolSpace.lg,
-                    ),
-                    value: ref.watch(lyricsTranslationEnabledProvider),
-                    onChanged: (value) => ref
-                        .read(lyricsTranslationEnabledProvider.notifier)
-                        .set(value),
-                    secondary: const Icon(Symbols.translate_rounded),
-                    title: Text('settingsTranslation'.tr()),
-                    subtitle: Text('settingsTranslationSubtitle'.tr()),
-                  ),
-                  const _LyricsLlmTile(),
-                  ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: SolSpace.lg,
-                    ),
-                    leading: const Icon(Symbols.lyrics_rounded),
-                    title: Text('settingsStoredLyrics'.tr()),
-                    subtitle: Text(switch (ref
-                        .watch(storedLyricsProvider)
-                        .value) {
-                      final count? => 'settingsStoredLyricsCached'.plural(
-                        count,
-                      ),
-                      null => 'settingsStoredLyricsNone'.tr(),
-                    }),
-                    trailing: TextButton(
-                      onPressed: () => _confirmClearLyrics(context, ref),
-                      child: Text('commonClear'.tr()),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SectionLabel('settingsSectionOffline'.tr()),
-            IslandCard(
-              margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
-              child: Column(
-                children: [
-                  ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: SolSpace.lg,
-                    ),
-                    leading: const Icon(Symbols.download_rounded),
-                    title: Text('settingsDownloads'.tr()),
-                    subtitle: Text(switch (ref
-                        .watch(downloadTotalsProvider)
-                        .value) {
-                      final totals? when totals.count == 0 =>
-                        'settingsDownloadsNone'.tr(),
-                      final totals? => 'settingsDownloadsKept'.plural(
-                        totals.count,
-                        args: [formatBytes(totals.bytes)],
-                      ),
-                      null => 'settingsDownloadsNone'.tr(),
-                    }),
-                    trailing: const Icon(Symbols.chevron_right_rounded),
-                    onTap: () => context.router.push(const DownloadsRoute()),
-                  ),
-                  ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: SolSpace.lg,
-                    ),
-                    leading: const Icon(Symbols.cloud_off_rounded),
-                    title: Text('settingsResponseCache'.tr()),
-                    subtitle: Text(switch (ref
-                        .watch(responseCacheTotalsProvider)
-                        .value) {
-                      final totals? when totals.count == 0 =>
-                        'settingsResponseCacheEmpty'.tr(),
-                      final totals? => 'settingsResponseCacheHeld'.plural(
-                        totals.count,
-                        args: [formatBytes(totals.bytes)],
-                      ),
-                      null => 'settingsResponseCacheEmpty'.tr(),
-                    }),
-                    trailing: TextButton(
-                      onPressed: () => _confirmClearCache(context, ref),
-                      child: Text('commonClear'.tr()),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            const _LibrariesSection(),
+            const _LibrarySection(),
+            const _LyricsSection(),
+            const _OfflineSection(),
             const SolarpassSettingsSection(),
             const LibrarySyncSection(),
             const SolarFavouritesSection(),
-            SectionLabel('settingsSectionData'.tr()),
-            IslandCard(
-              margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
-              child: Column(
-                children: [
-                  ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: SolSpace.lg,
-                    ),
-                    leading: const Icon(Symbols.upload_rounded),
-                    title: Text('settingsExportBackup'.tr()),
-                    subtitle: Text('settingsExportBackupSubtitle'.tr()),
-                    onTap: () => ref
-                        .read(backupServiceProvider)
-                        .exportBackupFile(context),
+            const _DataSection(),
+            const _AboutSection(),
+            const _StreamsFooter(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A card that fills the page's reading column, inset from its gutters.
+class _Card extends StatelessWidget {
+  final Widget child;
+  final EdgeInsets padding;
+
+  const _Card({
+    required this.child,
+    this.padding = const EdgeInsets.all(SolSpace.lg),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return IslandCard(
+      margin: _cardMargin,
+      padding: padding,
+      child: child,
+    );
+  }
+}
+
+/// Theme, colour, glass and the interface language.
+class _AppearanceSection extends ConsumerWidget {
+  const _AppearanceSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final themeMode = ref.watch(themeModeProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionLabel('settingsSectionAppearance'.tr()),
+        _Card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'settingsThemeLabel'.tr(),
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: SolSpace.md),
+              SegmentedButton<AppThemeMode>(
+                segments: [
+                  ButtonSegment(
+                    value: AppThemeMode.system,
+                    icon: const Icon(Symbols.brightness_auto_rounded),
+                    label: Text('settingsThemeSystem'.tr()),
                   ),
-                  ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: SolSpace.lg,
-                    ),
-                    leading: const Icon(Symbols.download_rounded),
-                    title: Text('settingsImportBackup'.tr()),
-                    subtitle: Text('settingsImportBackupSubtitle'.tr()),
-                    onTap: () => ref
-                        .read(backupServiceProvider)
-                        .importBackupFile(context),
+                  ButtonSegment(
+                    value: AppThemeMode.light,
+                    icon: const Icon(Symbols.light_mode_rounded),
+                    label: Text('settingsThemeLight'.tr()),
                   ),
-                  ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: SolSpace.lg,
-                    ),
-                    leading: const Icon(Symbols.database_rounded),
-                    title: Text('settingsExportDatabase'.tr()),
-                    subtitle: Text('settingsExportDatabaseSubtitle'.tr()),
-                    onTap: () => BackupService.exportRawDatabase(context),
+                  ButtonSegment(
+                    value: AppThemeMode.dark,
+                    icon: const Icon(Symbols.dark_mode_rounded),
+                    label: Text('settingsThemeDark'.tr()),
                   ),
                 ],
+                selected: {themeMode},
+                onSelectionChanged: (selection) =>
+                    ref.read(themeModeProvider.notifier).set(selection.first),
               ),
-            ),
+              const SizedBox(height: SolSpace.lg),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: ref.watch(dynamicColorEnabledProvider),
+                onChanged: (value) =>
+                    ref.read(dynamicColorEnabledProvider.notifier).set(value),
+                secondary: const Icon(Symbols.palette_rounded),
+                title: Text('settingsDynamicColor'.tr()),
+                subtitle: Text('settingsDynamicColorSubtitle'.tr()),
+              ),
+              const SizedBox(height: SolSpace.sm),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: ref.watch(glassEffectsEnabledProvider),
+                onChanged: (value) =>
+                    ref.read(glassEffectsEnabledProvider.notifier).set(value),
+                secondary: const Icon(Symbols.blur_on_rounded),
+                title: Text('settingsLiquidGlass'.tr()),
+                subtitle: Text('settingsLiquidGlassSubtitle'.tr()),
+              ),
+              const SizedBox(height: SolSpace.lg),
+              const _LanguageTile(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
 
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                SolSpace.xxl,
-                SolSpace.xl,
-                SolSpace.xxl,
-                SolSpace.xl,
+/// The Explore page's own layout.
+class _DashboardSection extends StatelessWidget {
+  const _DashboardSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionLabel('settingsSectionDashboard'.tr()),
+        _Card(
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Symbols.dashboard_customize_rounded),
+            title: Text('dashboardCustomize'.tr()),
+            subtitle: Text('settingsDashboardSubtitle'.tr()),
+            trailing: const Icon(Symbols.chevron_right_rounded),
+            onTap: () => showDashboardCustomize(context),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Volume, smart shuffle, infinite playback and the preferred library.
+class _PlaybackSection extends ConsumerWidget {
+  const _PlaybackSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionLabel('settingsSectionPlayback'.tr()),
+        _Card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const _VolumeControl(),
+              const SizedBox(height: SolSpace.lg),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Symbols.shuffle_rounded),
+                title: Text('settingsSmartShuffle'.tr()),
+                subtitle: Text('settingsSmartShuffleSubtitle'.tr()),
+                trailing: const Icon(Symbols.chevron_right_rounded),
+                onTap: () => context.router.push(const SmartShuffleRoute()),
               ),
-              child: Text(
-                'settingsStreamsFooter'.tr(),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  height: 1.5,
-                ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: ref.watch(infinitePlaybackEnabledProvider),
+                onChanged: (value) => ref
+                    .read(infinitePlaybackEnabledProvider.notifier)
+                    .set(value),
+                secondary: const Icon(Symbols.all_inclusive_rounded),
+                title: Text('settingsInfinitePlayback'.tr()),
+                subtitle: Text('settingsInfinitePlaybackSubtitle'.tr()),
+              ),
+              const _PreferredSourceTile(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The one volume handle in the app.
+///
+/// Its own consumer: the slider follows a nudge from the player's arrow keys
+/// live, and a drag must repaint this row rather than the whole page.
+class _VolumeControl extends ConsumerWidget {
+  const _VolumeControl();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final volume = ref.watch(playbackProvider.select((state) => state.volume));
+    // MusicKit has no volume API: while a platform-played track is on, the
+    // slider would move without changing anything, so it says whose the level
+    // is instead of lying.
+    final volumeIsSystem = ref.watch(
+      playbackProvider.select((state) => state.volumeIsSystemControlled),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'settingsVolumeLabel'.tr(),
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: SolSpace.md),
+        Row(
+          children: [
+            Icon(
+              volume <= 0 ? Symbols.volume_off_rounded : Symbols.volume_up_rounded,
+              size: 20,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            Expanded(
+              child: Slider(
+                value: volume.clamp(0, 100),
+                max: 100,
+                onChanged: volumeIsSystem
+                    ? null
+                    : (value) =>
+                          ref.read(playbackProvider.notifier).setVolume(value),
+                onChangeEnd: volumeIsSystem
+                    ? null
+                    : (value) => saveVolume(ref, value),
               ),
             ),
           ],
         ),
-      ),
+        Text(
+          volumeIsSystem
+              ? 'settingsVolumeSystemHint'.tr()
+              : 'settingsVolumeHint'.tr(),
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            height: 1.5,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The connected libraries: the only place one is renamed or removed.
+class _LibrariesSection extends ConsumerWidget {
+  const _LibrariesSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final sources = ref.watch(librarySourcesProvider);
+    final failures = ref.watch(sourceFailuresProvider);
+    // The accounts' own sizes, beside the rows that name them: an account's
+    // track count is a property of the connection, which is what this page
+    // manages, and the landing page is the wrong place to report it.
+    final digests = {
+      for (final digest
+          in ref.watch(libraryDigestsProvider).value ?? const <LibraryDigest>[])
+        digest.sourceId: digest,
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionLabel('settingsSectionLibraries'.tr()),
+        _Card(
+          padding: _listCardPadding,
+          child: Column(
+            children: [
+              for (final source in sources)
+                // The full identity on hover: two installs of one kind are
+                // told apart by their host, and a row wide enough to spell it
+                // out is a row that has no room for the name.
+                Tooltip(
+                  message: source.identityLabel,
+                  waitDuration: const Duration(milliseconds: 500),
+                  child: ListTile(
+                    contentPadding: _rowPadding,
+                    leading: Icon(source.kind.mark ?? Symbols.cloud_rounded),
+                    title: Text(source.displayName),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          [
+                            source.kind.label,
+                            if (source.addressLabel.isNotEmpty)
+                              source.addressLabel,
+                            if (failures[source.id] != null)
+                              failures[source.id]!,
+                          ].join(' · '),
+                        ),
+                        if (digests[source.id] case final digest?) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            _describeDigest(digest),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    isThreeLine:
+                        failures[source.id] != null || digests[source.id] != null,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: 'settingsRenameLibrary'.tr(),
+                          onPressed: () => _renameSource(context, ref, source),
+                          icon: const Icon(Symbols.edit_rounded),
+                        ),
+                        IconButton(
+                          tooltip: 'settingsRemoveLibrary'.tr(),
+                          onPressed: () =>
+                              _confirmRemove(context, ref, source.id),
+                          icon: const Icon(Symbols.delete_outline_rounded),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              if (sources.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: SolSpace.lg,
+                    vertical: SolSpace.md,
+                  ),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('settingsNoLibraries'.tr()),
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  SolSpace.md,
+                  0,
+                  SolSpace.md,
+                  SolSpace.sm,
+                ),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () => context.router.push(const SetupRoute()),
+                    icon: const Icon(Symbols.add_rounded),
+                    label: Text('settingsAddLibrary'.tr()),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -608,6 +507,119 @@ class SettingsScreen extends ConsumerWidget {
     // or adding another with the same tracks finds them again
     await ref.read(lyricsMaintenanceProvider.notifier).forgetSource(sourceId);
   }
+}
+
+/// What this device knows on its own: songs, imports and reloads.
+class _LibrarySection extends ConsumerWidget {
+  const _LibrarySection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionLabel('settingsSectionLibrary'.tr()),
+        _Card(
+          padding: _listCardPadding,
+          child: Column(
+            children: [
+              ListTile(
+                contentPadding: _rowPadding,
+                leading: const Icon(Symbols.storage_rounded),
+                title: Text('settingsOnThisDevice'.tr()),
+                subtitle: Text(
+                  switch (ref.watch(libraryStatsProvider).value) {
+                    final stats? => _describeLibrary(stats),
+                    null => 'settingsOnThisDeviceSubtitleEmpty'.tr(),
+                  },
+                ),
+              ),
+              ListTile(
+                contentPadding: _rowPadding,
+                leading: const Icon(Symbols.library_music_rounded),
+                title: Text('settingsImportMusic'.tr()),
+                subtitle: Text('settingsImportMusicSubtitle'.tr()),
+                onTap: () => importMusicFiles(context, ref),
+              ),
+              ListTile(
+                contentPadding: _rowPadding,
+                leading: const Icon(Symbols.refresh_rounded),
+                title: Text('settingsRefreshEverything'.tr()),
+                subtitle: Text('settingsRefreshEverythingSubtitle'.tr()),
+                onTap: () {
+                  ref.invalidate(recentAlbumsProvider);
+                  ref.invalidate(randomSongsProvider);
+                  ref.invalidate(playlistsProvider);
+                  ref.invalidate(libraryDigestsProvider);
+                },
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Pronunciation, translation and the stored lyric copies.
+class _LyricsSection extends ConsumerWidget {
+  const _LyricsSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionLabel('settingsSectionLyrics'.tr()),
+        _Card(
+          padding: _listCardPadding,
+          child: Column(
+            children: [
+              SwitchListTile(
+                contentPadding: _rowPadding,
+                value: ref.watch(lyricsPronunciationEnabledProvider),
+                onChanged: (value) => ref
+                    .read(lyricsPronunciationEnabledProvider.notifier)
+                    .set(value),
+                secondary: const Icon(Symbols.subtitles_rounded),
+                title: Text('settingsPronunciation'.tr()),
+                subtitle: Text('settingsPronunciationSubtitle'.tr()),
+              ),
+              SwitchListTile(
+                contentPadding: _rowPadding,
+                value: ref.watch(lyricsTranslationEnabledProvider),
+                onChanged: (value) => ref
+                    .read(lyricsTranslationEnabledProvider.notifier)
+                    .set(value),
+                secondary: const Icon(Symbols.translate_rounded),
+                title: Text('settingsTranslation'.tr()),
+                subtitle: Text('settingsTranslationSubtitle'.tr()),
+              ),
+              const _LyricsLlmTile(),
+              ListTile(
+                contentPadding: _rowPadding,
+                leading: const Icon(Symbols.lyrics_rounded),
+                title: Text('settingsStoredLyrics'.tr()),
+                subtitle: Text(
+                  switch (ref.watch(storedLyricsProvider).value) {
+                    final count? when count > 0 =>
+                      'settingsStoredLyricsCached'.plural(count),
+                    // Zero cached copies is not "0 songs cached": the row
+                    // says what lyrics do, not that nothing has happened.
+                    _ => 'settingsStoredLyricsNone'.tr(),
+                  },
+                ),
+                trailing: TextButton(
+                  onPressed: () => _confirmClearLyrics(context, ref),
+                  child: Text('commonClear'.tr()),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 
   Future<void> _confirmClearLyrics(BuildContext context, WidgetRef ref) async {
     final confirmed = await showDialog<bool>(
@@ -630,6 +642,69 @@ class SettingsScreen extends ConsumerWidget {
 
     if (confirmed != true) return;
     await ref.read(lyricsMaintenanceProvider.notifier).clear();
+  }
+}
+
+/// Downloads and the saved answers, and the way to empty only the latter.
+class _OfflineSection extends ConsumerWidget {
+  const _OfflineSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionLabel('settingsSectionOffline'.tr()),
+        _Card(
+          padding: _listCardPadding,
+          child: Column(
+            children: [
+              ListTile(
+                contentPadding: _rowPadding,
+                leading: const Icon(Symbols.download_rounded),
+                title: Text('settingsDownloads'.tr()),
+                subtitle: Text(
+                  switch (ref.watch(downloadTotalsProvider).value) {
+                    final totals? when totals.count == 0 =>
+                      'settingsDownloadsNone'.tr(),
+                    // The count is both the plural selector and the first
+                    // placeholder: passing args suppresses the automatic one,
+                    // so it has to be spelled out beside the size.
+                    final totals? => 'settingsDownloadsKept'.plural(
+                      totals.count,
+                      args: ['${totals.count}', formatBytes(totals.bytes)],
+                    ),
+                    null => 'settingsDownloadsNone'.tr(),
+                  },
+                ),
+                trailing: const Icon(Symbols.chevron_right_rounded),
+                onTap: () => context.router.push(const DownloadsRoute()),
+              ),
+              ListTile(
+                contentPadding: _rowPadding,
+                leading: const Icon(Symbols.cloud_off_rounded),
+                title: Text('settingsResponseCache'.tr()),
+                subtitle: Text(
+                  switch (ref.watch(responseCacheTotalsProvider).value) {
+                    final totals? when totals.count == 0 =>
+                      'settingsResponseCacheEmpty'.tr(),
+                    final totals? => 'settingsResponseCacheHeld'.plural(
+                      totals.count,
+                      args: ['${totals.count}', formatBytes(totals.bytes)],
+                    ),
+                    null => 'settingsResponseCacheEmpty'.tr(),
+                  },
+                ),
+                trailing: TextButton(
+                  onPressed: () => _confirmClearCache(context, ref),
+                  child: Text('commonClear'.tr()),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   /// Empties the saved answers. Downloads are untouched: they are the user's
@@ -656,6 +731,102 @@ class SettingsScreen extends ConsumerWidget {
     await ref.read(responseCacheProvider)?.clear();
     await ref.read(artworkCacheProvider)?.clear();
     ref.invalidate(responseCacheTotalsProvider);
+  }
+}
+
+/// Backups and the raw database file.
+class _DataSection extends ConsumerWidget {
+  const _DataSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionLabel('settingsSectionData'.tr()),
+        _Card(
+          padding: _listCardPadding,
+          child: Column(
+            children: [
+              ListTile(
+                contentPadding: _rowPadding,
+                leading: const Icon(Symbols.upload_rounded),
+                title: Text('settingsExportBackup'.tr()),
+                subtitle: Text('settingsExportBackupSubtitle'.tr()),
+                onTap: () =>
+                    ref.read(backupServiceProvider).exportBackupFile(context),
+              ),
+              ListTile(
+                contentPadding: _rowPadding,
+                leading: const Icon(Symbols.download_rounded),
+                title: Text('settingsImportBackup'.tr()),
+                subtitle: Text('settingsImportBackupSubtitle'.tr()),
+                onTap: () =>
+                    ref.read(backupServiceProvider).importBackupFile(context),
+              ),
+              ListTile(
+                contentPadding: _rowPadding,
+                leading: const Icon(Symbols.database_rounded),
+                title: Text('settingsExportDatabase'.tr()),
+                subtitle: Text('settingsExportDatabaseSubtitle'.tr()),
+                onTap: () => BackupService.exportRawDatabase(context),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Where the app says what it is: version, source, credits and licenses.
+class _AboutSection extends StatelessWidget {
+  const _AboutSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionLabel('settingsSectionAbout'.tr()),
+        _Card(
+          padding: _listCardPadding,
+          child: ListTile(
+            contentPadding: _rowPadding,
+            leading: const Icon(Symbols.info_rounded),
+            title: Text('aboutTitle'.tr()),
+            subtitle: Text('settingsAboutHint'.tr()),
+            trailing: const Icon(Symbols.chevron_right_rounded),
+            onTap: () => context.router.push(const AboutRoute()),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// What the app promises to do with the user's music, said once at the end.
+class _StreamsFooter extends StatelessWidget {
+  const _StreamsFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        SolSpace.xxl,
+        SolSpace.xl,
+        SolSpace.xxl,
+        SolSpace.xl,
+      ),
+      child: Text(
+        'settingsStreamsFooter'.tr(),
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+          height: 1.5,
+        ),
+      ),
+    );
   }
 }
 
@@ -749,7 +920,9 @@ const _systemValue = 'system';
 /// many tracks the account holds.
 ///
 /// Only an account-backed source answers a digest at all; a server's rows are
-/// the app's, not the server's, so its row never grows this line.
+/// the app's, not the server's, so its row never grows this line. Only a
+/// digest with a count is listed (`LibraryDigests` drops the empty ones), so
+/// the count is here whenever the line is.
 String _describeDigest(LibraryDigest digest) => [
   'libraryAccountLabel'.tr(),
   'libraryDigestTracks'.tr(args: ['${digest.libraryTracks}']),
@@ -895,7 +1068,7 @@ class _LyricsLlmTile extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SwitchListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: SolSpace.lg),
+          contentPadding: _rowPadding,
           value: current != null,
           onChanged: session == null
               ? null

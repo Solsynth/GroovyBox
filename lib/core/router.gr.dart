@@ -10,35 +10,52 @@
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 
-import 'package:auto_route/auto_route.dart' as _i18;
-import 'package:groovy_box/screens/albums.dart' as _i1;
-import 'package:groovy_box/screens/artists.dart' as _i2;
-import 'package:groovy_box/screens/downloads.dart' as _i3;
-import 'package:groovy_box/screens/explore.dart' as _i4;
-import 'package:groovy_box/screens/library.dart' as _i6;
-import 'package:groovy_box/screens/owned_playlist.dart' as _i7;
-import 'package:groovy_box/screens/player_screen.dart' as _i8;
-import 'package:groovy_box/screens/playlists.dart' as _i9;
-import 'package:groovy_box/screens/profile.dart' as _i10;
-import 'package:groovy_box/screens/pulsar_playlist.dart' as _i11;
-import 'package:groovy_box/screens/search.dart' as _i12;
-import 'package:groovy_box/screens/settings.dart' as _i13;
-import 'package:groovy_box/screens/setup.dart' as _i14;
-import 'package:groovy_box/screens/smart_shuffle.dart' as _i16;
-import 'package:groovy_box/screens/solink_favourites.dart' as _i17;
-import 'package:groovy_box/shell/shell_screen.dart' as _i15;
-import 'package:groovy_box/shell/tab_stack.dart' as _i5;
-import 'package:material_ui/material_ui.dart' as _i19;
+import 'package:auto_route/auto_route.dart' as _i19;
+import 'package:groovy_box/screens/about.dart' as _i1;
+import 'package:groovy_box/screens/albums.dart' as _i2;
+import 'package:groovy_box/screens/artists.dart' as _i3;
+import 'package:groovy_box/screens/downloads.dart' as _i4;
+import 'package:groovy_box/screens/explore.dart' as _i5;
+import 'package:groovy_box/screens/library.dart' as _i7;
+import 'package:groovy_box/screens/owned_playlist.dart' as _i8;
+import 'package:groovy_box/screens/player_screen.dart' as _i9;
+import 'package:groovy_box/screens/playlists.dart' as _i10;
+import 'package:groovy_box/screens/profile.dart' as _i11;
+import 'package:groovy_box/screens/pulsar_playlist.dart' as _i12;
+import 'package:groovy_box/screens/search.dart' as _i13;
+import 'package:groovy_box/screens/settings.dart' as _i14;
+import 'package:groovy_box/screens/setup.dart' as _i15;
+import 'package:groovy_box/screens/smart_shuffle.dart' as _i17;
+import 'package:groovy_box/screens/solink_favourites.dart' as _i18;
+import 'package:groovy_box/shell/shell_screen.dart' as _i16;
+import 'package:groovy_box/shell/tab_stack.dart' as _i6;
+import 'package:material_ui/material_ui.dart' as _i20;
 
 /// generated route for
-/// [_i1.AlbumDetailScreen]
-class AlbumDetailRoute extends _i18.PageRouteInfo<AlbumDetailRouteArgs> {
+/// [_i1.AboutScreen]
+class AboutRoute extends _i19.PageRouteInfo<void> {
+  const AboutRoute({List<_i19.PageRouteInfo>? children})
+    : super(AboutRoute.name, initialChildren: children);
+
+  static const String name = 'AboutRoute';
+
+  static _i19.PageInfo page = _i19.PageInfo(
+    name,
+    builder: (data) {
+      return const _i1.AboutScreen();
+    },
+  );
+}
+
+/// generated route for
+/// [_i2.AlbumDetailScreen]
+class AlbumDetailRoute extends _i19.PageRouteInfo<AlbumDetailRouteArgs> {
   AlbumDetailRoute({
-    _i19.Key? key,
+    _i20.Key? key,
     required String sourceId,
     required String albumId,
     String? albumName,
-    List<_i18.PageRouteInfo>? children,
+    List<_i19.PageRouteInfo>? children,
   }) : super(
          AlbumDetailRoute.name,
          args: AlbumDetailRouteArgs(
@@ -53,7 +70,7 @@ class AlbumDetailRoute extends _i18.PageRouteInfo<AlbumDetailRouteArgs> {
 
   static const String name = 'AlbumDetailRoute';
 
-  static _i18.PageInfo page = _i18.PageInfo(
+  static _i19.PageInfo page = _i19.PageInfo(
     name,
     builder: (data) {
       final pathParams = data.inheritedPathParams;
@@ -63,7 +80,7 @@ class AlbumDetailRoute extends _i18.PageRouteInfo<AlbumDetailRouteArgs> {
           albumId: pathParams.getString('albumId'),
         ),
       );
-      return _i1.AlbumDetailScreen(
+      return _i2.AlbumDetailScreen(
         key: args.key,
         sourceId: args.sourceId,
         albumId: args.albumId,
@@ -81,7 +98,7 @@ class AlbumDetailRouteArgs {
     this.albumName,
   });
 
-  final _i19.Key? key;
+  final _i20.Key? key;
 
   final String sourceId;
 
@@ -110,14 +127,14 @@ class AlbumDetailRouteArgs {
 }
 
 /// generated route for
-/// [_i2.ArtistDetailScreen]
-class ArtistDetailRoute extends _i18.PageRouteInfo<ArtistDetailRouteArgs> {
+/// [_i3.ArtistDetailScreen]
+class ArtistDetailRoute extends _i19.PageRouteInfo<ArtistDetailRouteArgs> {
   ArtistDetailRoute({
-    _i19.Key? key,
+    _i20.Key? key,
     required String sourceId,
     required String artistId,
     String? artistName,
-    List<_i18.PageRouteInfo>? children,
+    List<_i19.PageRouteInfo>? children,
   }) : super(
          ArtistDetailRoute.name,
          args: ArtistDetailRouteArgs(
@@ -132,7 +149,7 @@ class ArtistDetailRoute extends _i18.PageRouteInfo<ArtistDetailRouteArgs> {
 
   static const String name = 'ArtistDetailRoute';
 
-  static _i18.PageInfo page = _i18.PageInfo(
+  static _i19.PageInfo page = _i19.PageInfo(
     name,
     builder: (data) {
       final pathParams = data.inheritedPathParams;
@@ -142,7 +159,7 @@ class ArtistDetailRoute extends _i18.PageRouteInfo<ArtistDetailRouteArgs> {
           artistId: pathParams.getString('artistId'),
         ),
       );
-      return _i2.ArtistDetailScreen(
+      return _i3.ArtistDetailScreen(
         key: args.key,
         sourceId: args.sourceId,
         artistId: args.artistId,
@@ -160,7 +177,7 @@ class ArtistDetailRouteArgs {
     this.artistName,
   });
 
-  final _i19.Key? key;
+  final _i20.Key? key;
 
   final String sourceId;
 
@@ -192,94 +209,94 @@ class ArtistDetailRouteArgs {
 }
 
 /// generated route for
-/// [_i3.DownloadsScreen]
-class DownloadsRoute extends _i18.PageRouteInfo<void> {
-  const DownloadsRoute({List<_i18.PageRouteInfo>? children})
+/// [_i4.DownloadsScreen]
+class DownloadsRoute extends _i19.PageRouteInfo<void> {
+  const DownloadsRoute({List<_i19.PageRouteInfo>? children})
     : super(DownloadsRoute.name, initialChildren: children);
 
   static const String name = 'DownloadsRoute';
 
-  static _i18.PageInfo page = _i18.PageInfo(
+  static _i19.PageInfo page = _i19.PageInfo(
     name,
     builder: (data) {
-      return const _i3.DownloadsScreen();
+      return const _i4.DownloadsScreen();
     },
   );
 }
 
 /// generated route for
-/// [_i4.ExploreScreen]
-class ExploreRoute extends _i18.PageRouteInfo<void> {
-  const ExploreRoute({List<_i18.PageRouteInfo>? children})
+/// [_i5.ExploreScreen]
+class ExploreRoute extends _i19.PageRouteInfo<void> {
+  const ExploreRoute({List<_i19.PageRouteInfo>? children})
     : super(ExploreRoute.name, initialChildren: children);
 
   static const String name = 'ExploreRoute';
 
-  static _i18.PageInfo page = _i18.PageInfo(
+  static _i19.PageInfo page = _i19.PageInfo(
     name,
     builder: (data) {
-      return const _i4.ExploreScreen();
+      return const _i5.ExploreScreen();
     },
   );
 }
 
 /// generated route for
-/// [_i5.ExploreTab]
-class ExploreTab extends _i18.PageRouteInfo<void> {
-  const ExploreTab({List<_i18.PageRouteInfo>? children})
+/// [_i6.ExploreTab]
+class ExploreTab extends _i19.PageRouteInfo<void> {
+  const ExploreTab({List<_i19.PageRouteInfo>? children})
     : super(ExploreTab.name, initialChildren: children);
 
   static const String name = 'ExploreTab';
 
-  static _i18.PageInfo page = _i18.PageInfo(
+  static _i19.PageInfo page = _i19.PageInfo(
     name,
     builder: (data) {
-      return const _i5.ExploreTab();
+      return const _i6.ExploreTab();
     },
   );
 }
 
 /// generated route for
-/// [_i6.LibraryScreen]
-class LibraryRoute extends _i18.PageRouteInfo<void> {
-  const LibraryRoute({List<_i18.PageRouteInfo>? children})
+/// [_i7.LibraryScreen]
+class LibraryRoute extends _i19.PageRouteInfo<void> {
+  const LibraryRoute({List<_i19.PageRouteInfo>? children})
     : super(LibraryRoute.name, initialChildren: children);
 
   static const String name = 'LibraryRoute';
 
-  static _i18.PageInfo page = _i18.PageInfo(
+  static _i19.PageInfo page = _i19.PageInfo(
     name,
     builder: (data) {
-      return const _i6.LibraryScreen();
+      return const _i7.LibraryScreen();
     },
   );
 }
 
 /// generated route for
-/// [_i5.LibraryTab]
-class LibraryTab extends _i18.PageRouteInfo<void> {
-  const LibraryTab({List<_i18.PageRouteInfo>? children})
+/// [_i6.LibraryTab]
+class LibraryTab extends _i19.PageRouteInfo<void> {
+  const LibraryTab({List<_i19.PageRouteInfo>? children})
     : super(LibraryTab.name, initialChildren: children);
 
   static const String name = 'LibraryTab';
 
-  static _i18.PageInfo page = _i18.PageInfo(
+  static _i19.PageInfo page = _i19.PageInfo(
     name,
     builder: (data) {
-      return const _i5.LibraryTab();
+      return const _i6.LibraryTab();
     },
   );
 }
 
 /// generated route for
-/// [_i7.OwnedPlaylistDetailScreen]
+/// [_i8.OwnedPlaylistDetailScreen]
 class OwnedPlaylistDetailRoute
-    extends _i18.PageRouteInfo<OwnedPlaylistDetailRouteArgs> {
+    extends _i19.PageRouteInfo<OwnedPlaylistDetailRouteArgs> {
   OwnedPlaylistDetailRoute({
-    _i19.Key? key,
+    _i20.Key? key,
     required int playlistId,
     String? playlistName,
-    List<_i18.PageRouteInfo>? children,
+    List<_i19.PageRouteInfo>? children,
   }) : super(
          OwnedPlaylistDetailRoute.name,
          args: OwnedPlaylistDetailRouteArgs(
@@ -293,7 +310,7 @@ class OwnedPlaylistDetailRoute
 
   static const String name = 'OwnedPlaylistDetailRoute';
 
-  static _i18.PageInfo page = _i18.PageInfo(
+  static _i19.PageInfo page = _i19.PageInfo(
     name,
     builder: (data) {
       final pathParams = data.inheritedPathParams;
@@ -302,7 +319,7 @@ class OwnedPlaylistDetailRoute
           playlistId: pathParams.getInt('playlistId'),
         ),
       );
-      return _i7.OwnedPlaylistDetailScreen(
+      return _i8.OwnedPlaylistDetailScreen(
         key: args.key,
         playlistId: args.playlistId,
         playlistName: args.playlistName,
@@ -318,7 +335,7 @@ class OwnedPlaylistDetailRouteArgs {
     this.playlistName,
   });
 
-  final _i19.Key? key;
+  final _i20.Key? key;
 
   final int playlistId;
 
@@ -344,30 +361,30 @@ class OwnedPlaylistDetailRouteArgs {
 }
 
 /// generated route for
-/// [_i8.PlayerScreen]
-class PlayerRoute extends _i18.PageRouteInfo<void> {
-  const PlayerRoute({List<_i18.PageRouteInfo>? children})
+/// [_i9.PlayerScreen]
+class PlayerRoute extends _i19.PageRouteInfo<void> {
+  const PlayerRoute({List<_i19.PageRouteInfo>? children})
     : super(PlayerRoute.name, initialChildren: children);
 
   static const String name = 'PlayerRoute';
 
-  static _i18.PageInfo page = _i18.PageInfo(
+  static _i19.PageInfo page = _i19.PageInfo(
     name,
     builder: (data) {
-      return const _i8.PlayerScreen();
+      return const _i9.PlayerScreen();
     },
   );
 }
 
 /// generated route for
-/// [_i9.PlaylistDetailScreen]
-class PlaylistDetailRoute extends _i18.PageRouteInfo<PlaylistDetailRouteArgs> {
+/// [_i10.PlaylistDetailScreen]
+class PlaylistDetailRoute extends _i19.PageRouteInfo<PlaylistDetailRouteArgs> {
   PlaylistDetailRoute({
-    _i19.Key? key,
+    _i20.Key? key,
     required String sourceId,
     required String playlistId,
     String? playlistName,
-    List<_i18.PageRouteInfo>? children,
+    List<_i19.PageRouteInfo>? children,
   }) : super(
          PlaylistDetailRoute.name,
          args: PlaylistDetailRouteArgs(
@@ -382,7 +399,7 @@ class PlaylistDetailRoute extends _i18.PageRouteInfo<PlaylistDetailRouteArgs> {
 
   static const String name = 'PlaylistDetailRoute';
 
-  static _i18.PageInfo page = _i18.PageInfo(
+  static _i19.PageInfo page = _i19.PageInfo(
     name,
     builder: (data) {
       final pathParams = data.inheritedPathParams;
@@ -392,7 +409,7 @@ class PlaylistDetailRoute extends _i18.PageRouteInfo<PlaylistDetailRouteArgs> {
           playlistId: pathParams.getString('playlistId'),
         ),
       );
-      return _i9.PlaylistDetailScreen(
+      return _i10.PlaylistDetailScreen(
         key: args.key,
         sourceId: args.sourceId,
         playlistId: args.playlistId,
@@ -410,7 +427,7 @@ class PlaylistDetailRouteArgs {
     this.playlistName,
   });
 
-  final _i19.Key? key;
+  final _i20.Key? key;
 
   final String sourceId;
 
@@ -442,46 +459,46 @@ class PlaylistDetailRouteArgs {
 }
 
 /// generated route for
-/// [_i10.ProfileScreen]
-class ProfileRoute extends _i18.PageRouteInfo<void> {
-  const ProfileRoute({List<_i18.PageRouteInfo>? children})
+/// [_i11.ProfileScreen]
+class ProfileRoute extends _i19.PageRouteInfo<void> {
+  const ProfileRoute({List<_i19.PageRouteInfo>? children})
     : super(ProfileRoute.name, initialChildren: children);
 
   static const String name = 'ProfileRoute';
 
-  static _i18.PageInfo page = _i18.PageInfo(
+  static _i19.PageInfo page = _i19.PageInfo(
     name,
     builder: (data) {
-      return const _i10.ProfileScreen();
+      return const _i11.ProfileScreen();
     },
   );
 }
 
 /// generated route for
-/// [_i5.ProfileTab]
-class ProfileTab extends _i18.PageRouteInfo<void> {
-  const ProfileTab({List<_i18.PageRouteInfo>? children})
+/// [_i6.ProfileTab]
+class ProfileTab extends _i19.PageRouteInfo<void> {
+  const ProfileTab({List<_i19.PageRouteInfo>? children})
     : super(ProfileTab.name, initialChildren: children);
 
   static const String name = 'ProfileTab';
 
-  static _i18.PageInfo page = _i18.PageInfo(
+  static _i19.PageInfo page = _i19.PageInfo(
     name,
     builder: (data) {
-      return const _i5.ProfileTab();
+      return const _i6.ProfileTab();
     },
   );
 }
 
 /// generated route for
-/// [_i11.PulsarPlaylistDetailScreen]
+/// [_i12.PulsarPlaylistDetailScreen]
 class PulsarPlaylistDetailRoute
-    extends _i18.PageRouteInfo<PulsarPlaylistDetailRouteArgs> {
+    extends _i19.PageRouteInfo<PulsarPlaylistDetailRouteArgs> {
   PulsarPlaylistDetailRoute({
-    _i19.Key? key,
+    _i20.Key? key,
     required String playlistId,
     String? playlistName,
-    List<_i18.PageRouteInfo>? children,
+    List<_i19.PageRouteInfo>? children,
   }) : super(
          PulsarPlaylistDetailRoute.name,
          args: PulsarPlaylistDetailRouteArgs(
@@ -495,7 +512,7 @@ class PulsarPlaylistDetailRoute
 
   static const String name = 'PulsarPlaylistDetailRoute';
 
-  static _i18.PageInfo page = _i18.PageInfo(
+  static _i19.PageInfo page = _i19.PageInfo(
     name,
     builder: (data) {
       final pathParams = data.inheritedPathParams;
@@ -504,7 +521,7 @@ class PulsarPlaylistDetailRoute
           playlistId: pathParams.getString('playlistId'),
         ),
       );
-      return _i11.PulsarPlaylistDetailScreen(
+      return _i12.PulsarPlaylistDetailScreen(
         key: args.key,
         playlistId: args.playlistId,
         playlistName: args.playlistName,
@@ -520,7 +537,7 @@ class PulsarPlaylistDetailRouteArgs {
     this.playlistName,
   });
 
-  final _i19.Key? key;
+  final _i20.Key? key;
 
   final String playlistId;
 
@@ -546,129 +563,129 @@ class PulsarPlaylistDetailRouteArgs {
 }
 
 /// generated route for
-/// [_i12.SearchScreen]
-class SearchRoute extends _i18.PageRouteInfo<void> {
-  const SearchRoute({List<_i18.PageRouteInfo>? children})
+/// [_i13.SearchScreen]
+class SearchRoute extends _i19.PageRouteInfo<void> {
+  const SearchRoute({List<_i19.PageRouteInfo>? children})
     : super(SearchRoute.name, initialChildren: children);
 
   static const String name = 'SearchRoute';
 
-  static _i18.PageInfo page = _i18.PageInfo(
+  static _i19.PageInfo page = _i19.PageInfo(
     name,
     builder: (data) {
-      return const _i12.SearchScreen();
+      return const _i13.SearchScreen();
     },
   );
 }
 
 /// generated route for
-/// [_i5.SearchTab]
-class SearchTab extends _i18.PageRouteInfo<void> {
-  const SearchTab({List<_i18.PageRouteInfo>? children})
+/// [_i6.SearchTab]
+class SearchTab extends _i19.PageRouteInfo<void> {
+  const SearchTab({List<_i19.PageRouteInfo>? children})
     : super(SearchTab.name, initialChildren: children);
 
   static const String name = 'SearchTab';
 
-  static _i18.PageInfo page = _i18.PageInfo(
+  static _i19.PageInfo page = _i19.PageInfo(
     name,
     builder: (data) {
-      return const _i5.SearchTab();
+      return const _i6.SearchTab();
     },
   );
 }
 
 /// generated route for
-/// [_i13.SettingsScreen]
-class SettingsRoute extends _i18.PageRouteInfo<void> {
-  const SettingsRoute({List<_i18.PageRouteInfo>? children})
+/// [_i14.SettingsScreen]
+class SettingsRoute extends _i19.PageRouteInfo<void> {
+  const SettingsRoute({List<_i19.PageRouteInfo>? children})
     : super(SettingsRoute.name, initialChildren: children);
 
   static const String name = 'SettingsRoute';
 
-  static _i18.PageInfo page = _i18.PageInfo(
+  static _i19.PageInfo page = _i19.PageInfo(
     name,
     builder: (data) {
-      return const _i13.SettingsScreen();
+      return const _i14.SettingsScreen();
     },
   );
 }
 
 /// generated route for
-/// [_i5.SettingsTab]
-class SettingsTab extends _i18.PageRouteInfo<void> {
-  const SettingsTab({List<_i18.PageRouteInfo>? children})
+/// [_i6.SettingsTab]
+class SettingsTab extends _i19.PageRouteInfo<void> {
+  const SettingsTab({List<_i19.PageRouteInfo>? children})
     : super(SettingsTab.name, initialChildren: children);
 
   static const String name = 'SettingsTab';
 
-  static _i18.PageInfo page = _i18.PageInfo(
+  static _i19.PageInfo page = _i19.PageInfo(
     name,
     builder: (data) {
-      return const _i5.SettingsTab();
+      return const _i6.SettingsTab();
     },
   );
 }
 
 /// generated route for
-/// [_i14.SetupScreen]
-class SetupRoute extends _i18.PageRouteInfo<void> {
-  const SetupRoute({List<_i18.PageRouteInfo>? children})
+/// [_i15.SetupScreen]
+class SetupRoute extends _i19.PageRouteInfo<void> {
+  const SetupRoute({List<_i19.PageRouteInfo>? children})
     : super(SetupRoute.name, initialChildren: children);
 
   static const String name = 'SetupRoute';
 
-  static _i18.PageInfo page = _i18.PageInfo(
+  static _i19.PageInfo page = _i19.PageInfo(
     name,
     builder: (data) {
-      return const _i14.SetupScreen();
+      return const _i15.SetupScreen();
     },
   );
 }
 
 /// generated route for
-/// [_i15.ShellScreen]
-class ShellRoute extends _i18.PageRouteInfo<void> {
-  const ShellRoute({List<_i18.PageRouteInfo>? children})
+/// [_i16.ShellScreen]
+class ShellRoute extends _i19.PageRouteInfo<void> {
+  const ShellRoute({List<_i19.PageRouteInfo>? children})
     : super(ShellRoute.name, initialChildren: children);
 
   static const String name = 'ShellRoute';
 
-  static _i18.PageInfo page = _i18.PageInfo(
+  static _i19.PageInfo page = _i19.PageInfo(
     name,
     builder: (data) {
-      return const _i15.ShellScreen();
+      return const _i16.ShellScreen();
     },
   );
 }
 
 /// generated route for
-/// [_i16.SmartShuffleScreen]
-class SmartShuffleRoute extends _i18.PageRouteInfo<void> {
-  const SmartShuffleRoute({List<_i18.PageRouteInfo>? children})
+/// [_i17.SmartShuffleScreen]
+class SmartShuffleRoute extends _i19.PageRouteInfo<void> {
+  const SmartShuffleRoute({List<_i19.PageRouteInfo>? children})
     : super(SmartShuffleRoute.name, initialChildren: children);
 
   static const String name = 'SmartShuffleRoute';
 
-  static _i18.PageInfo page = _i18.PageInfo(
+  static _i19.PageInfo page = _i19.PageInfo(
     name,
     builder: (data) {
-      return const _i16.SmartShuffleScreen();
+      return const _i17.SmartShuffleScreen();
     },
   );
 }
 
 /// generated route for
-/// [_i17.SolinkFavouritesScreen]
-class SolinkFavouritesRoute extends _i18.PageRouteInfo<void> {
-  const SolinkFavouritesRoute({List<_i18.PageRouteInfo>? children})
+/// [_i18.SolinkFavouritesScreen]
+class SolinkFavouritesRoute extends _i19.PageRouteInfo<void> {
+  const SolinkFavouritesRoute({List<_i19.PageRouteInfo>? children})
     : super(SolinkFavouritesRoute.name, initialChildren: children);
 
   static const String name = 'SolinkFavouritesRoute';
 
-  static _i18.PageInfo page = _i18.PageInfo(
+  static _i19.PageInfo page = _i19.PageInfo(
     name,
     builder: (data) {
-      return const _i17.SolinkFavouritesScreen();
+      return const _i18.SolinkFavouritesScreen();
     },
   );
 }

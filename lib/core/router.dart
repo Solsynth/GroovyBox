@@ -33,6 +33,7 @@ List<AutoRoute> _tabChildren(AutoRoute root) => [
   ),
   AutoRoute(page: DownloadsRoute.page, path: 'downloads'),
   AutoRoute(page: SmartShuffleRoute.page, path: 'smart-shuffle'),
+  AutoRoute(page: AboutRoute.page, path: 'about'),
 ];
 
 /// The app's route table.
