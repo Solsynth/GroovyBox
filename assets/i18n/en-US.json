@@ -232,6 +232,8 @@
     "one": "{} track from your hearts, your history and your libraries · {} group",
     "other": "{} tracks from your hearts, your history and your libraries · {} groups"
   },
+  "shuffleSource": "From your hearts, your history and every library",
+  "shuffleOpen": "Open the mix",
   "shufflePlay": "Play the mix",
   "shuffleAgain": "Shuffle again",
   "shuffleGroupPlay": "Play",

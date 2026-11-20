@@ -790,6 +790,38 @@ class ShuffleSeeds extends AsyncNotifier<List<ShuffleSeed>> {
   }
 }
 
+/// The mix the smart shuffle currently plans, shared by its page and the
+/// dashboard shelf: one plan means the shelf and the page always show the same
+/// queue, and "shuffle again" on either moves both.
+///
+/// Kept alive so a trip to the page and back does not redraw the mix under a
+/// card the user was about to press; [shuffle] is the one way to redraw it.
+@Riverpod(keepAlive: true)
+class ShufflePlan extends AsyncNotifier<SmartShuffle> {
+  /// The seed the current plan was drawn with. A new press is a new seed, so
+  /// the same library is walked from another place instead of repeating.
+  int _seed = 0;
+
+  @override
+  Future<SmartShuffle> build() async {
+    final seeds = await ref.watch(shuffleSeedsProvider.future);
+    return planSmartShuffle(seeds, seed: _seed);
+  }
+
+  /// Draws a new mix from the same seeds.
+  ///
+  /// Written straight into the state rather than invalidating: the seeds are
+  /// already in hand, and a spinner between two presses of the same button is
+  /// noise. A failed read lands in the error state the page and the shelf both
+  /// draw, so the press is never silently lost.
+  Future<void> shuffle() async {
+    state = await AsyncValue.guard(() async {
+      final seeds = await ref.read(shuffleSeedsProvider.future);
+      return planSmartShuffle(seeds, seed: ++_seed);
+    });
+  }
+}
+
 /// Actions the library UI needs beyond reading: re-ask the network, forget a
 /// removed source, empty the stored lyrics.
 @Riverpod(keepAlive: true)

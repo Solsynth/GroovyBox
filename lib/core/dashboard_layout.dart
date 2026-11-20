@@ -16,6 +16,11 @@ abstract final class DashboardSections {
   /// Songs drawn at random, refreshed in place.
   static const forYou = 'forYou';
 
+  /// The smart shuffle's mix: hearts, history and every library, in the order
+  /// the shuffle chose. A shorter shelf than the page this opens, which is why
+  /// the header also opens the page.
+  static const smartShuffle = 'smartShuffle';
+
   /// What the account's friends are playing right now.
   static const friends = 'friends';
 

@@ -2718,6 +2718,76 @@ abstract class _$ShuffleSeeds extends $AsyncNotifier<List<ShuffleSeed>> {
   }
 }
 
+/// The mix the smart shuffle currently plans, shared by its page and the
+/// dashboard shelf: one plan means the shelf and the page always show the same
+/// queue, and "shuffle again" on either moves both.
+///
+/// Kept alive so a trip to the page and back does not redraw the mix under a
+/// card the user was about to press; [shuffle] is the one way to redraw it.
+
+@ProviderFor(ShufflePlan)
+final shufflePlanProvider = ShufflePlanProvider._();
+
+/// The mix the smart shuffle currently plans, shared by its page and the
+/// dashboard shelf: one plan means the shelf and the page always show the same
+/// queue, and "shuffle again" on either moves both.
+///
+/// Kept alive so a trip to the page and back does not redraw the mix under a
+/// card the user was about to press; [shuffle] is the one way to redraw it.
+final class ShufflePlanProvider
+    extends $AsyncNotifierProvider<ShufflePlan, SmartShuffle> {
+  /// The mix the smart shuffle currently plans, shared by its page and the
+  /// dashboard shelf: one plan means the shelf and the page always show the same
+  /// queue, and "shuffle again" on either moves both.
+  ///
+  /// Kept alive so a trip to the page and back does not redraw the mix under a
+  /// card the user was about to press; [shuffle] is the one way to redraw it.
+  ShufflePlanProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'shufflePlanProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$shufflePlanHash();
+
+  @$internal
+  @override
+  ShufflePlan create() => ShufflePlan();
+}
+
+String _$shufflePlanHash() => r'c585dd35dda3b154322de9f546be8d5d3ee5d664';
+
+/// The mix the smart shuffle currently plans, shared by its page and the
+/// dashboard shelf: one plan means the shelf and the page always show the same
+/// queue, and "shuffle again" on either moves both.
+///
+/// Kept alive so a trip to the page and back does not redraw the mix under a
+/// card the user was about to press; [shuffle] is the one way to redraw it.
+
+abstract class _$ShufflePlan extends $AsyncNotifier<SmartShuffle> {
+  FutureOr<SmartShuffle> build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<AsyncValue<SmartShuffle>, SmartShuffle>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<AsyncValue<SmartShuffle>, SmartShuffle>,
+              AsyncValue<SmartShuffle>,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
 /// Actions the library UI needs beyond reading: re-ask the network, forget a
 /// removed source, empty the stored lyrics.
 

@@ -150,6 +150,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
 
   /// The one action a section's header offers, when it has one.
   Widget? _trailingFor(BuildContext context, String key) => switch (key) {
+    DashboardSections.smartShuffle => _shuffleActions(context),
     DashboardSections.forYou => TextButton.icon(
       onPressed: () => ref.read(randomSongsProvider.notifier).refresh(),
       icon: const Icon(Symbols.shuffle_rounded, size: 18),
@@ -163,6 +164,36 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     ),
     _ => null,
   };
+
+  /// The smart shuffle's three moves: play it, draw another, or go to the page
+  /// that explains it. The first two act on the one shared plan, so the shelf
+  /// and the page never show two mixes.
+  Widget _shuffleActions(BuildContext context) {
+    final queue = ref.watch(shufflePlanProvider).value?.queue ?? const [];
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          tooltip: 'shufflePlay'.tr(),
+          // The cards play from the one they touch; this is the whole mix.
+          onPressed: queue.isEmpty
+              ? null
+              : () => ref.read(playbackProvider.notifier).playQueue(queue),
+          icon: const Icon(Symbols.play_arrow_rounded),
+        ),
+        IconButton(
+          tooltip: 'shuffleAgain'.tr(),
+          onPressed: () => ref.read(shufflePlanProvider.notifier).shuffle(),
+          icon: const Icon(Symbols.shuffle_rounded),
+        ),
+        IconButton(
+          tooltip: 'shuffleOpen'.tr(),
+          onPressed: () => context.router.push(const SmartShuffleRoute()),
+          icon: const Icon(Symbols.chevron_right_rounded),
+        ),
+      ],
+    );
+  }
 
   /// A section's content, attached by key rather than carried in the catalog.
   ///
@@ -183,6 +214,8 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     }
 
     switch (key) {
+      case DashboardSections.smartShuffle:
+        return const [SliverToBoxAdapter(child: SmartShuffleShelf())];
       case DashboardSections.forYou:
         return [
           SliverToBoxAdapter(

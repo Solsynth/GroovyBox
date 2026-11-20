@@ -231,6 +231,8 @@
     "one": "来自红心、播放记录与曲库的 {} 首曲目 · {} 个分组",
     "other": "来自红心、播放记录与曲库的 {} 首曲目 · {} 个分组"
   },
+  "shuffleSource": "来自红心、播放记录与全部曲库",
+  "shuffleOpen": "打开这组随机",
   "shufflePlay": "播放这组随机",
   "shuffleAgain": "再换一批",
   "shuffleGroupPlay": "播放",

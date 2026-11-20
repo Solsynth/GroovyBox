@@ -12,6 +12,7 @@ import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/smart_shuffle.dart';
 import 'package:groovy_box/player/player.dart';
+import 'package:groovy_box/screens/explore.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -29,61 +30,70 @@ class _Idle extends Playback {
   }
 }
 
-void main() {
-  testWidgets('smart shuffle plans from hearts and history', (tester) async {
-    final db = LibraryDatabase(NativeDatabase.memory());
-    addTearDown(db.close);
-    final catalog = LibraryCatalog(db);
-    for (final entry in [
-      ('Yellow', 'Coldplay', 'Parachutes', 'Rock'),
-      ('Fix You', 'Coldplay', 'X&Y', 'Rock'),
-      ('Clocks', 'Coldplay', 'A Rush of Blood', 'Rock'),
-      ('La Vie en Rose', 'Édith Piaf', null, 'Chanson'),
-    ]) {
-      await catalog.adopt(
-        LibrarySong(
-          sourceId: 'a',
-          id: entry.$1,
-          title: entry.$1,
-          artist: entry.$2,
-          album: entry.$3,
-          genre: entry.$4,
-          duration: const Duration(seconds: 200),
-        ),
-      );
-    }
-    await catalog.setFavourite(
+/// A small library with one heart, so the mix has something to draw on.
+Future<LibraryDatabase> _library() async {
+  final db = LibraryDatabase(NativeDatabase.memory());
+  addTearDown(db.close);
+  final catalog = LibraryCatalog(db);
+  for (final entry in [
+    ('Yellow', 'Coldplay', 'Parachutes', 'Rock'),
+    ('Fix You', 'Coldplay', 'X&Y', 'Rock'),
+    ('Clocks', 'Coldplay', 'A Rush of Blood', 'Rock'),
+    ('La Vie en Rose', 'Édith Piaf', null, 'Chanson'),
+  ]) {
+    await catalog.adopt(
       LibrarySong(
         sourceId: 'a',
-        id: 'Yellow',
-        title: 'Yellow',
-        artist: 'Coldplay',
+        id: entry.$1,
+        title: entry.$1,
+        artist: entry.$2,
+        album: entry.$3,
+        genre: entry.$4,
         duration: const Duration(seconds: 200),
       ),
-      value: true,
     );
+  }
+  await catalog.setFavourite(
+    LibrarySong(
+      sourceId: 'a',
+      id: 'Yellow',
+      title: 'Yellow',
+      artist: 'Coldplay',
+      duration: const Duration(seconds: 200),
+    ),
+    value: true,
+  );
+  return db;
+}
 
-    tester.view.physicalSize = const Size(1000, 2400);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    SharedPreferences.setMockInitialValues({});
-    final prefs = await SharedPreferences.getInstance();
+/// The app on its first page, over [db].
+Future<void> _pump(WidgetTester tester, LibraryDatabase db) async {
+  tester.view.physicalSize = const Size(1000, 2400);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  SharedPreferences.setMockInitialValues({});
+  final prefs = await SharedPreferences.getInstance();
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          sharedPreferencesProvider.overrideWithValue(prefs),
-          libraryDatabaseProvider.overrideWithValue(db),
-          librarySourcesProvider.overrideWithValue(const []),
-          playbackProvider.overrideWith(_Idle.new),
-        ],
-        child: MaterialApp.router(
-          theme: createAppThemeSet().light,
-          routerConfig: AppRouter().config(),
-        ),
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
+        libraryDatabaseProvider.overrideWithValue(db),
+        librarySourcesProvider.overrideWithValue(const []),
+        playbackProvider.overrideWith(_Idle.new),
+      ],
+      child: MaterialApp.router(
+        theme: createAppThemeSet().light,
+        routerConfig: AppRouter().config(),
       ),
-    );
-    await tester.pumpAndSettle();
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+void main() {
+  testWidgets('smart shuffle plans from hearts and history', (tester) async {
+    await _pump(tester, await _library());
 
     await tester.tap(find.byTooltip('Smart shuffle'));
     await tester.pumpAndSettle();
@@ -99,6 +109,34 @@ void main() {
     await tester.tap(find.text('Play the mix'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the dashboard plays the same mix the page shows', (
+    tester,
+  ) async {
+    await _pump(tester, await _library());
+
+    // The shelf sits on the first page with the planned cards.
+    expect(find.text('Smart shuffle'), findsOneWidget);
+    expect(find.textContaining('From your hearts'), findsOneWidget);
+    expect(find.text('Yellow'), findsWidgets);
+
+    // A card is a queue: the transport receives the plan, from that card on.
+    await tester.tap(find.text('Yellow').first);
+    await tester.pumpAndSettle();
+    final idle = ProviderScope.containerOf(
+      tester.element(find.byType(ExploreScreen)),
+    ).read(playbackProvider.notifier) as _Idle;
+    expect(idle.queues.last.map((song) => song.title), contains('Yellow'));
+
+    // "Shuffle again" redraws the one plan, and the page opens on that same
+    // mix rather than a second draw.
+    await tester.tap(find.byTooltip('Shuffle again'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Open the mix'));
+    await tester.pumpAndSettle();
+    expect(find.text('Play the mix'), findsOneWidget);
+    expect(find.text('Rock'), findsOneWidget);
   });
 
   test('every mood bucket has a label in both catalogs', () {

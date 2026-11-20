@@ -64,11 +64,18 @@ final dashboardSectionsProvider =
       final recentAlbums = ref.watch(recentAlbumsProvider);
       final friends = ref.watch(friendListeningFeedProvider);
       final curated = ref.watch(landingShelvesProvider);
+      final shuffle = ref.watch(shufflePlanProvider);
       final layout = ref.watch(dashboardLayoutProvider);
       final sources = ref.watch(librarySourceByIdProvider);
       final everyLibrary = 'dashboardSourceEveryLibrary'.tr();
 
       return {
+        DashboardSections.smartShuffle: DashboardShelf(
+          title: 'shuffleTitle'.tr(),
+          icon: Symbols.shuffle_rounded,
+          source: 'shuffleSource'.tr(),
+          visible: !(shuffle.value?.isEmpty ?? true) || shuffle.hasError,
+        ),
         DashboardSections.forYou: DashboardShelf(
           title: 'exploreMadeForYou'.tr(),
           icon: Symbols.auto_awesome_rounded,
@@ -168,6 +175,49 @@ class SongShelf extends ConsumerWidget {
         },
       ),
     );
+  }
+}
+
+/// The smart shuffle as a section: the planned mix's cards, in the order the
+/// shuffle chose.
+///
+/// The plan is the page's own, not a second draw — the shelf and the page show
+/// one queue, and "shuffle again" from either moves both. The section is
+/// shorter than the page on purpose: the groups and the full queue live there,
+/// and the header opens it.
+class SmartShuffleShelf extends ConsumerWidget {
+  const SmartShuffleShelf({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ref
+        .watch(shufflePlanProvider)
+        .when(
+          data: (plan) => plan.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: SolSpace.xxl,
+                    vertical: SolSpace.sm,
+                  ),
+                  child: Text(
+                    'shuffleEmptyMessage'.tr(),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      height: 1.5,
+                    ),
+                  ),
+                )
+              : SongShelf(songs: plan.queue),
+          loading: () => const SizedBox(
+            height: 190,
+            child: Center(child: CircularProgressIndicator()),
+          ),
+          // A retry re-reads what the mix is drawn from; the plan follows.
+          error: (error, _) => InlineError(
+            error: error,
+            onRetry: () => ref.read(shuffleSeedsProvider.notifier).refresh(),
+          ),
+        );
   }
 }
 

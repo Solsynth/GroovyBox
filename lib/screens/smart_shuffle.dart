@@ -21,34 +21,22 @@ import 'package:material_ui/material_ui.dart';
 /// shelves it drew from and what the listener's library is made of. The
 /// shuffle itself is one press — every group has its own play action, and the
 /// header's plays the whole mix.
+///
+/// The mix is [shufflePlanProvider]'s, not this page's: the dashboard's
+/// section draws the same plan, so the shelf that opens here is the queue the
+/// page is about to show.
 @RoutePage()
-class SmartShuffleScreen extends ConsumerStatefulWidget {
+class SmartShuffleScreen extends ConsumerWidget {
   const SmartShuffleScreen({super.key});
 
-  @override
-  ConsumerState<SmartShuffleScreen> createState() => _SmartShuffleScreenState();
-}
-
-class _SmartShuffleScreenState extends ConsumerState<SmartShuffleScreen> {
-  /// The seed the current plan was drawn with. A new press is a new seed, so
-  /// the same library is walked from another place instead of repeating.
-  int _seed = 0;
-
-  /// Null until the first plan, which needs the catalog and the locale.
-  SmartShuffle? _plan;
-
-  void _shuffle(List<ShuffleSeed> seeds) {
-    _plan = planSmartShuffle(seeds, seed: ++_seed);
-  }
-
-  void _play(List<LibrarySong> songs) {
+  void _play(WidgetRef ref, List<LibrarySong> songs) {
     if (songs.isEmpty) return;
     ref.read(playbackProvider.notifier).playQueue(songs);
   }
 
   @override
-  Widget build(BuildContext context) {
-    final seeds = ref.watch(shuffleSeedsProvider);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final plan = ref.watch(shufflePlanProvider);
     final hasSong = ref.watch(
       playbackProvider.select((state) => state.current != null),
     );
@@ -62,42 +50,41 @@ class _SmartShuffleScreenState extends ConsumerState<SmartShuffleScreen> {
             SliverToBoxAdapter(
               child: BackButtonRow(onBack: () => context.router.maybePop()),
             ),
-            ...seeds.when(
-              data: (list) {
-                _plan ??= planSmartShuffle(list, seed: _seed);
-                final plan = _plan!;
-                if (plan.isEmpty) {
-                  return [
-                    SliverToBoxAdapter(
-                      child: EmptyState(
-                        icon: Symbols.shuffle_rounded,
-                        title: 'shuffleEmptyTitle'.tr(),
-                        message: 'shuffleEmptyMessage'.tr(),
+            ...plan.when(
+              data: (plan) => plan.isEmpty
+                  ? [
+                      SliverToBoxAdapter(
+                        child: EmptyState(
+                          icon: Symbols.shuffle_rounded,
+                          title: 'shuffleEmptyTitle'.tr(),
+                          message: 'shuffleEmptyMessage'.tr(),
+                        ),
                       ),
-                    ),
-                  ];
-                }
-                return [
-                  SliverToBoxAdapter(
-                    child: _ShuffleHero(
-                      plan: plan,
-                      onPlay: () => _play(plan.queue),
-                      onShuffle: () => setState(() => _shuffle(list)),
-                    ),
-                  ),
-                  for (final group in plan.groups)
-                    SliverToBoxAdapter(
-                      child: _GroupSection(
-                        group: group,
-                        onPlay: (index) =>
-                            _play(group.songs.skip(index).toList()),
+                    ]
+                  : [
+                      SliverToBoxAdapter(
+                        child: _ShuffleHero(
+                          plan: plan,
+                          onPlay: () => _play(ref, plan.queue),
+                          onShuffle: () =>
+                              ref.read(shufflePlanProvider.notifier).shuffle(),
+                        ),
                       ),
-                    ),
-                  SliverToBoxAdapter(
-                    child: _QueueList(queue: plan.queue, onPlay: _play),
-                  ),
-                ];
-              },
+                      for (final group in plan.groups)
+                        SliverToBoxAdapter(
+                          child: _GroupSection(
+                            group: group,
+                            onPlay: (index) =>
+                                _play(ref, group.songs.skip(index).toList()),
+                          ),
+                        ),
+                      SliverToBoxAdapter(
+                        child: _QueueList(
+                          queue: plan.queue,
+                          onPlay: (songs) => _play(ref, songs),
+                        ),
+                      ),
+                    ],
               loading: () => const [
                 SliverToBoxAdapter(
                   child: Padding(
