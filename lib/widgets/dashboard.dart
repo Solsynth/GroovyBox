@@ -171,14 +171,14 @@ class SongShelf extends ConsumerWidget {
   }
 }
 
-class SongCard extends StatelessWidget {
+class SongCard extends ConsumerWidget {
   final LibrarySong song;
   final VoidCallback onTap;
 
   const SongCard({super.key, required this.song, required this.onTap});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     return SizedBox(
       width: 140,
@@ -205,19 +205,35 @@ class SongCard extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              Text(
-                song.subtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+              if (_subtitle(ref) case final subtitle?)
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
-              ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  /// The card's second line: the artist, else the album.
+  ///
+  /// A station has neither — it is a run of tracks the player generates, not a
+  /// recording — so it is named after the library that provides it ("Apple
+  /// Music"), which is true and is what the card would otherwise lose.
+  /// Anything else without an artist shows only its title.
+  String? _subtitle(WidgetRef ref) {
+    final artist = song.artist;
+    if (artist != null && artist.isNotEmpty) return artist;
+    final album = song.album;
+    if (album != null && album.isNotEmpty) return album;
+    if (!song.isRadio) return null;
+    return ref.watch(librarySourceByIdProvider)[song.sourceId]?.displayName;
   }
 }
 
