@@ -139,6 +139,19 @@ class SettingsScreen extends ConsumerWidget {
                 ],
               ),
             ),
+            SectionLabel('settingsSectionDashboard'.tr()),
+            IslandCard(
+              margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
+              padding: const EdgeInsets.all(SolSpace.lg),
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Symbols.dashboard_customize_rounded),
+                title: Text('dashboardCustomize'.tr()),
+                subtitle: Text('settingsDashboardSubtitle'.tr()),
+                trailing: const Icon(Symbols.chevron_right_rounded),
+                onTap: () => showDashboardCustomize(context),
+              ),
+            ),
             SectionLabel('settingsSectionPlayback'.tr()),
             IslandCard(
               margin: const EdgeInsets.symmetric(horizontal: SolSpace.xl),

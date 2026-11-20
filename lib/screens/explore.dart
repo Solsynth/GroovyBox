@@ -7,7 +7,6 @@ import 'package:groovy_box/core/tab_navigation.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
-import 'package:groovy_box/pulsar/providers.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/screens/albums.dart';
 import 'package:groovy_box/widgets/common.dart';
@@ -44,13 +43,23 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   @override
   Widget build(BuildContext context) {
     final layout = ref.watch(dashboardLayoutProvider);
+
+    // The catalog is shared with the customize sheet: it names each section
+    // and says whether it has anything to show. The page attaches the content,
+    // because only the page knows how a shelf behaves (a shuffle, a tab
+    // switch, a queue).
+    final available = ref.watch(
+      dashboardSectionsProvider(Localizations.localeOf(context).languageCode),
+    );
+
+    // What the shelves are filled from. Watched here rather than in the
+    // catalog so a section header can sit over a loading or failed read.
     final recentAlbums = ref.watch(recentAlbumsProvider);
     final randomSongs = ref.watch(randomSongsProvider);
     // Only accounts curate their own shelves; a server library contributes
     // nothing here and the shelves below carry it.
     final curated = ref.watch(landingShelvesProvider);
     final servers = ref.watch(librarySourcesProvider);
-    final friends = ref.watch(friendListeningFeedProvider);
     final hasSong = ref.watch(
       playbackProvider.select((state) => state.current != null),
     );
@@ -62,21 +71,114 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
       ref.read(landingShelvesProvider.notifier).refresh();
     }
 
-    // The page's shelves before the user's arrangement is applied.
-    final available = <String, DashboardShelf>{
-      DashboardSections.forYou: DashboardShelf(
-        title: 'exploreMadeForYou'.tr(),
-        icon: Symbols.auto_awesome_rounded,
-        // Empty until a read answers, so a first frame never flashes a shelf
-        // that the next frame removes.
-        visible:
-            (randomSongs.value?.isNotEmpty ?? false) || randomSongs.hasError,
-        trailing: TextButton.icon(
-          onPressed: () => ref.read(randomSongsProvider.notifier).refresh(),
-          icon: const Icon(Symbols.shuffle_rounded, size: 18),
-          label: Text('exploreShuffle'.tr()),
+    // The user's order first, then anything they have not seen yet — a
+    // curated shelf appears when the account answers it, at the end, rather
+    // than rearranging the page under them. Pins are sections too, so they
+    // take their place in that one order instead of being appended below.
+    final ordered = dashboardSectionOrder(layout, available);
+
+    // Removed shelves stay removed; a pin is removed by removing the pin, not
+    // by hiding its key.
+    final shown = [
+      for (final key in ordered)
+        if (!layout.hidden.contains(key)) key,
+    ];
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await ref.read(recentAlbumsProvider.notifier).refresh();
+          await ref.read(randomSongsProvider.notifier).refresh();
+          await ref.read(landingShelvesProvider.notifier).refresh();
+        },
+        child: ContentFrame(
+          child: CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: PageHeadline(
+                  title: 'exploreTitle'.tr(),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: 'dashboardCustomize'.tr(),
+                        onPressed: () => showDashboardCustomize(context),
+                        icon: const Icon(Symbols.tune_rounded),
+                      ),
+                      IconButton(
+                        tooltip: 'commonRefresh'.tr(),
+                        onPressed: refreshAll,
+                        icon: const Icon(Symbols.refresh_rounded),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (servers.isEmpty)
+                const SliverToBoxAdapter(child: AddSourceCard()),
+              for (final key in shown)
+                if (available[key] case final shelf?)
+                  if (shelf.visible)
+                    FoldableSection(
+                      page: _page,
+                      id: key,
+                      title: shelf.title,
+                      subtitle: shelf.source,
+                      trailing: _trailingFor(context, key),
+                      builder: () => _bodyFor(
+                        key,
+                        shelf,
+                        randomSongs: randomSongs,
+                        recentAlbums: recentAlbums,
+                        curated: curated,
+                      ),
+                    ),
+              SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
+            ],
+          ),
         ),
-        body: () => [
+      ),
+    );
+  }
+
+  /// The one action a section's header offers, when it has one.
+  Widget? _trailingFor(BuildContext context, String key) => switch (key) {
+    DashboardSections.forYou => TextButton.icon(
+      onPressed: () => ref.read(randomSongsProvider.notifier).refresh(),
+      icon: const Icon(Symbols.shuffle_rounded, size: 18),
+      label: Text('exploreShuffle'.tr()),
+    ),
+    DashboardSections.recentlyAdded => TextButton(
+      // The collection is the tab beside this one; selecting it is the same
+      // move the bottom bar makes.
+      onPressed: () => _openLibrary(context),
+      child: Text('exploreSeeAll'.tr()),
+    ),
+    _ => null,
+  };
+
+  /// A section's content, attached by key rather than carried in the catalog.
+  ///
+  /// A key the catalog lists but whose content vanished — a curated shelf the
+  /// account stopped answering — renders its header over nothing instead of
+  /// dropping the section the user arranged.
+  List<Widget> _bodyFor(
+    String key,
+    DashboardShelf shelf, {
+    required AsyncValue<List<LibrarySong>> randomSongs,
+    required AsyncValue<List<LibraryAlbum>> recentAlbums,
+    required AsyncValue<List<LandingShelf>> curated,
+  }) {
+    // A pinned playlist is the one shelf whose content is named by the
+    // catalog itself; a playlist that was deleted is handled by the shelf.
+    if (shelf.pin case final pin?) {
+      return [SliverToBoxAdapter(child: PinnedPlaylistShelf(pin: pin))];
+    }
+
+    switch (key) {
+      case DashboardSections.forYou:
+        return [
           SliverToBoxAdapter(
             child: randomSongs.when(
               data: (songs) => songs.isEmpty
@@ -92,28 +194,11 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
               ),
             ),
           ),
-        ],
-      ),
-      DashboardSections.friends: DashboardShelf(
-        title: 'friendsListeningTitle'.tr(),
-        icon: Symbols.group_rounded,
-        // Nobody is listening right now: an empty live shelf is a header over
-        // nothing, and the friends it would name are the point of the shelf.
-        visible: friends.value?.isNotEmpty ?? false,
-        body: () => const [SliverToBoxAdapter(child: FriendsListeningRows())],
-      ),
-      DashboardSections.recentlyAdded: DashboardShelf(
-        title: 'exploreRecentlyAdded'.tr(),
-        icon: Symbols.new_releases_rounded,
-        visible:
-            (recentAlbums.value?.isNotEmpty ?? false) || recentAlbums.hasError,
-        trailing: TextButton(
-          // The collection is the tab beside this one; selecting it is the
-          // same move the bottom bar makes.
-          onPressed: () => _openLibrary(context),
-          child: Text('exploreSeeAll'.tr()),
-        ),
-        body: () => recentAlbums.when(
+        ];
+      case DashboardSections.friends:
+        return const [SliverToBoxAdapter(child: FriendsListeningRows())];
+      case DashboardSections.recentlyAdded:
+        return recentAlbums.when(
           data: (list) => list.isEmpty
               ? const [SliverToBoxAdapter(child: SizedBox.shrink())]
               : [
@@ -144,100 +229,25 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
               onRetry: () => ref.invalidate(recentAlbumsProvider),
             ),
           ],
-        ),
-      ),
-      // The account's own shelves: its curation is what the merged shelves
-      // cannot reconstruct (a mix is not a playlist and a station is not a
-      // track).
-      for (final shelf in curated.value ?? const <LandingShelf>[])
-        DashboardSections.curated(shelf.sourceId, shelf.title): DashboardShelf(
-          title: shelf.title,
-          icon: Symbols.auto_awesome_rounded,
-          body: () => [SliverToBoxAdapter(child: SongShelf(songs: shelf.songs))],
-        ),
-    };
-
-    // The user's order first, then anything they have not seen yet — a
-    // curated shelf appears when the account answers it, at the end, rather
-    // than rearranging the page under them. Pins are sections too, so they
-    // take their place in that one order instead of being appended below.
-    final ordered = <String>[
-      for (final key in layout.order)
-        if (available.containsKey(key) || layout.pins.containsKey(key)) key,
-    ];
-    for (final key in available.keys) {
-      if (!ordered.contains(key)) ordered.add(key);
+        );
     }
 
-    // Removed shelves stay removed; a pin is removed by removing the pin, not
-    // by hiding its key, so it is drawn from the pin map instead.
-    final shown = [
-      for (final key in ordered)
-        if (!layout.hidden.contains(key)) key,
-    ];
-
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: RefreshIndicator(
-        onRefresh: () async {
-          await ref.read(recentAlbumsProvider.notifier).refresh();
-          await ref.read(randomSongsProvider.notifier).refresh();
-          await ref.read(landingShelvesProvider.notifier).refresh();
-        },
-        child: ContentFrame(
-          child: CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(
-                child: PageHeadline(
-                  title: 'exploreTitle'.tr(),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        tooltip: 'dashboardCustomize'.tr(),
-                        onPressed: () => showDashboardCustomize(
-                          context,
-                          ref,
-                          available,
-                        ),
-                        icon: const Icon(Symbols.tune_rounded),
-                      ),
-                      IconButton(
-                        tooltip: 'commonRefresh'.tr(),
-                        onPressed: refreshAll,
-                        icon: const Icon(Symbols.refresh_rounded),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              if (servers.isEmpty)
-                const SliverToBoxAdapter(child: AddSourceCard()),
-              for (final key in shown)
-                if (available[key] case final shelf?)
-                  if (shelf.visible)
-                    FoldableSection(
-                      page: _page,
-                      id: key,
-                      title: shelf.title,
-                      trailing: shelf.trailing,
-                      builder: shelf.body,
-                    )
-                else if (layout.pins[key] case final pin?)
-                  FoldableSection(
-                    page: _page,
-                    id: pin.key,
-                    title: pin.title,
-                    builder: () => [
-                      SliverToBoxAdapter(child: PinnedPlaylistShelf(pin: pin)),
-                    ],
-                  ),
-              SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
-            ],
-          ),
-        ),
-      ),
-    );
+    // The account's own shelves: its curation is what the merged shelves
+    // cannot reconstruct (a mix is not a playlist and a station is not a
+    // track). The key spells the shelf it names, so a read that dropped it
+    // falls through to an empty body rather than to another shelf's songs.
+    for (final curatedShelf in curated.value ?? const <LandingShelf>[]) {
+      final curatedKey = DashboardSections.curated(
+        curatedShelf.sourceId,
+        curatedShelf.title,
+      );
+      if (curatedKey == key) {
+        return [
+          SliverToBoxAdapter(child: SongShelf(songs: curatedShelf.songs)),
+        ];
+      }
+    }
+    return const [];
   }
 
   void _openAlbum(BuildContext context, LibraryAlbum album) {
@@ -265,31 +275,10 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
 ///
 /// A sheet rather than a settings page: the changes are visible on the page
 /// behind it as they are made, and closing it shows the result.
-void showDashboardCustomize(
-  BuildContext context,
-  WidgetRef ref,
-  Map<String, DashboardShelf> available,
-) {
-  final layout = ref.read(dashboardLayoutProvider);
-
-  // The order the sheet starts from is the order the page shows: the user's
-  // saved order, with shelves they have not seen yet at the end.
-  final ordered = <String>[
-    for (final key in layout.order)
-      if (available.containsKey(key)) key,
-  ];
-  for (final key in available.keys) {
-    if (!ordered.contains(key)) ordered.add(key);
-  }
-
   showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
     backgroundColor: Theme.of(context).colorScheme.surface,
-    builder: (sheetContext) => DashboardCustomizeSheet(
-      available: available,
-      initialOrder: ordered,
-    ),
   );
 }

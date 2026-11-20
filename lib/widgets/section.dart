@@ -19,7 +19,8 @@ String playlistSourceName(String sourceId, WidgetRef ref) {
       LibraryKind.local.label;
 }
 
-/// A section's name, above the content it introduces.
+/// A section's name, above the content it introduces, with an optional
+/// smaller line under it saying where the content came from.
 ///
 /// When [onToggle] is set the name is also the fold: tapping it collapses the
 /// section under it, and the chevron says which way it is about to go.
@@ -27,6 +28,10 @@ String playlistSourceName(String sourceId, WidgetRef ref) {
 /// section.
 class SectionHeader extends StatelessWidget {
   final String title;
+
+  /// Where the section's content came from — a library, a device, an account.
+  /// Null for a section the app itself assembled from several.
+  final String? subtitle;
   final Widget? trailing;
 
   /// Collapse state, when this header folds its section.
@@ -36,6 +41,7 @@ class SectionHeader extends StatelessWidget {
   const SectionHeader({
     super.key,
     required this.title,
+    this.subtitle,
     this.trailing,
     this.collapsed = false,
     this.onToggle,
@@ -50,6 +56,44 @@ class SectionHeader extends StatelessWidget {
         fontWeight: FontWeight.w700,
       ),
     );
+    // The source line is a quiet second line, not a second title: it answers
+    // "where is this from", while the name answers "what is this".
+    final source = switch (subtitle) {
+      final source? => Text(
+        source,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+      null => null,
+    };
+    final label = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Flexible(child: name),
+            if (onToggle != null) ...[
+              const SizedBox(width: SolSpace.xs),
+              AnimatedRotation(
+                turns: collapsed ? -0.25 : 0,
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                child: Icon(
+                  Symbols.expand_more_rounded,
+                  size: 20,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ],
+        ),
+        ?source,
+      ],
+    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         SolSpace.xxl,
@@ -61,26 +105,11 @@ class SectionHeader extends StatelessWidget {
         children: [
           Expanded(
             child: onToggle == null
-                ? name
+                ? label
                 : InkWell(
                     onTap: onToggle,
                     borderRadius: BorderRadius.circular(SolRadius.sm),
-                    child: Row(
-                      children: [
-                        Flexible(child: name),
-                        const SizedBox(width: SolSpace.xs),
-                        AnimatedRotation(
-                          turns: collapsed ? -0.25 : 0,
-                          duration: const Duration(milliseconds: 180),
-                          curve: Curves.easeOutCubic,
-                          child: Icon(
-                            Symbols.expand_more_rounded,
-                            size: 20,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
+                    child: label,
                   ),
           ),
           ?trailing,
@@ -102,6 +131,9 @@ class FoldableSection extends ConsumerWidget {
   final String page;
   final String id;
   final String title;
+
+  /// Where the section's content came from, shown under its name.
+  final String? subtitle;
   final Widget? trailing;
 
   /// The section's own slivers. Called only while the section is open.
@@ -113,6 +145,7 @@ class FoldableSection extends ConsumerWidget {
     required this.id,
     required this.title,
     required this.builder,
+    this.subtitle,
     this.trailing,
   });
 
@@ -131,6 +164,7 @@ class FoldableSection extends ConsumerWidget {
         SliverToBoxAdapter(
           child: SectionHeader(
             title: title,
+            subtitle: subtitle,
             trailing: trailing,
             collapsed: collapsed,
             onToggle: () => ref

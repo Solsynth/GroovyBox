@@ -113,16 +113,21 @@ void main() {
     await tester.pumpAndSettle();
 
     // The slider is the only volume handle in the app: the player page no
-    // longer carries one, and the arrow keys nudge the same state.
+    // longer carries one, and the arrow keys nudge the same state. The
+    // dashboard card above Appearance pushes it below the first frame, so
+    // scroll to it before looking, as a user does on a phone window.
+    await tester.scrollUntilVisible(
+      find.text('Volume'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
     final slider = find.byType(Slider);
     expect(slider, findsOneWidget);
     expect(find.text('Volume'), findsOneWidget);
-
     // The pill header floats with a gap under it, so on a phone the slider
     // can start below the fold; scroll it into reach before dragging, which
     // is what a user does. The contract is the drag, not the first frame.
-    await tester.ensureVisible(slider);
-    await tester.pumpAndSettle();
     await tester.drag(slider, const Offset(-200, 0));
     await tester.pumpAndSettle();
     expect(_playback.volumes, isNotEmpty);

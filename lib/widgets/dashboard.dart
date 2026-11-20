@@ -6,6 +6,7 @@ import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/local_import.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
+import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/pulsar/providers.dart';
 import 'package:groovy_box/widgets/artwork.dart';
@@ -14,26 +15,131 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// One shelf the dashboard can draw, before the user's arrangement decides
-/// where.
+/// One section the dashboard can show: its name, its mark, and the library
+/// that provided it.
+///
+/// The catalog is what the page and the customize sheet agree on — the page
+/// attaches the content, the sheet arranges the names — so a section is
+/// spelled once rather than in both places. A pinned playlist is a section
+/// too; [pin] names the playlist its shelf reads.
 class DashboardShelf {
   final String title;
   final IconData icon;
+
+  /// The library that provided the content, named in a small line under the
+  /// title. Null for a shelf the page assembles from every library, where a
+  /// name would claim one source for another's songs.
+  final String? source;
 
   /// False for a shelf that has nothing to show right now: the name would
   /// introduce an empty space. Still listed in the customize sheet, so the
   /// user can see it and turn it back on later.
   final bool visible;
-  final Widget? trailing;
-  final List<Widget> Function() body;
+
+  /// Set when this section is a playlist the user pinned.
+  final DashboardPin? pin;
 
   const DashboardShelf({
     required this.title,
     required this.icon,
-    required this.body,
+    this.source,
     this.visible = true,
-    this.trailing,
+    this.pin,
   });
+}
+
+/// The sections the dashboard can show right now, before the user's
+/// arrangement decides where.
+///
+/// The content is not here: each shelf's body is the page's own action (a
+/// shuffle, a see-all, a queue), and the page and the customize sheet share
+/// the catalog rather than a copy of the page.
+///
+/// Keyed on the locale: `tr()` reads easy_localization's process-wide
+/// singleton, which does not notify providers, so a map cached under one key
+/// would keep the first language after a switch.
+final dashboardSectionsProvider =
+    Provider.family<Map<String, DashboardShelf>, String>((ref, language) {
+      final randomSongs = ref.watch(randomSongsProvider);
+      final recentAlbums = ref.watch(recentAlbumsProvider);
+      final friends = ref.watch(friendListeningFeedProvider);
+      final curated = ref.watch(landingShelvesProvider);
+      final layout = ref.watch(dashboardLayoutProvider);
+      final sources = ref.watch(librarySourceByIdProvider);
+      final everyLibrary = 'dashboardSourceEveryLibrary'.tr();
+
+      return {
+        DashboardSections.forYou: DashboardShelf(
+          title: 'exploreMadeForYou'.tr(),
+          icon: Symbols.auto_awesome_rounded,
+          source: everyLibrary,
+          visible:
+              (randomSongs.value?.isNotEmpty ?? false) || randomSongs.hasError,
+        ),
+        DashboardSections.friends: DashboardShelf(
+          title: 'friendsListeningTitle'.tr(),
+          icon: Symbols.group_rounded,
+          source: 'dashboardSourceSolink'.tr(),
+          visible: friends.value?.isNotEmpty ?? false,
+        ),
+        DashboardSections.recentlyAdded: DashboardShelf(
+          title: 'exploreRecentlyAdded'.tr(),
+          icon: Symbols.new_releases_rounded,
+          source: everyLibrary,
+          visible:
+              (recentAlbums.value?.isNotEmpty ?? false) ||
+              recentAlbums.hasError,
+        ),
+        // A shelf an account-backed library curates itself: its name is the
+        // shelf's, and the line under it says which account answered.
+        for (final shelf in curated.value ?? const <LandingShelf>[])
+          DashboardSections.curated(
+            shelf.sourceId,
+            shelf.title,
+          ): DashboardShelf(
+            title: shelf.title,
+            icon: Symbols.auto_awesome_rounded,
+            source: sources[shelf.sourceId]?.displayName ?? shelf.sourceId,
+          ),
+        for (final pin in layout.pins.values)
+          pin.key: DashboardShelf(
+            title: pin.title,
+            icon: _pinIcon(pin.kind),
+            source: switch (pin.kind) {
+              DashboardPinKind.owned => LibraryKind.local.label,
+              DashboardPinKind.server =>
+                sources[pin.sourceId]?.displayName ?? pin.sourceId,
+              DashboardPinKind.solink => 'dashboardSourceSolink'.tr(),
+            },
+            pin: pin,
+          ),
+      };
+    });
+
+IconData _pinIcon(DashboardPinKind kind) => switch (kind) {
+  DashboardPinKind.owned => Symbols.queue_music_rounded,
+  DashboardPinKind.server => Symbols.playlist_play,
+  DashboardPinKind.solink => Symbols.cloud_rounded,
+};
+
+/// The catalog's sections in the order the user arranged them.
+///
+/// The saved order first, then shelves they have not seen yet at the end —
+/// a curated shelf appears when the account answers it rather than
+/// rearranging the page under them. Pins are sections too, so they take their
+/// place in that one order.
+List<String> dashboardSectionOrder(
+  DashboardLayout layout,
+  Map<String, DashboardShelf> available,
+) {
+  final ordered = [
+    for (final key in layout.order)
+      if (available.containsKey(key)) key,
+  ];
+  for (final key in available.keys) {
+    if (!ordered.contains(key)) ordered.add(key);
+  }
+  return ordered;
 }
 
 /// Horizontal shelf of playable songs, each a cover card.
@@ -337,6 +443,22 @@ class PinnedPlaylistShelf extends ConsumerWidget {
   }
 }
 
+/// Opens the customize sheet over the page that asked for it.
+///
+/// A sheet rather than a settings page of its own: the dashboard behind it
+/// follows every move as it is made, so closing the sheet shows the result
+/// rather than asking for a second confirmation. Both the Explore headline
+/// and Settings open the same sheet.
+void showDashboardCustomize(BuildContext context) {
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    backgroundColor: Theme.of(context).colorScheme.surface,
+    builder: (_) => const DashboardCustomizeSheet(),
+  );
+}
+
 /// The customize sheet: the page's sections in the user's order, each with
 /// the two moves that make a dashboard personal — take it off the page, and
 /// move it up or down — plus the two ways to add one (a shelf that was
@@ -345,14 +467,7 @@ class PinnedPlaylistShelf extends ConsumerWidget {
 /// Writes are live: the page behind the sheet follows every move, so closing
 /// the sheet shows the result rather than asking for a second confirmation.
 class DashboardCustomizeSheet extends ConsumerStatefulWidget {
-  final Map<String, DashboardShelf> available;
-  final List<String> initialOrder;
-
-  const DashboardCustomizeSheet({
-    super.key,
-    required this.available,
-    required this.initialOrder,
-  });
+  const DashboardCustomizeSheet({super.key});
 
   @override
   ConsumerState<DashboardCustomizeSheet> createState() =>
@@ -361,7 +476,10 @@ class DashboardCustomizeSheet extends ConsumerStatefulWidget {
 
 class _DashboardCustomizeSheetState
     extends ConsumerState<DashboardCustomizeSheet> {
-  late List<String> _order;
+  /// Null until the first build, which is also the first point the locale and
+  /// the translator are readable: `initState` cannot look at inherited
+  /// widgets, and the catalog is keyed by language.
+  List<String>? _order;
 
   @override
   void initState() {
@@ -379,10 +497,25 @@ class _DashboardCustomizeSheetState
 
   DashboardLayout get _layout => ref.read(dashboardLayoutProvider);
 
-  /// `onReorderItem` already adjusts the destination index for the item
-  /// removed from its old place.
+  /// The user's saved positions, then catalog entries they have not seen
+  /// yet: a curated shelf answers late and must not reshuffle the list under
+  /// them, so new keys are appended for display. The catalog already
+  /// includes the pins, so one derived order is all the sheet needs.
+  List<String> _effectiveOrder(Map<String, DashboardShelf> available) {
+    final order =
+        _order ??
+        dashboardSectionOrder(ref.read(dashboardLayoutProvider), available);
+    _order = order;
+    return [
+      ...order.where(available.containsKey),
+      ...available.keys.where((key) => !order.contains(key)),
+    ];
+  }
+
   Future<void> _move(int oldIndex, int newIndex) async {
-    final next = [..._order];
+    final next = _effectiveOrder(
+      ref.read(dashboardSectionsProvider(_language)),
+    );
     final key = next.removeAt(oldIndex);
     next.insert(newIndex, key);
     setState(() => _order = next);
@@ -405,7 +538,12 @@ class _DashboardCustomizeSheetState
 
   Future<void> _reset() async {
     await ref.read(dashboardLayoutProvider.notifier).reset();
-    setState(() => _order = [...widget.initialOrder]);
+    setState(
+      () => _order = dashboardSectionOrder(
+        ref.read(dashboardLayoutProvider),
+        ref.read(dashboardSectionsProvider(_language)),
+      ),
+    );
   }
 
   Future<void> _addPin() async {
@@ -427,6 +565,8 @@ class _DashboardCustomizeSheetState
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final layout = ref.watch(dashboardLayoutProvider);
+    final available = ref.watch(dashboardSectionsProvider(_language));
+    final effective = _effectiveOrder(available);
     final height = MediaQuery.sizeOf(context).height * 0.72;
     return SafeArea(
       child: SizedBox(
@@ -477,17 +617,15 @@ class _DashboardCustomizeSheetState
               child: ReorderableListView.builder(
                 buildDefaultDragHandles: false,
                 padding: const EdgeInsets.only(bottom: SolSpace.md),
-                itemCount: _order.length,
+                itemCount: effective.length,
                 onReorderItem: _move,
                 itemBuilder: (context, index) {
-                  final key = _order[index];
+                  final key = effective[index];
                   final pin = layout.pins[key];
-                  final shelf = widget.available[key];
-                  final title = pin?.title ?? shelf?.title ?? key;
-                  final icon =
-                      pin != null
-                      ? _pinIcon(pin.kind)
-                      : shelf?.icon ?? Symbols.widgets_rounded;
+                  final shelf = available[key];
+                  final title = shelf?.title ?? pin?.title ?? key;
+                  final icon = shelf?.icon ?? Symbols.widgets_rounded;
+                  final source = shelf?.source;
                   // A shelf the page cannot draw yet (a curated shelf that
                   // has not answered) is listed but greyed: it is still a
                   // choice, just not one with anything behind it today.
@@ -512,18 +650,33 @@ class _DashboardCustomizeSheetState
                         Icon(icon, size: 20),
                         const SizedBox(width: SolSpace.md),
                         Expanded(
-                          child: Text(
-                            title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: removed
-                                  ? theme.colorScheme.onSurfaceVariant
-                                  : null,
-                            ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: removed
+                                      ? theme.colorScheme.onSurfaceVariant
+                                      : null,
+                                ),
+                              ),
+                              if (source != null)
+                                Text(
+                                  source,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
-                        if (pin != null)
+                        if (shelf?.pin != null)
                           IconButton(
                             tooltip: 'dashboardRemoveSection'.tr(),
                             onPressed: () => _removePin(key),
@@ -558,11 +711,6 @@ class _DashboardCustomizeSheetState
     );
   }
 
-  IconData _pinIcon(DashboardPinKind kind) => switch (kind) {
-    DashboardPinKind.owned => Symbols.queue_music_rounded,
-    DashboardPinKind.server => Symbols.playlist_play,
-    DashboardPinKind.solink => Symbols.cloud_rounded,
-  };
 }
 
 /// The playlists a section can be made from, wherever they live. The same
