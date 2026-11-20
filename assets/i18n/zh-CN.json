@@ -32,6 +32,7 @@
   "artistsDetailEmptyTitle": "这里还没有内容",
   "artistsDetailEmptyMessage": "该媒体库列出了这位艺术家，但没有他们的专辑。",
   "artistsFleetHeader": "云账号中的曲目",
+  "artistsRecordUnavailable": "你的媒体库里都还没有这张专辑。",
   "commonNavCollapse": "收起导航",
   "commonNavExpand": "展开导航",
   "commonLibraryUnreachable": "曲库没有响应。请检查连接后重试。",

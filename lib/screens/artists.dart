@@ -129,6 +129,20 @@ class _BodyState extends ConsumerState<_Body> {
     final albums = widget.albums;
     final fallback = widget.name ?? 'artistsDetailTitleFallback'.tr();
     final artist = _name;
+    // The artist's own picture, as the library that listed them draws it on
+    // its card. Read from the list the page was opened from rather than
+    // asked for again: it is already in memory, and a source that carries a
+    // portrait here is the one case the fleet cannot answer for.
+    final artId = ref
+        .watch(libraryArtistsProvider)
+        .value
+        ?.where(
+          (candidate) =>
+              candidate.sourceId == widget.sourceId &&
+              candidate.id == widget.artistId,
+        )
+        .firstOrNull
+        ?.artId;
     // The fleet's record for this act. Watched by name, so a page opened for
     // a different artist asks again; a failure answers null and the page
     // keeps everything its own libraries already gave it.
@@ -172,14 +186,12 @@ class _BodyState extends ConsumerState<_Body> {
               SliverToBoxAdapter(
                 child: CollectionHero(
                   sourceId: widget.sourceId,
-                  artId: albums
-                      .map((a) => a.artId)
-                      .whereType<String>()
-                      .firstOrNull,
-                  // The fleet's portrait wins when the library has none: a
-                  // source that lists an artist often has no picture of them,
-                  // and an artist page that opens as a generic person is the
-                  // one thing this page can plainly fix.
+                  // The act's own portrait, never the first album's cover:
+                  // a sleeve is a record's face, and the artist page used to
+                  // open showing one of theirs as if it were a likeness. The
+                  // library's artist art is the fallback below, and the
+                  // fleet's portrait replaces it when there is one.
+                  artId: artId,
                   artworkUrl: profile?.artworkUrl ?? profile?.imageUrl,
                   title:
                       artist ??
@@ -338,6 +350,9 @@ class _BodyState extends ConsumerState<_Body> {
                     // fleet's discography is a completion, not a second copy.
                     known: albums.map((album) => album.name).toSet(),
                     total: profile.releaseGroupCount,
+                    // A fleet record is looked up by title and credit; the
+                    // name is what every connected library spells the act by.
+                    artist: artist,
                   ),
                 ),
               // Last: what the account holds beyond this device's libraries
@@ -449,18 +464,21 @@ class _FleetSection extends ConsumerWidget {
 ///
 /// The point is the gap: a server holding two of an artist's nine albums
 /// leaves the page looking like the artist made two. This section says the
-/// rest exist — a year, a title, a cover — without pretending any of them can
-/// be played from here, which is the difference between a discography and a
-/// library.
+/// rest exist — a year, a title, a cover — and each tile can be opened when
+/// the record turns out to be reachable somewhere: another connected library
+/// or a store, found by [discoveredAlbumProvider] when the tile is tapped. A
+/// record nobody can play says so in place instead of opening an empty page.
 class _Discography extends StatelessWidget {
   final List<PulsarAlbumSummary> albums;
   final Set<String> known;
   final int total;
+  final String? artist;
 
   const _Discography({
     required this.albums,
     required this.known,
     required this.total,
+    this.artist,
   });
 
   @override
@@ -496,7 +514,7 @@ class _Discography extends StatelessWidget {
             itemCount: missing.length,
             separatorBuilder: (_, _) => const SizedBox(width: SolSpace.md),
             itemBuilder: (context, index) =>
-                _DiscographyTile(album: missing[index]),
+                _DiscographyTile(album: missing[index], artist: artist),
           ),
         ),
       ],
@@ -504,70 +522,142 @@ class _Discography extends StatelessWidget {
   }
 }
 
-/// One fleet-only record: cover, title, year. Not tappable — this device has
-/// nothing to open, and a tile that leads to an empty page is worse than one
-/// that plainly says "not here".
-class _DiscographyTile extends StatelessWidget {
+/// One record the fleet knows and the libraries here do not: cover, title,
+/// year, and a way in when the record can be found.
+///
+/// Tapping asks [discoveredAlbumProvider] where the record actually lives —
+/// the connected libraries first, a store second — and opens its album page
+/// from the answer. The lookup is on demand rather than on build because a
+/// discography is a list of records, and asking every library about all of
+/// them would cost the page its first paint for a question the reader may
+/// never ask.
+class _DiscographyTile extends ConsumerStatefulWidget {
   final PulsarAlbumSummary album;
+  final String? artist;
 
-  const _DiscographyTile({required this.album});
+  const _DiscographyTile({required this.album, this.artist});
+
+  @override
+  ConsumerState<_DiscographyTile> createState() => _DiscographyTileState();
+}
+
+class _DiscographyTileState extends ConsumerState<_DiscographyTile> {
+  bool _opening = false;
+
+  Future<void> _open() async {
+    if (_opening) return;
+    setState(() => _opening = true);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      final album = await ref.read(
+        discoveredAlbumProvider((
+          title: widget.album.title,
+          artist: widget.artist,
+        )).future,
+      );
+      if (!mounted) return;
+      if (album == null) {
+        messenger?.showSnackBar(
+          SnackBar(content: Text('artistsRecordUnavailable'.tr())),
+        );
+        return;
+      }
+      context.router.push(
+        AlbumDetailRoute(
+          sourceId: album.sourceId,
+          albumId: album.id,
+          albumName: album.name,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _opening = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final album = widget.album;
+    final art = album.artworkUrl;
     return SizedBox(
       width: 150,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: AspectRatio(
-              aspectRatio: 1,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(SolRadius.md),
-                child: album.artworkUrl == null
-                    ? ColoredBox(
-                        color: theme.colorScheme.surfaceContainerHigh,
-                        child: Icon(
-                          Symbols.album,
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      )
-                    : Image.network(
-                        album.artworkUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => ColoredBox(
+      child: InkWell(
+        onTap: _open,
+        borderRadius: SolRadius.cardRadius,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(SolRadius.md),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (art == null)
+                        ColoredBox(
                           color: theme.colorScheme.surfaceContainerHigh,
                           child: Icon(
                             Symbols.album,
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
+                        )
+                      else
+                        Image.network(
+                          art,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => ColoredBox(
+                            color: theme.colorScheme.surfaceContainerHigh,
+                            child: Icon(
+                              Symbols.album,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
                         ),
-                      ),
+                      // The lookup is a request per tile; while it runs the
+                      // cover says so instead of the row going dead.
+                      if (_opening)
+                        ColoredBox(
+                          color: theme.colorScheme.scrim.withValues(
+                            alpha: 0.35,
+                          ),
+                          child: const Center(
+                            child: SizedBox.square(
+                              dimension: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.4,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: SolSpace.sm),
-          Text(
-            album.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall?.copyWith(
-              fontWeight: FontWeight.w700,
+            const SizedBox(height: SolSpace.sm),
+            Text(
+              album.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-          Text(
-            [
-              if (album.year != null) '${album.year}',
-              if (album.type != null) album.type!.toLowerCase(),
-            ].join('  ·  '),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+            Text(
+              [
+                if (album.year != null) '${album.year}',
+                if (album.type != null) album.type!.toLowerCase(),
+              ].join('  ·  '),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

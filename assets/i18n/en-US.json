@@ -33,6 +33,7 @@
   "artistsDetailEmptyTitle": "Nothing here yet",
   "artistsDetailEmptyMessage": "This source lists the artist but no albums for them.",
   "artistsFleetHeader": "Shared on your account",
+  "artistsRecordUnavailable": "None of your libraries has this record yet.",
   "commonNavCollapse": "Collapse navigation",
   "commonNavExpand": "Expand navigation",
   "commonLibraryUnreachable": "The library did not answer. Check the connection and try again.",

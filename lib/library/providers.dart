@@ -485,6 +485,91 @@ Future<List<LibraryAlbum>> artistAlbums(Ref ref, LibraryRef artist) async {
   return source.artistAlbums(artist.id);
 }
 
+/// A record the fleet names, as this device could actually open it.
+///
+/// The artist page's discography is the fleet's: a record the connected
+/// libraries do not list is a row with no id to open, which is why those
+/// tiles were inert. This is the other half of that answer — the same record
+/// found where it *can* be played.
+///
+/// Two questions, cheapest first. The connected libraries are asked for the
+/// record by title and credit and kept only where the title matches; a store
+/// is asked only when none of them has it, and its row counts only when the
+/// store can also list the tracks ([LibrarySource.albumSongs]) — a result a
+/// page cannot open is the same dead end the tile already was.
+///
+/// Null is the honest answer for a record nobody here has, and the tile stays
+/// inert rather than opening an empty page.
+typedef DiscoveredAlbumTarget = ({String title, String? artist});
+
+@riverpod
+Future<LibraryAlbum?> discoveredAlbum(
+  Ref ref,
+  DiscoveredAlbumTarget target,
+) async {
+  final title = trackTitleKey(target.title);
+  if (title.isEmpty) return null;
+  final artist = target.artist?.trim();
+  final sources = ref.watch(librarySourceByIdProvider);
+
+  bool matches(LibraryAlbum album) {
+    if (trackTitleKey(album.name) != title) return false;
+    if (artist == null || artist.isEmpty) return true;
+    // The credit is compared the way the catalog compares two libraries'
+    // spellings of it, so an ampersand or a missing "The" does not hide the
+    // record.
+    final wanted = trackArtistWords(artist);
+    final theirs = trackArtistWords(album.artist);
+    return wanted.isEmpty ||
+        theirs.isEmpty ||
+        wanted.intersection(theirs).isNotEmpty;
+  }
+
+  // What this device can already play: instant, offline, and answered by a
+  // server's holdings as much as by a store's trial copy.
+  final query = [target.artist, target.title].whereType<String>().join(' ');
+  final held = await ref
+      .watch(libraryAggregatorProvider)
+      .searchCatalogue(query);
+  for (final song in held) {
+    final id = song.albumId;
+    final album = song.album;
+    if (id == null || album == null) continue;
+    final candidate = LibraryAlbum(
+      sourceId: song.sourceId,
+      id: id,
+      name: album,
+      artist: song.albumArtist ?? song.artist,
+      artId: song.artId,
+      duration: Duration.zero,
+      year: song.year,
+    );
+    if (sources.containsKey(song.sourceId) && matches(candidate)) {
+      return candidate;
+    }
+  }
+
+  // A server cannot answer what the holdings search just missed — its
+  // catalogue is its holdings — so only a store is asked, and only for a
+  // record the store can also turn into tracks: a page that opens on "empty"
+  // is the dead end this lookup exists to avoid.
+  for (final source in sources.values) {
+    if (source is! ExtendableSource) continue;
+    try {
+      final found = await source.searchCatalog(query);
+      for (final album in found.albums.where(matches)) {
+        final tracks = await source.albumSongs(album.id);
+        if (tracks.isNotEmpty) return album;
+      }
+    } catch (error) {
+      // One store refusing is not the record's absence: the next one, or the
+      // tile staying inert, is still an answer.
+      debugPrint('[Library] store lookup of "${target.title}": $error');
+    }
+  }
+  return null;
+}
+
 @riverpod
 Future<List<LibrarySong>> searchSongs(Ref ref, String query) async {
   final trimmed = query.trim();

@@ -1748,6 +1748,85 @@ final class ArtistAlbumsFamily extends $Family
   String toString() => r'artistAlbumsProvider';
 }
 
+@ProviderFor(discoveredAlbum)
+final discoveredAlbumProvider = DiscoveredAlbumFamily._();
+
+final class DiscoveredAlbumProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<LibraryAlbum?>,
+          LibraryAlbum?,
+          FutureOr<LibraryAlbum?>
+        >
+    with $FutureModifier<LibraryAlbum?>, $FutureProvider<LibraryAlbum?> {
+  DiscoveredAlbumProvider._({
+    required DiscoveredAlbumFamily super.from,
+    required DiscoveredAlbumTarget super.argument,
+  }) : super(
+         retry: null,
+         name: r'discoveredAlbumProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$discoveredAlbumHash();
+
+  @override
+  String toString() {
+    return r'discoveredAlbumProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<LibraryAlbum?> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<LibraryAlbum?> create(Ref ref) {
+    final argument = this.argument as DiscoveredAlbumTarget;
+    return discoveredAlbum(ref, argument);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is DiscoveredAlbumProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$discoveredAlbumHash() => r'c3caf5db41ba3dc20848c55ecc8e217c434005eb';
+
+final class DiscoveredAlbumFamily extends $Family
+    with
+        $FunctionalFamilyOverride<
+          FutureOr<LibraryAlbum?>,
+          DiscoveredAlbumTarget
+        > {
+  DiscoveredAlbumFamily._()
+    : super(
+        retry: null,
+        name: r'discoveredAlbumProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  DiscoveredAlbumProvider call(DiscoveredAlbumTarget target) =>
+      DiscoveredAlbumProvider._(argument: target, from: this);
+
+  @override
+  String toString() => r'discoveredAlbumProvider';
+}
+
 @ProviderFor(searchSongs)
 final searchSongsProvider = SearchSongsFamily._();
 
