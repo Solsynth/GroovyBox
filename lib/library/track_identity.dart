@@ -105,30 +105,54 @@ class TrackIdentity {
   /// a few seconds. A lookup asks a different question, and two services
   /// describe one recording differently all the time: a featured credit on
   /// one and not the other, a length a second or two apart, a title carrying
-  /// an edition credit the other drops. Answering "nothing found" for those
-  /// is the bug this exists to stop.
+  /// an edition credit the other drops, an album that is a reissue or a
+  /// compilation on one side. Answering "nothing found" for those is the bug
+  /// this exists to stop.
   ///
-  /// The title must agree once normalized; beyond that a copy is accepted
-  /// when one artist's credits are all present in the other's (a duet
-  /// credited on one side only) or one is unknown, and the lengths are within
-  /// [copyDurationTolerance] whenever both are known. A different recording of
-  /// the same song — live, remixed, re-recorded — differs in length, which is
-  /// what the last rule keeps out.
+  /// The album is never part of the answer: the same recording is pressed on
+  /// a hundred different ones, and a lookup that insisted on it would miss
+  /// every copy another library files under its own release.
+  ///
+  /// The title must agree once normalized. When the lengths match within
+  /// [copyDurationTolerance] the credits decide at their own strictness
+  /// ([couldBeSameAct]); when they disagree the copy is still accepted if the
+  /// lengths match within [matchingDurationTolerance], because a romanization,
+  /// a translation or a stage name is a spelling difference this app cannot
+  /// read its way through. The length is what keeps a live or re-recorded take
+  /// out, and the lookup ranks the copy whose credit agrees first, so a cover
+  /// is only ever the last resort.
   bool couldBeSameRecording(TrackIdentity other) {
     if (matches(other)) return true;
     if (titleKey != other.titleKey) return false;
+    if (duration > Duration.zero && other.duration > Duration.zero) {
+      final delta = (duration - other.duration).abs();
+      if (delta > copyDurationTolerance) return false;
+      if (couldBeSameAct(other)) return true;
+      return delta <= matchingDurationTolerance;
+    }
+    return couldBeSameAct(other);
+  }
+
+  /// Whether the credits could name the same act despite how they are spelled.
+  ///
+  /// Two services spell one act differently all the time: a diacritic, an
+  /// ampersand against "and", a featured credit on one side, a shortened or
+  /// elongated name. One unknown credit is no evidence either way, subsetting
+  /// credits are a duet listed in part ([trackArtistWords]), and a shared
+  /// distinctive word catches the rest. A credit that shares nothing with the
+  /// other is answered false — the caller then leans on the length alone.
+  bool couldBeSameAct(TrackIdentity other) {
     final credited = artistWords;
     final theirs = other.artistWords;
-    if (credited.isNotEmpty &&
-        theirs.isNotEmpty &&
-        !credited.containsAll(theirs) &&
-        !theirs.containsAll(credited)) {
-      return false;
-    }
-    if (duration == Duration.zero || other.duration == Duration.zero) {
+    if (credited.isEmpty || theirs.isEmpty) return true;
+    if (credited.containsAll(theirs) || theirs.containsAll(credited)) {
       return true;
     }
-    return (duration - other.duration).abs() <= copyDurationTolerance;
+    final mine = _normalize(artist ?? '', isArtist: true);
+    final others = _normalize(other.artist ?? '', isArtist: true);
+    if (mine.isEmpty || others.isEmpty) return true;
+    if (mine.contains(others) || others.contains(mine)) return true;
+    return credited.intersection(theirs).any((word) => word.length >= 4);
   }
 }
 
@@ -143,12 +167,22 @@ String trackBaseFingerprint({
   ].join('|');
 }
 
-/// How far two libraries' lengths may be apart and still be one recording.
+/// How far two libraries' lengths may be apart and still be one recording,
+/// once their credits agree.
 ///
-/// Wider than [TrackIdentity.matches]'s four seconds: that compares two
-/// sightings of one item, while a lookup compares two services' metadata —
-/// one may time the master and the other a licensed copy.
+/// Wider than [matchingDurationTolerance]: that compares two sightings of one
+/// item, while a lookup compares two services' metadata — one may time the
+/// master and the other a licensed copy.
 const copyDurationTolerance = Duration(seconds: 10);
+
+/// How far two lengths may be apart when the credits do not agree.
+///
+/// A copy whose artist is spelled in another script or under another name is
+/// still this recording if it times the same; a cover, a live take and a
+/// remix all drift further than this. The value is [TrackIdentity.matches]'
+/// own tolerance, so nothing accepted here is looser than the catalog's idea
+/// of "the same song".
+const matchingDurationTolerance = Duration(seconds: 4);
 
 /// The title alone, normalized the way the fingerprints normalize it.
 ///

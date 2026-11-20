@@ -78,12 +78,17 @@ Future<List<TrackCopy>> findCopies(
     );
   }
 
-  // The source the track was opened from comes first; the rest keep the
-  // order the user connected them in.
+  // The source the track was opened from comes first, then the copies whose
+  // credit names the same act — a cover of the same length is still a cover —
+  // and the rest keep the order the user connected them in. Playback walks
+  // this list, so the ranking is what keeps it from opening the stranger.
   final ordered = bySource.values.toList()
     ..sort((a, b) {
       if (a.sourceId == song.sourceId) return -1;
       if (b.sourceId == song.sourceId) return 1;
+      final aAgrees = identity.couldBeSameAct(TrackIdentity.of(a.song));
+      final bAgrees = identity.couldBeSameAct(TrackIdentity.of(b.song));
+      if (aAgrees != bAgrees) return aAgrees ? -1 : 1;
       return 0;
     });
   return ordered;
@@ -111,33 +116,81 @@ Future<LibrarySong?> _findForSource(
 /// The row among [candidates] most likely to be [wanted], or null.
 ///
 /// [TrackIdentity.couldBeSameRecording] decides whether a row is the same
-/// recording at all; among those the closest length wins, because that is
-/// what tells a studio take from the live one that a search also returns.
-/// A row without a length is kept as a last resort rather than dropped: a
-/// library that cannot say how long a track is has not thereby said it is a
-/// different one.
+/// recording at all; among those a row whose credit names the same act wins
+/// over one that is only the same length — a cover credited to somebody else
+/// times the record too — and among equals the closest length wins, because
+/// that is what tells a studio take from the live one that a search also
+/// returns. A row without a length is kept as a last resort rather than
+/// dropped: a library that cannot say how long a track is has not thereby said
+/// it is a different one.
 LibrarySong? _bestCopy(TrackIdentity wanted, List<LibrarySong> candidates) {
   LibrarySong? best;
+  var bestActAgrees = false;
   // Null while the best row so far has no length of its own.
   Duration? bestDelta;
   for (final candidate in candidates) {
     final identity = TrackIdentity.of(candidate);
     if (!wanted.couldBeSameRecording(identity)) continue;
+    final actAgrees = wanted.couldBeSameAct(identity);
     // Two unknown lengths are no evidence: keep the first row the search
     // ranked, rather than the shortest of them.
     final delta =
         wanted.duration > Duration.zero && identity.duration > Duration.zero
         ? (wanted.duration - identity.duration).abs()
         : null;
-    // A known length always beats an unknown one; between two known lengths
-    // the closer is the better guess.
+    // The same act always beats a stranger; between two of a kind the closer
+    // length is the better guess, and a known length beats an unknown one.
     if (best == null ||
-        (delta != null && (bestDelta == null || delta < bestDelta))) {
+        (actAgrees && !bestActAgrees) ||
+        (actAgrees == bestActAgrees &&
+            delta != null &&
+            (bestDelta == null || delta < bestDelta))) {
       best = candidate;
+      bestActAgrees = actAgrees;
       bestDelta = delta;
     }
   }
   return best;
+}
+
+/// [source]'s copy of [song], if it has one.
+///
+/// The one-library half of [findCopies], for a caller that already knows where
+/// it wants to play the track from: a preferred library being checked before
+/// the track opens. The catalog's link to that library answers first — the
+/// same row the "other versions" sheet shows — so a preference does not cost a
+/// network search on every track; the library is asked only when it has never
+/// been seen holding this song. Both answers use the same query and the same
+/// [TrackIdentity] rules as [findCopies], so the two can never disagree about
+/// whether this library has the track, and a failure is answered as nothing
+/// found rather than failing the caller, exactly as the fan-out answers one.
+Future<LibrarySong?> findCopyIn(
+  LibrarySong song, {
+  required LibrarySource source,
+  LibraryCatalog? catalog,
+}) async {
+  if (source.id == song.sourceId) return song;
+  if (source is PlatformPlayedSource) return null;
+  if (catalog != null) {
+    final known = await catalog.copiesOfSong(
+      song,
+      connectedSourceIds: {source.id},
+    );
+    for (final copy in known) {
+      if (copy.sourceId == source.id) return copy.playable ? copy.song : null;
+    }
+  }
+  // Title and artist, not the album: the copy is usually filed under that
+  // library's own release. The credit and title query is precise; the title
+  // alone follows only when it found nothing.
+  final credit = [song.artist, song.title].whereType<String>().join(' ');
+  final queries = <String>[
+    if (credit.trim().isNotEmpty) credit,
+    if (song.title.trim().isNotEmpty &&
+        song.title.trim().toLowerCase() != credit.trim().toLowerCase())
+      song.title,
+  ];
+  return _findForSource(source, TrackIdentity.of(song), queries);
 }
 
 /// A library's search for **this recording**, with a failure (thrown now or

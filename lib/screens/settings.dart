@@ -221,6 +221,7 @@ class SettingsScreen extends ConsumerWidget {
                     title: Text('settingsInfinitePlayback'.tr()),
                     subtitle: Text('settingsInfinitePlaybackSubtitle'.tr()),
                   ),
+                  const _PreferredSourceTile(),
                 ],
               ),
             ),
@@ -765,3 +766,98 @@ String _describeLibrary(({int tracks, int orphaned}) stats) {
     args: ['${stats.tracks}', '${stats.orphaned}'],
   );
 }
+
+/// The preference that makes one library the copy playback looks for first.
+///
+/// The list is every source that can stream — the local library included,
+/// which is what "always prefer my own files" means — plus an entry that keeps
+/// the old rule: each track plays from the library it came from, and another
+/// copy is only a fallback. A source the preference names is asked for the
+/// recording before its own library is (see `Playback._openCurrent`).
+class _PreferredSourceTile extends ConsumerWidget {
+  const _PreferredSourceTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final sources = ref.watch(librarySourcesWithLocalProvider);
+    final preferred = ref.watch(preferredPlaybackSourceProvider);
+    // The value must be one of the dropdown's items, so "the track's own
+    // library" is its own entry rather than the absence of one — and a saved
+    // library that was since disconnected falls back to it instead of showing
+    // an item that no longer exists.
+    final current = sources.any((source) => source.id == preferred)
+        ? preferred!
+        : _rowSourceValue;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: SolSpace.lg),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsetsDirectional.only(top: 2, end: SolSpace.md),
+            child: Icon(Symbols.play_circle_rounded),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'settingsPreferredSourceLabel'.tr(),
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'settingsPreferredSourceSubtitle'.tr(),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    height: 1.5,
+                  ),
+                ),
+                // The dropdown gets a row of its own: library names are the
+                // user's, and a trailing one would either clip them or squeeze
+                // the sentence beside it.
+                DropdownButton<String>(
+                  value: current,
+                  isExpanded: true,
+                  underline: const SizedBox.shrink(),
+                  borderRadius: SolRadius.controlRadius,
+                  items: [
+                    DropdownMenuItem(
+                      value: _rowSourceValue,
+                      child: Text('settingsPreferredSourceNone'.tr()),
+                    ),
+                    for (final source in sources)
+                      DropdownMenuItem(
+                        value: source.id,
+                        child: Text(
+                          source.displayName,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ],
+                  onChanged: (value) => ref
+                      .read(preferredPlaybackSourceProvider.notifier)
+                      .set(
+                        value == null || value == _rowSourceValue
+                            ? null
+                            : value,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The dropdown value that means "play from the track's own library".
+///
+/// Not the empty string: [DropdownButton] reads `''` as "nothing selected",
+/// and not null, for the same reason `_systemValue` is a word of its own.
+const _rowSourceValue = 'row';

@@ -784,6 +784,38 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
 
     if (source == null) return;
 
+    // The library the user always prefers, before the row's own. When it holds
+    // this recording, that copy plays and the row follows it there: a queue
+    // mixed from every source sounds like the one library the user picked,
+    // and a track the row's library only sells as an excerpt plays in full
+    // from the favourite. Skipped for a station, which only its own source
+    // can describe, and for a preferred library the platform player owns —
+    // handing it one item would cut its run short.
+    Uri? preview;
+    final preferredId = ref.read(preferredPlaybackSourceProvider);
+    final preferred = preferredId == null ? null : sources[preferredId];
+    if (!song.isRadio &&
+        preferred != null &&
+        preferred.id != toPlay.sourceId &&
+        preferred is! PlatformPlayedSource) {
+      final here = await findCopyIn(
+        song,
+        source: preferred,
+        catalog: ref.read(libraryCatalogProvider),
+      );
+      if (here != null) {
+        await _activateAudioSession();
+        final attempt = await _tryOpenStream(preferred, here);
+        if (attempt.opened) {
+          // What is sounding is the favourite's copy, so the dock, the lyrics
+          // lookup and the next open of this slot name it.
+          _adoptPlayedCopy(here);
+          return;
+        }
+        preview ??= attempt.preview;
+      }
+    }
+
     // A source whose items the platform plays is not opened as a URL: the
     // item is handed to the system's own player, which brings its playback
     // time and its pause/interrupt handling with it.
@@ -846,24 +878,17 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     // already deactivated; a streamed track needs it active again before it
     // can sound. Activating an already-active session is a no-op.
     await _activateAudioSession();
-    // The row's own library first. A minted URL (per-request playback links)
+    // The row's own library next. A minted URL (per-request playback links)
     // has to be asked for; everything else opens straight from the item's own
     // address.
-    Uri? preview;
-    try {
-      final (uri, headers) = await _streamUriOf(source, toPlay);
-      await _player.open(Media(uri.toString(), httpHeaders: headers));
-      return;
-    } on PreviewOnlyException catch (error) {
-      // The provider holds the track but only sells an excerpt: the full
-      // recording may well be in another connected library, so the trial URL
-      // is held rather than opened and the others are asked first.
-      preview = error.previewUri;
-    } catch (_) {
-      // Expired session, no entitlement, offline source, gone track: the same
-      // question — does another library have this one in full?
-    }
-
+    final own = await _tryOpenStream(source, toPlay);
+    if (own.opened) return;
+    // The provider holds the track but only sells an excerpt: the full
+    // recording may well be in another connected library, so the trial URL is
+    // held rather than opened and the others are asked first. Any other
+    // failure — expired session, no entitlement, offline source, gone track —
+    // asks the same question: does another library have this one in full?
+    preview ??= own.preview;
     final copies = await findCopies(
       song,
       sources: sources,
@@ -878,21 +903,10 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       // player a single item would cut its run short: the fallback stays
       // between libraries the app can stream from.
       if (altSource == null || altSource is PlatformPlayedSource) continue;
-      (Uri, Map<String, String>?) stream;
-      try {
-        stream = await _streamUriOf(altSource, copy.song);
-      } on PreviewOnlyException catch (error) {
-        preview ??= error.previewUri;
-        continue;
-      } catch (_) {
-        continue;
-      }
-      final uri = stream.$1;
-      final headers = stream.$2;
 
-      try {
-        await _player.open(Media(uri.toString(), httpHeaders: headers));
-      } catch (_) {
+      final attempt = await _tryOpenStream(altSource, copy.song);
+      if (!attempt.opened) {
+        preview ??= attempt.preview;
         continue;
       }
       // What is sounding is the other library's copy, so the row says so:
@@ -928,6 +942,29 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
         : source.streamUri(song);
     final headers = source.streamHeaders(song);
     return (uri, headers.isEmpty ? null : headers);
+  }
+
+  /// Opens [song] from [source], reporting whether it played and carrying the
+  /// excerpt when that is all the library sells.
+  ///
+  /// One helper for the three callers that try a stream — the preferred
+  /// library, the row's own, and each alternate — so a refusal is classified
+  /// the same way whichever copy it happened on.
+  Future<({bool opened, Uri? preview})> _tryOpenStream(
+    LibrarySource source,
+    LibrarySong song,
+  ) async {
+    try {
+      final (uri, headers) = await _streamUriOf(source, song);
+      await _player.open(Media(uri.toString(), httpHeaders: headers));
+      return (opened: true, preview: null);
+    } on PreviewOnlyException catch (error) {
+      return (opened: false, preview: error.previewUri);
+    } catch (_) {
+      // Expired session, no entitlement, offline source, gone track: the
+      // caller asks the same question — does another library have it?
+      return (opened: false, preview: null);
+    }
   }
 
   /// Rewrites the row playing now to [copy], the library that actually

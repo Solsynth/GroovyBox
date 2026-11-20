@@ -649,3 +649,102 @@ abstract class _$DynamicColorEnabled extends $Notifier<bool> {
     return element.handleCreate(ref, build);
   }
 }
+
+/// The library the user always wants to hear from, or null for "the row's own".
+///
+/// Playback asks this before it opens a track: when the library holds the
+/// recording, its copy plays and the row follows it there — so a queue mixed
+/// from every source still sounds like the one the user picked, and a track
+/// one library only sells as an excerpt plays in full from the favourite.
+/// Null keeps the old rule, where each track plays from the library it came
+/// from and alternates are only a fallback.
+///
+/// A stale id (its library was disconnected) simply matches no source, and
+/// playback falls back to the track's own library.
+
+@ProviderFor(PreferredPlaybackSource)
+final preferredPlaybackSourceProvider = PreferredPlaybackSourceProvider._();
+
+/// The library the user always wants to hear from, or null for "the row's own".
+///
+/// Playback asks this before it opens a track: when the library holds the
+/// recording, its copy plays and the row follows it there — so a queue mixed
+/// from every source still sounds like the one the user picked, and a track
+/// one library only sells as an excerpt plays in full from the favourite.
+/// Null keeps the old rule, where each track plays from the library it came
+/// from and alternates are only a fallback.
+///
+/// A stale id (its library was disconnected) simply matches no source, and
+/// playback falls back to the track's own library.
+final class PreferredPlaybackSourceProvider
+    extends $NotifierProvider<PreferredPlaybackSource, String?> {
+  /// The library the user always wants to hear from, or null for "the row's own".
+  ///
+  /// Playback asks this before it opens a track: when the library holds the
+  /// recording, its copy plays and the row follows it there — so a queue mixed
+  /// from every source still sounds like the one the user picked, and a track
+  /// one library only sells as an excerpt plays in full from the favourite.
+  /// Null keeps the old rule, where each track plays from the library it came
+  /// from and alternates are only a fallback.
+  ///
+  /// A stale id (its library was disconnected) simply matches no source, and
+  /// playback falls back to the track's own library.
+  PreferredPlaybackSourceProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'preferredPlaybackSourceProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$preferredPlaybackSourceHash();
+
+  @$internal
+  @override
+  PreferredPlaybackSource create() => PreferredPlaybackSource();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(String? value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<String?>(value),
+    );
+  }
+}
+
+String _$preferredPlaybackSourceHash() =>
+    r'5ac73d7591c8a42222ff62a10987736ed1ed3ed0';
+
+/// The library the user always wants to hear from, or null for "the row's own".
+///
+/// Playback asks this before it opens a track: when the library holds the
+/// recording, its copy plays and the row follows it there — so a queue mixed
+/// from every source still sounds like the one the user picked, and a track
+/// one library only sells as an excerpt plays in full from the favourite.
+/// Null keeps the old rule, where each track plays from the library it came
+/// from and alternates are only a fallback.
+///
+/// A stale id (its library was disconnected) simply matches no source, and
+/// playback falls back to the track's own library.
+
+abstract class _$PreferredPlaybackSource extends $Notifier<String?> {
+  String? build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<String?, String?>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<String?, String?>,
+              String?,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}

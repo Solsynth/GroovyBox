@@ -164,4 +164,60 @@ void main() {
     expect(find.text('Add library'), findsOneWidget);
     expect(find.text('Connect a library'), findsNothing);
   });
+
+  testWidgets('settings offers a library to play everything from', (
+    tester,
+  ) async {
+    final db = LibraryDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+
+    tester.view.physicalSize = const Size(900, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          librarySourcesProvider.overrideWithValue(const []),
+          libraryDatabaseProvider.overrideWithValue(db),
+          localLibraryPathProvider.overrideWithValue('/tmp/groovy-box-test'),
+          playbackProvider.overrideWith(() {
+            _playback = _Idle();
+            return _playback;
+          }),
+        ],
+        child: MaterialApp.router(
+          theme: createAppThemeSet().light,
+          routerConfig: AppRouter().config(),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.byIcon(Symbols.settings));
+    await tester.pumpAndSettle();
+
+    final row = find.text('Preferred library');
+    await tester.scrollUntilVisible(
+      row,
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+    // The row keeps the old rule as an entry of its own: a preference is a
+    // choice, and "no preference" has to be choosable again.
+    expect(find.text("The track's own library"), findsOneWidget);
+
+    await tester.tap(find.text("The track's own library"));
+    await tester.pumpAndSettle();
+    // The local library is a source like any other, and the one a device-only
+    // listener wants to prefer.
+    expect(find.text('Local files'), findsWidgets);
+
+    await tester.tap(find.text('Local files').last);
+    await tester.pumpAndSettle();
+    expect(prefs.getString('app_preferred_playback_source'), kLocalSourceId);
+  });
 }

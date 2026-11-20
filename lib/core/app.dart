@@ -85,6 +85,7 @@ const _kLyricsPronunciationKey = 'app_lyrics_pronunciation';
 const _kLyricsTranslationKey = 'app_lyrics_translation';
 const _kInfinitePlaybackKey = 'app_infinite_playback';
 const _kDynamicColorKey = 'app_dynamic_color';
+const _kPreferredPlaybackSourceKey = 'app_preferred_playback_source';
 
 /// Which sections the user has folded away, per page.
 ///
@@ -255,5 +256,34 @@ class DynamicColorEnabled extends Notifier<bool> {
     await ref
         .read(sharedPreferencesProvider)
         .setBool(_kDynamicColorKey, enabled);
+  }
+}
+
+/// The library the user always wants to hear from, or null for "the row's own".
+///
+/// Playback asks this before it opens a track: when the library holds the
+/// recording, its copy plays and the row follows it there — so a queue mixed
+/// from every source still sounds like the one the user picked, and a track
+/// one library only sells as an excerpt plays in full from the favourite.
+/// Null keeps the old rule, where each track plays from the library it came
+/// from and alternates are only a fallback.
+///
+/// A stale id (its library was disconnected) simply matches no source, and
+/// playback falls back to the track's own library.
+@Riverpod(keepAlive: true)
+class PreferredPlaybackSource extends Notifier<String?> {
+  @override
+  String? build() => ref
+      .watch(sharedPreferencesProvider)
+      .getString(_kPreferredPlaybackSourceKey);
+
+  Future<void> set(String? sourceId) async {
+    state = sourceId;
+    final prefs = ref.read(sharedPreferencesProvider);
+    if (sourceId == null) {
+      await prefs.remove(_kPreferredPlaybackSourceKey);
+      return;
+    }
+    await prefs.setString(_kPreferredPlaybackSourceKey, sourceId);
   }
 }

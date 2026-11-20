@@ -4,6 +4,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/data/local/library_database.dart';
+import 'package:groovy_box/library/lookup.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/source.dart';
@@ -134,8 +135,14 @@ void main() {
   late _FakePlayer player;
   late LibraryDatabase db;
 
-  Future<ProviderContainer> containerFor(List<LibrarySource> sources) async {
-    SharedPreferences.setMockInitialValues({'app_infinite_playback': false});
+  Future<ProviderContainer> containerFor(
+    List<LibrarySource> sources, {
+    String? preferred,
+  }) async {
+    SharedPreferences.setMockInitialValues({
+      'app_infinite_playback': false,
+      'app_preferred_playback_source': ?preferred,
+    });
     final prefs = await SharedPreferences.getInstance();
     db = LibraryDatabase(NativeDatabase.memory());
     addTearDown(db.close);
@@ -305,5 +312,155 @@ void main() {
     expect(player.opened, ['https://ne.example.com/101.mp3']);
     // `null`, not an empty map: libmpv then sends its own defaults.
     expect(player.openedHeaders.single, isNull);
+  });
+
+  test('the preferred library plays every track it holds', () async {
+    final container = await containerFor([
+      _MintingSource('ne'),
+      _MintingSource(
+        'jam',
+        catalogue: const [
+          LibrarySong(
+            sourceId: 'jam',
+            id: 's-1',
+            title: 'Yellow',
+            artist: 'Coldplay',
+            duration: Duration(milliseconds: 266773),
+          ),
+        ],
+      ),
+    ], preferred: 'jam');
+
+    await container.read(playbackProvider.notifier).playQueue([_wanted]);
+
+    // The row's own library streams it too, but the preference wins: every
+    // track sounds from the library the user picked.
+    expect(player.opened, ['https://jam.example.com/s-1.mp3']);
+    final row = container.read(playbackProvider).queueRow!;
+    expect(row.sourceId, 'jam');
+    expect(row.id, 's-1');
+  });
+
+  test('a preferred library without the track is not a wall', () async {
+    final container = await containerFor([
+      _MintingSource('ne'),
+      _MintingSource('jam'),
+    ], preferred: 'jam');
+
+    await container.read(playbackProvider.notifier).playQueue([_wanted]);
+
+    expect(player.opened, ['https://ne.example.com/101.mp3']);
+  });
+
+  test('a differently spelled credit still counts as the same act', () async {
+    // Two services spell one band differently; the lengths agree, so this is
+    // the recording and not a cover.
+    final container = await containerFor([
+      _MintingSource('ne'),
+      _MintingSource(
+        'jam',
+        catalogue: const [
+          LibrarySong(
+            sourceId: 'jam',
+            id: 's-1',
+            title: 'Yellow',
+            artist: 'Cold Play',
+            album: 'Parachutes (2011 Reissue)',
+            duration: Duration(milliseconds: 267500),
+          ),
+        ],
+      ),
+    ], preferred: 'jam');
+
+    await container.read(playbackProvider.notifier).playQueue([_wanted]);
+
+    expect(player.opened, ['https://jam.example.com/s-1.mp3']);
+  });
+
+  test('the same act beats a stranger that times the same', () async {
+    final container = await containerFor([
+      _MintingSource('ne', preview: true),
+      _MintingSource(
+        'jam',
+        catalogue: const [
+          LibrarySong(
+            sourceId: 'jam',
+            id: 'cover',
+            title: 'Yellow',
+            artist: 'Somebody Else',
+            duration: Duration(milliseconds: 266773),
+          ),
+        ],
+      ),
+      _MintingSource(
+        'tidal',
+        catalogue: const [
+          LibrarySong(
+            sourceId: 'tidal',
+            id: 'real',
+            title: 'Yellow',
+            artist: 'Coldplay',
+            duration: Duration(milliseconds: 268000),
+          ),
+        ],
+      ),
+    ]);
+
+    await container.read(playbackProvider.notifier).playQueue([_wanted]);
+
+    // The cover is the same length, and would be reached first if only the
+    // length decided; the credit is what keeps it from being played.
+    expect(player.opened, ['https://tidal.example.com/real.mp3']);
+  });
+
+  test('a different act and length is not the recording', () async {
+    final container = await containerFor([
+      _MintingSource('ne', preview: true),
+      _MintingSource(
+        'jam',
+        catalogue: const [
+          LibrarySong(
+            sourceId: 'jam',
+            id: 'live',
+            title: 'Yellow',
+            artist: 'Somebody Else',
+            duration: Duration(seconds: 310),
+          ),
+        ],
+      ),
+    ]);
+
+    await container.read(playbackProvider.notifier).playQueue([_wanted]);
+
+    expect(player.opened, ['https://preview.example/101.aac']);
+  });
+
+  test('the preferred copy is found through the catalog first', () async {
+    // Once the app has seen a track in the preferred library it is a link
+    // there, so a later play needs no search at all.
+    final container = await containerFor([
+      _MintingSource('ne'),
+    ], preferred: 'jam');
+    final catalog = container.read(libraryCatalogProvider)!;
+    await catalog.adopt(
+      const LibrarySong(
+        sourceId: 'jam',
+        id: 's-1',
+        title: 'Yellow (Remastered)',
+        artist: 'Coldplay',
+        duration: Duration(milliseconds: 266773),
+      ),
+    );
+    final found = await findCopyIn(
+      _wanted,
+      source: _MintingSource('jam'),
+      catalog: catalog,
+    );
+
+    // The catalog's row is returned as the preferred library's own copy,
+    // which is what playback opens and what the row then names.
+    expect(found, isNotNull);
+    expect(found!.sourceId, 'jam');
+    expect(found.id, 's-1');
   });
 }

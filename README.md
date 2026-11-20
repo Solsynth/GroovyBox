@@ -89,8 +89,12 @@ than block you behind a form.
   full length is the track. The lookup itself is looser than the catalog's
   fingerprint on purpose: `TrackIdentity.couldBeSameRecording` accepts the
   same recording under another service's tags — a featured credit on one side
-  only, ten seconds of timing drift — while the length still rules out a live
-  or remixed take, and the closest length wins among candidates.
+  only, a differently spelled act, ten seconds of timing drift, a reissue or a
+  compilation as the album — while the length still rules out a live or
+  remixed take. When the credits disagree the copy still counts if the lengths
+  agree within four seconds, so a romanized or translated artist name is not a
+  miss; a row whose credit names the same act is preferred over one that is
+  only the same length, so a cover cannot stand in for the recording.
 - **Playback** — one `media_kit` player for the app's lifetime
   (`lib/player/player.dart`), exposed through Riverpod. Shuffle reorders the
   visible queue instead of hiding randomization underneath. The media session
@@ -105,6 +109,14 @@ than block you behind a form.
   `getSimilarSongs` as fallback, Jellyfin's `/Items/{id}/Similar`, NetEase's
   `/simi/song`, an Apple genre station, and the local tags), then appends them;
   the shuffle over the whole library is the fallback when no source can answer.
+  Settings → Playback also names a **preferred library**: every track it holds
+  opens from it, looked up by the same recording rules and with the row
+  rewritten to that copy, so a queue mixed from every source still sounds like
+  the one library the user picked. A track it does not hold, or a copy it
+  cannot open, falls back to the row's own library and then to the other
+  copies; "the track's own library" keeps the un-pinned rule. A platform-played
+  library is not offered as a preference: handing MusicKit a single item cuts
+  the run it would advance through.
 - **Local library** — `lib/data/local/library_database.dart` (Drift, SQLite)
   is where the app remembers songs, whatever server serves them. A track is
   canonical — title, artist, album, duration and a fingerprint of them — and
