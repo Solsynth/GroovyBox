@@ -25,27 +25,38 @@ const kFallbackLocale = Locale('en', 'US');
 /// keeps this window from being a second copy of the player page.
 const kMiniPlayerBarWidth = 340.0;
 
-/// Window height of the bar shape, chrome included.
+/// Window height of the bar shape.
 ///
 /// The window is frameless and [DesktopWindowFrame] draws a 32px title band
-/// inside it, so the height the user sees is band + content. Setting this to
-/// the content height alone is what made the overlay column overflow by
-/// exactly that band.
+/// *over* the content, so the artwork runs behind the traffic lights and the
+/// view's stack opens with a 32px band spacer. The band is therefore already
+/// inside this height: adding it again put 32px of empty surface under the
+/// transport, which is the dead strip this constant now measures exactly.
 ///
-/// 196 is the stack measured in a widget test — header, scrubber, transport —
-/// plus a 4px cushion; anything larger is the empty strip at the bottom of
-/// the window that read as a padding bug.
-const kMiniPlayerBarContentHeight = 196.0;
-const kMiniPlayerBarHeight = kMiniPlayerBarContentHeight + 32.0;
+/// 196 is the stack to the pixel: band 32, header 64, scrubber 44, transport
+/// 56.
+const kMiniPlayerBarHeight = 196.0;
 
-/// Extra height the window takes when the queue or the lyrics open. The pane
-/// fills exactly this, so a bar and a pane are one window in two shapes
-/// rather than two layouts.
-const kMiniPlayerPaneHeight = 300.0;
+/// Height of the footer — scrubber and transport — where a pane lays it over
+/// itself: measured 100 (scrubber 44, transport 56), no cushion.
+///
+/// The bar shape lays the footer out inline instead, so this is only the
+/// space a pane's last row keeps clear and the height of the scrim behind the
+/// floating controls.
+const kMiniPlayerFooterHeight = 100.0;
 
-/// Floor for an open pane: enough lyrics or queue to be usable before the user
-/// drags the window taller.
-const kMiniPlayerPaneMinHeight = 200.0;
+/// How far above the footer its scrim starts fading in, so the pane's words
+/// run out under a gradient rather than meeting a hard edge.
+const kMiniPlayerFooterFadeHeight = 24.0;
+
+/// Extra height over the bar when the queue or the lyrics open, and the floor
+/// an open pane may be dragged back to.
+///
+/// The pane is whatever sits below the band (32) and the compact header (56),
+/// so 260 opens 368px of pane — 268 of it clear of the floating footer, which
+/// is a screenful of lyrics or queue rows. The 200 this replaces opened 308
+/// and then handed 132 of those to a footer that measures 100.
+const kMiniPlayerPaneMinHeight = 260.0;
 
 /// Tallest either shape can be dragged to. A floating player that can grow
 /// into a full page is the player page with extra steps.

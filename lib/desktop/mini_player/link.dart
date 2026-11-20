@@ -83,6 +83,7 @@ Lyrics decodeLyrics(Map<String, dynamic> json) => Lyrics(
       ),
   ],
 );
+
 /// A [LyricsRequest] on the wire: the mini window has no catalog to key a
 /// lookup with, so it sends the fields the host's resolver matches on.
 Map<String, dynamic> encodeLyricsRequest(
@@ -107,6 +108,86 @@ LyricsRequest decodeLyricsRequest(Map<String, dynamic> json) => LyricsRequest(
   album: json['album'] as String?,
   duration: Duration(milliseconds: json['durationMs'] as int? ?? 0),
 );
+
+/// Ask the host to turn an art handle into something paintable.
+///
+/// The guest never loads the source store, so an art handle is opaque there,
+/// and it owns no cover cache to paint from. The host has both: it answers
+/// with one `uri` string — a `file:` URI for the cached cover, or the art's
+/// own URL when there is no cache to fill.
+const kResolveArtworkMethod = 'resolveArtwork';
+
+/// The reply's single field: the `file:` or `http:` URI to paint, if any.
+const kArtworkUriField = 'uri';
+
+/// The guest's writes, all answered by the host: it owns the database, the
+/// library credentials and the account session.
+const kFavouriteStateMethod = 'favouriteState';
+const kToggleFavouriteMethod = 'toggleFavourite';
+const kPlaylistTargetsMethod = 'playlistTargets';
+const kAddToPlaylistMethod = 'addToPlaylist';
+const kCreatePlaylistMethod = 'createPlaylist';
+const kShareTrackMethod = 'shareTrack';
+
+/// A destination a track can be added to, as the guest draws it.
+///
+/// The guest cannot ask a source for its playlists (it holds no sources) and
+/// has no database for the device's own ones. The host answers with this list
+/// — anything it is willing to write to — and the guest names one back by
+/// [key] when a tap lands. The host resolves the key; the guest never learns
+/// how a destination is stored, only what to call it.
+class MiniPlaylistTarget {
+  /// Which owner the destination belongs to: `'device'`, `'cloud'`, or the
+  /// id of a connected library.
+  final String owner;
+
+  /// The destination's id inside its owner.
+  final String id;
+  final String name;
+  final int trackCount;
+
+  const MiniPlaylistTarget({
+    required this.owner,
+    required this.id,
+    required this.name,
+    required this.trackCount,
+  });
+
+  /// `'owner:id'`, the one thing the guest sends back to name a write.
+  String get key => '$owner\u0000$id';
+
+  Map<String, dynamic> toJson() => {
+    'owner': owner,
+    'id': id,
+    'name': name,
+    'trackCount': trackCount,
+  };
+
+  static MiniPlaylistTarget? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final owner = raw['owner'];
+    final id = raw['id'];
+    final name = raw['name'];
+    if (owner is! String || id is! String || name is! String) return null;
+    return MiniPlaylistTarget(
+      owner: owner,
+      id: id,
+      name: name,
+      trackCount: (raw['trackCount'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+/// Splits a [MiniPlaylistTarget.key] back into its owner and id.
+///
+/// Null for anything malformed: a write with a key the host did not issue is
+/// a dropped command, never a guessed destination.
+({String owner, String id})? decodePlaylistTargetKey(Object? raw) {
+  if (raw is! String) return null;
+  final split = raw.indexOf('\u0000');
+  if (split <= 0 || split >= raw.length - 1) return null;
+  return (owner: raw.substring(0, split), id: raw.substring(split + 1));
+}
 
 /// Rebuilds a [PlaybackState] from [encodeSnapshot]'s output.
 ///

@@ -8,6 +8,8 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/foundation.dart';
 import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/desktop/mini_player/link.dart';
+import 'package:groovy_box/desktop/mini_player/mini_actions.dart';
+import 'package:groovy_box/desktop/mini_player/mini_artwork.dart';
 import 'package:groovy_box/desktop/mini_player/mini_lyrics.dart';
 import 'package:groovy_box/desktop/mini_player/mini_playback.dart';
 import 'package:groovy_box/desktop/mini_player/mini_player_app.dart';
@@ -23,6 +25,7 @@ import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/library/plugins/plugin_host.dart';
 import 'package:groovy_box/player/session.dart';
 import 'package:groovy_box/shell/window_frame.dart';
+import 'package:groovy_box/widgets/artwork_pixels.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:media_kit/media_kit.dart';
@@ -242,6 +245,11 @@ Future<void> _runMiniPlayer(int? mainWindowId) async {
         kMiniPlayerMaxWidth,
         kMiniPlayerBarHeight,
       ).toNative()
+      // A fixed-height bar has nothing to zoom to, and AppKit's double-click
+      // zoom on a window whose bounds are animated from Dart crashed inside
+      // NSWindow. With the property off, the title-band double-click is a
+      // no-op on every desktop platform instead of a resize.
+      ..isMaximizable = false
       ..isAlwaysOnTop = true
       ..backgroundColor = Colors.transparent.toNative()
       ..titleBarStyle = TitleBarStyle.hidden
@@ -283,6 +291,14 @@ Future<void> _runMiniPlayer(int? mainWindowId) async {
         artworkCacheDirectoryProvider.overrideWithValue(localLibraryPath),
         miniPlayerLinkProvider.overrideWithValue(link),
         playbackProvider.overrideWith(MiniPlayback.new),
+        // Covers and the track's writes are the host's: the guest holds no
+        // sources, no database and no account session, so both providers are
+        // the link and nothing else.
+        miniArtworkSourceProvider.overrideWithValue(MiniArtworkSource(link)),
+        miniActionsProvider.overrideWithValue(MiniActions(link)),
+        artworkPixelsProvider.overrideWith(
+          (ref, handle) => ref.watch(miniArtworkSourceProvider).pixels(handle),
+        ),
         // The guest has no database, so every lyric it shows is the host's:
         // the resolver is the link, not a local chain over an absent cache.
         lyricsResolverProvider.overrideWith(

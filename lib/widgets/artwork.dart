@@ -1,25 +1,20 @@
-import 'dart:io';
-
+import 'package:groovy_box/core/theme.dart';
+import 'package:groovy_box/widgets/artwork_pixels.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
-import '../core/theme.dart';
-import '../library/artwork_cache.dart';
-import '../library/providers.dart';
-import '../library/source.dart';
-
-/// Cover art served by a library, with a tonal fallback while it loads and
-/// when a track or album has no art at all.
+/// Cover art for a library item, with a tonal fallback while it loads and when
+/// a track or album has no art at all.
 ///
-/// The requested image is sized from the box the art actually paints into,
-/// in device pixels. A fixed request leaves covers soft on the grid and in
-/// the player, where the same tile is painted at two to five times that size.
+/// The requested image is sized from the box the art actually paints into, in
+/// device pixels. A fixed request leaves covers soft on the grid and in the
+/// player, where the same tile is painted at two to five times that size.
 ///
-/// A server's cover is kept on disk (`lib/library/artwork_cache.dart`) the
-/// first time it is painted, so the library looks the same with no network.
-/// The file is what is painted once it exists; the URL is only the way it got
-/// there.
+/// How a handle becomes pixels — the cover cache, a bare URL, or the host
+/// engine's answer inside the mini player — is [artworkPixelsProvider]. This
+/// widget draws the result and owns nothing of the resolution itself, which is
+/// what lets the same widget work in an engine that has no sources at all.
 class LibraryArtwork extends ConsumerWidget {
   /// Which library owns the item; resolves the URL scheme.
   final String? sourceId;
@@ -57,13 +52,12 @@ class LibraryArtwork extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final source = ref.watch(librarySourceByIdProvider)[sourceId];
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final longest = size ?? width ?? height;
 
     if (longest != null || pixelSize != null) {
       return _Art(
-        source: source,
+        sourceId: sourceId,
         artId: artId,
         pixels: _clampPixels(pixelSize ?? (longest! * dpr).round()),
         width: size ?? width,
@@ -83,7 +77,7 @@ class LibraryArtwork extends ConsumerWidget {
         final extent = constraints.biggest.shortestSide;
         final scale = extent.isFinite && extent > 0 ? extent : null;
         return _Art(
-          source: source,
+          sourceId: sourceId,
           artId: artId,
           pixels: scale == null
               ? _defaultPixels
@@ -115,7 +109,7 @@ class LibraryArtwork extends ConsumerWidget {
 }
 
 class _Art extends ConsumerWidget {
-  final LibrarySource? source;
+  final String? sourceId;
   final String? artId;
   final int pixels;
   final double? width;
@@ -124,7 +118,7 @@ class _Art extends ConsumerWidget {
   final IconData fallbackIcon;
 
   const _Art({
-    required this.source,
+    required this.sourceId,
     required this.artId,
     required this.pixels,
     required this.width,
@@ -136,21 +130,18 @@ class _Art extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
-    final uri = source?.artworkUri(artId, size: pixels);
     final extent = width ?? height ?? pixels.toDouble();
-    final cache = ref.watch(artworkCacheProvider);
-    // A local file is already on disk; a server's cover is what the cache
-    // fills in. Either way the file is the thing painted.
-    final cached =
-        cache == null || source == null || artId == null || artId!.isEmpty
+    final id = artId;
+    final owner = sourceId;
+    // No handle, no question: an item without a cover skips the resolver
+    // entirely, so a list of coverless rows makes no requests at all.
+    final answer = owner == null || id == null || id.isEmpty
         ? null
         : ref
               .watch(
-                artworkFileProvider((
-                  sourceId: source!.id,
-                  artId: artId,
-                  size: pixels,
-                )),
+                artworkPixelsProvider(
+                  ArtworkHandle(sourceId: owner, artId: id, size: pixels),
+                ),
               )
               .value;
 
@@ -165,51 +156,38 @@ class _Art extends ConsumerWidget {
       ),
     );
 
-    // A platform that keeps no files (the web, a test) still paints a remote
-    // cover the old way: the disk cache is an improvement where it exists,
-    // not a new requirement.
-    final File? file = uri == null
-        ? null
-        : uri.isScheme('file')
-        ? File(uri.toFilePath())
-        : cached;
-    final remote = uri != null && !uri.isScheme('file') && cache == null;
+    final image = switch (answer) {
+      ArtworkFile(:final file) => Image.file(
+        file,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+      ),
+      ArtworkRemote(:final uri) => Image.network(
+        uri.toString(),
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+      ),
+      null => null,
+    };
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: SizedBox(
         width: width,
         height: height,
-        child: file == null && !remote
+        child: image == null
             // Nothing to paint yet: the placeholder is the surface until the
-            // cached file arrives, and the widget rebuilds when it does —
-            // there is no second network image in between.
+            // resolver answers, and the widget rebuilds when it does — there
+            // is no second network image in between.
             ? placeholder
             // The placeholder sits *under* the image rather than replacing it.
             // `gaplessPlayback` can only hold the previous frame while the
             // image widget is still the one painting; a `loadingBuilder` that
             // swaps in a grey box throws that frame away and flashes on every
             // reload — which is exactly what an animating box causes.
-            : Stack(
-                fit: StackFit.expand,
-                children: [
-                  placeholder,
-                  if (file != null)
-                    Image.file(
-                      file,
-                      fit: BoxFit.cover,
-                      gaplessPlayback: true,
-                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                    )
-                  else
-                    Image.network(
-                      uri.toString(),
-                      fit: BoxFit.cover,
-                      gaplessPlayback: true,
-                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                    ),
-                ],
-              ),
+            : Stack(fit: StackFit.expand, children: [placeholder, image]),
       ),
     );
   }

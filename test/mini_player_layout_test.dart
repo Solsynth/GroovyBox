@@ -64,12 +64,13 @@ void main() {
         ) async => null);
   });
 
-  for (final size in const [
-    // Body sizes: the view fills the window below the frame's title band,
-    // which the probe does not draw.
-    Size(340, kMiniPlayerBarContentHeight),
-    Size(300, kMiniPlayerBarContentHeight),
-    Size(480, 228),
+  for (final size in [
+    // Both shapes at their opening heights. The view is the whole window: the
+    // frame's title band is drawn over it, not above it, so nothing is
+    // subtracted here.
+    Size(340, kMiniPlayerBarHeight),
+    Size(300, kMiniPlayerBarHeight),
+    Size(480, kMiniPlayerBarHeight + kMiniPlayerPaneMinHeight),
     Size(340, 458),
   ]) {
     testWidgets('no overflow at $size', (tester) async {

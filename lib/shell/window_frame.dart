@@ -109,6 +109,11 @@ class DesktopWindowFrame extends HookWidget {
                     right: 0,
                     height: titleBarHeight,
                     child: DragToMoveArea(
+                      // The frame's own window, never `getCurrent()`: from a
+                      // secondary engine that answers the app's main window,
+                      // so a drag or a double-click here would move or zoom
+                      // the wrong one.
+                      window: window,
                       child: _buildTitleBar(context, isMaximized),
                     ),
                   ),
@@ -117,10 +122,9 @@ class DesktopWindowFrame extends HookWidget {
                     crossAxisAlignment: .stretch,
                     children: [
                       DragToMoveArea(
+                        window: window,
                         child: Material(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.surfaceContainer,
+                          color: Theme.of(context).colorScheme.surfaceContainer,
                           child: _buildTitleBar(context, isMaximized),
                         ),
                       ),

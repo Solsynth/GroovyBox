@@ -5,7 +5,9 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/desktop/mini_player/link.dart';
+import 'package:groovy_box/desktop/mini_player/mini_actions.dart';
 import 'package:groovy_box/desktop/mini_player/mini_playback.dart';
+import 'package:groovy_box/desktop/mini_player/mini_track_menu.dart';
 import 'package:groovy_box/desktop/mini_player/window.dart';
 import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/player/player.dart';
@@ -51,12 +53,6 @@ class MiniPlayerApp extends ConsumerWidget {
     );
   }
 }
-
-/// Height the floating footer occupies at the bottom of a pane.
-///
-/// The bar shape lays the footer out inline, so this is only used to keep a
-/// pane's last row scrollable clear of it.
-const double _kFooterHeight = 132;
 
 /// The pane the window grows for, if any.
 enum MiniPane { lyrics, queue }
@@ -303,20 +299,23 @@ class _MiniPlayerViewState extends ConsumerState<MiniPlayerView> {
                     // a reserved strip cut off the bottom.
                     Expanded(
                       child: switch (pane) {
-                        // The bottom inset is the floating footer's height:
-                        // the column can still scroll every line clear of it
-                        // instead of ending underneath the buttons.
+                        // The bottom inset clears the whole floating band,
+                        // scrim included: a row that stops at the controls but
+                        // runs under the fade still ends in the gradient.
                         MiniPane.lyrics => const SongLyricsPane(
                           padding: EdgeInsets.fromLTRB(
                             SolSpace.xl,
                             0,
                             SolSpace.xl,
-                            _kFooterHeight,
+                            kMiniPlayerFooterHeight +
+                                kMiniPlayerFooterFadeHeight,
                           ),
                           fade: true,
                         ),
                         MiniPane.queue => const QueuePanel(
-                          bottomInset: _kFooterHeight,
+                          bottomInset:
+                              kMiniPlayerFooterHeight +
+                              kMiniPlayerFooterFadeHeight,
                         ),
                       },
                     )
@@ -336,6 +335,12 @@ class _MiniPlayerViewState extends ConsumerState<MiniPlayerView> {
               ),
               // A pane's footer is an overlay: it fades and slides away when
               // idle instead of holding a strip of the pane's height.
+              //
+              // Over a pane it needs a scrim: lyrics and queue rows run under
+              // it, and transparent buttons over live text are unreadable
+              // whichever way the two overlap. The scrim is a gradient — clear
+              // at the top, surface at the controls — so the pane's content
+              // fades out beneath it instead of meeting a hard edge.
               if (pane != null)
                 Positioned(
                   left: 0,
@@ -344,20 +349,20 @@ class _MiniPlayerViewState extends ConsumerState<MiniPlayerView> {
                   child: AnimatedSlide(
                     duration: const Duration(milliseconds: 220),
                     curve: Curves.easeOutCubic,
-                    offset: _controlsVisible
-                        ? Offset.zero
-                        : const Offset(0, 1),
+                    offset: _controlsVisible ? Offset.zero : const Offset(0, 1),
                     child: AnimatedOpacity(
                       duration: const Duration(milliseconds: 220),
                       opacity: _controlsVisible ? 1 : 0,
                       child: IgnorePointer(
                         ignoring: !_controlsVisible,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (!shown.isRadio) const _Scrubber(),
-                            const _TransportRow(),
-                          ],
+                        child: _FooterScrim(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (!shown.isRadio) const _Scrubber(),
+                              const _TransportRow(),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -371,11 +376,53 @@ class _MiniPlayerViewState extends ConsumerState<MiniPlayerView> {
   }
 }
 
-/// The blurred cover that carries the whole window's colour.
+/// The gradient behind a pane's floating footer.
+///
+/// Clear where the pane's rows still read, opaque [ColorScheme.surface] under
+/// the scrubber and the transport, so the controls sit on a surface that
+/// changes with the theme while the content above runs out through the fade
+/// instead of being clipped at the controls' edge.
+class _FooterScrim extends StatelessWidget {
+  final Widget child;
+
+  const _FooterScrim({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final surface = Theme.of(context).colorScheme.surface;
+    // A fixed strip, not a fraction of the footer: the fade has to end exactly
+    // where the controls begin, whatever the footer's height is (a station
+    // drops the scrubber), so every control sits on solid surface and only the
+    // pane's last words run out through a gradient instead of a seam.
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: kMiniPlayerFooterFadeHeight,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [surface.withValues(alpha: 0), surface],
+              ),
+            ),
+          ),
+        ),
+        ColoredBox(color: surface, child: child),
+      ],
+    );
+  }
+}
+
+/// The blurred cover that carries the whole window's colour, over the window's
+/// own gradient.
 ///
 /// Blurred past recognition like the main player page's backdrop, so detail
-/// would be decoded and thrown away — a thumbnail is enough. Over it a scrim
-/// keeps text legible no matter how bright the art is.
+/// would be decoded and thrown away — a thumbnail is enough. The gradient
+/// underneath is what the window shows when there is no cover at all, and over
+/// a cover it keeps the top and the bottom from reading as one flat tint; the
+/// scrim on top keeps text legible whatever the art's brightness.
 class _ArtworkField extends ConsumerWidget {
   final LibrarySong song;
   final bool paneOpen;
@@ -384,9 +431,24 @@ class _ArtworkField extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final surface = Theme.of(context).colorScheme.surface;
-    return Material(
-      color: Theme.of(context).colorScheme.surfaceContainer,
+    final scheme = Theme.of(context).colorScheme;
+    // The window's base is a vertical gradient whether or not there is a
+    // cover: with no art, a flat surface read as a dead panel, and the very
+    // scrim that makes a blurry cover quiet also hid it. The gradient is drawn
+    // first, so the cover tints it rather than replacing it.
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            scheme.surfaceContainerHigh,
+            scheme.surface,
+            scheme.surfaceContainerLowest,
+          ],
+          stops: const [0, 0.55, 1],
+        ),
+      ),
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -410,14 +472,22 @@ class _ArtworkField extends ConsumerWidget {
               ),
             ),
           ),
-          // The scrim: without it, a bright cover washes the labels out.
+          // The scrim: without it, a bright cover washes the labels out. It
+          // fades in from nothing at the top rather than sitting at a flat
+          // tint, so the top half keeps the cover's colour and the controls
+          // below land on the surface.
           IgnorePointer(
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [surface.withValues(alpha: 0.15), surface.withValues(alpha: 0.55)],
+                  colors: [
+                    scheme.surface.withValues(alpha: 0),
+                    scheme.surface.withValues(alpha: 0.45),
+                    scheme.surface.withValues(alpha: 0.8),
+                  ],
+                  stops: const [0, 0.5, 1],
                 ),
               ),
             ),
@@ -512,7 +582,13 @@ class _Header extends StatelessWidget {
       child: body,
     );
 
-    return DragToMoveArea(child: SizedBox(height: compact ? 56 : 64, child: body));
+    // The window is named explicitly: inside a secondary engine `getCurrent`
+    // answers the *main* window, so a drag or a double-click from here would
+    // otherwise act on the app's window instead of this one.
+    return DragToMoveArea(
+      window: miniPlayerWindow(),
+      child: SizedBox(height: compact ? 56 : 64, child: body),
+    );
   }
 }
 
@@ -576,11 +652,16 @@ class _Scrubber extends ConsumerWidget {
   }
 }
 
-/// Previous, play, next, flanked by the two mode toggles.
+/// Previous, play, next, flanked by the favourite and the track menu.
 ///
 /// Own row instead of the shared [Transport]: the shared one sits on plain
 /// surfaces with filled accents; here every button but play is a ghost over
 /// the artwork, the way Apple Music's overlay reads.
+///
+/// The flanks are the track's own actions, not the queue's. Shuffle and
+/// repeat describe the list, and they live on the queue pane's header where
+/// the list is; here the two things a mini player can still do about the track
+/// itself — remember it, and put it somewhere — are one tap away.
 class _TransportRow extends ConsumerWidget {
   const _TransportRow();
 
@@ -588,13 +669,10 @@ class _TransportRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final controller = ref.read(playbackProvider.notifier);
-    final state = ref.watch(
-      playbackProvider.select(
-        (state) => (state.playing, state.shuffle, state.repeatMode),
-      ),
+    final song = ref.watch(playbackProvider.select((state) => state.current));
+    final playing = ref.watch(
+      playbackProvider.select((state) => state.playing),
     );
-    final (playing, shuffle, repeat) = state;
-    final ghostColor = theme.colorScheme.onSurfaceVariant;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -605,14 +683,13 @@ class _TransportRow extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          IconButton(
-            tooltip: 'playerShuffle'.tr(),
-            isSelected: shuffle,
-            onPressed: () => controller.setShuffle(!shuffle),
-            color: ghostColor,
-            iconSize: 20,
-            icon: const Icon(Symbols.shuffle_rounded),
-          ),
+          // The flanks are the track's own actions. A station is a standing
+          // request rather than a track, so neither one is offered there and
+          // the slot keeps its width to stay centred either way.
+          if (song == null || song.isRadio)
+            const SizedBox(width: _kFlankWidth)
+          else
+            _FavouriteButton(song: song),
           const Spacer(),
           IconButton(
             tooltip: 'playerPrevious'.tr(),
@@ -637,20 +714,79 @@ class _TransportRow extends ConsumerWidget {
             iconSize: 28,
             icon: const Icon(Symbols.skip_next_rounded),
           ),
+          // The flanks are the track's own actions. Shuffle and repeat are
+          // statements about the queue, and they live on the queue pane's
+          // header; what a mini player can say about the track itself is
+          // here. A station is a standing request rather than a track, so
+          // neither control is offered and the slot keeps its width.
           const Spacer(),
-          IconButton(
-            tooltip: repeat == PlaybackRepeatMode.single
-                ? 'playerRepeatSong'.tr()
-                : 'playerRepeat'.tr(),
-            isSelected: repeat != PlaybackRepeatMode.off,
-            onPressed: controller.cycleRepeatMode,
-            color: ghostColor,
-            iconSize: 20,
-            icon: const Icon(Symbols.repeat_rounded),
-          ),
+          if (song == null || song.isRadio)
+            const SizedBox(width: _kFlankWidth)
+          else
+            MiniTrackMenuButton(song: song),
         ],
       ),
     );
+  }
+}
+
+/// The width of a transport flank: one icon button at its compact size.
+///
+/// A station draws neither the heart nor the menu, and the empty slot keeps
+/// this width so the three transport buttons stay where they were.
+const double _kFlankWidth = 40;
+
+/// The heart, lit from the host's record and written through the link.
+///
+/// No local flag: the host answers, and its write is the same one the player
+/// page's bar performs. The two surfaces never disagree, because neither one
+/// keeps its own copy.
+class _FavouriteButton extends ConsumerWidget {
+  final LibrarySong song;
+
+  const _FavouriteButton({required this.song});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final track = TrackLookup(song);
+    // A host that has not answered yet reads as "not a favourite": the
+    // placeholder is the honest value while there is nothing to say.
+    final favourited = ref.watch(miniFavouriteProvider(track)).value ?? false;
+    return IconButton(
+      tooltip: favourited ? 'playerFavourited'.tr() : 'playerFavourite'.tr(),
+      isSelected: favourited,
+      onPressed: () => _toggle(context, ref, song),
+      color: theme.colorScheme.onSurfaceVariant,
+      iconSize: 20,
+      padding: EdgeInsets.zero,
+      visualDensity: VisualDensity.compact,
+      constraints: const BoxConstraints.tightFor(
+        width: _kFlankWidth,
+        height: _kFlankWidth,
+      ),
+      icon: Icon(
+        favourited ? Symbols.favorite_rounded : Symbols.favorite_border_rounded,
+        fill: favourited ? 1 : null,
+      ),
+    );
+  }
+
+  Future<void> _toggle(
+    BuildContext context,
+    WidgetRef ref,
+    LibrarySong song,
+  ) async {
+    final answer = await ref.read(miniActionsProvider).toggleFavourite(song);
+    // The host's providers moved under it; asking again is what redraws this
+    // heart — and the player page's — with the value now on record.
+    ref.invalidate(miniFavouriteProvider(TrackLookup(song)));
+    if (answer == null || !context.mounted) return;
+    final error = answer.error;
+    if (error != null) {
+      ScaffoldMessenger.maybeOf(context)
+          ?.showSnackBar(SnackBar(content: Text(error)));
+    }
   }
 }
 
