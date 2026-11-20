@@ -32,11 +32,7 @@
   "artistsDetailLoadError": "Could not load this artist",
   "artistsDetailEmptyTitle": "Nothing here yet",
   "artistsDetailEmptyMessage": "This source lists the artist but no albums for them.",
-  "artistsFleetHeader": "In your fleet",
-  "artistsFleetRoles": "Credited as {}",
-  "artistsFleetEmpty": "Your Solink account has no catalog entries for this artist yet.",
-  "artistsFleetSignOut": "Sign in to see what your account's devices have shared.",
-  "artistsFleetTrack": "Track",
+  "artistsFleetHeader": "Shared on your account",
   "commonNavCollapse": "Collapse navigation",
   "commonNavExpand": "Expand navigation",
   "commonLibraryUnreachable": "The library did not answer. Check the connection and try again.",
@@ -629,5 +625,7 @@
   "downloadsRadioUnsupported": "A radio station cannot be downloaded.",
   "downloadsPlatformUnsupported": "This library plays through the system player, so its tracks cannot be copied.",
   "downloadsSourceMissing": "The library this track lives in is not connected.",
-  "libraryOfflineCached": "This library could not be reached; showing what was saved."
+  "libraryOfflineCached": "This library could not be reached; showing what was saved.",
+  "albumsTracklist": "Tracklist",
+  "albumsTracklistNotHeld": "The fleet knows this record; none of its tracks are in your libraries yet."
 }

@@ -7,6 +7,7 @@ import 'package:groovy_box/library/models.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
 import 'package:groovy_box/pulsar/metadata.dart';
+import 'package:groovy_box/pulsar/models.dart';
 import 'package:groovy_box/pulsar/providers.dart';
 import 'package:groovy_box/screens/albums.dart';
 import 'package:groovy_box/widgets/section.dart';
@@ -144,9 +145,12 @@ class _BodyState extends ConsumerState<_Body> {
     if (_topTracks == null && albums.isNotEmpty) {
       ref
           .read(
-            albumSongsProvider((
-              sourceId: albums.first.sourceId,
-              id: albums.first.id,
+            // The same fallback the album page uses: a cloud account's first
+            // album often answers with no tracks, and the top tracks are the
+            // one part of this page that would then be missing.
+            albumTracksProvider((
+              album: (sourceId: albums.first.sourceId, id: albums.first.id),
+              title: albums.first.name,
             )).future,
           )
           .then((songs) {
@@ -223,6 +227,11 @@ class _BodyState extends ConsumerState<_Body> {
                     children: [
                       EntityFacts(metadata: profile),
                       EntityProse(metadata: profile),
+                      // Under the prose, where the reader who wants more has
+                      // just finished reading: a link row after the page's
+                      // record lengths hangs off the last tile instead of
+                      // belonging to anything.
+                      EntityLinks(metadata: profile),
                     ],
                   ),
                 )
@@ -331,8 +340,8 @@ class _BodyState extends ConsumerState<_Body> {
                     total: profile.releaseGroupCount,
                   ),
                 ),
-              if (profile != null)
-                SliverToBoxAdapter(child: EntityLinks(metadata: profile)),
+              // Last: what the account holds beyond this device's libraries
+              // is a footnote to the artist, not a second discography.
               if (artist != null)
                 SliverToBoxAdapter(child: _FleetSection(name: artist)),
               SliverToBoxAdapter(child: SizedBox(height: widget.bottomInset)),
@@ -344,14 +353,17 @@ class _BodyState extends ConsumerState<_Body> {
   }
 }
 
-/// What the fleet holds for this artist: the catalog entries every signed-in
-/// device has pushed to Pulsar, plus how the fleet credits them.
+/// What the fleet holds for this artist that this device cannot see: the
+/// catalog entries the app pushed from every signed-in device.
 ///
 /// Matched by the artist's display name in the music domain — Pulsar has no
 /// id the device's libraries share, and a name is exactly what the fleet
-/// dedupes on per domain. Everything here is additive: a miss, a sign-out or
-/// an unreachable fleet leaves the page as the device's own libraries drew
-/// it, never an error row.
+/// dedupes on per domain. Only rows the app itself wrote are listed: the
+/// fleet also stores the MusicBrainz entities it resolved (the artist record
+/// credits the artist to themselves), and those are a second copy of the
+/// page rather than something the account holds. Everything here is additive:
+/// a miss, a sign-out or an unreachable fleet leaves the page as the device's
+/// own libraries drew it, never an error row.
 class _FleetSection extends ConsumerWidget {
   final String name;
 
@@ -366,32 +378,18 @@ class _FleetSection extends ConsumerWidget {
     final metadata = ref.watch(pulsarArtistMetadataProvider(name));
     return metadata.when(
       data: (metadata) {
-        if (metadata == null || metadata.catalog.isEmpty) {
-          return const SizedBox.shrink();
-        }
+        final pushed = [
+          for (final item in metadata?.catalog ?? const <CatalogItem>[])
+            if (item.provider == pulsarProviderKey) item,
+        ];
+        if (pushed.isEmpty) return const SizedBox.shrink();
         return Padding(
           padding: const EdgeInsets.only(top: SolSpace.xl),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SectionHeader(title: 'artistsFleetHeader'.tr()),
-              if (metadata.roles.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    SolSpace.xl,
-                    SolSpace.xs,
-                    SolSpace.xl,
-                    0,
-                  ),
-                  child: Text(
-                    'artistsFleetRoles'.tr(args: [metadata.roles.join(', ')]),
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              const SizedBox(height: SolSpace.sm),
-              for (final item in metadata.catalog)
+              for (final item in pushed)
                 ListTile(
                   leading: item.artworkUrl == null
                       ? null
@@ -411,19 +409,28 @@ class _FleetSection extends ConsumerWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  subtitle: item.subtitle == null
+                  // The album, not the artist: this page is about the artist,
+                  // and the row is here to say which record the track is on.
+                  subtitle: item.caption == null
                       ? null
                       : Text(
-                          item.subtitle!,
+                          item.caption!,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                  trailing: Text(
-                    'artistsFleetTrack'.tr(),
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
+                  trailing: item.durationSeconds == null
+                      ? null
+                      : Text(
+                          formatDuration(
+                            Duration(seconds: item.durationSeconds!),
+                          ),
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
+                        ),
                 ),
             ],
           ),

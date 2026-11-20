@@ -1290,6 +1290,201 @@ final class AlbumSongsFamily extends $Family
   String toString() => r'albumSongsProvider';
 }
 
+/// One album as its own source describes it, independent of its tracks.
+///
+/// A store album the account never added answers with no tracklist but is
+/// still a record with a name, a year and a cover — which is what the album
+/// page's hero needs to draw when the library has nothing to list. Null when
+/// the source is gone or does not know the id; the page then falls back to
+/// what its route carried.
+
+@ProviderFor(albumInfo)
+final albumInfoProvider = AlbumInfoFamily._();
+
+/// One album as its own source describes it, independent of its tracks.
+///
+/// A store album the account never added answers with no tracklist but is
+/// still a record with a name, a year and a cover — which is what the album
+/// page's hero needs to draw when the library has nothing to list. Null when
+/// the source is gone or does not know the id; the page then falls back to
+/// what its route carried.
+
+final class AlbumInfoProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<LibraryAlbum?>,
+          LibraryAlbum?,
+          FutureOr<LibraryAlbum?>
+        >
+    with $FutureModifier<LibraryAlbum?>, $FutureProvider<LibraryAlbum?> {
+  /// One album as its own source describes it, independent of its tracks.
+  ///
+  /// A store album the account never added answers with no tracklist but is
+  /// still a record with a name, a year and a cover — which is what the album
+  /// page's hero needs to draw when the library has nothing to list. Null when
+  /// the source is gone or does not know the id; the page then falls back to
+  /// what its route carried.
+  AlbumInfoProvider._({
+    required AlbumInfoFamily super.from,
+    required LibraryRef super.argument,
+  }) : super(
+         retry: null,
+         name: r'albumInfoProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$albumInfoHash();
+
+  @override
+  String toString() {
+    return r'albumInfoProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<LibraryAlbum?> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<LibraryAlbum?> create(Ref ref) {
+    final argument = this.argument as LibraryRef;
+    return albumInfo(ref, argument);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is AlbumInfoProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$albumInfoHash() => r'52262c96ab246636ec20c0b29031476e05ab2477';
+
+/// One album as its own source describes it, independent of its tracks.
+///
+/// A store album the account never added answers with no tracklist but is
+/// still a record with a name, a year and a cover — which is what the album
+/// page's hero needs to draw when the library has nothing to list. Null when
+/// the source is gone or does not know the id; the page then falls back to
+/// what its route carried.
+
+final class AlbumInfoFamily extends $Family
+    with $FunctionalFamilyOverride<FutureOr<LibraryAlbum?>, LibraryRef> {
+  AlbumInfoFamily._()
+    : super(
+        retry: null,
+        name: r'albumInfoProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  /// One album as its own source describes it, independent of its tracks.
+  ///
+  /// A store album the account never added answers with no tracklist but is
+  /// still a record with a name, a year and a cover — which is what the album
+  /// page's hero needs to draw when the library has nothing to list. Null when
+  /// the source is gone or does not know the id; the page then falls back to
+  /// what its route carried.
+
+  AlbumInfoProvider call(LibraryRef album) =>
+      AlbumInfoProvider._(argument: album, from: this);
+
+  @override
+  String toString() => r'albumInfoProvider';
+}
+
+@ProviderFor(albumTracks)
+final albumTracksProvider = AlbumTracksFamily._();
+
+final class AlbumTracksProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<List<LibrarySong>>,
+          List<LibrarySong>,
+          FutureOr<List<LibrarySong>>
+        >
+    with
+        $FutureModifier<List<LibrarySong>>,
+        $FutureProvider<List<LibrarySong>> {
+  AlbumTracksProvider._({
+    required AlbumTracksFamily super.from,
+    required AlbumTracksTarget super.argument,
+  }) : super(
+         retry: null,
+         name: r'albumTracksProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$albumTracksHash();
+
+  @override
+  String toString() {
+    return r'albumTracksProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<List<LibrarySong>> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<List<LibrarySong>> create(Ref ref) {
+    final argument = this.argument as AlbumTracksTarget;
+    return albumTracks(ref, argument);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is AlbumTracksProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$albumTracksHash() => r'dc4fbc23366b2e3f1fe7c0942ec2b697e9bc7ab6';
+
+final class AlbumTracksFamily extends $Family
+    with
+        $FunctionalFamilyOverride<
+          FutureOr<List<LibrarySong>>,
+          AlbumTracksTarget
+        > {
+  AlbumTracksFamily._()
+    : super(
+        retry: null,
+        name: r'albumTracksProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  AlbumTracksProvider call(AlbumTracksTarget target) =>
+      AlbumTracksProvider._(argument: target, from: this);
+
+  @override
+  String toString() => r'albumTracksProvider';
+}
+
 /// Songs of one playlist, read straight from its own source.
 
 @ProviderFor(playlistSongs)

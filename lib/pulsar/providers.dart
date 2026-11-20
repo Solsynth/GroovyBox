@@ -495,20 +495,13 @@ Future<List<LibrarySong?>> solarFavouriteSongs(Ref ref) async {
 /// miss is silence, not an error — the page is built from the device's own
 /// libraries first, and the fleet section only ever adds.
 class PulsarArtistMetadata {
-  const PulsarArtistMetadata({
-    required this.creator,
-    required this.roles,
-    required this.catalog,
-  });
+  const PulsarArtistMetadata({required this.creator, required this.catalog});
 
   final PulsarCreator creator;
 
-  /// Every role the catalog credits this creator with, alphabetical and
-  /// deduped across items.
-  final List<String> roles;
-
-  /// The fleet's catalog items credited to them, newest first as the server
-  /// returns them.
+  /// Every catalog item the fleet credits to them, newest first as the server
+  /// returns them. Mixed by design: the fleet's own resolved entities sit in
+  /// the same list as the tracks devices pushed, and the reader picks.
   final List<CatalogItem> catalog;
 }
 
@@ -538,19 +531,8 @@ Future<PulsarArtistMetadata?> pulsarArtistMetadata(Ref ref, String name) async {
     domain: 'music',
     session: session,
   );
-  final roles = {
-    for (final item in catalog)
-      for (final credit in item.creators)
-        if (credit.name.toLowerCase() == creator.name.toLowerCase() &&
-            credit.role.isNotEmpty)
-          credit.role,
-  }.toList()..sort();
 
-  return PulsarArtistMetadata(
-    creator: creator,
-    roles: roles,
-    catalog: catalog,
-  );
+  return PulsarArtistMetadata(creator: creator, catalog: catalog);
 }
 
 /// The fleet's record for one artist, as the artist page reads it.

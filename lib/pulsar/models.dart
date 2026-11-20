@@ -100,6 +100,12 @@ class PulsarTrackPayload {
   };
 }
 
+/// The `provider` every catalog row this app writes is stamped with. The
+/// fleet also stores rows its own metadata engine resolved (MusicBrainz
+/// artists and albums); those are entities, not things an account holds, and
+/// a list of "what your devices shared" means the former only.
+const pulsarProviderKey = 'groovybox';
+
 /// A Pulsar catalog item: the server-side record of a track, deduped on
 /// `provider` + `provider_key` or `domain` + `title` + `subtitle`.
 class CatalogItem {
@@ -110,6 +116,7 @@ class CatalogItem {
     this.providerKey,
     required this.title,
     this.subtitle,
+    this.caption,
     this.artworkUrl,
     this.durationSeconds,
     this.creators = const [],
@@ -121,6 +128,10 @@ class CatalogItem {
   final String? providerKey;
   final String title;
   final String? subtitle;
+
+  /// The record the track is on, when the writer knew it. The fleet's own
+  /// entities leave this empty; a track pushed by the app fills it.
+  final String? caption;
   final String? artworkUrl;
   final int? durationSeconds;
 
@@ -135,6 +146,7 @@ class CatalogItem {
     if (providerKey != null) 'provider_key': providerKey,
     'title': title,
     if (subtitle != null) 'subtitle': subtitle,
+    if (caption != null) 'caption': caption,
     if (artworkUrl != null) 'artwork_url': artworkUrl,
     if (durationSeconds != null) 'duration_seconds': durationSeconds,
   };
@@ -146,6 +158,7 @@ class CatalogItem {
     providerKey: json['provider_key'] as String?,
     title: json['title'] as String? ?? '',
     subtitle: json['subtitle'] as String?,
+    caption: json['caption'] as String?,
     artworkUrl: json['artwork_url'] as String?,
     durationSeconds: (json['duration_seconds'] as num?)?.toInt(),
     creators: PulsarCreatorCredit.listOf(json['creators']),

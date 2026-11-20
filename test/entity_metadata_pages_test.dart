@@ -184,4 +184,50 @@ void main() {
     // The release date the library's tags may not carry.
     expect(find.textContaining('1997'), findsWidgets);
   });
+
+  testWidgets('an album whose own source has no tracks lists a server copy', (
+    tester,
+  ) async {
+    // A cloud account answering with an id it will not turn into tracks: the
+    // page must show the record and the copy another library holds, not
+    // "this album is empty" over a title it already knows.
+    const info = LibraryAlbum(
+      sourceId: 'a',
+      id: 'album-1',
+      name: 'OK Computer',
+      artist: 'Radiohead',
+      duration: Duration.zero,
+      year: 1997,
+    );
+    const copy = LibrarySong(
+      sourceId: 'b',
+      id: 'server-song',
+      title: 'Airbag',
+      artist: 'Radiohead',
+      album: 'OK Computer',
+      albumId: 'server-album',
+      duration: Duration(milliseconds: 284400),
+      track: 1,
+    );
+
+    await _pump(
+      tester,
+      const AlbumDetailScreen(
+        sourceId: 'a',
+        albumId: 'album-1',
+        albumName: 'OK Computer',
+      ),
+      [
+        albumTracksProvider((
+          album: (sourceId: 'a', id: 'album-1'),
+          title: 'OK Computer',
+        )).overrideWith((ref) async => const [copy]),
+        albumInfoProvider((sourceId: 'a', id: 'album-1'))
+            .overrideWith((ref) async => info),
+      ],
+    );
+
+    expect(find.text('OK Computer'), findsWidgets);
+    expect(find.text('Airbag'), findsOneWidget);
+  });
 }

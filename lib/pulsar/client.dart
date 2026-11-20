@@ -152,7 +152,7 @@ class PulsarClient {
         '$_basePath/collections/$playlistId/items',
         data: {
           'domain': 'music',
-          'provider': 'groovybox',
+          'provider': pulsarProviderKey,
           'provider_key': ?trackKey,
           'title': title,
           if (artist != null && artist.isNotEmpty) 'subtitle': artist,
@@ -303,7 +303,7 @@ class PulsarClient {
         '$_basePath/catalog',
         data: {
           'domain': 'music',
-          'provider': 'groovybox',
+          'provider': pulsarProviderKey,
           'provider_key': ?trackKey,
           'title': title,
           if (artist != null && artist.isNotEmpty) 'subtitle': artist,

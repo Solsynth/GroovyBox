@@ -150,7 +150,7 @@ final class PulsarPlaylistsProvider
   PulsarPlaylists create() => PulsarPlaylists();
 }
 
-String _$pulsarPlaylistsHash() => r'23a0980ee839f2e469c5c1086c3e54be7fc20506';
+String _$pulsarPlaylistsHash() => r'bc3265705daf12866e2db200fa285ee894e33cd4';
 
 /// The account's playlists, as Pulsar holds them. Empty without a session:
 /// a signed-out window has no cloud playlists and that is not an error.
@@ -420,7 +420,7 @@ final class PulsarPlaylistSongsProvider
 }
 
 String _$pulsarPlaylistSongsHash() =>
-    r'ee273a45a9eda1a5c86362cefaf44eb196826844';
+    r'8500782a54e7995982346df9449c37f8b02445d7';
 
 /// The songs of one Pulsar playlist, resolved against the connected library
 /// sources. A catalog entry is a record of a track, not a playable stream:
@@ -951,7 +951,7 @@ final class PulsarArtistMetadataProvider
 }
 
 String _$pulsarArtistMetadataHash() =>
-    r'a846e27313e6b11d627b64fa441b8bfae3b4c1a7';
+    r'05924bc71900cf3dfa124127b403cc598a025e8a';
 
 /// The fleet's view of [name]. Null when signed out, when nothing matches,
 /// or when the fleet is unreachable — each a reason the section stays quiet,

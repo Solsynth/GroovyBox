@@ -227,7 +227,7 @@ class AppleMusicSource extends LibrarySource
     // "newest" shelf.
     final items = await _data(
       '/v1/me/library/recently-added',
-      query: {'limit': limit},
+      query: {'limit': limit, 'include': 'artists'},
     );
     return [
       for (final item in items)
@@ -239,7 +239,11 @@ class AppleMusicSource extends LibrarySource
   Future<List<LibraryAlbum>> albums({int limit = 60, int offset = 0}) async {
     final items = await _data(
       '/v1/me/library/albums',
-      query: {'limit': limit, 'offset': offset},
+      query: {
+        'limit': limit,
+        'offset': offset,
+        'include': 'artists',
+      },
     );
     return [for (final item in items) _album(item)];
   }
@@ -255,7 +259,10 @@ class AppleMusicSource extends LibrarySource
       );
       return items.isEmpty ? null : _album(items.first);
     }
-    final items = await _data('/v1/me/library/albums/${_path(albumId)}');
+    final items = await _data(
+      '/v1/me/library/albums/${_path(albumId)}',
+      query: {'include': 'artists'},
+    );
     return items.isEmpty ? null : _album(items.first);
   }
 
@@ -268,7 +275,10 @@ class AppleMusicSource extends LibrarySource
       );
       return [for (final item in items) _song(item, albumId: albumId)];
     }
-    final items = await _data('/v1/me/library/albums/${_path(albumId)}/tracks');
+    final items = await _data(
+      '/v1/me/library/albums/${_path(albumId)}/tracks',
+      query: {'include': 'artists,albums'},
+    );
     return [for (final item in items) _song(item, albumId: albumId)];
   }
 
@@ -324,6 +334,7 @@ class AppleMusicSource extends LibrarySource
     }
     final items = await _data(
       '/v1/me/library/artists/${_path(artistId)}/albums',
+      query: {'include': 'artists'},
     );
     return [for (final item in items) _album(item)];
   }
@@ -332,6 +343,7 @@ class AppleMusicSource extends LibrarySource
   Future<List<LibrarySong>> playlistSongs(String playlistId) async {
     final items = await _data(
       '/v1/me/library/playlists/${_path(playlistId)}/tracks',
+      query: {'include': 'artists,albums'},
     );
     return [for (final item in items) _song(item)];
   }
@@ -342,7 +354,12 @@ class AppleMusicSource extends LibrarySource
     if (term.isEmpty) return const [];
     final body = await _get(
       '/v1/me/library/search',
-      query: {'term': term, 'types': 'library-songs', 'limit': limit},
+      query: {
+        'term': term,
+        'types': 'library-songs',
+        'limit': limit,
+        'include': 'artists,albums',
+      },
     );
     final results = body['results'];
     final songs = results is Map ? results['library-songs'] : null;
@@ -522,7 +539,13 @@ class AppleMusicSource extends LibrarySource
     final storefront = await _storefront();
     final body = await _get(
       '/v1/catalog/$storefront/search',
-      query: {'term': term, 'types': 'songs', 'limit': limit},
+      // The store caps a search page at 25 per type; asking for more makes it
+      // refuse the whole request rather than answer a shorter page.
+      query: {
+        'term': term,
+        'types': 'songs',
+        'limit': limit.clamp(1, 25),
+      },
     );
     final results = body['results'];
     final section = results is Map ? results['songs'] : null;
@@ -665,7 +688,11 @@ class AppleMusicSource extends LibrarySource
     while (true) {
       final body = await _get(
         '/v1/me/library/songs',
-        query: {'limit': page, 'offset': offset},
+        query: {
+          'limit': page,
+          'offset': offset,
+          'include': 'artists,albums',
+        },
       );
       final items = _resources(body);
       if (items.isEmpty) break;
@@ -890,7 +917,11 @@ class AppleMusicSource extends LibrarySource
     final offset = total > size ? Random().nextInt(total - size) : 0;
     final items = await _data(
       '/v1/me/library/songs',
-      query: {'limit': size, 'offset': offset},
+      query: {
+        'limit': size,
+        'offset': offset,
+        'include': 'artists,albums',
+      },
       cache: CachePolicy.none,
     );
     return [for (final item in items) _song(item)]..shuffle();
@@ -983,7 +1014,8 @@ class AppleMusicSource extends LibrarySource
       // Catalog responses name the artist's store id in attributes;
       // library responses do not, and the artist page falls back to a
       // library lookup through the album when the id is missing.
-      artistId: attributes['artistId']?.toString(),
+      artistId:
+          attributes['artistId']?.toString() ?? _relationshipId(json, 'artists'),
       album: attributes['albumName'] as String?,
       albumId: albumId ?? _relationshipId(json, 'albums'),
       artId: _artTemplate(attributes),

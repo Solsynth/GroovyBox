@@ -376,6 +376,70 @@ Future<List<LibrarySong>> albumSongs(Ref ref, LibraryRef album) async {
   return source.albumSongs(album.id);
 }
 
+/// One album as its own source describes it, independent of its tracks.
+///
+/// A store album the account never added answers with no tracklist but is
+/// still a record with a name, a year and a cover — which is what the album
+/// page's hero needs to draw when the library has nothing to list. Null when
+/// the source is gone or does not know the id; the page then falls back to
+/// what its route carried.
+@riverpod
+Future<LibraryAlbum?> albumInfo(Ref ref, LibraryRef album) async {
+  final source = ref.watch(librarySourceByIdProvider)[album.sourceId];
+  if (source == null) return null;
+  try {
+    return await source.album(album.id);
+  } catch (error) {
+    // A store album the account never added, a bridge that answers 301, a
+    // server that does not know the id: every one of those is "no record",
+    // not a reason to fail the page that already knows the name.
+    debugPrint('[Library] album ${album.id} on ${album.sourceId}: $error');
+    return null;
+  }
+}
+/// The tracks of one album, from wherever they can be played.
+///
+/// A cloud account is the case this exists for: Apple Music and NetEase hand
+/// a page an album id their own endpoints refuse to turn into tracks — a
+/// store album the account never added, a bridge that answers 301 — so the
+/// album page would open empty beside a title it already knows. The album is
+/// not empty; this device simply cannot ask for it there.
+///
+/// The fallback is the other connected libraries, found by the record's own
+/// title and artist and kept only when the album title matches: a different
+/// record with a similar name is not this album. Each row keeps its own
+/// source, so a copy found on the server plays from the server.
+///
+/// [AlbumTracksTarget.title] is the name the route carried, used when the
+/// album's own source cannot describe it either.
+typedef AlbumTracksTarget = ({LibraryRef album, String? title});
+
+@riverpod
+Future<List<LibrarySong>> albumTracks(Ref ref, AlbumTracksTarget target) async {
+  final album = target.album;
+  final own = await ref.watch(albumSongsProvider(album).future);
+  if (own.isNotEmpty) return own;
+  final info = await ref.watch(albumInfoProvider(album).future);
+  final name = (info?.name ?? target.title)?.trim();
+  if (name == null || name.isEmpty) return const [];
+  final title = name.toLowerCase();
+  final artist = info?.artist?.trim().toLowerCase();
+  // The wide question: the copy may live in a store the account never added,
+  // and a server's holdings are its catalogue anyway.
+  final found = await ref
+      .watch(libraryAggregatorProvider)
+      .searchCatalogue([info?.artist, name].whereType<String>().join(' '));
+  return [
+    for (final song in found)
+      if (song.sourceId != album.sourceId &&
+          (song.album ?? '').trim().toLowerCase() == title &&
+          (artist == null ||
+              (song.albumArtist ?? song.artist ?? '').trim().toLowerCase() ==
+                  artist))
+        song,
+  ];
+}
+
 /// Songs of one playlist, read straight from its own source.
 @riverpod
 Future<List<LibrarySong>> playlistSongs(Ref ref, LibraryRef playlist) async {

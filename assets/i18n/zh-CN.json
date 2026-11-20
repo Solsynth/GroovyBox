@@ -31,11 +31,7 @@
   "artistsDetailLoadError": "无法加载该艺术家",
   "artistsDetailEmptyTitle": "这里还没有内容",
   "artistsDetailEmptyMessage": "该媒体库列出了这位艺术家，但没有他们的专辑。",
-  "artistsFleetHeader": "在您的云账号中",
-  "artistsFleetRoles": "参与身份：{}",
-  "artistsFleetEmpty": "你的 Solink 账号还没有这位艺术家的目录条目。",
-  "artistsFleetSignOut": "登录后即可查看你账号中各设备分享的内容。",
-  "artistsFleetTrack": "曲目",
+  "artistsFleetHeader": "云账号中的曲目",
   "commonNavCollapse": "收起导航",
   "commonNavExpand": "展开导航",
   "commonLibraryUnreachable": "曲库没有响应。请检查连接后重试。",
@@ -628,5 +624,7 @@
   "downloadsRadioUnsupported": "电台无法下载。",
   "downloadsPlatformUnsupported": "该音乐库由系统播放器播放，无法复制。",
   "downloadsSourceMissing": "这首歌所在的音乐库未连接。",
-  "libraryOfflineCached": "无法连接到该音乐库，显示已保存的内容。"
+  "libraryOfflineCached": "无法连接到该音乐库，显示已保存的内容。",
+  "albumsTracklist": "曲目列表",
+  "albumsTracklistNotHeld": "云账号知道这张专辑，但曲库里还没有它的曲目。"
 }
