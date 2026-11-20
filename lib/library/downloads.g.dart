@@ -48,7 +48,7 @@ final class DownloadsControllerProvider
 }
 
 String _$downloadsControllerHash() =>
-    r'38578dc85b6717261711dd0ade1f2bdd16c05e81';
+    r'fbbde6bc7dae7806bb276ea78d2af52a3bd12393';
 
 /// What every download is doing right now, keyed `'sourceId:externalId'`.
 

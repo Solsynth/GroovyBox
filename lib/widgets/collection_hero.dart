@@ -114,21 +114,6 @@ class CollectionHero extends StatelessWidget {
                               : theme.textTheme.headlineSmall)
                           ?.copyWith(fontWeight: FontWeight.w800, height: 1.15),
                 ),
-                if (source != null || meta.isNotEmpty) ...[
-                  const SizedBox(height: SolSpace.xs),
-                  Text(
-                    [
-                      source ?? '',
-                      meta,
-                    ].where((s) => s.isNotEmpty).join('  ·  '),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      height: 1.4,
-                    ),
-                  ),
-                ],
                 const SizedBox(height: SolSpace.md),
                 Wrap(
                   spacing: SolSpace.sm,

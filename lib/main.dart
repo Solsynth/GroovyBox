@@ -162,7 +162,6 @@ Future<void> main() async {
     debugPrint('[Library] Local music directory unavailable: $error');
   }
 
-
   // Downloads live under the same support directory as imports, in a folder
   // of their own: a machine that refuses one still runs, just without
   // offline copies. The folder is created on the first download, not here,
@@ -206,7 +205,6 @@ Future<void> main() async {
     ),
   );
 }
-
 
 /// Boots the secondary engine that renders the mini player window.
 ///
@@ -272,7 +270,8 @@ Future<void> _runMiniPlayer(int? mainWindowId) async {
   // platform plugin (see the engine-registration note in MainFlutterWindow):
   // the provider tree reads it exactly as the host does, the values are
   // defaults and last for the window's lifetime, and no native code runs twice.
-  SharedPreferencesStorePlatform.instance = InMemorySharedPreferencesStore.empty();
+  SharedPreferencesStorePlatform.instance =
+      InMemorySharedPreferencesStore.empty();
   final prefs = await SharedPreferences.getInstance();
 
   const libraryDatabase = null;
@@ -402,4 +401,3 @@ class _WindowTitle extends ConsumerWidget {
     );
   }
 }
-

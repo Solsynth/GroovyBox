@@ -186,7 +186,7 @@ class EmptyState extends StatelessWidget {
   }
 }
 
-/// Back button for a pushed page's pill header.
+/// Back button for a pushed page's opening row.
 class HeaderBackButton extends StatelessWidget {
   final VoidCallback onPressed;
 

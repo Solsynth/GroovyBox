@@ -669,6 +669,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              IconButton(
+                                tooltip: 'playerClose'.tr(),
+                                onPressed: () => context.router.maybePop(),
+                                icon: const Icon(
+                                  Symbols.keyboard_arrow_down_rounded,
+                                ),
+                              ),
                               // A second window onto the same transport: it
                               // sits with the way out because both are window
                               // actions rather than views of this page.
@@ -681,26 +688,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                                     Symbols.picture_in_picture_rounded,
                                   ),
                                 ),
-                              IconButton(
-                                tooltip: 'playerClose'.tr(),
-                                onPressed: () => context.router.maybePop(),
-                                icon: const Icon(
-                                  Symbols.keyboard_arrow_down_rounded,
-                                ),
-                              ),
-                              // About this track rather than about the page,
-                              // so it sits with the way out. A station has no
-                              // other versions: its run is generated.
-                              IconButton(
-                                tooltip: 'versionsTitle'.tr(),
-                                onPressed: song.isRadio
-                                    ? null
-                                    : () => TrackVersionsPanel.show(
-                                        context,
-                                        song,
-                                      ),
-                                icon: const Icon(Symbols.content_copy_rounded),
-                              ),
                             ],
                           ),
                         ),
@@ -740,6 +727,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
+                                  IconButton(
+                                    tooltip: 'playerClose'.tr(),
+                                    onPressed: () => context.router.maybePop(),
+                                    icon: const Icon(
+                                      Symbols.keyboard_arrow_down_rounded,
+                                    ),
+                                  ),
                                   // Same second window, in the compact row:
                                   // beside the way out, away from the pair of
                                   // view toggles on the trailing edge.
@@ -752,25 +746,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                                         Symbols.picture_in_picture_rounded,
                                       ),
                                     ),
-                                  IconButton(
-                                    tooltip: 'playerClose'.tr(),
-                                    onPressed: () => context.router.maybePop(),
-                                    icon: const Icon(
-                                      Symbols.keyboard_arrow_down_rounded,
-                                    ),
-                                  ),
-                                  IconButton(
-                                    tooltip: 'versionsTitle'.tr(),
-                                    onPressed: song.isRadio
-                                        ? null
-                                        : () => TrackVersionsPanel.show(
-                                            context,
-                                            song,
-                                          ),
-                                    icon: const Icon(
-                                      Symbols.content_copy_rounded,
-                                    ),
-                                  ),
                                 ],
                               ),
                               Row(
@@ -1730,6 +1705,7 @@ class _TrackCopy extends ConsumerWidget {
         // keeps the line starting at the same edge as the title.
         Wrap(
           alignment: centered ? WrapAlignment.center : WrapAlignment.start,
+          spacing: 6,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             if (artistRef != null)
@@ -1807,7 +1783,7 @@ class _MarqueeTitle extends StatelessWidget {
         )..layout();
         final overflows = painter.width > constraints.maxWidth;
         painter.dispose();
-        if (!overflows) return Center(child: text);
+        if (!overflows) return centered ? Center(child: text) : text;
         // The mask is alpha only — `dstOut` erases by the mask's own alpha —
         // so the headline's colour and any emphasis survive untouched, and
         // the fade itself never paints a pixel of its own.
@@ -1861,16 +1837,13 @@ class _CreditText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: SolSpace.xs),
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        textAlign: centered ? TextAlign.center : TextAlign.start,
-        style: Theme.of(context).textTheme.bodyMedium
-            ?.copyWith(color: colorScheme.onSurfaceVariant),
-      ),
+    return Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      textAlign: centered ? TextAlign.center : TextAlign.start,
+      style: Theme.of(context).textTheme.bodyMedium
+          ?.copyWith(color: colorScheme.onSurfaceVariant),
     );
   }
 }
@@ -1891,21 +1864,14 @@ class _CreditLink extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(SolRadius.sm),
+      child: GestureDetector(
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: SolSpace.xs,
-            vertical: 2,
-          ),
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodyMedium
-                ?.copyWith(color: colorScheme.onSurfaceVariant),
-          ),
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodyMedium
+              ?.copyWith(color: colorScheme.onSurfaceVariant),
         ),
       ),
     );
@@ -1926,6 +1892,7 @@ class _TrackMoreMenu extends ConsumerWidget {
     if (song == null) return const SizedBox.shrink();
 
     return MenuAnchor(
+      animated: true,
       builder: (context, controller, child) => IconButton(
         tooltip: 'playerMore'.tr(),
         // Smaller than a toolbar button: it rides beside the title rather
@@ -2035,9 +2002,8 @@ class _SongActionsMenuItems extends ConsumerWidget {
         if (actions.canFavourite)
           MenuItemButton(
             leadingIcon: Icon(
-              favourited
-                  ? Symbols.favorite_rounded
-                  : Symbols.favorite_border_rounded,
+              Symbols.favorite_rounded,
+              fill: favourited ? 1 : null,
             ),
             onPressed: () =>
                 SongActionsRunner.toggleFavourite(hostContext, actions),

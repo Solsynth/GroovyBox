@@ -236,7 +236,6 @@ class QueuePanel extends ConsumerWidget {
   }
 }
 
-
 /// What "Playback info" says, as a sheet: the track's metadata and, when the
 /// source can name it, the library it plays from.
 ///
@@ -268,34 +267,19 @@ class PlaybackInfoSheet extends ConsumerWidget {
     final colorScheme = theme.colorScheme;
     final playing = song.playing;
     final source = ref.watch(
-      librarySourceByIdProvider.select(
-        (sources) => sources[song.sourceId],
-      ),
+      librarySourceByIdProvider.select((sources) => sources[song.sourceId]),
     );
     // Where the words come from, asked of the stored answer rather than by
     // fetching: the sheet describes what the track has, it does not go get
     // anything. An unstored track reads as having no lyrics yet — which is
     // the same thing the lyrics pane would go check on demand.
     final lyricsOrigin = ref.watch(lyricsOriginProvider(song)).value;
-    final lyricsOriginLabel =
-        (lyricsOrigin ?? LyricsOrigin.none).labelKey.tr();
+    final lyricsOriginLabel = (lyricsOrigin ?? LyricsOrigin.none).labelKey.tr();
     final rows = <(IconData, String, String)>[
-      (
-        Symbols.music_note_rounded,
-        'playbackInfoTitle'.tr(),
-        playing.title,
-      ),
-      (
-        Symbols.person_rounded,
-        'playbackInfoArtist'.tr(),
-        playing.subtitle,
-      ),
+      (Symbols.music_note_rounded, 'playbackInfoTitle'.tr(), playing.title),
+      (Symbols.person_rounded, 'playbackInfoArtist'.tr(), playing.subtitle),
       if (playing.album != null)
-        (
-          Symbols.album_rounded,
-          'playbackInfoAlbum'.tr(),
-          playing.album!,
-        ),
+        (Symbols.album_rounded, 'playbackInfoAlbum'.tr(), playing.album!),
       if (source != null)
         (
           source.kind.mark ?? Symbols.cloud_rounded,
@@ -314,19 +298,11 @@ class PlaybackInfoSheet extends ConsumerWidget {
           '${playing.year}',
         ),
       if (playing.genre != null)
-        (
-          Symbols.category_rounded,
-          'playbackInfoGenre'.tr(),
-          playing.genre!,
-        ),
+        (Symbols.category_rounded, 'playbackInfoGenre'.tr(), playing.genre!),
       // Lyrics as metadata, not text: where the words come from, or that
       // there are none. The words themselves are the lyrics pane's job; this
       // sheet only describes the track.
-      (
-        Symbols.lyrics_rounded,
-        'playbackInfoLyrics'.tr(),
-        lyricsOriginLabel,
-      ),
+      (Symbols.lyrics_rounded, 'playbackInfoLyrics'.tr(), lyricsOriginLabel),
     ];
 
     return SafeArea(
@@ -392,4 +368,3 @@ class PlaybackInfoSheet extends ConsumerWidget {
     );
   }
 }
-

@@ -146,4 +146,104 @@ void main() {
       ))),
     );
   });
+
+  group('buildLyricTimeline', () {
+    test('prepends a leading interlude when first line starts at >= 3s', () {
+      const lyrics = Lyrics(
+        synced: true,
+        lines: [
+          LyricLine(Duration(seconds: 5), 'First line'),
+          LyricLine(Duration(seconds: 9), 'Second line'),
+        ],
+      );
+
+      final timeline = buildLyricTimeline(lyrics);
+      expect(timeline.length, 3);
+      expect(timeline[0], isA<LyricInterludeEntry>());
+      expect(timeline[0].startTime, Duration.zero);
+      expect(timeline[0].endTime, const Duration(seconds: 5));
+      expect(timeline[1], isA<LyricLineEntry>());
+      expect(timeline[1].startTime, const Duration(seconds: 5));
+      expect(timeline[1].endTime, const Duration(seconds: 9));
+      expect(timelineIndexAt(timeline, const Duration(seconds: 2)), 0);
+      expect(timelineIndexAt(timeline, const Duration(seconds: 5)), 1);
+    });
+
+    test('skips leading interlude when first line starts before 3s', () {
+      const lyrics = Lyrics(
+        synced: true,
+        lines: [
+          LyricLine(Duration(seconds: 1), 'Quick start'),
+          LyricLine(Duration(seconds: 5), 'Next line'),
+        ],
+      );
+
+      final timeline = buildLyricTimeline(lyrics);
+      expect(timeline.length, 2);
+      expect(timeline.first, isA<LyricLineEntry>());
+    });
+
+    test('injects mid-song interlude for explicit empty end markers >= 4s', () {
+      const lyrics = Lyrics(
+        synced: true,
+        lines: [
+          LyricLine(Duration(seconds: 1), 'Verse end'),
+          LyricLine(Duration(seconds: 5), ''),
+          LyricLine(Duration(seconds: 12), 'Chorus start'),
+        ],
+      );
+
+      final timeline = buildLyricTimeline(lyrics);
+      expect(timeline.length, 3);
+      expect(timeline[0], isA<LyricLineEntry>());
+      expect(timeline[0].endTime, const Duration(seconds: 5));
+      expect(timeline[1], isA<LyricInterludeEntry>());
+      expect(timeline[1].startTime, const Duration(seconds: 5));
+      expect(timeline[1].endTime, const Duration(seconds: 12));
+      expect(timeline[2], isA<LyricLineEntry>());
+    });
+
+    test('injects mid-song interlude for long instrumental gaps without blanks', () {
+      const lyrics = Lyrics(
+        synced: true,
+        lines: [
+          LyricLine(Duration(seconds: 1), 'Before solo'),
+          LyricLine(Duration(seconds: 20), 'After solo'),
+        ],
+      );
+
+      final timeline = buildLyricTimeline(lyrics);
+      expect(timeline.length, 3);
+      expect(timeline[1], isA<LyricInterludeEntry>());
+      expect(
+        timeline[1].endTime - timeline[1].startTime,
+        greaterThanOrEqualTo(kInterludeGapThreshold),
+      );
+      expect(timeline[1].endTime, const Duration(seconds: 20));
+    });
+
+    test('unsynced lyrics produce plain entries with no interludes', () {
+      const lyrics = Lyrics(
+        synced: false,
+        lines: [
+          LyricLine(Duration.zero, 'Line one'),
+          LyricLine(Duration.zero, 'Line two'),
+        ],
+      );
+
+      final timeline = buildLyricTimeline(lyrics);
+      expect(timeline.length, 2);
+      expect(timeline.every((e) => e is LyricLineEntry), isTrue);
+    });
+
+    test('progressAt normalizes and clamps cleanly', () {
+      const item = LyricInterludeEntry(
+        startTime: Duration(seconds: 10),
+        endTime: Duration(seconds: 20),
+      );
+      expect(item.progressAt(const Duration(seconds: 5)), 0.0);
+      expect(item.progressAt(const Duration(seconds: 15)), 0.5);
+      expect(item.progressAt(const Duration(seconds: 25)), 1.0);
+    });
+  });
 }

@@ -151,11 +151,14 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
             body: ContentFrame(
               maxWidth: kReadingMaxWidth,
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(
-                  SolSpace.xl,
-                  SolSpace.md,
-                  SolSpace.xl,
-                  SolSpace.xxxl,
+                // The headline keeps the page's own gutter, as it does on
+                // every other page: the list itself is unpadded, and the
+                // form below is inset once. Padding the list too indented
+                // this title and its back button a further step past the
+                // form, which no other page does.
+                padding: const EdgeInsets.only(
+                  top: SolSpace.md,
+                  bottom: SolSpace.xxxl,
                 ),
                 children: [
                   // The page names itself and carries the only control that
@@ -174,6 +177,13 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                           )
                         : null,
                   ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: SolSpace.xl,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
                         Text(
                           'setupSubtitle'.tr(),
                           style: theme.textTheme.bodySmall?.copyWith(
@@ -227,6 +237,9 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                             ),
                           ),
                         ],
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),

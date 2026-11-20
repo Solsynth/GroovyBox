@@ -951,7 +951,7 @@ final class PulsarArtistMetadataProvider
 }
 
 String _$pulsarArtistMetadataHash() =>
-    r'05924bc71900cf3dfa124127b403cc598a025e8a';
+    r'3babe44d7b625c755ef0632e6cf055f535a1f0fd';
 
 /// The fleet's view of [name]. Null when signed out, when nothing matches,
 /// or when the fleet is unreachable — each a reason the section stays quiet,

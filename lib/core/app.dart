@@ -17,7 +17,6 @@ const kTranslationsPath = 'assets/i18n';
 const kSupportedLocales = [Locale('en', 'US'), Locale('zh', 'CN')];
 const kFallbackLocale = Locale('en', 'US');
 
-
 /// The compact bar's default geometry.
 ///
 /// A bar is one header row, the scrubber and the transport: the artwork lives
@@ -67,7 +66,6 @@ const kMiniPlayerMaxHeight = 720.0;
 const kMiniPlayerMinWidth = 300.0;
 const kMiniPlayerMaxWidth = 480.0;
 
-
 /// The platform prefs store, opened in `main` and injected into the container.
 ///
 /// Overriding it (instead of calling `getInstance` inside providers) keeps the
@@ -112,9 +110,7 @@ class CollapsedSections extends Notifier<Set<String>> {
     if (saved != null) return saved.toSet();
     final legacy = prefs.getStringList(_legacyKey);
     if (legacy == null) return const {};
-    return {
-      for (final section in legacy) '$_legacyPage:$section',
-    };
+    return {for (final section in legacy) '$_legacyPage:$section'};
   }
 
   Future<void> toggle(String page, String section) async {

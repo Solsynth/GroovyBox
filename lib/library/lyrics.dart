@@ -252,3 +252,181 @@ Future<Lyrics> parseLrcAsync(String raw) =>
     raw.length > _kParseIsolateThreshold
     ? Isolate.run(() => parseLrc(raw))
     : Future.value(parseLrc(raw));
+
+/// One timed slot in a prepared lyric timeline: either a sung line or an
+/// instrumental interlude between vocal sections.
+sealed class LyricTimelineItem {
+  final Duration startTime;
+  final Duration endTime;
+
+  const LyricTimelineItem({
+    required this.startTime,
+    required this.endTime,
+  });
+
+  /// Normalized progress (`0.0` to `1.0`) across `[startTime, endTime]` at
+  /// [position].
+  double progressAt(Duration position) {
+    final spanUs = (endTime - startTime).inMicroseconds;
+    if (spanUs <= 0) return position >= startTime ? 1.0 : 0.0;
+    final elapsedUs = (position - startTime).inMicroseconds;
+    return (elapsedUs / spanUs).clamp(0.0, 1.0);
+  }
+}
+
+/// A sung lyric line with its resolved `[startTime, endTime]` window.
+class LyricLineEntry extends LyricTimelineItem {
+  final LyricLine line;
+
+  const LyricLineEntry({
+    required this.line,
+    required super.startTime,
+    required super.endTime,
+  });
+}
+
+/// An instrumental gap rendered as three sequential breathing dots.
+class LyricInterludeEntry extends LyricTimelineItem {
+  const LyricInterludeEntry({
+    required super.startTime,
+    required super.endTime,
+  });
+}
+
+/// Minimum leading instrumental gap before the first vocal line that receives
+/// an interlude indicator.
+const Duration kLeadingInterludeThreshold = Duration(seconds: 3);
+
+/// Minimum instrumental gap between two vocal lines that receives an interlude
+/// indicator.
+const Duration kInterludeGapThreshold = Duration(seconds: 4);
+
+/// Converts parsed [lyrics] into a display timeline with explicit line end
+/// times and injected [LyricInterludeEntry] items for instrumental breaks.
+///
+/// Unsynced lyrics are returned as plain [LyricLineEntry] items without
+/// interludes.
+List<LyricTimelineItem> buildLyricTimeline(
+  Lyrics lyrics, {
+  Duration? trackDuration,
+}) {
+  if (lyrics.lines.isEmpty) return const [];
+  if (!lyrics.synced) {
+    return [
+      for (final line in lyrics.lines)
+        LyricLineEntry(
+          line: line,
+          startTime: Duration.zero,
+          endTime: Duration.zero,
+        ),
+    ];
+  }
+
+  final raw = lyrics.lines;
+  final sungEntries = <LyricLineEntry>[];
+
+  for (var i = 0; i < raw.length; i++) {
+    final line = raw[i];
+    if (line.text.trim().isEmpty) continue;
+
+    // Look ahead for the next non-empty vocal line and any explicit blank
+    // timestamped end marker between them.
+    Duration? explicitEnd;
+    LyricLine? nextSung;
+    for (var j = i + 1; j < raw.length; j++) {
+      final candidate = raw[j];
+      if (candidate.text.trim().isEmpty) {
+        if (explicitEnd == null && candidate.at > line.at) {
+          explicitEnd = candidate.at;
+        }
+        continue;
+      }
+      nextSung = candidate;
+      break;
+    }
+
+    Duration endTime;
+    if (explicitEnd != null) {
+      endTime = explicitEnd;
+    } else if (nextSung != null) {
+      final gap = nextSung.at - line.at;
+      final estimatedVocal = Duration(
+        milliseconds: (2600 + line.text.trim().length * 110).clamp(4000, 6500),
+      );
+      if (gap >= estimatedVocal + kInterludeGapThreshold) {
+        endTime = line.at + estimatedVocal;
+      } else {
+        endTime = nextSung.at;
+      }
+    } else {
+      if (trackDuration != null && trackDuration > line.at) {
+        final remaining = trackDuration - line.at;
+        endTime = remaining <= const Duration(seconds: 10)
+            ? trackDuration
+            : line.at + const Duration(seconds: 6);
+      } else {
+        endTime = line.at + const Duration(seconds: 5);
+      }
+    }
+
+    if (endTime < line.at) endTime = line.at;
+
+    sungEntries.add(
+      LyricLineEntry(
+        line: line,
+        startTime: line.at,
+        endTime: endTime,
+      ),
+    );
+  }
+
+  if (sungEntries.isEmpty) return const [];
+
+  final timeline = <LyricTimelineItem>[];
+  if (sungEntries.first.startTime >= kLeadingInterludeThreshold) {
+    timeline.add(
+      LyricInterludeEntry(
+        startTime: Duration.zero,
+        endTime: sungEntries.first.startTime,
+      ),
+    );
+  }
+
+  for (var i = 0; i < sungEntries.length; i++) {
+    final entry = sungEntries[i];
+    timeline.add(entry);
+    if (i + 1 < sungEntries.length) {
+      final next = sungEntries[i + 1];
+      final gap = next.startTime - entry.endTime;
+      if (gap >= kInterludeGapThreshold) {
+        timeline.add(
+          LyricInterludeEntry(
+            startTime: entry.endTime,
+            endTime: next.startTime,
+          ),
+        );
+      }
+    }
+  }
+
+  return timeline;
+}
+
+/// Binary-searches [items] for the active timeline item at [position], or `-1`
+/// when [position] precedes the first item.
+int timelineIndexAt(List<LyricTimelineItem> items, Duration position) {
+  if (items.isEmpty) return -1;
+  var low = 0;
+  var high = items.length - 1;
+  var found = -1;
+  while (low <= high) {
+    final mid = (low + high) >> 1;
+    if (items[mid].startTime <= position) {
+      found = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return found;
+}

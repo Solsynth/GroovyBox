@@ -58,6 +58,15 @@ void main() {
       expect(enriched.lines[1].pronunciation, contains('tsumetai'));
     });
 
+    test('romanizes a Japanese line ending in a comma', () async {
+      // Kuromoji splits on '、' and '。'. A trailing separator used to leave an
+      // empty sentence, whose Viterbi path looped EOS → EOS until the heap was
+      // exhausted — the whole app froze on a line like this one.
+      await LyricsEnricher.ensureInitialized();
+      final roman = LyricsEnricher.romanizeJapanese('「君だけがいた夏が、');
+      expect(roman, contains('kimi'));
+    });
+
     test('generates pinyin for Chinese lyrics', () async {
       final lyrics = const Lyrics(
         lines: [

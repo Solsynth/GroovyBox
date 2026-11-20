@@ -125,9 +125,6 @@ void main() {
     final slider = find.byType(Slider);
     expect(slider, findsOneWidget);
     expect(find.text('Volume'), findsOneWidget);
-    // The pill header floats with a gap under it, so on a phone the slider
-    // can start below the fold; scroll it into reach before dragging, which
-    // is what a user does. The contract is the drag, not the first frame.
     await tester.drag(slider, const Offset(-200, 0));
     await tester.pumpAndSettle();
     expect(_playback.volumes, isNotEmpty);

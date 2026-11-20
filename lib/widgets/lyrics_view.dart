@@ -1,347 +1,29 @@
-import 'dart:async';
-import 'dart:math' as math;
-
-import 'package:easy_localization/easy_localization.dart';
+import 'package:easy_localization/easy_localization.dart' hide TextDirection;
+import 'package:flutter/scheduler.dart';
 import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/lyrics.dart';
 import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/player/player.dart';
+import 'package:groovy_box/widgets/lyric_widgets.dart';
 import 'package:groovy_box/widgets/lyrics_picker.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 
-/// Timed lyrics, drawn the way Apple Music draws them.
-///
-/// One scrolling column, left aligned, with the line being sung in full tone
-/// and weight and everything else dimmed to a trace. The column follows the
-/// transport and keeps the current line around the upper third of the box, so
-/// the eye never hunts; the upcoming line enters from below.
-///
-/// The list is a `ListView` with per-line keys rather than a fixed item extent:
-/// lyric lines wrap to two or three rows on a narrow pane, and scrolling to a
-/// guessed offset lands between lines. `ensureVisible` on the line's own
-/// context is what keeps a karaoke scroll honest.
-///
-/// The widget owns no state about the song. Give it lyrics and a position; tap
-/// is offered only when [onSeek] is set.
-class LyricsView extends StatefulWidget {
-  final Lyrics lyrics;
-  final Duration position;
-  final ValueChanged<Duration>? onSeek;
+export 'lyric_widgets.dart';
 
-  /// Inset inside the scrolling plane.
-  final EdgeInsets padding;
-
-  /// Whether to fade the column's edges into the surface behind it.
-  final bool fade;
-
-  /// Whether to show pronunciation (Romaji/Pinyin/Hangul) layers.
-  final bool showPronunciation;
-
-  /// Whether to show translation layers.
-  final bool showTranslation;
-
-  const LyricsView({
-    super.key,
-    required this.lyrics,
-    required this.position,
-    this.onSeek,
-    this.padding = const EdgeInsets.symmetric(horizontal: SolSpace.xl),
-    this.fade = true,
-    this.showPronunciation = true,
-    this.showTranslation = true,
-  });
-
-  @override
-  State<LyricsView> createState() => _LyricsViewState();
-}
-
-class _LyricsViewState extends State<LyricsView> {
-  final _controller = ScrollController();
-  final _keys = <int, GlobalKey>{};
-
-  /// The line the scroll is parked on. Kept separately from the position so a
-  /// rebuild caused by any other pixel change does not re-run the animation.
-  int _shownLine = -2;
-
-  /// Set while the user is dragging the column. The transport keeps playing,
-  /// but it must not yank the text out from under a finger that is reading
-  /// ahead; follow resumes a few seconds after the gesture ends.
-  bool _userScrolling = false;
-  Timer? _resumeTimer;
-
-  int get _index => widget.lyrics.synced
-      ? lyricIndexAt(widget.lyrics.lines, widget.position)
-      : -1;
-
-  @override
-  void didUpdateWidget(LyricsView oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.lyrics != widget.lyrics) {
-      _shownLine = -2;
-      _keys.clear();
-      if (_controller.hasClients) _controller.jumpTo(0);
-    }
-  }
-
-  @override
-  void dispose() {
-    _resumeTimer?.cancel();
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _follow(int index) {
-    if (index < 0 || index == _shownLine) return;
-    _shownLine = index;
-    // After the frame in which the line is laid out: its context does not
-    // exist yet during this build, and scrolling during layout is refused.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final context = _keys[index]?.currentContext;
-      if (context == null) return;
-      Scrollable.ensureVisible(
-        context,
-        alignment: 0.35,
-        duration: const Duration(milliseconds: 560),
-        curve: Curves.easeOutCubic,
-      );
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final lyrics = widget.lyrics;
-    final current = _index;
-    if (lyrics.synced && !_userScrolling) _follow(current);
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Enough air above and below that the first and last line can both sit
-        // where the middle ones do. Unsynced text does not need the runway: it
-        // only scrolls by hand, and empty space at the top is just empty.
-        final margin = lyrics.synced ? constraints.maxHeight * 0.34 : 0.0;
-        final column = SingleChildScrollView(
-          controller: _controller,
-          physics: const BouncingScrollPhysics(),
-          padding: widget.padding.copyWith(
-            top: math.max(widget.padding.top, margin),
-            bottom: math.max(widget.padding.bottom, margin),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (var index = 0; index < lyrics.lines.length; index++)
-                _LyricLine(
-                  key: _keys.putIfAbsent(index, GlobalKey.new),
-                  line: lyrics.lines[index],
-                  current: lyrics.synced && index == current,
-                  showPronunciation: widget.showPronunciation,
-                  showTranslation: widget.showTranslation,
-                  onTap: widget.onSeek == null
-                      ? null
-                      : () => widget.onSeek!(
-                          lyrics.synced
-                              ? lyrics.lines[index].at
-                              : Duration.zero,
-                        ),
-                ),
-            ],
-          ),
-        );
-
-        // No thumb over the column: the fade at the ends already says "more
-        // to come", and a scrollbar over Apple-Music-style lyrics reads as
-        // furniture. The platform scrollbar is switched off underneath so the
-        // column never shows one; drags still work, the physics carry them.
-        return NotificationListener<ScrollNotification>(
-          onNotification: _onScroll,
-          child: ScrollConfiguration(
-            behavior: ScrollConfiguration.of(
-              context,
-            ).copyWith(scrollbars: false),
-            child: widget.fade ? _faded(column) : column,
-          ),
-        );
-      },
-    );
-  }
-
-  /// Suspends auto-follow while a drag is in flight, then hands control back
-  /// to the transport once the user has stopped looking around.
-  bool _onScroll(ScrollNotification notification) {
-    if (notification is ScrollStartNotification &&
-        notification.dragDetails != null) {
-      _userScrolling = true;
-    } else if (notification is ScrollEndNotification) {
-      _resumeTimer?.cancel();
-      _resumeTimer = Timer(const Duration(seconds: 3), () {
-        if (!mounted) return;
-        // Re-arm the follow: the next build parks the current line again.
-        setState(() {
-          _userScrolling = false;
-          _shownLine = -2;
-        });
-      });
-    }
-    return false;
-  }
-
-  Widget _faded(Widget child) => ShaderMask(
-    // Fades the column into the panel instead of cutting it off with a hard
-    // edge; a scrolled list that ends flush reads as broken.
-    shaderCallback: (rect) => const LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        Colors.transparent,
-        Colors.black,
-        Colors.black,
-        Colors.transparent,
-      ],
-      stops: [0, 0.12, 0.88, 1],
-    ).createShader(rect),
-    blendMode: BlendMode.dstIn,
-    child: child,
-  );
-}
-
-/// One line of the column.
-///
-/// Colour and weight carry the state, not a box or a highlight behind the
-/// text. A romanization and a translation hang below the words they annotate,
-/// smaller and quieter, the way Apple Music shows a translated lyric.
-class _LyricLine extends StatelessWidget {
-  final LyricLine line;
-  final bool current;
-  final bool showPronunciation;
-  final bool showTranslation;
-  final VoidCallback? onTap;
-
-  const _LyricLine({
-    super.key,
-    required this.line,
-    required this.current,
-    this.showPronunciation = true,
-    this.showTranslation = true,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    // Blank lines are stanza breaks: they need the height, not a widget.
-    if (line.text.trim().isEmpty) return const SizedBox(height: SolSpace.lg);
-
-    final tone = current
-        ? colorScheme.onSurface
-        : colorScheme.onSurface.withValues(alpha: 0.32);
-
-    final words = theme.textTheme.titleLarge?.copyWith(
-      fontSize: current ? 32.0 : 22.0,
-      height: 1.25,
-      fontWeight: current ? FontWeight.w800 : FontWeight.w700,
-      letterSpacing: current ? -0.2 : 0.1,
-      color: tone,
-    );
-    final reading = theme.textTheme.bodySmall?.copyWith(
-      fontSize: current ? 15.5 : 13.0,
-      height: 1.35,
-      fontWeight: current ? FontWeight.w700 : FontWeight.w600,
-      letterSpacing: 0.2,
-      color: colorScheme.onSurface.withValues(alpha: current ? 0.72 : 0.24),
-    );
-    final translation = theme.textTheme.bodySmall?.copyWith(
-      fontSize: current ? 16.5 : 14.0,
-      height: 1.35,
-      fontWeight: current ? FontWeight.w600 : FontWeight.w500,
-      color: colorScheme.onSurface.withValues(alpha: current ? 0.82 : 0.26),
-    );
-
-    final cleanText = line.text.trim().toLowerCase();
-    final hasPronunciation = showPronunciation &&
-        line.pronunciation != null &&
-        line.pronunciation!.trim().isNotEmpty &&
-        line.pronunciation!.trim().toLowerCase() != cleanText;
-    final hasTranslation = showTranslation &&
-        line.translation != null &&
-        line.translation!.trim().isNotEmpty &&
-        line.translation!.trim().toLowerCase() != cleanText &&
-        line.translation!.trim().toLowerCase() !=
-            line.pronunciation?.trim().toLowerCase();
-
-    return Semantics(
-      selected: current,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(SolRadius.sm),
-        child: AnimatedPadding(
-          duration: const Duration(milliseconds: 360),
-          curve: Curves.easeOutCubic,
-          padding: EdgeInsets.symmetric(
-            vertical: current ? SolSpace.md : SolSpace.sm,
-          ),
-          child: AnimatedScale(
-            scale: current ? 1.02 : 1.0,
-            alignment: Alignment.centerLeft,
-            duration: const Duration(milliseconds: 360),
-            curve: Curves.easeOutCubic,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 360),
-                  curve: Curves.easeOutCubic,
-                  style: words!,
-                  child: Text(line.text),
-                ),
-                if (hasPronunciation) ...[
-                  const SizedBox(height: SolSpace.xxs),
-                  AnimatedDefaultTextStyle(
-                    duration: const Duration(milliseconds: 360),
-                    curve: Curves.easeOutCubic,
-                    style: reading!,
-                    child: Text(line.pronunciation!),
-                  ),
-                ],
-                if (hasTranslation) ...[
-                  const SizedBox(height: SolSpace.xxs),
-                  AnimatedDefaultTextStyle(
-                    duration: const Duration(milliseconds: 360),
-                    curve: Curves.easeOutCubic,
-                    style: translation!,
-                    child: Text(line.translation!),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The lyrics of the song the transport is on, with the live line countdown
-/// and the requests already answered.
-///
-/// Reading the transport here rather than taking a position argument keeps the
-/// rebuild scoped to the pane: the dock's own row does not repaint because a
-/// lyric line changed.
-class SongLyricsPane extends ConsumerWidget {
+/// The lyrics of the song the transport is on, driven by an isolated 60/120Hz
+/// [ValueNotifier<Duration>] so position updates never rebuild the pane or
+/// inactive rows.
+class SongLyricsPane extends ConsumerStatefulWidget {
   /// Height the pane fills, or null to take the space its parent gives it.
   /// The dock sizes the sheet itself; the player page gives it the column.
   final double? height;
   final EdgeInsets padding;
 
-  /// Whether to fade the column's edges. The dock's sheet floats over glass
-  /// and wants the fade; the player page's column ends in the page's own
-  /// inset, where a fade would erase the last line for no reason.
+  /// Whether to fade the column's edges.
   final bool fade;
 
   const SongLyricsPane({
@@ -352,20 +34,118 @@ class SongLyricsPane extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final song = ref.watch(playbackProvider.select((state) => state.current));
-    final position = ref.watch(
+  ConsumerState<SongLyricsPane> createState() => _SongLyricsPaneState();
+}
+
+class _SongLyricsPaneState extends ConsumerState<SongLyricsPane>
+    with SingleTickerProviderStateMixin {
+  late final ValueNotifier<Duration> _positionNotifier;
+  late final Ticker _clockTicker;
+
+  Duration _anchorPosition = Duration.zero;
+  Duration? _anchorElapsed;
+  Duration _trackDuration = Duration.zero;
+  bool _playing = false;
+  bool _buffering = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = ref.read(playbackProvider);
+    _anchorPosition = initial.position;
+    _trackDuration = _resolveDuration(initial);
+    _playing = initial.playing;
+    _buffering = initial.buffering;
+    _positionNotifier = ValueNotifier<Duration>(initial.position);
+    _clockTicker = createTicker(_onClockTick);
+    _syncClock();
+  }
+
+  Duration _resolveDuration(PlaybackState state) =>
+      state.duration > Duration.zero
+      ? state.duration
+      : (state.current?.duration ?? Duration.zero);
+
+  void _syncClock() {
+    final shouldTick = _playing && !_buffering;
+    if (shouldTick) {
+      if (!_clockTicker.isActive) {
+        _anchorElapsed = null;
+        _clockTicker.start();
+      }
+    } else if (_clockTicker.isActive) {
+      _clockTicker.stop();
+      _anchorElapsed = null;
+    }
+  }
+
+  void _onClockTick(Duration elapsed) {
+    if (_anchorElapsed == null) {
+      _anchorElapsed = elapsed;
+      return;
+    }
+    var next = _anchorPosition + (elapsed - _anchorElapsed!);
+    if (_trackDuration > Duration.zero && next > _trackDuration) {
+      next = _trackDuration;
+    }
+    if (next < Duration.zero) next = Duration.zero;
+    _positionNotifier.value = next;
+  }
+
+  void _onPositionUpdate(Duration reported) {
+    final current = _positionNotifier.value;
+    final delta = reported - current;
+    // Ignore tiny backward jitter from audio-engine polling or mini-player IPC
+    // while actively playing so the karaoke sweep never stutters backward.
+    if (_playing &&
+        !_buffering &&
+        delta < Duration.zero &&
+        delta > const Duration(milliseconds: -250)) {
+      return;
+    }
+    _anchorPosition = reported;
+    _anchorElapsed = null;
+    _positionNotifier.value = reported;
+  }
+
+  @override
+  void dispose() {
+    _clockTicker.dispose();
+    _positionNotifier.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Subscribe to position via ref.listen so audio ticks never rebuild this
+    // widget tree; only the active lyric/interlude item listens to
+    // _positionNotifier.
+    ref.listen<Duration>(
       playbackProvider.select((state) => state.position),
+      (_, next) => _onPositionUpdate(next),
     );
+    ref.listen<(bool, bool, Duration)>(
+      playbackProvider.select(
+        (state) => (state.playing, state.buffering, _resolveDuration(state)),
+      ),
+      (_, next) {
+        final (playing, buffering, duration) = next;
+        _playing = playing;
+        _buffering = buffering;
+        _trackDuration = duration;
+        if (!playing || buffering) {
+          final pos = ref.read(playbackProvider).position;
+          _anchorPosition = pos;
+          _positionNotifier.value = pos;
+        }
+        _syncClock();
+      },
+    );
+
+    final song = ref.watch(playbackProvider.select((state) => state.current));
+    final duration = ref.watch(playbackProvider.select(_resolveDuration));
     final theme = Theme.of(context);
 
-    /// One full-slot state: the loading skeleton, or a centered fallback
-    /// with the ways out of it.
-    ///
-    /// The player gives this pane the slot the cover had, and on a short
-    /// window that slot is shorter than the icon, the lines and the actions
-    /// together — so the content scrolls rather than clips, and sits in a
-    /// centered column when it fits.
     Widget status(
       IconData? icon,
       String title, {
@@ -376,10 +156,6 @@ class SongLyricsPane extends ConsumerWidget {
     }) {
       Widget core;
       if (skeleton) {
-        // A mock of the words themselves rather than a spinner: several
-        // ghosted lyric lines, dimmed the way unsung lines are. Reads as
-        // "this space is the lyrics, they are on their way", and matches
-        // the column the real content takes.
         core = Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -427,9 +203,6 @@ class SongLyricsPane extends ConsumerWidget {
             ],
             if (retry || rescue) ...[
               const SizedBox(height: SolSpace.md),
-              // Wraps rather than runs off the edge: the mini player gives
-              // the pane 300-odd pixels, and two buttons plus their labels do
-              // not fit on one line there.
               Wrap(
                 alignment: WrapAlignment.center,
                 spacing: SolSpace.sm,
@@ -463,12 +236,10 @@ class SongLyricsPane extends ConsumerWidget {
         );
       }
       return SizedBox(
-        height: height,
+        height: widget.height,
         child: SingleChildScrollView(
-          // A centered column of a known height does not actually scroll;
-          // this only keeps a fallback that outgrows a short slot reachable.
           child: SizedBox(
-            height: height,
+            height: widget.height,
             child: Center(
               child: skeleton
                   ? Skeletonizer.zone(
@@ -494,9 +265,6 @@ class SongLyricsPane extends ConsumerWidget {
       return status(Symbols.lyrics_rounded, 'lyricsNothingPlaying'.tr());
     }
 
-    // The interface language, so translations are generated in the language
-    // the reader is actually reading: a user who switched the app to Chinese
-    // wants Chinese words under the lyrics, not their device's English.
     final lyrics = ref.watch(
       songLyricsProvider(
         LyricsRequest.of(song),
@@ -528,12 +296,13 @@ class SongLyricsPane extends ConsumerWidget {
           );
         }
         return SizedBox(
-          height: height,
+          height: widget.height,
           child: LyricsView(
             lyrics: lyrics,
-            position: position,
-            padding: padding,
-            fade: fade,
+            positionListenable: _positionNotifier,
+            trackDuration: duration > Duration.zero ? duration : null,
+            padding: widget.padding,
+            fade: widget.fade,
             onSeek: lyrics.synced ? controller.seek : null,
             showPronunciation: showPronunciation,
             showTranslation: showTranslation,
