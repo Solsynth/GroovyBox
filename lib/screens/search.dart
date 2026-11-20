@@ -10,9 +10,12 @@ import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/library/track_identity.dart';
 import 'package:groovy_box/player/player.dart';
+import 'package:groovy_box/screens/albums.dart';
+import 'package:groovy_box/widgets/artist_card.dart';
 import 'package:groovy_box/widgets/artwork.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/format.dart';
+import 'package:groovy_box/widgets/section.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
@@ -193,7 +196,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 ),
               )
             else if (_tab == _SearchTab.library)
-              SliverToBoxAdapter(child: _LibraryResults(query: _query))
+              _LibraryResults(query: _query)
             else ...[
               if (stores.isEmpty)
                 SliverToBoxAdapter(
@@ -223,43 +226,225 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 }
 
-/// Songs the libraries already hold, playable now.
-class _LibraryResults extends ConsumerWidget {
+/// What the libraries hold, as three folds: artists, albums, tracks.
+///
+/// One query answers three kinds, and a page that stacked them in one list
+/// made a search for an act open on nine of their songs. Each kind is its own
+/// section — the same fold the library page uses — so a reader can put the
+/// tracks away and keep the records, and a kind with nothing to say stays out
+/// entirely rather than printing an empty heading.
+///
+/// Each kind answers with its own first page: the store's search returns
+/// whatever it wants, and a search page that lists two hundred albums is a
+/// page nobody scrolls to the end of. The extra results are behind a "see
+/// all" that widens that one section, not the field: a search is a question,
+/// and asking it again is the field's job.
+class _LibraryResults extends ConsumerStatefulWidget {
   final String query;
 
   const _LibraryResults({required this.query});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final results = ref.watch(searchSongsProvider(query));
-    return results.when(
-      skipLoadingOnRefresh: true,
-      data: (songs) => songs.isEmpty
-          ? _SectionNote(text: 'searchInLibrariesEmpty'.tr(args: [query]))
-          : Column(
-              children: [
-                for (var i = 0; i < songs.length; i++)
-                  SongTrackRow(
-                    song: songs[i],
-                    subtitle: songRowSubtitle(ref, songs[i]),
-                    trailing: formatDuration(songs[i].duration),
+  ConsumerState<_LibraryResults> createState() => _LibraryResultsState();
+}
+
+class _LibraryResultsState extends ConsumerState<_LibraryResults> {
+  /// How many rows of each kind are on screen, before "see all" widens it.
+  static const _initial = 5;
+  static const _widened = 40;
+
+  int _artists = _initial;
+  int _albums = _initial;
+  int _tracks = _initial;
+
+  static const _page = 'search';
+  static const _artistsId = 'artists';
+  static const _albumsId = 'albums';
+  static const _tracksId = 'tracks';
+
+  @override
+  void didUpdateWidget(_LibraryResults oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A new question starts at the top of each kind again: "see all" widens
+    // the answer it was tapped on, not the next one.
+    if (oldWidget.query != widget.query) {
+      _artists = _albums = _tracks = _initial;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final groups = ref.watch(searchGroupsProvider(widget.query));
+    final songs = ref.watch(searchSongsProvider(widget.query));
+    final artists = groups.value?.artists ?? const <LibraryArtist>[];
+    final albums = groups.value?.albums ?? const <LibraryAlbum>[];
+    final tracks = songs.value ?? const <LibrarySong>[];
+    // "Nothing here" is only honest once both questions have answered: the
+    // group search can land a frame after the songs, and a note drawn on the
+    // songs' empty answer would then sit above the artists it denied.
+    final everythingEmpty =
+        !groups.isLoading &&
+        !songs.isLoading &&
+        artists.isEmpty &&
+        albums.isEmpty &&
+        tracks.isEmpty;
+    if (everythingEmpty) {
+      // A source that failed says so where its results would have been; a
+      // source that answered nothing is the note below. Both at once is the
+      // honest reading: this query found nothing it could show.
+      final failure = groups.error ?? songs.error;
+      return SliverToBoxAdapter(
+        child: _SectionNote(
+          text: failure == null
+              ? 'searchInLibrariesEmpty'.tr(args: [widget.query])
+              : describeServerError(failure),
+        ),
+      );
+    }
+    return SliverMainAxisGroup(
+      slivers: [
+        if (groups.isLoading || songs.isLoading)
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: SolSpace.lg),
+              child: Center(child: CircularProgressIndicator.adaptive()),
+            ),
+          ),
+        if (artists.isNotEmpty)
+          FoldableSection(
+            page: _page,
+            id: _artistsId,
+            title: 'libraryArtists'.tr(),
+            trailing: _SeeAll(
+              shown: _artists,
+              total: artists.length,
+              onTap: () => setState(() => _artists = _widened),
+            ),
+            builder: () => [
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 168,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
+                    itemCount: artists.take(_artists).length,
+                    separatorBuilder: (_, _) => const SizedBox(width: SolSpace.md),
+                    itemBuilder: (context, index) => SizedBox(
+                      width: 132,
+                      child: ArtistCard(
+                        artist: artists[index],
+                        onTap: () => context.router.push(
+                          ArtistDetailRoute(
+                            sourceId: artists[index].sourceId,
+                            artistId: artists[index].id,
+                            artistName: artists[index].name,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        if (albums.isNotEmpty)
+          FoldableSection(
+            page: _page,
+            id: _albumsId,
+            title: 'libraryAlbums'.tr(),
+            trailing: _SeeAll(
+              shown: _albums,
+              total: albums.length,
+              onTap: () => setState(() => _albums = _widened),
+            ),
+            builder: () => [
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: SolSpace.xl),
+                sliver: SliverGrid.builder(
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 200,
+                    mainAxisSpacing: SolSpace.md,
+                    crossAxisSpacing: SolSpace.md,
+                    childAspectRatio: 0.72,
+                  ),
+                  itemCount: albums.take(_albums).length,
+                  itemBuilder: (context, index) => AlbumCard(
+                    album: albums[index],
+                    onTap: () => context.router.push(
+                      AlbumDetailRoute(
+                        sourceId: albums[index].sourceId,
+                        albumId: albums[index].id,
+                        albumName: albums[index].name,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        if (tracks.isNotEmpty)
+          FoldableSection(
+            page: _page,
+            id: _tracksId,
+            title: 'libraryTracks'.tr(),
+            trailing: _SeeAll(
+              shown: _tracks,
+              total: tracks.length,
+              onTap: () => setState(() => _tracks = _widened),
+            ),
+            builder: () => [
+              SliverList.builder(
+                itemCount: tracks.take(_tracks).length,
+                itemBuilder: (context, index) {
+                  final song = tracks[index];
+                  return SongTrackRow(
+                    song: song,
+                    subtitle: songRowSubtitle(ref, song),
+                    trailing: formatDuration(song.duration),
                     artwork: LibraryArtwork(
-                      sourceId: songs[i].sourceId,
-                      artId: songs[i].artId,
+                      sourceId: song.sourceId,
+                      artId: song.artId,
                       size: 44,
                       radius: SolRadius.xs,
                     ),
                     onTap: () => ref
                         .read(playbackProvider.notifier)
-                        .playQueue(songs, startIndex: i),
-                  ),
-              ],
-            ),
-      loading: () => const Padding(
-        padding: EdgeInsets.symmetric(vertical: SolSpace.lg),
-        child: Center(child: CircularProgressIndicator.adaptive()),
+                        .playQueue(tracks, startIndex: index),
+                  );
+                },
+              ),
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+/// "See all (12)": widens one section to the rest of its answer. Nothing to
+/// do when the first page already holds everything.
+class _SeeAll extends StatelessWidget {
+  final int shown;
+  final int total;
+  final VoidCallback onTap;
+
+  const _SeeAll({
+    required this.shown,
+    required this.total,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (shown >= total) return const SizedBox.shrink();
+    return TextButton(
+      onPressed: onTap,
+      style: TextButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: SolSpace.sm),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
-      error: (error, _) => _SectionNote(text: describeServerError(error)),
+      child: Text('searchSeeAll'.tr(args: ['$total'])),
     );
   }
 }

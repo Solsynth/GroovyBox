@@ -490,6 +490,32 @@ Future<List<LibrarySong>> searchSongs(Ref ref, String query) async {
   return ref.watch(libraryAggregatorProvider).search(trimmed);
 }
 
+/// The artists and albums the libraries hold that match [query].
+///
+/// The search page's other two sections: one search field answers three
+/// kinds, and only the songs were ever asked for. Kept as its own provider so
+/// a page section can fold without costing the songs their answer, and so the
+/// two requests can land in either order.
+///
+/// Additive by design: a library that cannot enumerate its artists (a plugin
+/// without the capability, a server mid-restart) answers here with nothing
+/// rather than failing the page. The songs still carry the failure, and the
+/// search field still answered the question the reader asked.
+@riverpod
+Future<LibraryGroups> searchGroups(Ref ref, String query) async {
+  final trimmed = query.trim();
+  if (trimmed.isEmpty) return const LibraryGroups();
+  if (ref.watch(librarySourcesWithLocalProvider).isEmpty) {
+    return const LibraryGroups();
+  }
+  try {
+    return await ref.watch(libraryAggregatorProvider).searchGroups(trimmed);
+  } catch (error) {
+    debugPrint('[Library] group search for "$trimmed": $error');
+    return const LibraryGroups();
+  }
+}
+
 /// The local library, opened in `main` and injected into the container.
 ///
 /// Overriding it keeps the catalog and the lyrics store synchronous to read,

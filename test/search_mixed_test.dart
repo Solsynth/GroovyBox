@@ -118,6 +118,9 @@ Future<void> _pump(WidgetTester tester) async {
         searchSongsProvider(
           'sunset',
         ).overrideWith((ref) async => const [_held]),
+        searchGroupsProvider.overrideWith(
+          (ref, query) async => const LibraryGroups(),
+        ),
       ],
       child: MaterialApp(
         theme: createAppThemeSet().light,
@@ -189,5 +192,68 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byIcon(Symbols.check_circle_rounded), findsWidgets);
+  });
+
+  testWidgets('the Library tab splits artists, albums and tracks into folds', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(900, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          librarySourcesProvider.overrideWithValue([_Store()]),
+          playbackProvider.overrideWith(_Idle.new),
+          libraryDatabaseProvider.overrideWithValue(null),
+          searchSongsProvider(
+            'sunset',
+          ).overrideWith((ref) async => const [_held]),
+          searchGroupsProvider.overrideWith(
+            (ref, query) async => LibraryGroups(
+              artists: const [
+                LibraryArtist(sourceId: 'a', id: 'ar1', name: 'The Paper Kites'),
+              ],
+              albums: const [
+                LibraryAlbum(
+                  sourceId: 'a',
+                  id: 'al1',
+                  name: 'On the Corner Where You Live',
+                  duration: Duration.zero,
+                ),
+              ],
+            ),
+          ),
+        ],
+        child: MaterialApp(
+          theme: createAppThemeSet().light,
+          home: const SearchScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(SearchBar), 'sunset');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    // Three kinds, three headings — the artist the query named is a row, not
+    // a handful of their songs under one undifferentiated list.
+    expect(find.text('Artists'), findsOneWidget);
+    expect(find.text('Albums'), findsOneWidget);
+    expect(find.text('Tracks'), findsOneWidget);
+    // The act appears twice on purpose: once as the artist card, once under
+    // the album it made. What must not happen is nine of their tracks and no
+    // row naming them.
+    expect(find.text('The Paper Kites'), findsNWidgets(2));
+    expect(find.text('On the Corner Where You Live'), findsOneWidget);
+
+    // A section folds: the row goes away and the heading stays.
+    await tester.tap(find.text('Tracks'));
+    await tester.pumpAndSettle();
+    expect(find.text('Sunset Overdrive'), findsNothing);
+    expect(find.text('Tracks'), findsOneWidget);
   });
 }

@@ -210,6 +210,71 @@ void main() {
 
     expect(adopted, ['album-song', 'playlist-song']);
   });
+
+  test('the group search merges artists and albums across servers', () async {
+    // One act listed on two servers is one row, not two: the search page
+    // draws a card per name, and the same name twice is a bug the merge can
+    // fix without either server agreeing on an id.
+    final first = _GroupsSource('a', const [
+      LibraryArtist(sourceId: 'a', id: 'ar-1', name: 'The Paper Kites'),
+    ]);
+    final second = _GroupsSource('b', const [
+      LibraryArtist(sourceId: 'b', id: 'ar-9', name: 'the paper kites'),
+    ]);
+    final aggregator = LibraryAggregator([first, second]);
+
+    final groups = await aggregator.searchGroups('paper');
+    expect(groups.artists, hasLength(1));
+    expect(groups.artists.single.name, 'The Paper Kites');
+    expect(groups.albums, hasLength(1));
+  });
+
+  test('a source that cannot answer the group search stays silent', () async {
+    // Additive by design: the songs still answer, so one library that cannot
+    // enumerate its artists must not fail the page it shares with them.
+    final aggregator = LibraryAggregator([
+      _FakeSource('a', const []),
+      _GroupsSource('b', const [
+        LibraryArtist(sourceId: 'b', id: 'ar-1', name: 'Radiohead'),
+      ]),
+    ]);
+    final groups = await aggregator.searchGroups('radio');
+    expect(groups.artists.single.name, 'Radiohead');
+  });
+}
+
+/// A server whose search answers artists and albums, and nothing else.
+class _GroupsSource extends LibrarySource {
+  _GroupsSource(this.id, this._artists);
+
+  @override
+  final String id;
+  final List<LibraryArtist> _artists;
+
+  @override
+  SourceConfig get config => SourceConfig(
+    id: id,
+    kind: LibraryKind.subsonic,
+    baseUrl: 'https://$id.example.com',
+    displayName: id,
+  );
+
+  @override
+  Future<LibraryGroups> searchGroups(String query, {int limit = 20}) async =>
+      LibraryGroups(
+        artists: _artists,
+        albums: [
+          LibraryAlbum(
+            sourceId: id,
+            id: '$id-album',
+            name: 'On the Corner Where You Live',
+            duration: Duration.zero,
+          ),
+        ],
+      );
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
 }
 
 /// One source whose four song reads each answer a different song, so the

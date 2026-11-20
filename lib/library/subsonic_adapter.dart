@@ -324,6 +324,36 @@ class SubsonicSource extends LibrarySource implements RatedSource {
     ];
   }
 
+  /// One `search3` already names artists, albums and songs; asking it again
+  /// for the other two kinds is a second request where the server was
+  /// prepared to answer all three, so the group search is its own call.
+  @override
+  Future<LibraryGroups> searchGroups(String query, {int limit = 20}) async {
+    final body = await _request(
+      'search3',
+      query: {
+        'query': query,
+        'songCount': 0,
+        'albumCount': limit,
+        'artistCount': limit,
+      },
+    );
+    final result = body['searchResult3'];
+    if (result is! Map) return const LibraryGroups();
+    return LibraryGroups(
+      artists: [
+        if (result['artist'] is List)
+          for (final artist in result['artist'] as List)
+            if (artist is Map) _artistFromJson(_stringKeyed(artist)),
+      ],
+      albums: [
+        if (result['album'] is List)
+          for (final album in result['album'] as List)
+            if (album is Map) _albumFromJson(_stringKeyed(album)),
+      ],
+    );
+  }
+
   @override
   Future<List<LibrarySong>> randomSongs({int size = 40}) async {
     final body = await _request('getRandomSongs', query: {'size': size});

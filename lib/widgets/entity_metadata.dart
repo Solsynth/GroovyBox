@@ -115,6 +115,13 @@ class EntityFacts extends StatelessWidget {
     final origin = metadata.origin;
     if (origin != null) add(origin);
     final lifespan = metadata.lifespan;
+    // An album's year is a fact about the record in the same way an artist's
+    // span is about the act; the hero no longer carries a facts line, so the
+    // chip row is where it lives.
+    final release = metadata.releaseDate;
+    if (release != null && release.trim().isNotEmpty) {
+      add(release.split('-').first);
+    }
     if (lifespan != null) add(lifespan);
     if (metadata.scrobbleCount > 0) {
       add('entityPlays'.plural(metadata.scrobbleCount));

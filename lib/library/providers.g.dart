@@ -1461,7 +1461,7 @@ final class AlbumTracksProvider
   }
 }
 
-String _$albumTracksHash() => r'dc4fbc23366b2e3f1fe7c0942ec2b697e9bc7ab6';
+String _$albumTracksHash() => r'be6e23cce7f54b362306d761b5f51f39d0713c85';
 
 final class AlbumTracksFamily extends $Family
     with
@@ -1823,6 +1823,115 @@ final class SearchSongsFamily extends $Family
 
   @override
   String toString() => r'searchSongsProvider';
+}
+
+/// The artists and albums the libraries hold that match [query].
+///
+/// The search page's other two sections: one search field answers three
+/// kinds, and only the songs were ever asked for. Kept as its own provider so
+/// a page section can fold without costing the songs their answer, and so the
+/// two requests can land in either order.
+
+@ProviderFor(searchGroups)
+final searchGroupsProvider = SearchGroupsFamily._();
+
+/// The artists and albums the libraries hold that match [query].
+///
+/// The search page's other two sections: one search field answers three
+/// kinds, and only the songs were ever asked for. Kept as its own provider so
+/// a page section can fold without costing the songs their answer, and so the
+/// two requests can land in either order.
+
+final class SearchGroupsProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<LibraryGroups>,
+          LibraryGroups,
+          FutureOr<LibraryGroups>
+        >
+    with $FutureModifier<LibraryGroups>, $FutureProvider<LibraryGroups> {
+  /// The artists and albums the libraries hold that match [query].
+  ///
+  /// The search page's other two sections: one search field answers three
+  /// kinds, and only the songs were ever asked for. Kept as its own provider so
+  /// a page section can fold without costing the songs their answer, and so the
+  /// two requests can land in either order.
+  SearchGroupsProvider._({
+    required SearchGroupsFamily super.from,
+    required String super.argument,
+  }) : super(
+         retry: null,
+         name: r'searchGroupsProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$searchGroupsHash();
+
+  @override
+  String toString() {
+    return r'searchGroupsProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<LibraryGroups> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<LibraryGroups> create(Ref ref) {
+    final argument = this.argument as String;
+    return searchGroups(ref, argument);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is SearchGroupsProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$searchGroupsHash() => r'a9b6611b77a38b518bc07591c55f626e05d01257';
+
+/// The artists and albums the libraries hold that match [query].
+///
+/// The search page's other two sections: one search field answers three
+/// kinds, and only the songs were ever asked for. Kept as its own provider so
+/// a page section can fold without costing the songs their answer, and so the
+/// two requests can land in either order.
+
+final class SearchGroupsFamily extends $Family
+    with $FunctionalFamilyOverride<FutureOr<LibraryGroups>, String> {
+  SearchGroupsFamily._()
+    : super(
+        retry: null,
+        name: r'searchGroupsProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  /// The artists and albums the libraries hold that match [query].
+  ///
+  /// The search page's other two sections: one search field answers three
+  /// kinds, and only the songs were ever asked for. Kept as its own provider so
+  /// a page section can fold without costing the songs their answer, and so the
+  /// two requests can land in either order.
+
+  SearchGroupsProvider call(String query) =>
+      SearchGroupsProvider._(argument: query, from: this);
+
+  @override
+  String toString() => r'searchGroupsProvider';
 }
 
 /// The local library, opened in `main` and injected into the container.

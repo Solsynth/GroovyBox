@@ -344,3 +344,21 @@ class TrackLookup {
   @override
   int get hashCode => Object.hash(song.sourceId, song.id);
 }
+
+/// What one library holds whose artists or albums match a query.
+///
+/// Songs are not here: the songs search already answers those, and a page
+/// that mixed a third list in would be back to one undifferentiated result.
+class LibraryGroups {
+  final List<LibraryArtist> artists;
+  final List<LibraryAlbum> albums;
+
+  const LibraryGroups({this.artists = const [], this.albums = const []});
+
+  bool get isEmpty => artists.isEmpty && albums.isEmpty;
+
+  LibraryGroups merge(LibraryGroups other) => LibraryGroups(
+    artists: [...artists, ...other.artists],
+    albums: [...albums, ...other.albums],
+  );
+}

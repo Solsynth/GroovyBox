@@ -344,6 +344,36 @@ class JellyfinSource extends LibrarySource implements RatedSource {
     return [for (final item in items) _song(item)];
   }
 
+  /// `/Items` filters by kind, so the two groups are one request with both
+  /// kinds named: Jellyfin answers each item in its own shape and the mappers
+  /// already know how to read them.
+  @override
+  Future<LibraryGroups> searchGroups(String query, {int limit = 20}) async {
+    final items = await _items({
+      'searchTerm': query,
+      'IncludeItemTypes': 'MusicArtist,MusicAlbum',
+      'Recursive': true,
+      'Limit': limit * 2,
+      'Fields': 'Genres,AlbumArtists,ArtistItems',
+    });
+    return LibraryGroups(
+      artists: [
+        for (final item in items)
+          if (item['Type'] == 'MusicArtist')
+            LibraryArtist(
+              sourceId: config.id,
+              id: '${item['Id']}',
+              name: item['Name'] as String? ?? 'Unknown artist',
+              artId: _primaryImage(item),
+            ),
+      ].take(limit).toList(),
+      albums: [
+        for (final item in items)
+          if (item['Type'] == 'MusicAlbum') _album(item),
+      ].take(limit).toList(),
+    );
+  }
+
   @override
   Future<List<LibrarySong>> randomSongs({int size = 40}) async {
     final items = await _items({

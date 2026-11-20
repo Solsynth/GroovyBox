@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import 'models.dart';
 import 'source.dart';
 import 'track_identity.dart';
@@ -110,6 +112,42 @@ class LibraryAggregator {
   Future<List<LibrarySong>> search(String query, {int limit = 40}) async {
     final songs = await _fanOut((source) => source.search(query, limit: limit));
     return _deduplicateSongs(songs);
+  }
+
+  /// The artists and albums the libraries **hold** that match [query].
+  ///
+  /// Same holdings rule as [search], asked about the two groups a track list
+  /// cannot answer. Merged in source order and deduped by name where a server
+  /// lists the same act twice under one id each.
+  Future<LibraryGroups> searchGroups(String query, {int limit = 20}) async {
+    // A source that cannot answer is a source with nothing to say here: the
+    // group search is additive, and one server mid-restart must not cost the
+    // page its albums.
+    final groups = await Future.wait([
+      for (final source in sources)
+        source.searchGroups(query, limit: limit).catchError((Object error) {
+          debugPrint('[Library] groups on ${source.id}: $error');
+          return const LibraryGroups();
+        }),
+    ]);
+    final seenArtists = <String>{};
+    final seenAlbums = <String>{};
+    final artists = <LibraryArtist>[];
+    final albums = <LibraryAlbum>[];
+    for (final group in groups) {
+      for (final artist in group.artists) {
+        if (seenArtists.add(artist.name.trim().toLowerCase())) {
+          artists.add(artist);
+        }
+      }
+      for (final album in group.albums) {
+        final key =
+            '${album.name.trim().toLowerCase()}\u0000'
+            '${(album.artist ?? '').trim().toLowerCase()}';
+        if (seenAlbums.add(key)) albums.add(album);
+      }
+    }
+    return LibraryGroups(artists: artists, albums: albums);
   }
 
   /// The same question asked of everything each library can *reach*.

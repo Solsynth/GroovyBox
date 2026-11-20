@@ -181,6 +181,35 @@ abstract class LibrarySource {
   /// [CatalogueSource.searchCatalogue], and only the callers that mean it —
   /// playback's fallback, a cloud playlist naming a track — ask it.
   Future<List<LibrarySong>> search(String query, {int limit});
+
+  /// What this library holds whose **artist or album** matches [query].
+  ///
+  /// The same holdings question as [search], asked about the two groups a
+  /// track list cannot answer: a reader looking for an act wants the act, not
+  /// nine of their songs. Answered from the library's own lists where the
+  /// service offers a search for them, from [artists] and [albums] where it
+  /// does not — a server's `search3` names all three kinds in one request.
+  ///
+  /// Defaults to a case-insensitive filter over the library's own lists, so a
+  /// source with nothing special to say still answers.
+  Future<LibraryGroups> searchGroups(String query, {int limit = 20}) async {
+    final term = query.trim().toLowerCase();
+    if (term.isEmpty) return const LibraryGroups();
+    bool matches(String? value) =>
+        value != null && value.toLowerCase().contains(term);
+    final artists = await this.artists();
+    final albums = await this.albums(limit: 200, offset: 0);
+    return LibraryGroups(
+      artists: [
+        for (final artist in artists)
+          if (matches(artist.name)) artist,
+      ].take(limit).toList(),
+      albums: [
+        for (final album in albums)
+          if (matches(album.name) || matches(album.artist)) album,
+      ].take(limit).toList(),
+    );
+  }
   Future<List<LibrarySong>> randomSongs({int size});
 
   /// Lyrics for [song], synced when the server has a timed version.

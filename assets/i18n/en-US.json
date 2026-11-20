@@ -631,5 +631,7 @@
   "downloadsSourceMissing": "The library this track lives in is not connected.",
   "libraryOfflineCached": "This library could not be reached; showing what was saved.",
   "albumsTracklist": "Tracklist",
-  "albumsTracklistNotHeld": "The fleet knows this record; none of its tracks are in your libraries yet."
+  "albumsTracklistNotHeld": "The fleet knows this record; none of its tracks are in your libraries yet.",
+  "libraryTracks": "Tracks",
+  "searchSeeAll": "See all ({})"
 }
