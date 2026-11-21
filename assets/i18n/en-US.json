@@ -151,6 +151,7 @@
   "setupTestConnection": "Test connection",
   "setupSecurityNote": "Your password is never stored: only a token, the way each API expects clients to authenticate.",
   "setupTestSuccess": "Server responded. You can connect now.",
+  "setupConnected": "Connected {}.",
   "statsTitle": "Stats",
   "statsSubtitle": "Listening kept on this device",
   "statsErrorTitle": "Could not read your history",

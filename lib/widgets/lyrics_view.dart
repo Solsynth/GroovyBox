@@ -1,6 +1,7 @@
 import 'package:easy_localization/easy_localization.dart' hide TextDirection;
 import 'package:flutter/scheduler.dart';
 import 'package:groovy_box/core/app.dart';
+import 'package:groovy_box/core/screen_awake.dart';
 import 'package:groovy_box/core/theme.dart';
 import 'package:groovy_box/library/lyrics.dart';
 import 'package:groovy_box/library/providers.dart';
@@ -59,6 +60,10 @@ class _SongLyricsPaneState extends ConsumerState<SongLyricsPane>
     _positionNotifier = ValueNotifier<Duration>(initial.position);
     _clockTicker = createTicker(_onClockTick);
     _syncClock();
+    // Words are read, not watched from a distance: a phone left on the lyric
+    // sheet must not dim. The pane's own lifetime is the whole condition —
+    // closed, it hands the screen back to the system's timeout.
+    ScreenAwake.acquire();
   }
 
   Duration _resolveDuration(PlaybackState state) =>
@@ -112,6 +117,9 @@ class _SongLyricsPaneState extends ConsumerState<SongLyricsPane>
   void dispose() {
     _clockTicker.dispose();
     _positionNotifier.dispose();
+    // Counted, so a pane closing behind another one on screen does not let
+    // the display sleep under the one still showing words.
+    ScreenAwake.release();
     super.dispose();
   }
 

@@ -28,7 +28,6 @@ class DownloadsScreen extends ConsumerWidget {
     final downloads = ref.watch(downloadedTracksProvider);
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
       body: ContentFrame(
         child: PageScrollView(
           slivers: [

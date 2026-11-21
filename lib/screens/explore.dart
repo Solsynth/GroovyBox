@@ -80,7 +80,6 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     ];
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
       body: RefreshIndicator(
         onRefresh: () async {
           await ref.read(recentAlbumsProvider.notifier).refresh();

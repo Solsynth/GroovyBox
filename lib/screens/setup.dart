@@ -147,100 +147,106 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
         },
         child: FocusScope(
           child: Scaffold(
-            backgroundColor: Colors.transparent,
-            body: ContentFrame(
-              maxWidth: kReadingMaxWidth,
-              child: PageListView(
-                // The headline keeps the page's own gutter, as it does on
-                // every other page: the list itself is unpadded, and the
-                // form below is inset once. Padding the list too indented
-                // this title and its back button a further step past the
-                // form, which no other page does.
-                padding: const EdgeInsets.only(
-                  top: SolSpace.md,
-                  bottom: SolSpace.xxxl,
-                ),
-                children: [
-                  // The page names itself and carries the only control that
-                  // is not part of the form: the way back, disabled while a
-                  // connection attempt is in flight.
-                  PageHeadline(
-                    title: 'setupTitle'.tr(),
-                    leading: canLeave
-                        ? Padding(
-                            padding: const EdgeInsets.only(right: SolSpace.sm),
-                            child: IconButton(
-                              tooltip: 'commonBack'.tr(),
-                              onPressed: _busy ? null : _leave,
-                              icon: const Icon(Symbols.arrow_back_rounded),
-                            ),
-                          )
-                        : null,
+            // The one page pushed above the shell, so nothing above it has
+            // spent the status bar's inset: without this the headline drew
+            // under the clock on a phone.
+            body: SafeArea(
+              child: ContentFrame(
+                maxWidth: kReadingMaxWidth,
+                child: PageListView(
+                  // The headline keeps the page's own gutter, as it does on
+                  // every other page: the list itself is unpadded, and the
+                  // form below is inset once. Padding the list too indented
+                  // this title and its back button a further step past the
+                  // form, which no other page does.
+                  padding: const EdgeInsets.only(
+                    top: SolSpace.md,
+                    bottom: SolSpace.xxxl,
                   ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: SolSpace.xl,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          'setupSubtitle'.tr(),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            height: 1.5,
-                          ),
-                        ),
-                        const SizedBox(height: SolSpace.xl),
-                        Form(
-                          key: _formKey,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _ProviderPicker(
-                                option: _option,
-                                options: _options,
-                                enabled: !_busy,
-                                onChanged: _pick,
+                  children: [
+                    // The page names itself and carries the only control that
+                    // is not part of the form: the way back, disabled while a
+                    // connection attempt is in flight.
+                    PageHeadline(
+                      title: 'setupTitle'.tr(),
+                      leading: canLeave
+                          ? Padding(
+                              padding: const EdgeInsets.only(
+                                right: SolSpace.sm,
                               ),
-                              const SizedBox(height: SolSpace.lg),
-                              ..._formFields(),
-                              if (_error != null) ...[
-                                const SizedBox(height: SolSpace.lg),
-                                _Banner(
-                                  icon: Symbols.error_rounded,
-                                  message: _error!,
-                                  color: colorScheme.error,
-                                ),
-                              ],
-                              if (_success != null) ...[
-                                const SizedBox(height: SolSpace.lg),
-                                _Banner(
-                                  icon: Symbols.check_circle_rounded,
-                                  message: _success!,
-                                  color: colorScheme.primary,
-                                ),
-                              ],
-                              const SizedBox(height: SolSpace.xl),
-                              _actions(canLeave: canLeave),
-                            ],
-                          ),
-                        ),
-                        if (adapter.needsCredentials) ...[
-                          const SizedBox(height: SolSpace.lg),
+                              child: IconButton(
+                                tooltip: 'commonBack'.tr(),
+                                onPressed: _busy ? null : _leave,
+                                icon: const Icon(Symbols.arrow_back_rounded),
+                              ),
+                            )
+                          : null,
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: SolSpace.xl,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
                           Text(
-                            'setupSecurityNote'.tr(),
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.labelSmall?.copyWith(
+                            'setupSubtitle'.tr(),
+                            style: theme.textTheme.bodySmall?.copyWith(
                               color: colorScheme.onSurfaceVariant,
                               height: 1.5,
                             ),
                           ),
+                          const SizedBox(height: SolSpace.xl),
+                          Form(
+                            key: _formKey,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _ProviderPicker(
+                                  option: _option,
+                                  options: _options,
+                                  enabled: !_busy,
+                                  onChanged: _pick,
+                                ),
+                                const SizedBox(height: SolSpace.lg),
+                                ..._formFields(),
+                                if (_error != null) ...[
+                                  const SizedBox(height: SolSpace.lg),
+                                  _Banner(
+                                    icon: Symbols.error_rounded,
+                                    message: _error!,
+                                    color: colorScheme.error,
+                                  ),
+                                ],
+                                if (_success != null) ...[
+                                  const SizedBox(height: SolSpace.lg),
+                                  _Banner(
+                                    icon: Symbols.check_circle_rounded,
+                                    message: _success!,
+                                    color: colorScheme.primary,
+                                  ),
+                                ],
+                                const SizedBox(height: SolSpace.xl),
+                                _actions(canLeave: canLeave),
+                              ],
+                            ),
+                          ),
+                          if (adapter.needsCredentials) ...[
+                            const SizedBox(height: SolSpace.lg),
+                            Text(
+                              'setupSecurityNote'.tr(),
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                height: 1.5,
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -499,9 +505,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
         _serverController.text.trim(),
         _loginSteps ?? const [],
       );
-      await ref.read(sourceStoreProvider.notifier).add(config);
-      TextInput.finishAutofillContext();
-      if (mounted) _leave();
+      await _finish(config);
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -509,6 +513,36 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
         _busy = false;
       });
     }
+  }
+
+  /// Stores a connected library, says so, and returns to the page that asked
+  /// for it.
+  ///
+  /// The page closes rather than staying open on a filled-in form: a second
+  /// "Connect" would add the same library twice. The confirmation is a
+  /// snackbar on the shell, because this page is on its way out — the banner
+  /// it replaces was gone before anyone could read it.
+  Future<void> _finish(SourceConfig config) async {
+    await ref.read(sourceStoreProvider.notifier).add(config);
+    if (!mounted) return;
+    TextInput.finishAutofillContext();
+    // The messenger is the app's, not this route's, so the line outlives the
+    // page being left and lands on the page the user is returned to.
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    // `PopScope` refuses to leave while a connect is in flight, and the route
+    // reads that flag from the last build: the spinner is stopped and a frame
+    // given to it before the page asks to leave, or the pop is swallowed and
+    // the filled-in form just sits there.
+    setState(() => _busy = false);
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    _leave();
+    // Said after the pop is requested: the success banner this replaces was
+    // drawn on a page that had already been asked to leave, so a connect that
+    // worked looked exactly like one that did nothing.
+    messenger?.showSnackBar(
+      SnackBar(content: Text('setupConnected'.tr(args: [config.displayName]))),
+    );
   }
 
   /// Runs the adapter's connect flow, or returns null when the form is
@@ -558,11 +592,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     try {
       final config = await _connectConfig();
       if (config == null) return;
-      await ref.read(sourceStoreProvider.notifier).add(config);
-      TextInput.finishAutofillContext();
-      // The screen was pushed over the shell, so the shell is always there to
-      // return to; a first connection is no different from a fifth.
-      if (mounted) _leave();
+      await _finish(config);
     } catch (error) {
       // Same reason as [_test]: an unlisted failure must say something
       // rather than leave the form looking idle after a tap.

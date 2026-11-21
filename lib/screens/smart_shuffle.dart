@@ -38,7 +38,6 @@ class SmartShuffleScreen extends ConsumerWidget {
     final plan = ref.watch(shufflePlanProvider);
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
       body: ContentFrame(
         child: PageScrollView(
           slivers: [

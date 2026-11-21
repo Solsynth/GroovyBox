@@ -217,7 +217,6 @@ class _OwnedPlaylistDetailScreenState
     final keys = [for (final e in list) '${e.entryId}'];
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
       body: SelectionBarOverlay(
         selection: _selection,
         // Above the shell's own floating chrome: the bar belongs to the page,

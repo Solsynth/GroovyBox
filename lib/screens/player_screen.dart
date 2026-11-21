@@ -538,7 +538,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
     if (song == null) {
       return Scaffold(
-        backgroundColor: Colors.transparent,
+        // Opaque like the page it replaces: a song that ends while the player
+        // is open must not turn the window into a hole over the shell.
+        backgroundColor: colorScheme.surface,
         body: Center(
           child: TextButton.icon(
             onPressed: () => context.router.maybePop(),

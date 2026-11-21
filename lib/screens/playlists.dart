@@ -51,7 +51,6 @@ class PlaylistDetailScreen extends ConsumerWidget {
     final title =
         playlistName ?? playlist?.name ?? 'playlistsDetailTitleFallback'.tr();
     return Scaffold(
-      backgroundColor: Colors.transparent,
       body: ContentFrame(
         child: PageScrollView(
           slivers: [

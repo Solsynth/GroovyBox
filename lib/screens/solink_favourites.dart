@@ -159,7 +159,6 @@ class _SolinkFavouritesScreenState
     ];
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
       body: SelectionBarOverlay(
         selection: _selection,
         bottom: barOffset,

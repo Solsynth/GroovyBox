@@ -160,7 +160,6 @@ class AlbumDetailScreen extends ConsumerWidget {
     final fleetTracks = list.isEmpty ? profile?.tracks ?? const [] : const [];
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
       body: ContentFrame(
         child: PageScrollView(
           slivers: [

@@ -150,6 +150,7 @@
   "setupTestConnection": "测试连接",
   "setupSecurityNote": "你的密码不会被存储：只保存一个令牌，这是各 API 期望客户端进行身份验证的方式。",
   "setupTestSuccess": "服务器已响应，现在可以连接了。",
+  "setupConnected": "已连接 {}。",
   "statsTitle": "统计",
   "statsSubtitle": "保存在本设备的收听记录",
   "statsErrorTitle": "无法读取你的历史记录",

@@ -121,7 +121,6 @@ class _ShellFrameState extends ConsumerState<_ShellFrame> {
 
     if (isWideScreen(context)) {
       return Scaffold(
-        backgroundColor: Colors.transparent,
         body: SafeArea(
           // Desktop windows have no notch and already sit inside the title
           // bar.
@@ -152,7 +151,6 @@ class _ShellFrameState extends ConsumerState<_ShellFrame> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
       body: SafeArea(
         bottom: false,
         top: !isDesktop,

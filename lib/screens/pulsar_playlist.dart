@@ -289,7 +289,6 @@ class _PulsarPlaylistDetailScreenState
           ];
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
       body: SelectionBarOverlay(
         selection: _selection,
         bottom: barOffset,

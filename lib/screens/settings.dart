@@ -57,7 +57,6 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
       body: ContentFrame(
         maxWidth: kReadingMaxWidth,
         child: PageListView(

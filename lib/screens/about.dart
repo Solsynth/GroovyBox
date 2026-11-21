@@ -42,7 +42,6 @@ class AboutScreen extends ConsumerWidget {
     final info = ref.watch(packageInfoProvider).value;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
       body: ContentFrame(
         maxWidth: kReadingMaxWidth,
         child: PageListView(

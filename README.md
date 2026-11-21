@@ -266,6 +266,16 @@ The dock's lyrics button lifts the capsule into a lyric sheet instead of a
 route, so glancing at the next line never loses the page; the player page keeps
 the cover beside the words on a wide window and swaps them on a phone.
 
+Every page's `Scaffold` is opaque (the theme's `scaffoldBackgroundColor`), not
+transparent: the iOS back-swipe and Android's predictive back both drag the
+outgoing page aside, and a transparent one showed the page underneath through
+its own content. The shell paints the page plane once; nothing above it needs
+to be see-through.
+
+The lyric sheet holds the screen awake (`lib/core/screen_awake.dart`) for as
+long as it is mounted, counted so a second pane — the player page's own, or the
+mini player's — closing does not let the display sleep under the first.
+
 The now-playing dock is the collapsed player: tapping anywhere on the capsule
 that is not a control records its rect and opens `/now-playing` through a
 container transform (`lib/shell/dock_morph.dart`), so the capsule grows into the

@@ -57,11 +57,9 @@ class ArtistDetailScreen extends ConsumerWidget {
         albums: list,
       ),
       loading: () => const Scaffold(
-        backgroundColor: Colors.transparent,
         body: Center(child: CircularProgressIndicator()),
       ),
       error: (error, _) => Scaffold(
-        backgroundColor: Colors.transparent,
         body: ContentFrame(
           child: EmptyState(
             icon: Symbols.error_rounded,
@@ -163,7 +161,6 @@ class _BodyState extends ConsumerState<_Body> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
       body: ContentFrame(
         child: RefreshIndicator(
           onRefresh: () async =>

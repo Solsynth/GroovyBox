@@ -35,7 +35,6 @@ class ProfileScreen extends ConsumerWidget {
     final account = ref.watch(solarpassAccountProvider);
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(listeningStatsProvider);

@@ -90,7 +90,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final stores = ref.watch(extendableSourcesProvider);
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
       body: ContentFrame(
         child: PageScrollView(
           slivers: [
