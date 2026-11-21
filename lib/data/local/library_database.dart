@@ -631,9 +631,11 @@ class LibraryDatabase extends _$LibraryDatabase {
   /// under that artist, though, and a track's cover is what the artist's shelf
   /// can show without asking anything new.
   ///
-  /// The newest link wins: a re-tagged album replaces the picture the artist
-  /// tile drew before, which is the same rule the album grids follow.
-  Future<Map<String, ({String sourceId, String artId})>> artistCoversByName() async {
+  /// The newest link wins, with the handle as the tiebreak: links written by
+  /// one sync share a `last_seen_at` to the second, and without a second key
+  /// the tile would pick a different record's cover on each rebuild.
+  Future<Map<String, ({String sourceId, String artId})>>
+  artistCoversByName() async {
     final rows = await customSelect(
       'SELECT DISTINCT LOWER(TRIM(t.artist)) AS name, '
       'l.source_id AS source_id, l.art_id AS art_id, l.last_seen_at AS seen '
@@ -641,7 +643,7 @@ class LibraryDatabase extends _$LibraryDatabase {
       'JOIN track_links l ON l.track_id = t.id '
       "WHERE t.artist IS NOT NULL AND TRIM(t.artist) != '' "
       "AND l.art_id IS NOT NULL AND TRIM(l.art_id) != '' "
-      'ORDER BY seen DESC',
+      'ORDER BY seen DESC, l.art_id ASC',
     ).get();
     final covers = <String, ({String sourceId, String artId})>{};
     for (final row in rows) {
