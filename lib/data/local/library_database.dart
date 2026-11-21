@@ -1438,13 +1438,14 @@ extension CollectionFavouriteQuery on LibraryDatabase {
     String kind,
     String sourceId,
     String externalId,
-  ) => (select(collectionFavourites)..where(
-        (row) =>
-            row.kind.equals(kind) &
-            row.sourceId.equals(sourceId) &
-            row.externalId.equals(externalId),
-      ))
-      .getSingleOrNull();
+  ) =>
+      (select(collectionFavourites)..where(
+            (row) =>
+                row.kind.equals(kind) &
+                row.sourceId.equals(sourceId) &
+                row.externalId.equals(externalId),
+          ))
+          .getSingleOrNull();
 
   /// Writes or clears the device's answer for one thing.
   ///
@@ -1469,10 +1470,9 @@ extension CollectionFavouriteQuery on LibraryDatabase {
   }
 
   /// Every album and playlist this device likes, newest decision first.
-  Future<List<CollectionFavouriteRow>> allCollectionFavourites() =>
-      (select(collectionFavourites)
-            ..orderBy([(row) => OrderingTerm.desc(row.updatedAt)]))
-          .get();
+  Future<List<CollectionFavouriteRow>> allCollectionFavourites() => (select(
+    collectionFavourites,
+  )..orderBy([(row) => OrderingTerm.desc(row.updatedAt)])).get();
 }
 
 /// Device-owned playlists: the ones this app created, not a server's.
@@ -1669,9 +1669,9 @@ extension HttpCacheQuery on LibraryDatabase {
 /// The stored answers of the app's own list reads.
 extension LibrarySnapshotQuery on LibraryDatabase {
   /// One read's last answer, or null when it has never answered.
-  Future<LibrarySnapshotRow?> librarySnapshot(String key) =>
-      (select(librarySnapshots)..where((row) => row.key.equals(key)))
-          .getSingleOrNull();
+  Future<LibrarySnapshotRow?> librarySnapshot(String key) => (select(
+    librarySnapshots,
+  )..where((row) => row.key.equals(key))).getSingleOrNull();
 
   /// Writes a read's answer, replacing the previous one for the same read.
   Future<void> putLibrarySnapshot(LibrarySnapshotRow row) =>
