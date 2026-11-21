@@ -134,10 +134,6 @@ void main() {
     final lyrics = tester.getRect(find.byTooltip('Show lyrics'));
     expect(close.top, lessThan(32));
     expect(lyrics.top, moreOrLessEquals(close.top, epsilon: 0.5));
-
-    // The body is laid out against the whole window, so the artwork is
-    // centred in it. A header row would have pushed the centre down by half
-    // its height.
     final art = tester.getRect(
       find
           .descendant(
@@ -148,6 +144,18 @@ void main() {
           )
           .first,
     );
-    expect(art.center.dy, moreOrLessEquals(900 / 2, epsilon: 24));
+
+    // The body is centred in the room the floating corner controls leave, not
+    // in the whole window: they take no row, so their runway is paid for once
+    // and the leftover split above and below. The cover's top edge has to
+    // clear the buttons, and its centre sits in the middle of what is left —
+    // the way the compact page centres its own column.
+    const topInset = SolSpace.lg + 48; // the corner inset plus a button
+    const bottomInset = SolSpace.xxxl; // the page's own margin
+    expect(art.top, greaterThan(close.bottom));
+    expect(
+      art.center.dy,
+      moreOrLessEquals((topInset + 900 - bottomInset) / 2, epsilon: 1),
+    );
   });
 }

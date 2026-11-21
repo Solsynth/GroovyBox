@@ -45,14 +45,14 @@ const double _kPageMargin = SolSpace.xxxl;
 /// than [_kPageMargin] because a button already carries its own tap padding.
 const double _kCornerInset = SolSpace.lg;
 
-/// Room the compact page keeps above its slot for the corner controls.
+/// Room the page keeps above its body for the floating corner controls.
 ///
-/// They float over the body rather than taking a row of their own, so the
+/// They float over the body rather than taking a row of their own, so each
 /// page has to leave the row's height free itself: the slot started at the
 /// page's own margin and the artwork ran under the close and view buttons,
 /// which reads as a cropped cover rather than as controls over it. A button's
 /// own box, not its icon, because the tap target is what must clear the art.
-const double _kCompactTopInset = _kCornerInset + 48;
+const double _kTopInset = _kCornerInset + 48;
 
 /// Height the column under the cover takes on a wide window at the default
 /// type size: the copy, the scrubber and the transport, plus the gaps
@@ -838,7 +838,7 @@ class _CompactPlayerBody extends StatelessWidget {
         // The corner controls float over the body, so the page pays for their
         // row before anything is measured: the slot starts under them rather
         // than under the window edge.
-        final topInset = _kCompactTopInset;
+        final topInset = _kTopInset;
         final available = math.max(
           constraints.maxHeight - topInset - _kPageMargin,
           0.0,
@@ -1226,6 +1226,11 @@ class _PaneSwap extends StatelessWidget {
 /// between them. The controls still hand off with the page's morph: they are
 /// on the right for the cover and under the artwork for the words, and each
 /// copy fades on its own ramp so there is no frame with no transport.
+///
+/// The body is centred in the room the floating corner controls leave, not in
+/// the whole window: the controls are not a bar, so the page owns their row,
+/// and a column laid out against the window edge put the cover's top corner
+/// under the close and view buttons.
 class _WidePlayerBody extends StatelessWidget {
   final LibrarySong song;
   final Widget scrubber;
@@ -1294,7 +1299,15 @@ class _WidePlayerBody extends StatelessWidget {
         // stale mid-layout.
         // ignore: deprecated_member_use
         final textScale = MediaQuery.textScalerOf(context).textScaleFactor;
-        final bodyHeight = math.max(screen.height - _kPageMargin * 2, 240.0);
+        // The corner controls float over the body rather than taking a row of
+        // their own, so the room the body may use starts under them — the
+        // same runway the compact page reserves. Measured here rather than
+        // added to the scroll's padding so the leftover can be split evenly.
+        final topInset = _kTopInset;
+        final bodyHeight = math.max(
+          screen.height - topInset - _kPageMargin,
+          240.0,
+        );
         final controlsHeight = textScale * _kBodyTail;
         // Under half the column, and never taller than the window can show:
         // the cover is a companion to the controls, not the page itself. The
@@ -1330,11 +1343,18 @@ class _WidePlayerBody extends StatelessWidget {
           coverSize + (SolSpace.lg + controlsHeight) * leftControls,
         );
 
+        // The leftover goes above and below rather than under the block: the
+        // body sits in the middle of the room under the corner controls, the
+        // way the compact page splits its own slack. A page too short for its
+        // content still scrolls; the padding only ever adds room.
+        final slack = math.max(bodyHeight - wordsHeight, 0.0);
         return Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(
-              horizontal: SolSpace.xxl,
-              vertical: _kPageMargin,
+            padding: EdgeInsets.fromLTRB(
+              SolSpace.xxl,
+              topInset + slack / 2,
+              SolSpace.xxl,
+              _kPageMargin + slack / 2,
             ),
             child: AnimatedContainer(
               width: width,
@@ -1349,6 +1369,12 @@ class _WidePlayerBody extends StatelessWidget {
                     duration: const Duration(milliseconds: 240),
                     curve: Curves.easeOutCubic,
                     child: Column(
+                      // Centred, like the compact page's column: with an
+                      // alternate open the row is taller than the cover and
+                      // its controls, and a block pinned to the top of that
+                      // row drifted up towards the corner controls while the
+                      // words ran the height of the window beside it.
+                      mainAxisAlignment: MainAxisAlignment.center,
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
