@@ -1,0 +1,30 @@
+name: Flutter Analyze
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.9
+          cache: true
+      # Retry + HTTP/1.1: git deps clone from src.solsynth.dev behind
+      # Cloudflare, which intermittently resets large pack transfers (curl 56).
+      - name: flutter pub get
+        shell: bash
+        run: |
+          git config --global http.version HTTP/1.1
+          for attempt in 1 2 3; do
+            flutter pub get && break
+            echo "flutter pub get failed (attempt $attempt); retrying in 10s"
+            sleep 10
+          done
+      # Errors and warnings fail the build; the two `info`-level lints the
+      # tree already carries do not, so a PR is judged on its own change.
+      - run: flutter analyze lib --no-fatal-infos

@@ -1,0 +1,286 @@
+name: Build Release
+
+on:
+  push:
+    tags:
+      - "*"
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Platform to build"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - windows
+          - linux
+          - android
+
+# Repository configuration:
+#   variables  DISTRIBUTION_API_BASE_URL  e.g. https://dx.solsynth.dev/api
+#              DISTRIBUTION_PRODUCT_ID    the groovy-box product uuid
+#   secrets    DISTRIBUTION_UPLOAD_KEY
+#              ANDROID_KEYSTORE_BASE64 / ANDROID_KEY_ALIAS / ANDROID_KEYSTORE_PASSWORD
+#
+# The app's own product id is compiled in (`lib/core/updates.dart`), so the
+# build jobs deliberately pass no `--dart-define`: an unset variable would
+# expand to `-DDISTRIBUTION_PRODUCT_ID=` and that empty string overrides the
+# baked-in default, switching update checks off in every shipped build.
+
+jobs:
+  build-windows:
+    if: github.event_name == 'push' || github.event.inputs.platform == 'all' || github.event.inputs.platform == 'windows'
+    runs-on: windows-latest
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.9
+          cache: true
+      # Retry + HTTP/1.1: git deps clone from src.solsynth.dev behind
+      # Cloudflare, which intermittently resets large pack transfers (curl 56).
+      - name: flutter pub get
+        shell: bash
+        run: |
+          git config --global http.version HTTP/1.1
+          for attempt in 1 2 3; do
+            flutter pub get && break
+            echo "flutter pub get failed (attempt $attempt); retrying in 10s"
+            sleep 10
+          done
+      - run: flutter build windows --release
+      - name: Archive release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output-windows
+          path: build/windows/x64/runner/Release
+      # The distribution lists a single file per platform, so the runner's
+      # whole Release folder is zipped rather than only the .exe: libmpv and
+      # the plugin DLLs live beside it and the app cannot start without them.
+      - name: Zip release folder
+        shell: bash
+        run: |
+          cd build/windows/x64/runner/Release
+          7z a -tzip "$GITHUB_WORKSPACE/build-output-windows.zip" .
+      - name: Archive zipped bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output-windows-zip
+          path: build-output-windows.zip
+
+  build-linux:
+    if: github.event_name == 'push' || github.event.inputs.platform == 'all' || github.event.inputs.platform == 'linux'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.9
+          cache: true
+      # gtk+-3.0 is required by the runner CMakeLists; media_kit_libs_linux
+      # dlopens the system libmpv at runtime, which the packages below provide.
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ninja-build libgtk-3-dev
+          sudo apt-get install -y libmpv-dev mpv
+      # Retry + HTTP/1.1: git deps clone from src.solsynth.dev behind
+      # Cloudflare, which intermittently resets large pack transfers (curl 56).
+      - name: flutter pub get
+        shell: bash
+        run: |
+          git config --global http.version HTTP/1.1
+          for attempt in 1 2 3; do
+            flutter pub get && break
+            echo "flutter pub get failed (attempt $attempt); retrying in 10s"
+            sleep 10
+          done
+      - run: flutter build linux --release
+      - name: Archive release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output-linux
+          path: build/linux/x64/release/bundle
+      # A bundle is a folder of libraries; the distribution stores one file per
+      # platform, so it ships as a tarball that keeps the executable bit.
+      - name: Package bundle
+        run: |
+          tar -C build/linux/x64/release -czf build-output-linux.tar.gz bundle
+      - name: Archive packaged bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output-linux-tarball
+          path: build-output-linux.tar.gz
+
+  build-android:
+    if: github.event_name == 'push' || github.event.inputs.platform == 'all' || github.event.inputs.platform == 'android'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      # compileSdk 37 is set by build.gradle.kts, so the matching platform has
+      # to be installed for Gradle to resolve it.
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Install Android build dependencies
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager "platforms;android-36" "platforms;android-37.0" "build-tools;36.0.0"
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.9
+          cache: true
+      # Writes android/key.properties, which build.gradle.kts reads: with it the
+      # release build is signed with the publisher key and an installed build
+      # can accept the next update, which a debug-signed one never can.
+      - name: Configure Android signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/release.jks
+          {
+            echo "storeFile=release.jks"
+            echo "storePassword=$ANDROID_KEYSTORE_PASSWORD"
+            echo "keyAlias=$ANDROID_KEY_ALIAS"
+            echo "keyPassword=$ANDROID_KEYSTORE_PASSWORD"
+          } > android/key.properties
+      # Retry + HTTP/1.1: git deps clone from src.solsynth.dev behind
+      # Cloudflare, which intermittently resets large pack transfers (curl 56).
+      - name: flutter pub get
+        shell: bash
+        run: |
+          git config --global http.version HTTP/1.1
+          for attempt in 1 2 3; do
+            flutter pub get && break
+            echo "flutter pub get failed (attempt $attempt); retrying in 10s"
+            sleep 10
+          done
+      # --split-per-abi keeps each APK to one architecture. The build number
+      # each split reports is offset by ABI; the app strips that offset before
+      # comparing against the release tag (lib/core/updates.dart).
+      - run: flutter build apk --release --split-per-abi
+      - name: Archive Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output-android
+          path: build/app/outputs/flutter-apk/app-*-release.apk
+
+  upload-to-distribution:
+    needs: [build-windows, build-linux, build-android]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Resolve distribution version
+        id: distribution_version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "push" && "$GITHUB_REF" == refs/tags/* ]]; then
+            version="$GITHUB_REF_NAME"
+          else
+            version="$(git tag --sort=-creatordate | sed -n '1p')"
+          fi
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - if: needs.build-windows.result == 'success'
+        name: Download Windows bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output-windows-zip
+          path: ./artifacts/windows
+      - if: needs.build-linux.result == 'success'
+        name: Download Linux tarball
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output-linux-tarball
+          path: ./artifacts/linux
+      - if: needs.build-android.result == 'success'
+        name: Download Android artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output-android
+          path: ./artifacts/android
+      - if: needs.build-windows.result == 'success'
+        name: Upload Windows bundle to Solsynth Express
+        uses: Solsynth/SolsynthExpressUpload@v2
+        with:
+          api-base-url: ${{ vars.DISTRIBUTION_API_BASE_URL }}
+          product-id: ${{ vars.DISTRIBUTION_PRODUCT_ID }}
+          api-key: ${{ secrets.DISTRIBUTION_UPLOAD_KEY }}
+          version: ${{ steps.distribution_version.outputs.version }}
+          file: ./artifacts/windows/build-output-windows.zip
+          platform: windows
+          architecture: amd64
+          mime-type: application/zip
+          channel: stable
+      - if: needs.build-linux.result == 'success'
+        name: Upload Linux tarball to Solsynth Express
+        uses: Solsynth/SolsynthExpressUpload@v2
+        with:
+          api-base-url: ${{ vars.DISTRIBUTION_API_BASE_URL }}
+          product-id: ${{ vars.DISTRIBUTION_PRODUCT_ID }}
+          api-key: ${{ secrets.DISTRIBUTION_UPLOAD_KEY }}
+          version: ${{ steps.distribution_version.outputs.version }}
+          file: ./artifacts/linux/build-output-linux.tar.gz
+          platform: linux
+          architecture: amd64
+          mime-type: application/gzip
+          channel: stable
+      - if: needs.build-android.result == 'success'
+        name: Upload Android arm64 artifact to Solsynth Express
+        uses: Solsynth/SolsynthExpressUpload@v2
+        with:
+          api-base-url: ${{ vars.DISTRIBUTION_API_BASE_URL }}
+          product-id: ${{ vars.DISTRIBUTION_PRODUCT_ID }}
+          api-key: ${{ secrets.DISTRIBUTION_UPLOAD_KEY }}
+          version: ${{ steps.distribution_version.outputs.version }}
+          file: ./artifacts/android/app-arm64-v8a-release.apk
+          platform: android
+          architecture: arm64
+          mime-type: application/vnd.android.package-archive
+          channel: stable
+      - if: needs.build-android.result == 'success'
+        name: Upload Android armeabi-v7a artifact to Solsynth Express
+        uses: Solsynth/SolsynthExpressUpload@v2
+        with:
+          api-base-url: ${{ vars.DISTRIBUTION_API_BASE_URL }}
+          product-id: ${{ vars.DISTRIBUTION_PRODUCT_ID }}
+          api-key: ${{ secrets.DISTRIBUTION_UPLOAD_KEY }}
+          version: ${{ steps.distribution_version.outputs.version }}
+          file: ./artifacts/android/app-armeabi-v7a-release.apk
+          platform: android
+          architecture: armeabi-v7a
+          mime-type: application/vnd.android.package-archive
+          channel: stable
+      - if: needs.build-android.result == 'success'
+        name: Upload Android x86_64 artifact to Solsynth Express
+        uses: Solsynth/SolsynthExpressUpload@v2
+        with:
+          api-base-url: ${{ vars.DISTRIBUTION_API_BASE_URL }}
+          product-id: ${{ vars.DISTRIBUTION_PRODUCT_ID }}
+          api-key: ${{ secrets.DISTRIBUTION_UPLOAD_KEY }}
+          version: ${{ steps.distribution_version.outputs.version }}
+          file: ./artifacts/android/app-x86_64-release.apk
+          platform: android
+          architecture: x86_64
+          mime-type: application/vnd.android.package-archive
+          channel: stable

@@ -355,6 +355,27 @@ release channel and every check resolves to "nothing published".
 dependency's `island_ui_foundation` asks for a 0.5.x fork, and nothing in the
 data layer touches windowing.
 
+### Releases
+
+`.github/workflows/build.yml` builds Windows, Linux and Android on a tag push
+(or by hand) and uploads each artifact to Solsynth Express on `stable`; iOS and
+macOS are not built there — they ship through Xcode and the App Store.
+
+The repository needs, under Settings → Secrets and variables → Actions:
+
+| Kind | Name | Purpose |
+| --- | --- | --- |
+| variable | `DISTRIBUTION_API_BASE_URL` | feed root, e.g. `https://dx.solsynth.dev/api` |
+| variable | `DISTRIBUTION_PRODUCT_ID` | the `groovy-box` product uuid |
+| secret | `DISTRIBUTION_UPLOAD_KEY` | product-scoped upload key |
+| secret | `ANDROID_KEYSTORE_BASE64` | base64 of the publisher `.jks` |
+| secret | `ANDROID_KEY_ALIAS`, `ANDROID_KEYSTORE_PASSWORD` | keystore credentials |
+
+The build jobs pass no `--dart-define`: the product id is compiled in, and an
+empty `-DDISTRIBUTION_PRODUCT_ID=` from an unset variable would override it and
+switch update checks off. `flutter analyze lib --no-fatal-infos` runs on every
+pull request; the two `info` lints already in the tree do not fail it.
+
 ## Layout
 
 ```
