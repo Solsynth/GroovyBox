@@ -32,6 +32,13 @@
 	     account; this is the sentence iOS shows in that prompt. -->
 	<key>NSAppleMusicUsageDescription</key>
 	<string>GroovyBox plays and browses the music in your Apple Music library.</string>
+	<!-- The Solar Network drive client bundled with the app can save images to
+	     the photo library. iOS requires both purpose strings whenever the
+	     Photos APIs are linked, even though GroovyBox itself never prompts. -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>GroovyBox saves images you choose into an album in your photo library.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>GroovyBox saves images you choose to your photo library.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
