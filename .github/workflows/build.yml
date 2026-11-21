@@ -25,8 +25,14 @@ on:
 #
 # The app's own product id is compiled in (`lib/core/updates.dart`), so the
 # build jobs deliberately pass no `--dart-define`: an unset variable would
-# expand to `-DDISTRIBUTION_PRODUCT_ID=` and that empty string overrides the
-# baked-in default, switching update checks off in every shipped build.
+# expand to `-DDISTRIBUTION_PRODUCT_ID=`, and that empty string overrides the
+# baked-in default, switching update checks off in every shipped build. The
+# upload job is different — it passes the variables directly, and the action
+# requires both, so an unset one fails the upload loudly instead.
+#
+# Note the two spellings: variables expand to EMPTY when unset, secrets expand
+# to nothing at all. Keep `${{ secrets.X }}` inside the `with:` block and out
+# of computed expressions, and keep `INPUT_*: ${{ vars.X }}` in `env:`.
 
 jobs:
   build-windows:
