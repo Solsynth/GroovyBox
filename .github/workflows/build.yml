@@ -196,6 +196,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      # The version tag must name the build the artifacts actually carry: the
+      # APK's version code comes from pubspec.yaml, not from the tag, so a tag
+      # that lags pubspec would publish 2.0.0+21 binaries under 2.0.0+20 and
+      # then offer every 2.0.0+21 install an update to a release it already has.
       - name: Resolve distribution version
         id: distribution_version
         shell: bash
@@ -206,6 +210,11 @@ jobs:
             version="$(git tag --sort=-creatordate | sed -n '1p')"
           fi
           test -n "$version"
+          pubspec_version="$(sed -n 's/^version:[[:space:]]*\(.*\)$/\1/p' pubspec.yaml | tr -d ' ')"
+          if [[ "${version#v}" != "$pubspec_version" ]]; then
+            echo "::error::Release tag '$version' does not match pubspec.yaml version '$pubspec_version'. Tag the build you are publishing."
+            exit 1
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - if: needs.build-windows.result == 'success'
         name: Download Windows bundle
