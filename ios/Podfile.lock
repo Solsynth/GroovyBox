@@ -1,5 +1,7 @@
 PODS:
   - Flutter (1.0.0)
+  - flutter_app_update (0.0.1):
+    - Flutter
   - flutter_js (0.1.0):
     - Flutter
   - media_kit_libs_ios_audio (1.0.4):
@@ -10,6 +12,7 @@ PODS:
 
 DEPENDENCIES:
   - Flutter (from `Flutter`)
+  - flutter_app_update (from `.symlinks/plugins/flutter_app_update/ios`)
   - flutter_js (from `.symlinks/plugins/flutter_js/ios`)
   - media_kit_libs_ios_audio (from `.symlinks/plugins/media_kit_libs_ios_audio/ios`)
   - music_kit (from `.symlinks/plugins/music_kit/darwin`)
@@ -17,6 +20,8 @@ DEPENDENCIES:
 EXTERNAL SOURCES:
   Flutter:
     :path: Flutter
+  flutter_app_update:
+    :path: ".symlinks/plugins/flutter_app_update/ios"
   flutter_js:
     :path: ".symlinks/plugins/flutter_js/ios"
   media_kit_libs_ios_audio:
@@ -26,6 +31,7 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   Flutter: 71a624a5bc0c04062bf19101d501e466baf2fb47
+  flutter_app_update: 816fdb2e30e4832a7c45e3f108d391c42ef040a9
   flutter_js: 867813c1830e1d9b2c5d547cdb6f61801e2f2145
   media_kit_libs_ios_audio: 905e6323b72e65c63ab9262b2e473f52c024a3a8
   music_kit: 401df686dad5d77dba4cb369cb63f72df0e4d424
