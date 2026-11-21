@@ -107,8 +107,7 @@ class PulsarTrackPayload {
     'title': title,
     if (artist != null && artist!.isNotEmpty) 'subtitle': artist,
     if (album != null && album!.isNotEmpty) 'caption': album,
-    if (artworkUrl != null && artworkUrl!.isNotEmpty)
-      'artwork_url': artworkUrl,
+    if (artworkUrl != null && artworkUrl!.isNotEmpty) 'artwork_url': artworkUrl,
     'duration_seconds': ?durationSeconds,
     if (kind != null) 'kind': kind!.value,
   };
@@ -164,9 +163,7 @@ class CatalogItem {
     if (artworkUrl != null) 'artwork_url': artworkUrl,
     if (durationSeconds != null) 'duration_seconds': durationSeconds,
     if (creators.isNotEmpty)
-      'creators': [
-        for (final creator in creators) creator.toJson(),
-      ],
+      'creators': [for (final creator in creators) creator.toJson()],
   };
 
   factory CatalogItem.fromJson(Map<String, dynamic> json) => CatalogItem(

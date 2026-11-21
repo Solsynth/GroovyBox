@@ -56,9 +56,8 @@ class ArtistDetailScreen extends ConsumerWidget {
         name: artistName,
         albums: list,
       ),
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      ),
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (error, _) => Scaffold(
         body: ContentFrame(
           child: EmptyState(

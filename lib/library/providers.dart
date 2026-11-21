@@ -1101,7 +1101,9 @@ class LyricsMaintenance extends Notifier<void> {
     final resolver = await ref.read(lyricsResolverProvider.future);
     await resolver.forget(song);
     ref.invalidate(songLyricsProvider(song));
-    ref.invalidate(songLyricsTranslationProvider(song, languageCode: languageCode));
+    ref.invalidate(
+      songLyricsTranslationProvider(song, languageCode: languageCode),
+    );
     ref.invalidate(storedLyricsProvider);
   }
 
@@ -1185,8 +1187,7 @@ Favourites favourites(Ref ref) => Favourites(ref);
 /// the record, the widget asks a provider, and the fleet copy is forwarded by
 /// the caller that is allowed to know about Pulsar.
 @Riverpod(keepAlive: true)
-CollectionFavourites collectionFavourites(Ref ref) =>
-    CollectionFavourites(ref);
+CollectionFavourites collectionFavourites(Ref ref) => CollectionFavourites(ref);
 
 class CollectionFavourites {
   const CollectionFavourites(this._ref);

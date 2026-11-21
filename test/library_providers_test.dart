@@ -321,13 +321,10 @@ void main() {
     // The server lists the act with no image of its own — the ordinary case
     // for a Jellyfin library nobody filled portraits into — while the
     // recordings it served carry a cover.
-    final source = _ArtistsSource(
-      'jf',
-      const [
-        LibraryArtist(sourceId: 'jf', id: 'ar-1', name: 'ChiliChill'),
-        LibraryArtist(sourceId: 'jf', id: 'ar-2', name: 'Nobody At All'),
-      ],
-    );
+    final source = _ArtistsSource('jf', const [
+      LibraryArtist(sourceId: 'jf', id: 'ar-1', name: 'ChiliChill'),
+      LibraryArtist(sourceId: 'jf', id: 'ar-2', name: 'Nobody At All'),
+    ]);
     final catalog = LibraryCatalog(db);
     await catalog.adopt(
       const LibrarySong(
@@ -360,17 +357,14 @@ void main() {
   test('an artist that has its own portrait keeps it', () async {
     final db = LibraryDatabase(NativeDatabase.memory());
     addTearDown(db.close);
-    final source = _ArtistsSource(
-      'jf',
-      const [
-        LibraryArtist(
-          sourceId: 'jf',
-          id: 'ar-1',
-          name: 'ChiliChill',
-          artId: 'portrait',
-        ),
-      ],
-    );
+    final source = _ArtistsSource('jf', const [
+      LibraryArtist(
+        sourceId: 'jf',
+        id: 'ar-1',
+        name: 'ChiliChill',
+        artId: 'portrait',
+      ),
+    ]);
     await LibraryCatalog(db).adopt(
       const LibrarySong(
         sourceId: 'jf',

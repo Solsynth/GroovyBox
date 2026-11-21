@@ -76,8 +76,7 @@ class CollectionFavourite {
   });
 
   /// The identity a heart is asked about.
-  CollectionFavouriteKey get key =>
-      (kind: kind, sourceId: sourceId, id: id);
+  CollectionFavouriteKey get key => (kind: kind, sourceId: sourceId, id: id);
 }
 
 /// A [CollectionFavourite]'s identity, usable as a riverpod family argument.

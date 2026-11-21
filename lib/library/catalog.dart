@@ -403,8 +403,8 @@ class LibraryCatalog {
   /// The fallback for an artist listing whose service has no portrait for the
   /// act. Reading it costs one query over links this device already stored, and
   /// covers the case a single album's worth of the artist is on the device.
-  Future<Map<String, ({String sourceId, String artId})>>
-  artistCoversByName() => _db.artistCoversByName();
+  Future<Map<String, ({String sourceId, String artId})>> artistCoversByName() =>
+      _db.artistCoversByName();
 
   /// Tracks no currently connected source can reach.
   Future<int> orphanCount() => _db.orphanCount();
@@ -463,15 +463,13 @@ extension FavouritesAndPlaylists on LibraryCatalog {
   /// Every track this device likes, newest decision first.
   Future<List<FavouriteTrack>> favourites() async {
     final rows = await _db.allFavourites();
-    return [
-      for (final row in rows) await _favouriteOf(row),
-    ];
+    return [for (final row in rows) await _favouriteOf(row)];
   }
 
   Future<FavouriteTrack> _favouriteOf(FavouriteTrackRow row) async {
-    final track = await (_db.select(_db.tracks)
-          ..where((t) => t.id.equals(row.trackId)))
-        .getSingle();
+    final track = await (_db.select(
+      _db.tracks,
+    )..where((t) => t.id.equals(row.trackId))).getSingle();
     final links = await _db.linksOf(row.trackId);
     return FavouriteTrack(
       track: track,
@@ -623,9 +621,7 @@ extension FavouritesAndPlaylists on LibraryCatalog {
   /// row has to draw something better than a monogram.
   Future<List<OwnedPlaylist>> ownedPlaylists() async {
     final rows = await _db.localPlaylists_();
-    return [
-      for (final row in rows) await _ownedPlaylist(row),
-    ];
+    return [for (final row in rows) await _ownedPlaylist(row)];
   }
 
   /// One row of [ownedPlaylists], with the count and cover its card draws.
@@ -661,7 +657,10 @@ extension FavouritesAndPlaylists on LibraryCatalog {
   }
 
   /// Appends [songs] to a device-owned playlist, in the order given.
-  Future<void> addToOwnedPlaylist(int playlistId, List<LibrarySong> songs) async {
+  Future<void> addToOwnedPlaylist(
+    int playlistId,
+    List<LibrarySong> songs,
+  ) async {
     final ids = <int>[];
     for (final song in songs) {
       ids.add(await trackIdOf(song));
@@ -677,9 +676,9 @@ extension FavouritesAndPlaylists on LibraryCatalog {
     final entries = await _db.playlistEntries(playlistId);
     final songs = <LibrarySong>[];
     for (final entry in entries) {
-      final track = await (_db.select(_db.tracks)
-            ..where((t) => t.id.equals(entry.trackId)))
-          .getSingleOrNull();
+      final track = await (_db.select(
+        _db.tracks,
+      )..where((t) => t.id.equals(entry.trackId))).getSingleOrNull();
       if (track == null) continue;
       final links = await _db.linksOf(entry.trackId);
       if (links.isEmpty) continue;
@@ -737,9 +736,9 @@ extension FavouritesAndPlaylists on LibraryCatalog {
     final entries = await _db.playlistEntries(playlistId);
     final rows = <(int, LibrarySong)>[];
     for (final entry in entries) {
-      final track = await (_db.select(_db.tracks)
-            ..where((t) => t.id.equals(entry.trackId)))
-          .getSingleOrNull();
+      final track = await (_db.select(
+        _db.tracks,
+      )..where((t) => t.id.equals(entry.trackId))).getSingleOrNull();
       if (track == null) continue;
       final links = await _db.linksOf(entry.trackId);
       if (links.isEmpty) continue;

@@ -102,11 +102,7 @@ class SnapshotCache {
     }
     try {
       await _db.putLibrarySnapshot(
-        LibrarySnapshotRow(
-          key: key,
-          body: body,
-          storedAt: DateTime.now(),
-        ),
+        LibrarySnapshotRow(key: key, body: body, storedAt: DateTime.now()),
       );
     } catch (error) {
       debugPrint('[Snapshots] Could not write $key: $error');
