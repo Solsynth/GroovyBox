@@ -4,6 +4,8 @@ import 'package:groovy_box/core/app.dart';
 import 'package:groovy_box/core/responsive.dart';
 import 'package:groovy_box/core/router.gr.dart';
 import 'package:groovy_box/core/theme.dart';
+import 'package:groovy_box/core/update_preferences.dart';
+import 'package:groovy_box/core/updates.dart';
 import 'package:groovy_box/library/backup.dart';
 import 'package:groovy_box/library/artwork_cache.dart';
 import 'package:groovy_box/library/downloads.dart';
@@ -20,9 +22,11 @@ import 'package:groovy_box/solarpass/solarpass_section.dart';
 import 'package:groovy_box/widgets/common.dart';
 import 'package:groovy_box/widgets/dashboard.dart';
 import 'package:groovy_box/widgets/format.dart';
+import 'package:groovy_box/widgets/release_sheet.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:solsynth_express/api.dart';
 
 import 'plugins_section.dart';
 import 'pulsar_section.dart';
@@ -77,6 +81,7 @@ class SettingsScreen extends ConsumerWidget {
             const LibrarySyncSection(),
             const SolarFavouritesSection(),
             const _DataSection(),
+            const _UpdatesSection(),
             const _AboutSection(),
             const _StreamsFooter(),
           ],
@@ -797,6 +802,231 @@ class _AboutSection extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Where a new release comes from: the channel followed, what is published
+/// there, and the check for it.
+///
+/// Last before About because it is read once in a while, and it belongs beside
+/// "which build is this" rather than among playback settings.
+class _UpdatesSection extends ConsumerStatefulWidget {
+  const _UpdatesSection();
+
+  @override
+  ConsumerState<_UpdatesSection> createState() => _UpdatesSectionState();
+}
+
+class _UpdatesSectionState extends ConsumerState<_UpdatesSection> {
+  @override
+  Widget build(BuildContext context) {
+    final enabled = ref.watch(updateChecksEnabledProvider);
+    final channel = ref.watch(updateChannelProvider);
+    final feed = ref.watch(releaseFeedProvider);
+    final published = feed.isConfigured;
+    final channels = ref.watch(releaseChannelsProvider).value ?? const [];
+    final channelNames = <String>{
+      kDefaultUpdateChannel,
+      channel,
+      ...channels.map((item) => item.name),
+    }.toList();
+    final latest = ref.watch(latestReleaseProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionLabel('settingsSectionUpdates'.tr()),
+        _Card(
+          padding: _listCardPadding,
+          child: Column(
+            children: [
+              if (!published)
+                ListTile(
+                  contentPadding: _rowPadding,
+                  leading: const Icon(Symbols.science_rounded),
+                  title: Text('settingsUpdatesUnpublished'.tr()),
+                  subtitle: Text('settingsUpdatesUnpublishedHint'.tr()),
+                )
+              else if (channels.isEmpty && latest.value?.release == null)
+                // The product exists but has nowhere to publish yet — every
+                // new product's state, and a different answer from "this
+                // build names no product".
+                ListTile(
+                  contentPadding: _rowPadding,
+                  leading: const Icon(Symbols.rocket_launch_rounded),
+                  title: Text('settingsUpdatesNoChannels'.tr()),
+                  subtitle: Text('settingsUpdatesNoChannelsHint'.tr()),
+                )
+              else ...[
+                SwitchListTile(
+                  contentPadding: _rowPadding,
+                  secondary: const Icon(Symbols.system_update_rounded),
+                  value: enabled,
+                  onChanged: (value) =>
+                      ref.read(updateChecksEnabledProvider.notifier).set(value),
+                  title: Text('settingsUpdatesCheckOnLaunch'.tr()),
+                  subtitle: Text('settingsUpdatesCheckOnLaunchHint'.tr()),
+                ),
+                ListTile(
+                  contentPadding: _rowPadding,
+                  leading: const Icon(Symbols.new_releases_rounded),
+                  title: Text('settingsUpdatesChannel'.tr()),
+                  subtitle: Text(
+                    _channelLabel(channel, channels),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: channel,
+                      borderRadius: BorderRadius.circular(SolRadius.menu),
+                      items: [
+                        for (final name in channelNames)
+                          DropdownMenuItem(
+                            value: name,
+                            child: Text(_channelLabel(name, channels)),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) return;
+                        ref.read(updateChannelProvider.notifier).set(value);
+                      },
+                    ),
+                  ),
+                ),
+                ListTile(
+                  contentPadding: _rowPadding,
+                  leading: const Icon(Symbols.history_rounded),
+                  title: Text('settingsUpdatesLatest'.tr()),
+                  subtitle: Text(
+                    switch (latest) {
+                      AsyncData(:final value) => _latestLabel(value),
+                      AsyncError() => 'settingsUpdatesLatestFailed'.tr(),
+                      _ => 'settingsUpdatesLatestLoading'.tr(),
+                    },
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: latest.value?.release == null
+                      ? null
+                      : const Icon(Symbols.chevron_right_rounded),
+                  onTap: latest.value?.release == null
+                      ? null
+                      : () => _showRelease(
+                          latest.value!.release!,
+                          updateAvailable: false,
+                        ),
+                ),
+                ListTile(
+                  contentPadding: _rowPadding,
+                  leading: const Icon(Symbols.refresh_rounded),
+                  title: Text('settingsUpdatesCheckNow'.tr()),
+                  subtitle: Text('settingsUpdatesCheckNowHint'.tr()),
+                  onTap: () => _checkNow(channel),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// The newest release, or why there is none to name.
+  String _latestLabel(LatestRelease latest) {
+    final release = latest.release;
+    if (latest.unavailable) return 'settingsUpdatesLatestDisabled'.tr();
+    if (latest.failed) return 'settingsUpdatesLatestFailed'.tr();
+    if (release == null) return 'settingsUpdatesLatestNone'.tr();
+    if (release.name.trim().isEmpty) {
+      return 'updatesVersionValue'.tr(args: [release.tagName]);
+    }
+    return '${release.name}  ·  ${release.tagName}';
+  }
+
+  /// The channel's own label when the publisher sent one, else the bare name,
+  /// with `stable` always reading as a word rather than a database value.
+  String _channelLabel(String name, List<DistributionChannel> channels) {
+    if (name == kDefaultUpdateChannel) {
+      return 'settingsUpdatesChannelStable'.tr();
+    }
+    for (final item in channels) {
+      if (item.name != name) continue;
+      // `Localizations` rather than easy_localization's `context.locale`: the
+      // label is a server-supplied string keyed by tag, and this reads the
+      // same locale from the widget tree without requiring the plugin's scope.
+      final label = item.label(Localizations.localeOf(context).toLanguageTag());
+      if (label.trim().isNotEmpty) return label;
+    }
+    return name;
+  }
+
+  /// Asks the feed about the running build and reports the answer.
+  ///
+  /// Separate from [latestReleaseProvider] because this is the only place
+  /// that says "you are current" or "the feed did not answer": a silent
+  /// refetch would look like a failed tap.
+  Future<void> _checkNow(String channel) async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final target = await ref.read(appTargetProvider.future);
+    if (!mounted) return;
+    if (target == null) {
+      messenger?.showSnackBar(
+        SnackBar(content: Text('settingsUpdatesUnavailable'.tr())),
+      );
+      return;
+    }
+    final check = await ref
+        .read(releaseFeedProvider)
+        .check(
+          target,
+          channel: channel,
+          locale: Localizations.localeOf(context).toLanguageTag(),
+        );
+    if (!mounted) return;
+    // The row above the row that was tapped shows what this check found.
+    ref.invalidate(latestReleaseProvider);
+    if (check == null) {
+      messenger?.showSnackBar(
+        SnackBar(content: Text('settingsUpdatesCheckFailed'.tr())),
+      );
+      return;
+    }
+    if (!check.updateAvailable) {
+      messenger?.showSnackBar(
+        SnackBar(content: Text('settingsUpdatesUpToDate'.tr())),
+      );
+      return;
+    }
+    await ReleaseSheet.show(
+      context,
+      release: check.release,
+      currentVersion: check.currentVersion,
+      // Without this the sheet could only offer the release page, even
+      // though the feed published a file for exactly this platform.
+      artifact: check.release.artifactFor(
+        target.platform,
+        target.architecture,
+      ),
+    );
+  }
+
+  /// Opens a release for reading, with the download this platform would take
+  /// when the feed published one.
+  void _showRelease(
+    DistributionReleaseInfo release, {
+    required bool updateAvailable,
+  }) {
+    final target = ref.read(appTargetProvider).value;
+    ReleaseSheet.show(
+      context,
+      release: release,
+      currentVersion: target?.version,
+      artifact: target == null
+          ? null
+          : release.artifactFor(target.platform, target.architecture),
+      updateAvailable: updateAvailable,
     );
   }
 }

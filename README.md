@@ -331,6 +331,30 @@ Generated files: `lib/core/router.gr.dart`, `lib/core/app.g.dart`,
 `lib/library/providers.g.dart`, `lib/library/store.g.dart`,
 `lib/player/player.g.dart`, `lib/player/apple_player.g.dart`. Do not edit them.
 
+## Updates
+
+Release notes and the update check come from Solsynth Express, the same
+distribution service Solian and MaidKit publish through. GroovyBox uses only
+the package's data layer (`lib/core/updates.dart`) and draws its own sheet
+(`lib/widgets/release_sheet.dart`), because the bundled one is built against a
+different Material library and pins a fork of `window_manager`.
+
+The product id is baked into `lib/core/updates.dart` (`groovy-box`,
+`03605b4d-c25c-4380-9cb5-87e47c6997ab`), so a stock build checks the right feed:
+
+```sh
+flutter build macos
+flutter build macos --dart-define=DISTRIBUTION_PRODUCT_ID=<staging uuid>
+```
+
+`DISTRIBUTION_API_BASE_URL` overrides the endpoint for a staging server. Until
+a channel on the product carries a release, the settings row says there is no
+release channel and every check resolves to "nothing published".
+
+`dependency_overrides` pins `window_manager` to the hosted 0.6.0: the git
+dependency's `island_ui_foundation` asks for a 0.5.x fork, and nothing in the
+data layer touches windowing.
+
 ## Layout
 
 ```

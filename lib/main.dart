@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -15,6 +16,7 @@ import 'package:groovy_box/desktop/mini_player/mini_playback.dart';
 import 'package:groovy_box/desktop/mini_player/mini_player_app.dart';
 import 'package:groovy_box/desktop/mini_player/window.dart';
 import 'package:groovy_box/core/glass.dart';
+import 'package:groovy_box/core/update_preferences.dart';
 import 'package:groovy_box/core/router.dart';
 import 'package:groovy_box/data/local/library_database.dart';
 import 'package:groovy_box/library/artwork_cache.dart';
@@ -182,19 +184,26 @@ Future<void> main() async {
   // loaded twice.
   await (PluginHost.instance ??= PluginHost()).boot();
 
+  // Owned here rather than by `ProviderScope` so the launch-time update check
+  // can read it without a widget: the check runs while the shell is still
+  // building, and it is the only reader before the first frame.
+  final container = ProviderContainer(
+    overrides: [
+      sharedPreferencesProvider.overrideWithValue(prefs),
+      audioHandlerProvider.overrideWithValue(audioHandler),
+      libraryDatabaseProvider.overrideWithValue(library),
+      localLibraryPathProvider.overrideWithValue(localLibraryPath),
+      downloadDirectoryProvider.overrideWithValue(downloadPath),
+      artworkCacheDirectoryProvider.overrideWithValue(artCachePath),
+      // The host half of the mini player's channel: created here so the
+      // command handler is registered before the second engine launches.
+      miniPlayerLinkProvider.overrideWithValue(MiniPlayerLink.host()),
+    ],
+  );
+
   runApp(
-    ProviderScope(
-      overrides: [
-        sharedPreferencesProvider.overrideWithValue(prefs),
-        audioHandlerProvider.overrideWithValue(audioHandler),
-        libraryDatabaseProvider.overrideWithValue(library),
-        localLibraryPathProvider.overrideWithValue(localLibraryPath),
-        downloadDirectoryProvider.overrideWithValue(downloadPath),
-        artworkCacheDirectoryProvider.overrideWithValue(artCachePath),
-        // The host half of the mini player's channel: created here so the
-        // command handler is registered before the second engine launches.
-        miniPlayerLinkProvider.overrideWithValue(MiniPlayerLink.host()),
-      ],
+    UncontrolledProviderScope(
+      container: container,
       child: EasyLocalization(
         supportedLocales: kSupportedLocales,
         path: kTranslationsPath,
@@ -202,6 +211,15 @@ Future<void> main() async {
         useFallbackTranslations: true,
         child: const GroovyBoxApp(),
       ),
+    ),
+  );
+
+  // After `runApp` so the first frame is not waiting on the network, and
+  // unawaited so a feed that never answers cannot hold a launch open.
+  unawaited(
+    runLaunchUpdateCheck(
+      container,
+      resolveContext: () => appNavigatorContext(container),
     ),
   );
 }

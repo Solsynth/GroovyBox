@@ -5,7 +5,9 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   desktop_multi_window
   desktop_webview_window
+  file_saver
   flutter_js
+  gal
   media_kit_libs_windows_audio
   permission_handler_windows
   share_plus

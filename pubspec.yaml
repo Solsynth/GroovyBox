@@ -72,6 +72,22 @@ dependencies:
   marqueer: ^2.7.0
   package_info_plus: ^10.2.2
   wakelock_plus: ^1.8.2
+  # The update check reports the device's OS version to the release feed, and
+  # picks its architecture from the supported ABI list on Android.
+  device_info_plus: ^13.3.0
+  # Release notes arrive as Markdown from Solsynth Express. This renderer
+  # builds Flutter's own Material widgets, so it is styled from an explicit
+  # sheet rather than the ambient theme (see `widgets/release_sheet.dart`).
+  flutter_markdown_plus: ^1.0.12
+  # Solsynth Express: release feed + update check (diagnostics, changelogs).
+  # Pinned to a commit so a server-side change is a deliberate bump; the
+  # package's UI layer is not used, only `api.dart` (see lib/core/updates.dart).
+  solsynth_express:
+    git:
+      url: https://src.solsynth.dev/SoSYS/Socommon.git
+      path: packages/solsynth_express
+      ref: 8f5cf5314564e77488490aafc8e2c723fc9dee23
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -87,6 +103,12 @@ dev_dependencies:
   riverpod_generator: ^4.0.10
   flutter_launcher_icons: ^0.14.4
   drift_dev: ^2.35.3
+
+# solsynth_express's island_ui_foundation dependency pins window_manager from a
+# fork (0.5.x API). This app is on 0.6.0 and only imports the package's
+# data layer, which never touches window_manager, so the hosted version wins.
+dependency_overrides:
+  window_manager: ^0.6.0
 
 flutter:
   uses-material-design: true
