@@ -1,16 +1,21 @@
 /// Riverpod wiring for Pulsar.
 library;
 
+import 'dart:async';
+
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../solarpass/models.dart';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../library/aggregate.dart';
 import '../library/catalog.dart';
 import '../library/models.dart';
 import '../library/providers.dart';
+import '../library/snapshot_cache.dart';
 import '../solarpass/providers.dart';
 import 'client.dart';
 import 'favourites.dart';
@@ -56,11 +61,22 @@ Future<OAuthSession?> pulsarSession(Ref ref) async {
 /// a signed-out window has no cloud playlists and that is not an error.
 @Riverpod(keepAlive: true)
 class PulsarPlaylists extends AsyncNotifier<List<PulsarPlaylist>> {
+  OAuthSession? _session;
+
   @override
-  Future<List<PulsarPlaylist>> build() async {
-    final session = ref.watch(pulsarSessionProvider).value;
-    if (session == null) return const [];
-    return ref.watch(pulsarClientProvider).listPlaylists(session);
+  Future<List<PulsarPlaylist>> build() {
+    _session = ref.watch(pulsarSessionProvider).value;
+    // A signed-out window has no cloud playlists; that is an answer, not a
+    // reason to read a stored one from a previous session.
+    if (_session == null) return Future.value(const []);
+    return snapshotThenRefresh(
+      ref,
+      key: SnapshotKeys.cloudPlaylists,
+      fetch: () => ref.read(pulsarClientProvider).listPlaylists(_session!),
+      parse: PulsarPlaylist.fromJson,
+      encode: (playlist) => playlist.toJson(),
+      publish: (value) => state = value,
+    );
   }
 
   /// Creates a playlist and refreshes the list, so the caller can navigate
@@ -217,16 +233,36 @@ class PulsarPlaylists extends AsyncNotifier<List<PulsarPlaylist>> {
 /// One cloud playlist as the detail page reads it: the collection itself
 /// with its items preloaded, from the one endpoint that returns both.
 @riverpod
-Future<PulsarPlaylist> pulsarPlaylistDetail(Ref ref, String playlistId) async {
-  final session = ref.watch(pulsarSessionProvider).value;
-  if (session == null) {
-    throw PulsarException(
-      statusCode: 0,
-      code: 'NO_SESSION',
-      message: 'Sign in to read cloud playlists.',
-    );
+class PulsarPlaylistDetail extends _$PulsarPlaylistDetail {
+  OAuthSession? _session;
+
+  @override
+  Future<PulsarPlaylist> build(String playlistId) {
+    _session = ref.watch(pulsarSessionProvider).value;
+    final session = _session;
+    if (session == null) {
+      throw PulsarException(
+        statusCode: 0,
+        code: 'NO_SESSION',
+        message: 'Sign in to read cloud playlists.',
+      );
+    }
+    // The list-shaped helper, wrapped around the one playlist it holds: the
+    // detail page is a cold-start page (a dashboard pin, a share link) and its
+    // stored copy is the difference between a page and a spinner.
+    return snapshotThenRefresh<PulsarPlaylist>(
+      ref,
+      key: SnapshotKeys.cloudPlaylistDetail(playlistId),
+      fetch: () async => [
+        await ref
+            .read(pulsarClientProvider)
+            .getPlaylist(_session!, playlistId),
+      ],
+      parse: PulsarPlaylist.fromJson,
+      encode: (playlist) => playlist.toJson(),
+      publish: (value) => state = AsyncData(value.value!.first),
+    ).then((playlists) => playlists.first);
   }
-  return ref.watch(pulsarClientProvider).getPlaylist(session, playlistId);
 }
 
 /// One cover URL per cloud playlist, for lists that draw the item.
@@ -282,43 +318,108 @@ Future<Map<String, String>> pulsarPlaylistCovers(Ref ref) async {
 /// no library holds the track: the playlist's order is the server's, and a
 /// dropped entry would shift every row after it onto the wrong track.
 @riverpod
-Future<List<LibrarySong?>> pulsarPlaylistSongs(
-  Ref ref,
-  PulsarPlaylist playlist,
-) async {
-  final aggregator = ref.watch(libraryAggregatorProvider);
-  final songs = <LibrarySong?>[];
-  for (final item in playlist.items) {
-    final track = item.catalogItem;
-    if (track == null) {
-      songs.add(null);
-      continue;
+class PulsarPlaylistSongs extends _$PulsarPlaylistSongs {
+  LibraryAggregator? _aggregator;
+
+  @override
+  Future<List<LibrarySong?>> build(PulsarPlaylist playlist) async {
+    _aggregator = ref.watch(libraryAggregatorProvider);
+    final cache = ref.watch(snapshotCacheProvider);
+    final key = SnapshotKeys.cloudPlaylistSongs(playlist.id);
+    final cached = ref.isFirstBuild && cache != null
+        ? await cache.restore(key, _parseRows)
+        : null;
+    if (cached == null) {
+      final fresh = await _resolve(playlist);
+      await _remember(cache, key, fresh);
+      return fresh;
     }
-    final artist = track.subtitle;
-    // A cloud playlist names tracks by catalogue id, so the row is resolved
-    // through the wide search: a track the account never added is still the
-    // right answer if it is the one the playlist means.
-    final matches = await aggregator.searchCatalogue(
-      [track.title, if (artist != null && artist.isNotEmpty) artist].join(' '),
-      limit: 5,
-    );
-    songs.add(matches.firstOrNull);
+    unawaited(() async {
+      if (!ref.mounted) return;
+      try {
+        final fresh = await _resolve(playlist);
+        if (!ref.mounted) return;
+        state = AsyncData(fresh);
+        await _remember(cache, key, fresh);
+      } catch (error) {
+        debugPrint('[Pulsar] Background resolve of $key: $error');
+      }
+    }());
+    return cached;
   }
-  return songs;
+
+  /// The rows as JSON. A null entry is a hook the list must keep: every row
+  /// after it would otherwise shift onto another track.
+  static List<LibrarySong?> _parseRows(Object? json) => [
+    for (final entry in (json as List?) ?? const [])
+      if (entry is Map)
+        LibrarySong.fromJson(Map<String, dynamic>.from(entry))
+      else
+        null,
+  ];
+
+  static Future<void> _remember(
+    SnapshotCache? cache,
+    String key,
+    List<LibrarySong?> rows,
+  ) async {
+    if (cache == null) return;
+    await cache.store(key, rows, (raw) => [
+      for (final row in raw! as List<LibrarySong?>) row?.toJson(),
+    ]);
+  }
+
+  Future<List<LibrarySong?>> _resolve(PulsarPlaylist playlist) async {
+    final aggregator = _aggregator!;
+    final songs = <LibrarySong?>[];
+    for (final item in playlist.items) {
+      final track = item.catalogItem;
+      if (track == null) {
+        songs.add(null);
+        continue;
+      }
+      final artist = track.subtitle;
+      // A cloud playlist names tracks by catalogue id, so the row is resolved
+      // through the wide search: a track the account never added is still the
+      // right answer if it is the one the playlist means.
+      final matches = await aggregator.searchCatalogue(
+        [track.title, if (artist != null && artist.isNotEmpty) artist].join(' '),
+        limit: 5,
+      );
+      songs.add(matches.firstOrNull);
+    }
+    return songs;
+  }
 }
 
 /// What the account's friends are listening to. Empty without a session.
 @Riverpod(keepAlive: true)
 class FriendListeningFeed extends AsyncNotifier<List<FriendListening>> {
+  OAuthSession? _session;
+
   @override
-  Future<List<FriendListening>> build() async {
-    final session = ref.watch(pulsarSessionProvider).value;
+  Future<List<FriendListening>> build() {
+    _session = ref.watch(pulsarSessionProvider).value;
+    if (_session == null) return Future.value(const []);
+    return snapshotThenRefresh(
+      ref,
+      key: SnapshotKeys.friendListening,
+      fetch: _fetch,
+      parse: FriendListening.fromJson,
+      encode: (friend) => friend.toJson(),
+      publish: (value) => state = value,
+    );
+  }
+
+  /// The rows worth drawing: a friend with no live activity is noise on the
+  /// shelf. [FriendListening.nowPlaying] judges liveness, so a stored row that
+  /// has since expired is dropped here rather than shown as "listening".
+  Future<List<FriendListening>> _fetch() async {
+    final session = _session;
     if (session == null) return const [];
     final friends = await ref
-        .watch(pulsarClientProvider)
+        .read(pulsarClientProvider)
         .friendsListening(session);
-    // A friend with no live activity is noise on the shelf; only the ones
-    // actually playing something are worth a row.
     return [
       for (final friend in friends)
         if (friend.nowPlaying != null) friend,

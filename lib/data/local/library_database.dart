@@ -346,6 +346,34 @@ class HttpCache extends Table {
   Set<Column> get primaryKey => {key};
 }
 
+/// The last answer of one list read — the dashboard's shelves, a library's
+/// playlists, a playlist's tracks — kept as the JSON the screen rendered.
+///
+/// Separate from [HttpCache] because the two answer different questions. The
+/// HTTP cache replays one request's body at the adapter's wire level, under a
+/// TTL; a snapshot is the *merged* answer the page actually showed, across
+/// every source, and it is served before any request is made. That makes a
+/// cold start draw the last page immediately instead of a row of spinners,
+/// which is why the key is a read's own name rather than a URL.
+///
+/// Never the record: a snapshot is replaced by the refresh that follows it,
+/// and a failed refresh leaves the older rows in place rather than blanking
+/// the page.
+@DataClassName('LibrarySnapshotRow')
+@TableIndex(name: 'library_snapshots_stored', columns: {#storedAt})
+class LibrarySnapshots extends Table {
+  /// The read this answered, e.g. `recentAlbums`, `playlistSongs:home:p1`.
+  TextColumn get key => text()();
+
+  /// The merged answer as JSON. A list of models, never a wire body.
+  TextColumn get body => text()();
+
+  DateTimeColumn get storedAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {key};
+}
+
 /// Everything the app remembers about songs, in one SQLite file.
 ///
 /// [executor] exists for tests, which open `NativeDatabase.memory()` on a
@@ -365,6 +393,7 @@ class HttpCache extends Table {
     LocalPlaylistEntries,
     Downloads,
     HttpCache,
+    LibrarySnapshots,
   ],
 )
 class LibraryDatabase extends _$LibraryDatabase {
@@ -385,7 +414,7 @@ class LibraryDatabase extends _$LibraryDatabase {
   }
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -422,6 +451,9 @@ class LibraryDatabase extends _$LibraryDatabase {
       }
       if (from < 10) {
         await m.createTable(collectionFavourites);
+      }
+      if (from < 11) {
+        await m.createTable(librarySnapshots);
       }
     },
     beforeOpen: (details) async {
@@ -587,6 +619,41 @@ class LibraryDatabase extends _$LibraryDatabase {
       tracks,
     )..where((track) => track.id.equals(trackId))).getSingleOrNull();
     return row?.fingerprint;
+  }
+
+  /// The cover the library already knows for each artist name, keyed by the
+  /// name as the tags spell it lowercased.
+  ///
+  /// An artist listing answers a portrait only where the service's own artist
+  /// record has one: Jellyfin tags an artist item with a primary image only if
+  /// somebody uploaded one, and a server whose portraits were never filled in
+  /// lists hundreds of artists with no art at all. The recordings are filed
+  /// under that artist, though, and a track's cover is what the artist's shelf
+  /// can show without asking anything new.
+  ///
+  /// The newest link wins: a re-tagged album replaces the picture the artist
+  /// tile drew before, which is the same rule the album grids follow.
+  Future<Map<String, ({String sourceId, String artId})>> artistCoversByName() async {
+    final rows = await customSelect(
+      'SELECT DISTINCT LOWER(TRIM(t.artist)) AS name, '
+      'l.source_id AS source_id, l.art_id AS art_id, l.last_seen_at AS seen '
+      'FROM tracks t '
+      'JOIN track_links l ON l.track_id = t.id '
+      "WHERE t.artist IS NOT NULL AND TRIM(t.artist) != '' "
+      "AND l.art_id IS NOT NULL AND TRIM(l.art_id) != '' "
+      'ORDER BY seen DESC',
+    ).get();
+    final covers = <String, ({String sourceId, String artId})>{};
+    for (final row in rows) {
+      covers.putIfAbsent(
+        row.read<String>('name'),
+        () => (
+          sourceId: row.read<String>('source_id'),
+          artId: row.read<String>('art_id'),
+        ),
+      );
+    }
+    return covers;
   }
 
   /// The fingerprint of every track that currently has stored lyrics.
@@ -1592,6 +1659,42 @@ extension HttpCacheQuery on LibraryDatabase {
     final row = await customSelect(
       'SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(body)), 0) AS bytes '
       'FROM http_cache',
+    ).getSingle();
+    return (count: row.read<int>('n'), bytes: row.read<int>('bytes'));
+  }
+}
+
+/// The stored answers of the app's own list reads.
+extension LibrarySnapshotQuery on LibraryDatabase {
+  /// One read's last answer, or null when it has never answered.
+  Future<LibrarySnapshotRow?> librarySnapshot(String key) =>
+      (select(librarySnapshots)..where((row) => row.key.equals(key)))
+          .getSingleOrNull();
+
+  /// Writes a read's answer, replacing the previous one for the same read.
+  Future<void> putLibrarySnapshot(LibrarySnapshotRow row) =>
+      into(librarySnapshots).insert(
+        row,
+        onConflict: DoUpdate((old) => row, target: [librarySnapshots.key]),
+      );
+
+  /// Drops every snapshot whose key starts with [prefix], e.g. one removed
+  /// library's playlist pages.
+  Future<int> clearLibrarySnapshotsWithPrefix(String prefix) =>
+      (delete(librarySnapshots)..where((row) => row.key.like('$prefix%'))).go();
+
+  /// Drops snapshots last written before [before].
+  Future<int> pruneLibrarySnapshots(DateTime before) => (delete(
+    librarySnapshots,
+  )..where((row) => row.storedAt.isSmallerThanValue(before))).go();
+
+  Future<void> clearLibrarySnapshots() => delete(librarySnapshots).go();
+
+  /// How many snapshots are held, and how many bytes their bodies take.
+  Future<({int count, int bytes})> librarySnapshotTotals() async {
+    final row = await customSelect(
+      'SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(body)), 0) AS bytes '
+      'FROM library_snapshots',
     ).getSingle();
     return (count: row.read<int>('n'), bytes: row.read<int>('bytes'));
   }

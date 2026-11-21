@@ -66,13 +66,16 @@ class LibraryAggregator {
       }
     }
 
+    // Reported before the throw: a caller that answers "every source failed"
+    // with a stored page still has to name the sources that went quiet, which
+    // is the only place Settings learns why the page looks the way it does.
+    for (final (sourceId, error) in failures) {
+      onFailure?.call(sourceId, error);
+    }
     if (failures.length == targets.length) throw failures.first.$2;
     final failedIds = {for (final (sourceId, _) in failures) sourceId};
     for (final source in targets) {
       if (!failedIds.contains(source.id)) onSuccess?.call(source.id);
-    }
-    for (final (sourceId, error) in failures) {
-      onFailure?.call(sourceId, error);
     }
     return merged;
   }

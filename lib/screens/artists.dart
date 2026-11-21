@@ -121,7 +121,11 @@ class _BodyState extends ConsumerState<_Body> {
     // its card. Read from the list the page was opened from rather than
     // asked for again: it is already in memory, and a source that carries a
     // portrait here is the one case the fleet cannot answer for.
-    final artId = ref
+    //
+    // A portrait the listing had none of was borrowed from the artist's own
+    // recordings, and the handle belongs to whichever library minted it — so
+    // the cover names its own source, and the page tells the hero.
+    final listed = ref
         .watch(libraryArtistsProvider)
         .value
         ?.where(
@@ -129,8 +133,9 @@ class _BodyState extends ConsumerState<_Body> {
               candidate.sourceId == widget.sourceId &&
               candidate.id == widget.artistId,
         )
-        .firstOrNull
-        ?.artId;
+        .firstOrNull;
+    final artId = listed?.artId;
+    final artSourceId = listed?.coverSourceId ?? widget.sourceId;
     // The fleet's record for this act. Watched by name, so a page opened for
     // a different artist asks again; a failure answers null and the page
     // keeps everything its own libraries already gave it.
@@ -172,7 +177,7 @@ class _BodyState extends ConsumerState<_Body> {
               ),
               SliverToBoxAdapter(
                 child: CollectionHero(
-                  sourceId: widget.sourceId,
+                  sourceId: artSourceId,
                   // The act's own portrait, never the first album's cover:
                   // a sleeve is a record's face, and the artist page used to
                   // open showing one of theirs as if it were a likeness. The

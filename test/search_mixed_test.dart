@@ -87,6 +87,12 @@ class _Store extends LibrarySource implements ExtendableSource {
       throw UnimplementedError();
 }
 
+/// A playlist page with nothing in it: this suite is about search rows.
+class _NoPlaylistSongs extends PlaylistSongs {
+  @override
+  Future<List<LibrarySong>> build(LibraryRef playlist) async => const [];
+}
+
 class _Idle extends Playback {
   @override
   PlaybackState build() => const PlaybackState();
@@ -176,7 +182,7 @@ Future<void> _pumpRouted(WidgetTester tester) async {
         searchGroupsProvider.overrideWith(
           (ref, query) async => const LibraryGroups(),
         ),
-        playlistSongsProvider.overrideWith((ref, ref0) async => const []),
+        playlistSongsProvider.overrideWith2((_) => _NoPlaylistSongs()),
       ],
       child: MaterialApp.router(
         theme: createAppThemeSet().light,

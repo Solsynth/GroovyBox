@@ -6354,6 +6354,275 @@ class HttpCacheCompanion extends UpdateCompanion<HttpCacheRow> {
   }
 }
 
+class $LibrarySnapshotsTable extends LibrarySnapshots
+    with TableInfo<$LibrarySnapshotsTable, LibrarySnapshotRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LibrarySnapshotsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _keyMeta = const VerificationMeta('key');
+  @override
+  late final GeneratedColumn<String> key = GeneratedColumn<String>(
+    'key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bodyMeta = const VerificationMeta('body');
+  @override
+  late final GeneratedColumn<String> body = GeneratedColumn<String>(
+    'body',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _storedAtMeta = const VerificationMeta(
+    'storedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> storedAt = GeneratedColumn<DateTime>(
+    'stored_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [key, body, storedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'library_snapshots';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LibrarySnapshotRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('key')) {
+      context.handle(
+        _keyMeta,
+        key.isAcceptableOrUnknown(data['key']!, _keyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_keyMeta);
+    }
+    if (data.containsKey('body')) {
+      context.handle(
+        _bodyMeta,
+        body.isAcceptableOrUnknown(data['body']!, _bodyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bodyMeta);
+    }
+    if (data.containsKey('stored_at')) {
+      context.handle(
+        _storedAtMeta,
+        storedAt.isAcceptableOrUnknown(data['stored_at']!, _storedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_storedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {key};
+  @override
+  LibrarySnapshotRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LibrarySnapshotRow(
+      key: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}key'],
+      )!,
+      body: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}body'],
+      )!,
+      storedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}stored_at'],
+      )!,
+    );
+  }
+
+  @override
+  $LibrarySnapshotsTable createAlias(String alias) {
+    return $LibrarySnapshotsTable(attachedDatabase, alias);
+  }
+}
+
+class LibrarySnapshotRow extends DataClass
+    implements Insertable<LibrarySnapshotRow> {
+  /// The read this answered, e.g. `recentAlbums`, `playlistSongs:home:p1`.
+  final String key;
+
+  /// The merged answer as JSON. A list of models, never a wire body.
+  final String body;
+  final DateTime storedAt;
+  const LibrarySnapshotRow({
+    required this.key,
+    required this.body,
+    required this.storedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['key'] = Variable<String>(key);
+    map['body'] = Variable<String>(body);
+    map['stored_at'] = Variable<DateTime>(storedAt);
+    return map;
+  }
+
+  LibrarySnapshotsCompanion toCompanion(bool nullToAbsent) {
+    return LibrarySnapshotsCompanion(
+      key: Value(key),
+      body: Value(body),
+      storedAt: Value(storedAt),
+    );
+  }
+
+  factory LibrarySnapshotRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LibrarySnapshotRow(
+      key: serializer.fromJson<String>(json['key']),
+      body: serializer.fromJson<String>(json['body']),
+      storedAt: serializer.fromJson<DateTime>(json['storedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'key': serializer.toJson<String>(key),
+      'body': serializer.toJson<String>(body),
+      'storedAt': serializer.toJson<DateTime>(storedAt),
+    };
+  }
+
+  LibrarySnapshotRow copyWith({
+    String? key,
+    String? body,
+    DateTime? storedAt,
+  }) => LibrarySnapshotRow(
+    key: key ?? this.key,
+    body: body ?? this.body,
+    storedAt: storedAt ?? this.storedAt,
+  );
+  LibrarySnapshotRow copyWithCompanion(LibrarySnapshotsCompanion data) {
+    return LibrarySnapshotRow(
+      key: data.key.present ? data.key.value : this.key,
+      body: data.body.present ? data.body.value : this.body,
+      storedAt: data.storedAt.present ? data.storedAt.value : this.storedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LibrarySnapshotRow(')
+          ..write('key: $key, ')
+          ..write('body: $body, ')
+          ..write('storedAt: $storedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(key, body, storedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LibrarySnapshotRow &&
+          other.key == this.key &&
+          other.body == this.body &&
+          other.storedAt == this.storedAt);
+}
+
+class LibrarySnapshotsCompanion extends UpdateCompanion<LibrarySnapshotRow> {
+  final Value<String> key;
+  final Value<String> body;
+  final Value<DateTime> storedAt;
+  final Value<int> rowid;
+  const LibrarySnapshotsCompanion({
+    this.key = const Value.absent(),
+    this.body = const Value.absent(),
+    this.storedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LibrarySnapshotsCompanion.insert({
+    required String key,
+    required String body,
+    required DateTime storedAt,
+    this.rowid = const Value.absent(),
+  }) : key = Value(key),
+       body = Value(body),
+       storedAt = Value(storedAt);
+  static Insertable<LibrarySnapshotRow> custom({
+    Expression<String>? key,
+    Expression<String>? body,
+    Expression<DateTime>? storedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (key != null) 'key': key,
+      if (body != null) 'body': body,
+      if (storedAt != null) 'stored_at': storedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LibrarySnapshotsCompanion copyWith({
+    Value<String>? key,
+    Value<String>? body,
+    Value<DateTime>? storedAt,
+    Value<int>? rowid,
+  }) {
+    return LibrarySnapshotsCompanion(
+      key: key ?? this.key,
+      body: body ?? this.body,
+      storedAt: storedAt ?? this.storedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (key.present) {
+      map['key'] = Variable<String>(key.value);
+    }
+    if (body.present) {
+      map['body'] = Variable<String>(body.value);
+    }
+    if (storedAt.present) {
+      map['stored_at'] = Variable<DateTime>(storedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LibrarySnapshotsCompanion(')
+          ..write('key: $key, ')
+          ..write('body: $body, ')
+          ..write('storedAt: $storedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$LibraryDatabase extends GeneratedDatabase {
   _$LibraryDatabase(QueryExecutor e) : super(e);
   $LibraryDatabaseManager get managers => $LibraryDatabaseManager(this);
@@ -6375,6 +6644,9 @@ abstract class _$LibraryDatabase extends GeneratedDatabase {
       $LocalPlaylistEntriesTable(this);
   late final $DownloadsTable downloads = $DownloadsTable(this);
   late final $HttpCacheTable httpCache = $HttpCacheTable(this);
+  late final $LibrarySnapshotsTable librarySnapshots = $LibrarySnapshotsTable(
+    this,
+  );
   late final Index trackLinksTrack = Index(
     'track_links_track',
     'CREATE INDEX track_links_track ON track_links (track_id)',
@@ -6403,6 +6675,10 @@ abstract class _$LibraryDatabase extends GeneratedDatabase {
     'http_cache_expiry',
     'CREATE INDEX http_cache_expiry ON http_cache (expires_at)',
   );
+  late final Index librarySnapshotsStored = Index(
+    'library_snapshots_stored',
+    'CREATE INDEX library_snapshots_stored ON library_snapshots (stored_at)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -6420,6 +6696,7 @@ abstract class _$LibraryDatabase extends GeneratedDatabase {
     localPlaylistEntries,
     downloads,
     httpCache,
+    librarySnapshots,
     trackLinksTrack,
     playEventsTrack,
     playEventsStarted,
@@ -6427,6 +6704,7 @@ abstract class _$LibraryDatabase extends GeneratedDatabase {
     localPlaylistEntriesPlaylist,
     downloadsLink,
     httpCacheExpiry,
+    librarySnapshotsStored,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -11002,6 +11280,189 @@ typedef $$HttpCacheTableProcessedTableManager =
       HttpCacheRow,
       PrefetchHooks Function()
     >;
+typedef $$LibrarySnapshotsTableCreateCompanionBuilder =
+    LibrarySnapshotsCompanion Function({
+      required String key,
+      required String body,
+      required DateTime storedAt,
+      Value<int> rowid,
+    });
+typedef $$LibrarySnapshotsTableUpdateCompanionBuilder =
+    LibrarySnapshotsCompanion Function({
+      Value<String> key,
+      Value<String> body,
+      Value<DateTime> storedAt,
+      Value<int> rowid,
+    });
+
+class $$LibrarySnapshotsTableFilterComposer
+    extends Composer<_$LibraryDatabase, $LibrarySnapshotsTable> {
+  $$LibrarySnapshotsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get key => $composableBuilder(
+    column: $table.key,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get body => $composableBuilder(
+    column: $table.body,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get storedAt => $composableBuilder(
+    column: $table.storedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$LibrarySnapshotsTableOrderingComposer
+    extends Composer<_$LibraryDatabase, $LibrarySnapshotsTable> {
+  $$LibrarySnapshotsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get key => $composableBuilder(
+    column: $table.key,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get body => $composableBuilder(
+    column: $table.body,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get storedAt => $composableBuilder(
+    column: $table.storedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$LibrarySnapshotsTableAnnotationComposer
+    extends Composer<_$LibraryDatabase, $LibrarySnapshotsTable> {
+  $$LibrarySnapshotsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get key =>
+      $composableBuilder(column: $table.key, builder: (column) => column);
+
+  GeneratedColumn<String> get body =>
+      $composableBuilder(column: $table.body, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get storedAt =>
+      $composableBuilder(column: $table.storedAt, builder: (column) => column);
+}
+
+class $$LibrarySnapshotsTableTableManager
+    extends
+        RootTableManager<
+          _$LibraryDatabase,
+          $LibrarySnapshotsTable,
+          LibrarySnapshotRow,
+          $$LibrarySnapshotsTableFilterComposer,
+          $$LibrarySnapshotsTableOrderingComposer,
+          $$LibrarySnapshotsTableAnnotationComposer,
+          $$LibrarySnapshotsTableCreateCompanionBuilder,
+          $$LibrarySnapshotsTableUpdateCompanionBuilder,
+          (
+            LibrarySnapshotRow,
+            BaseReferences<
+              _$LibraryDatabase,
+              $LibrarySnapshotsTable,
+              LibrarySnapshotRow
+            >,
+          ),
+          LibrarySnapshotRow,
+          PrefetchHooks Function()
+        > {
+  $$LibrarySnapshotsTableTableManager(
+    _$LibraryDatabase db,
+    $LibrarySnapshotsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LibrarySnapshotsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LibrarySnapshotsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LibrarySnapshotsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> key = const Value.absent(),
+                Value<String> body = const Value.absent(),
+                Value<DateTime> storedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LibrarySnapshotsCompanion(
+                key: key,
+                body: body,
+                storedAt: storedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String key,
+                required String body,
+                required DateTime storedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => LibrarySnapshotsCompanion.insert(
+                key: key,
+                body: body,
+                storedAt: storedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$LibrarySnapshotsTable, LibrarySnapshotRow>(
+                    table,
+                  ),
+                  BaseReferences<
+                    _$LibraryDatabase,
+                    $LibrarySnapshotsTable,
+                    LibrarySnapshotRow
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$LibrarySnapshotsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$LibraryDatabase,
+      $LibrarySnapshotsTable,
+      LibrarySnapshotRow,
+      $$LibrarySnapshotsTableFilterComposer,
+      $$LibrarySnapshotsTableOrderingComposer,
+      $$LibrarySnapshotsTableAnnotationComposer,
+      $$LibrarySnapshotsTableCreateCompanionBuilder,
+      $$LibrarySnapshotsTableUpdateCompanionBuilder,
+      (
+        LibrarySnapshotRow,
+        BaseReferences<
+          _$LibraryDatabase,
+          $LibrarySnapshotsTable,
+          LibrarySnapshotRow
+        >,
+      ),
+      LibrarySnapshotRow,
+      PrefetchHooks Function()
+    >;
 
 class $LibraryDatabaseManager {
   final _$LibraryDatabase _db;
@@ -11030,4 +11491,6 @@ class $LibraryDatabaseManager {
       $$DownloadsTableTableManager(_db, _db.downloads);
   $$HttpCacheTableTableManager get httpCache =>
       $$HttpCacheTableTableManager(_db, _db.httpCache);
+  $$LibrarySnapshotsTableTableManager get librarySnapshots =>
+      $$LibrarySnapshotsTableTableManager(_db, _db.librarySnapshots);
 }

@@ -8,6 +8,64 @@ part of 'providers.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
+/// The device's copy of the last answer every list page showed.
+///
+/// One store for the whole app, built from the database every source already
+/// shares. Null without a database, exactly like [libraryCatalogProvider]: a
+/// machine that could not open one reads from the network only.
+
+@ProviderFor(snapshotCache)
+final snapshotCacheProvider = SnapshotCacheProvider._();
+
+/// The device's copy of the last answer every list page showed.
+///
+/// One store for the whole app, built from the database every source already
+/// shares. Null without a database, exactly like [libraryCatalogProvider]: a
+/// machine that could not open one reads from the network only.
+
+final class SnapshotCacheProvider
+    extends $FunctionalProvider<SnapshotCache?, SnapshotCache?, SnapshotCache?>
+    with $Provider<SnapshotCache?> {
+  /// The device's copy of the last answer every list page showed.
+  ///
+  /// One store for the whole app, built from the database every source already
+  /// shares. Null without a database, exactly like [libraryCatalogProvider]: a
+  /// machine that could not open one reads from the network only.
+  SnapshotCacheProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'snapshotCacheProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$snapshotCacheHash();
+
+  @$internal
+  @override
+  $ProviderElement<SnapshotCache?> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  SnapshotCache? create(Ref ref) {
+    return snapshotCache(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(SnapshotCache? value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<SnapshotCache?>(value),
+    );
+  }
+}
+
+String _$snapshotCacheHash() => r'7957004b81300570c009e47e75b1dc0970604a03';
+
 /// Where imported files live, injected by `main` once the platform has told
 /// the app its support directory. Null in tests and on a platform that cannot
 /// provide one, which simply means no local library.
@@ -419,11 +477,19 @@ final class ResponseCacheProvider
 String _$responseCacheHash() => r'b9072489a2b2040c441a76b6b528c696feb02351';
 
 /// How many answers are cached and how many bytes they take, for Settings.
+///
+/// Both layers count: the per-request answers an adapter replays, and the
+/// per-page snapshots a cold start draws. A row that counted one of them would
+/// say "nothing saved" while a launch still had something to show.
 
 @ProviderFor(responseCacheTotals)
 final responseCacheTotalsProvider = ResponseCacheTotalsProvider._();
 
 /// How many answers are cached and how many bytes they take, for Settings.
+///
+/// Both layers count: the per-request answers an adapter replays, and the
+/// per-page snapshots a cold start draws. A row that counted one of them would
+/// say "nothing saved" while a launch still had something to show.
 
 final class ResponseCacheTotalsProvider
     extends
@@ -436,6 +502,10 @@ final class ResponseCacheTotalsProvider
         $FutureModifier<({int bytes, int count})>,
         $FutureProvider<({int bytes, int count})> {
   /// How many answers are cached and how many bytes they take, for Settings.
+  ///
+  /// Both layers count: the per-request answers an adapter replays, and the
+  /// per-page snapshots a cold start draws. A row that counted one of them would
+  /// say "nothing saved" while a launch still had something to show.
   ResponseCacheTotalsProvider._()
     : super(
         from: null,
@@ -463,7 +533,7 @@ final class ResponseCacheTotalsProvider
 }
 
 String _$responseCacheTotalsHash() =>
-    r'cb21ffa873b8cb3fb68f7d2fcc51e6f1b7461931';
+    r'e6a7a97f8210654a1029cf31c7aa3e83f658831b';
 
 /// The last failure of each source, so settings can show why it went quiet.
 
@@ -591,14 +661,23 @@ final class LibraryAggregatorProvider
 String _$libraryAggregatorHash() => r'f1ea87b7710d29925baf59385b113e91f5cf83fc';
 
 /// Recently added albums, merged across every library.
+///
+/// Snapshot first: the shelf is the page's own headline, and an empty grid for
+/// the length of a server round trip is what this avoids.
 
 @ProviderFor(RecentAlbums)
 final recentAlbumsProvider = RecentAlbumsProvider._();
 
 /// Recently added albums, merged across every library.
+///
+/// Snapshot first: the shelf is the page's own headline, and an empty grid for
+/// the length of a server round trip is what this avoids.
 final class RecentAlbumsProvider
     extends $AsyncNotifierProvider<RecentAlbums, List<LibraryAlbum>> {
   /// Recently added albums, merged across every library.
+  ///
+  /// Snapshot first: the shelf is the page's own headline, and an empty grid for
+  /// the length of a server round trip is what this avoids.
   RecentAlbumsProvider._()
     : super(
         from: null,
@@ -618,9 +697,12 @@ final class RecentAlbumsProvider
   RecentAlbums create() => RecentAlbums();
 }
 
-String _$recentAlbumsHash() => r'5fcd7a62bd2cbcafc0bf7501e12a0e07cdf0ca64';
+String _$recentAlbumsHash() => r'bd02d90c00aa8522554033f9c1c7fdae212e37e0';
 
 /// Recently added albums, merged across every library.
+///
+/// Snapshot first: the shelf is the page's own headline, and an empty grid for
+/// the length of a server round trip is what this avoids.
 
 abstract class _$RecentAlbums extends $AsyncNotifier<List<LibraryAlbum>> {
   FutureOr<List<LibraryAlbum>> build();
@@ -642,14 +724,26 @@ abstract class _$RecentAlbums extends $AsyncNotifier<List<LibraryAlbum>> {
 }
 
 /// Songs from a random draw, used as the browse page's instant-play shelf.
+///
+/// The draw is stored like any other list: a different set on the next launch
+/// is what a random shelf means, and having one at all on the first frame is
+/// the point.
 
 @ProviderFor(RandomSongs)
 final randomSongsProvider = RandomSongsProvider._();
 
 /// Songs from a random draw, used as the browse page's instant-play shelf.
+///
+/// The draw is stored like any other list: a different set on the next launch
+/// is what a random shelf means, and having one at all on the first frame is
+/// the point.
 final class RandomSongsProvider
     extends $AsyncNotifierProvider<RandomSongs, List<LibrarySong>> {
   /// Songs from a random draw, used as the browse page's instant-play shelf.
+  ///
+  /// The draw is stored like any other list: a different set on the next launch
+  /// is what a random shelf means, and having one at all on the first frame is
+  /// the point.
   RandomSongsProvider._()
     : super(
         from: null,
@@ -669,9 +763,13 @@ final class RandomSongsProvider
   RandomSongs create() => RandomSongs();
 }
 
-String _$randomSongsHash() => r'35c4aec12508dbde9e5efd9869048206890e343a';
+String _$randomSongsHash() => r'065c32489fc5d77c7898493ff7bf292fe6038b56';
 
 /// Songs from a random draw, used as the browse page's instant-play shelf.
+///
+/// The draw is stored like any other list: a different set on the next launch
+/// is what a random shelf means, and having one at all on the first frame is
+/// the point.
 
 abstract class _$RandomSongs extends $AsyncNotifier<List<LibrarySong>> {
   FutureOr<List<LibrarySong>> build();
@@ -720,7 +818,7 @@ final class PlaylistsProvider
   Playlists create() => Playlists();
 }
 
-String _$playlistsHash() => r'ef8de34fbb68a3980908d4fa16a12ec1a4298629';
+String _$playlistsHash() => r'4f420d103ad62bc8c652772b49a75605ffdbf8b9';
 
 /// The user's playlists, merged across every library.
 
@@ -787,7 +885,7 @@ final class LandingShelvesProvider
   LandingShelves create() => LandingShelves();
 }
 
-String _$landingShelvesHash() => r'26cdfacb670009c58f85c2a8abe95fa84f4d7c51';
+String _$landingShelvesHash() => r'9ecabb0fe459ab225ce2fb50bede01d197f5f843';
 
 /// The shelves the connected libraries curate themselves, in source order.
 ///
@@ -1204,24 +1302,27 @@ final class SongCopiesFamily extends $Family
   String toString() => r'songCopiesProvider';
 }
 
-/// Songs of one album, read straight from its own source./// Songs of one album, read straight from its own source.
+/// Songs of one album, read straight from its own source.
+///
+/// A stored copy answers first: a record page is often opened on a cold start
+/// (a share link, a shelf drawn off a snapshot), and its own source is the one
+/// call the page cannot do without.
 
-@ProviderFor(albumSongs)
+@ProviderFor(AlbumSongs)
 final albumSongsProvider = AlbumSongsFamily._();
 
-/// Songs of one album, read straight from its own source./// Songs of one album, read straight from its own source.
-
+/// Songs of one album, read straight from its own source.
+///
+/// A stored copy answers first: a record page is often opened on a cold start
+/// (a share link, a shelf drawn off a snapshot), and its own source is the one
+/// call the page cannot do without.
 final class AlbumSongsProvider
-    extends
-        $FunctionalProvider<
-          AsyncValue<List<LibrarySong>>,
-          List<LibrarySong>,
-          FutureOr<List<LibrarySong>>
-        >
-    with
-        $FutureModifier<List<LibrarySong>>,
-        $FutureProvider<List<LibrarySong>> {
-  /// Songs of one album, read straight from its own source./// Songs of one album, read straight from its own source.
+    extends $AsyncNotifierProvider<AlbumSongs, List<LibrarySong>> {
+  /// Songs of one album, read straight from its own source.
+  ///
+  /// A stored copy answers first: a record page is often opened on a cold start
+  /// (a share link, a shelf drawn off a snapshot), and its own source is the one
+  /// call the page cannot do without.
   AlbumSongsProvider._({
     required AlbumSongsFamily super.from,
     required LibraryRef super.argument,
@@ -1245,15 +1346,7 @@ final class AlbumSongsProvider
 
   @$internal
   @override
-  $FutureProviderElement<List<LibrarySong>> $createElement(
-    $ProviderPointer pointer,
-  ) => $FutureProviderElement(pointer);
-
-  @override
-  FutureOr<List<LibrarySong>> create(Ref ref) {
-    final argument = this.argument as LibraryRef;
-    return albumSongs(ref, argument);
-  }
+  AlbumSongs create() => AlbumSongs();
 
   @override
   bool operator ==(Object other) {
@@ -1266,12 +1359,23 @@ final class AlbumSongsProvider
   }
 }
 
-String _$albumSongsHash() => r'5cab94c4eb64798bd714ed44349a629670b5b2ba';
+String _$albumSongsHash() => r'e788d6f941b5c34021df98070f47a4bf9c7d3f0e';
 
-/// Songs of one album, read straight from its own source./// Songs of one album, read straight from its own source.
+/// Songs of one album, read straight from its own source.
+///
+/// A stored copy answers first: a record page is often opened on a cold start
+/// (a share link, a shelf drawn off a snapshot), and its own source is the one
+/// call the page cannot do without.
 
 final class AlbumSongsFamily extends $Family
-    with $FunctionalFamilyOverride<FutureOr<List<LibrarySong>>, LibraryRef> {
+    with
+        $ClassFamilyOverride<
+          AlbumSongs,
+          AsyncValue<List<LibrarySong>>,
+          List<LibrarySong>,
+          FutureOr<List<LibrarySong>>,
+          LibraryRef
+        > {
   AlbumSongsFamily._()
     : super(
         retry: null,
@@ -1281,13 +1385,45 @@ final class AlbumSongsFamily extends $Family
         isAutoDispose: true,
       );
 
-  /// Songs of one album, read straight from its own source./// Songs of one album, read straight from its own source.
+  /// Songs of one album, read straight from its own source.
+  ///
+  /// A stored copy answers first: a record page is often opened on a cold start
+  /// (a share link, a shelf drawn off a snapshot), and its own source is the one
+  /// call the page cannot do without.
 
   AlbumSongsProvider call(LibraryRef album) =>
       AlbumSongsProvider._(argument: album, from: this);
 
   @override
   String toString() => r'albumSongsProvider';
+}
+
+/// Songs of one album, read straight from its own source.
+///
+/// A stored copy answers first: a record page is often opened on a cold start
+/// (a share link, a shelf drawn off a snapshot), and its own source is the one
+/// call the page cannot do without.
+
+abstract class _$AlbumSongs extends $AsyncNotifier<List<LibrarySong>> {
+  late final _$args = ref.$arg as LibraryRef;
+  LibraryRef get album => _$args;
+
+  FutureOr<List<LibrarySong>> build(LibraryRef album);
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref =
+        this.ref as $Ref<AsyncValue<List<LibrarySong>>, List<LibrarySong>>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<AsyncValue<List<LibrarySong>>, List<LibrarySong>>,
+              AsyncValue<List<LibrarySong>>,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, () => build(_$args));
+  }
 }
 
 /// One album as its own source describes it, independent of its tracks.
@@ -1486,23 +1622,23 @@ final class AlbumTracksFamily extends $Family
 }
 
 /// Songs of one playlist, read straight from its own source.
+///
+/// Pinned playlists are dashboard sections, so this is one of the reads that
+/// has to answer before the page does.
 
-@ProviderFor(playlistSongs)
+@ProviderFor(PlaylistSongs)
 final playlistSongsProvider = PlaylistSongsFamily._();
 
 /// Songs of one playlist, read straight from its own source.
-
+///
+/// Pinned playlists are dashboard sections, so this is one of the reads that
+/// has to answer before the page does.
 final class PlaylistSongsProvider
-    extends
-        $FunctionalProvider<
-          AsyncValue<List<LibrarySong>>,
-          List<LibrarySong>,
-          FutureOr<List<LibrarySong>>
-        >
-    with
-        $FutureModifier<List<LibrarySong>>,
-        $FutureProvider<List<LibrarySong>> {
+    extends $AsyncNotifierProvider<PlaylistSongs, List<LibrarySong>> {
   /// Songs of one playlist, read straight from its own source.
+  ///
+  /// Pinned playlists are dashboard sections, so this is one of the reads that
+  /// has to answer before the page does.
   PlaylistSongsProvider._({
     required PlaylistSongsFamily super.from,
     required LibraryRef super.argument,
@@ -1526,15 +1662,7 @@ final class PlaylistSongsProvider
 
   @$internal
   @override
-  $FutureProviderElement<List<LibrarySong>> $createElement(
-    $ProviderPointer pointer,
-  ) => $FutureProviderElement(pointer);
-
-  @override
-  FutureOr<List<LibrarySong>> create(Ref ref) {
-    final argument = this.argument as LibraryRef;
-    return playlistSongs(ref, argument);
-  }
+  PlaylistSongs create() => PlaylistSongs();
 
   @override
   bool operator ==(Object other) {
@@ -1547,12 +1675,22 @@ final class PlaylistSongsProvider
   }
 }
 
-String _$playlistSongsHash() => r'807dd95a6eab6ef276eff8f86eaa3b3550e1b3d6';
+String _$playlistSongsHash() => r'ac59d3aafe4c901dbfef7a1addf15d5d363e0a8b';
 
 /// Songs of one playlist, read straight from its own source.
+///
+/// Pinned playlists are dashboard sections, so this is one of the reads that
+/// has to answer before the page does.
 
 final class PlaylistSongsFamily extends $Family
-    with $FunctionalFamilyOverride<FutureOr<List<LibrarySong>>, LibraryRef> {
+    with
+        $ClassFamilyOverride<
+          PlaylistSongs,
+          AsyncValue<List<LibrarySong>>,
+          List<LibrarySong>,
+          FutureOr<List<LibrarySong>>,
+          LibraryRef
+        > {
   PlaylistSongsFamily._()
     : super(
         retry: null,
@@ -1563,12 +1701,42 @@ final class PlaylistSongsFamily extends $Family
       );
 
   /// Songs of one playlist, read straight from its own source.
+  ///
+  /// Pinned playlists are dashboard sections, so this is one of the reads that
+  /// has to answer before the page does.
 
   PlaylistSongsProvider call(LibraryRef playlist) =>
       PlaylistSongsProvider._(argument: playlist, from: this);
 
   @override
   String toString() => r'playlistSongsProvider';
+}
+
+/// Songs of one playlist, read straight from its own source.
+///
+/// Pinned playlists are dashboard sections, so this is one of the reads that
+/// has to answer before the page does.
+
+abstract class _$PlaylistSongs extends $AsyncNotifier<List<LibrarySong>> {
+  late final _$args = ref.$arg as LibraryRef;
+  LibraryRef get playlist => _$args;
+
+  FutureOr<List<LibrarySong>> build(LibraryRef playlist);
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref =
+        this.ref as $Ref<AsyncValue<List<LibrarySong>>, List<LibrarySong>>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<AsyncValue<List<LibrarySong>>, List<LibrarySong>>,
+              AsyncValue<List<LibrarySong>>,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, () => build(_$args));
+  }
 }
 
 /// Every artist the connected libraries list, merged in source order.
@@ -1614,7 +1782,7 @@ final class LibraryArtistsProvider
   LibraryArtists create() => LibraryArtists();
 }
 
-String _$libraryArtistsHash() => r'cc9fe10a5895be98cb905f8b7bf204d6ccf7c7eb';
+String _$libraryArtistsHash() => r'39f86e1822f02952163650fca7149f249af0bb74';
 
 /// Every artist the connected libraries list, merged in source order.
 ///

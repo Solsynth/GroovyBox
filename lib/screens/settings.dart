@@ -721,6 +721,10 @@ class _OfflineSection extends ConsumerWidget {
     );
     if (confirmed != true) return;
     await ref.read(responseCacheProvider)?.clear();
+    // A snapshot is what a launch draws before the network answers, so
+    // clearing only the request cache would leave the "saved answers" this
+    // button promises to forget still on disk.
+    await ref.read(snapshotCacheProvider)?.clear();
     await ref.read(artworkCacheProvider)?.clear();
     ref.invalidate(responseCacheTotalsProvider);
   }

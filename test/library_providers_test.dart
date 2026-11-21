@@ -314,4 +314,101 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 50));
     expect(await db.trackCount(), greaterThan(0));
   });
+
+  test('an artist with no portrait borrows its own recordings cover', () async {
+    final db = LibraryDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    // The server lists the act with no image of its own — the ordinary case
+    // for a Jellyfin library nobody filled portraits into — while the
+    // recordings it served carry a cover.
+    final source = _ArtistsSource(
+      'jf',
+      const [
+        LibraryArtist(sourceId: 'jf', id: 'ar-1', name: 'ChiliChill'),
+        LibraryArtist(sourceId: 'jf', id: 'ar-2', name: 'Nobody At All'),
+      ],
+    );
+    final catalog = LibraryCatalog(db);
+    await catalog.adopt(
+      const LibrarySong(
+        sourceId: 'jf',
+        id: 't-1',
+        title: 'A Song',
+        artist: 'ChiliChill',
+        artId: 'album-cover',
+        duration: Duration(minutes: 3),
+      ),
+    );
+    final container = await _container([source], database: db);
+
+    final artists = await container.read(libraryArtistsProvider.future);
+
+    final covered = artists.firstWhere((artist) => artist.name == 'ChiliChill');
+    expect(covered.artId, 'album-cover');
+    expect(covered.artSourceId, 'jf');
+    // The page still opens through the library that listed the act, not the
+    // one whose cover happened to be borrowed.
+    expect(covered.sourceId, 'jf');
+    expect(covered.id, 'ar-1');
+
+    // A name nothing was filed under stays bare rather than borrowing
+    // somebody else's picture.
+    final bare = artists.firstWhere((artist) => artist.name == 'Nobody At All');
+    expect(bare.artId, isNull);
+  });
+
+  test('an artist that has its own portrait keeps it', () async {
+    final db = LibraryDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final source = _ArtistsSource(
+      'jf',
+      const [
+        LibraryArtist(
+          sourceId: 'jf',
+          id: 'ar-1',
+          name: 'ChiliChill',
+          artId: 'portrait',
+        ),
+      ],
+    );
+    await LibraryCatalog(db).adopt(
+      const LibrarySong(
+        sourceId: 'jf',
+        id: 't-1',
+        title: 'A Song',
+        artist: 'ChiliChill',
+        artId: 'album-cover',
+        duration: Duration(minutes: 3),
+      ),
+    );
+    final container = await _container([source], database: db);
+
+    final artist = (await container.read(libraryArtistsProvider.future)).single;
+
+    expect(artist.artId, 'portrait');
+    expect(artist.artSourceId, isNull, reason: 'no borrow happened');
+  });
+}
+
+/// A server that answers the artist list and nothing else.
+class _ArtistsSource extends LibrarySource {
+  _ArtistsSource(this.id, this._artists);
+
+  @override
+  final String id;
+  final List<LibraryArtist> _artists;
+
+  @override
+  SourceConfig get config => SourceConfig(
+    id: id,
+    kind: LibraryKind.jellyfin,
+    baseUrl: 'https://$id.example.com',
+    displayName: id,
+  );
+
+  @override
+  Future<List<LibraryArtist>> artists() async => _artists;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
 }

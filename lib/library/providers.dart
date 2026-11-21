@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -12,9 +14,11 @@ import 'local_library.dart';
 import 'lookup.dart';
 import 'lrclib.dart';
 import 'lyrics.dart';
+import 'lyrics_enricher.dart';
 import 'lyrics_query.dart';
 import 'lyrics_resolver.dart';
 import 'lyrics_store.dart';
+import 'lyrics_translator.dart';
 import 'models.dart';
 import 'netease_adapter.dart';
 import 'smart_shuffle.dart';
@@ -24,11 +28,85 @@ import 'plugins/plugin_schema.dart';
 import '../library_sync/queue.dart';
 import 'store.dart';
 import 'track_identity.dart';
-
-import 'lyrics_enricher.dart';
-import 'lyrics_translator.dart';
+import 'snapshot_cache.dart';
 
 part 'providers.g.dart';
+
+/// The device's copy of the last answer every list page showed.
+///
+/// One store for the whole app, built from the database every source already
+/// shares. Null without a database, exactly like [libraryCatalogProvider]: a
+/// machine that could not open one reads from the network only.
+@Riverpod(keepAlive: true)
+SnapshotCache? snapshotCache(Ref ref) {
+  final database = ref.watch(libraryDatabaseProvider);
+  return database == null ? null : SnapshotCache(database);
+}
+
+/// Draws [fetch]'s last answer first, then refreshes it in the background.
+///
+/// The shape every list read shares: a page must have something to paint on
+/// the first frame, and the network's answer arrives second. Three states, in
+/// order:
+///
+///   1. a snapshot exists and is returned — the page is drawn from it;
+///   2. [fetch] runs anyway, and its answer replaces both the page and the
+///      snapshot;
+///   3. [fetch] fails, and the snapshot stays — a library that is down must
+///      not blank a page that already had something on it.
+///
+/// The snapshot is served only on the first build of an instance. A rebuild
+/// caused by a dependency change (a library added or removed) is a question
+/// the snapshot cannot answer, so it goes straight to the network; an explicit
+/// `refresh()` does the same, because the user asked for the answer rather
+/// than for its copy.
+///
+/// [publish] is the notifier's own state setter: the refresh runs after
+/// `build` has returned, so the value it replaces is already published.
+Future<List<T>> snapshotThenRefresh<T>(
+  Ref ref, {
+  required String key,
+  required Future<List<T>> Function() fetch,
+  required T Function(Map<String, dynamic> json) parse,
+  required Map<String, dynamic> Function(T value) encode,
+  required void Function(AsyncValue<List<T>> value) publish,
+}) async {
+  final cache = ref.watch(snapshotCacheProvider);
+  Future<void> remember(List<T> value) async {
+    if (cache == null) return;
+    await cache.store(key, value, (raw) => [
+      for (final item in raw! as List<T>) encode(item),
+    ]);
+  }
+
+  final cached = ref.isFirstBuild && cache != null
+      ? await cache.restoreList(key, parse)
+      : null;
+  if (cached == null) {
+    final fresh = await fetch();
+    await remember(fresh);
+    return fresh;
+  }
+
+  // A timer, not a microtask: the value this build returns has to be published
+  // before the refresh may write over it, and a zero-duration task runs after
+  // the frame that publishes it.
+  Timer.run(() async {
+    if (!ref.mounted) return;
+    try {
+      final fresh = await fetch();
+      if (!ref.mounted) return;
+      publish(AsyncData(fresh));
+      await remember(fresh);
+    } catch (error) {
+      // The snapshot is what this page shows; a failed refresh must not replace
+      // it with an error screen. Which library went quiet is already on
+      // [sourceFailuresProvider], through the aggregator.
+      debugPrint('[Library] Background refresh of $key: $error');
+    }
+  });
+  return cached;
+}
 
 /// Where imported files live, injected by `main` once the platform has told
 /// the app its support directory. Null in tests and on a platform that cannot
@@ -119,11 +197,18 @@ ResponseCache? responseCache(Ref ref) {
 }
 
 /// How many answers are cached and how many bytes they take, for Settings.
+///
+/// Both layers count: the per-request answers an adapter replays, and the
+/// per-page snapshots a cold start draws. A row that counted one of them would
+/// say "nothing saved" while a launch still had something to show.
 @riverpod
 Future<({int count, int bytes})> responseCacheTotals(Ref ref) async {
-  final cache = ref.watch(responseCacheProvider);
-  if (cache == null) return (count: 0, bytes: 0);
-  return cache.totals();
+  final response = await ref.watch(responseCacheProvider)?.totals();
+  final snapshots = await ref.watch(snapshotCacheProvider)?.totals();
+  return (
+    count: (response?.count ?? 0) + (snapshots?.count ?? 0),
+    bytes: (response?.bytes ?? 0) + (snapshots?.bytes ?? 0),
+  );
 }
 
 /// The last failure of each source, so settings can show why it went quiet.
@@ -178,14 +263,34 @@ LibraryAggregator libraryAggregator(Ref ref) {
 }
 
 /// Recently added albums, merged across every library.
+///
+/// Snapshot first: the shelf is the page's own headline, and an empty grid for
+/// the length of a server round trip is what this avoids.
 @Riverpod(keepAlive: true)
 class RecentAlbums extends AsyncNotifier<List<LibraryAlbum>> {
   @override
-  Future<List<LibraryAlbum>> build() => _fetch();
+  Future<List<LibraryAlbum>> build() {
+    _sources = ref.watch(librarySourcesWithLocalProvider);
+    _aggregator = ref.watch(libraryAggregatorProvider);
+    return snapshotThenRefresh(
+      ref,
+      key: SnapshotKeys.recentAlbums,
+      fetch: _fetch,
+      parse: SnapshotAlbumJson.fromSnapshotJson,
+      encode: (album) => album.toSnapshotJson(),
+      publish: (value) => state = value,
+    );
+  }
+
+  /// The dependencies as the last build saw them. The refresh runs outside
+  /// `build`, where a `watch` would register a listener nobody asked for, so
+  /// what it needs is carried over instead.
+  List<LibrarySource> _sources = const [];
+  LibraryAggregator? _aggregator;
 
   Future<List<LibraryAlbum>> _fetch() async {
-    if (ref.watch(librarySourcesWithLocalProvider).isEmpty) return const [];
-    return ref.watch(libraryAggregatorProvider).recentlyAdded(limit: 50);
+    if (_sources.isEmpty) return const [];
+    return _aggregator!.recentlyAdded(limit: 50);
   }
 
   Future<void> refresh() async {
@@ -196,14 +301,32 @@ class RecentAlbums extends AsyncNotifier<List<LibraryAlbum>> {
 }
 
 /// Songs from a random draw, used as the browse page's instant-play shelf.
+///
+/// The draw is stored like any other list: a different set on the next launch
+/// is what a random shelf means, and having one at all on the first frame is
+/// the point.
 @Riverpod(keepAlive: true)
 class RandomSongs extends AsyncNotifier<List<LibrarySong>> {
   @override
-  Future<List<LibrarySong>> build() => _fetch();
+  Future<List<LibrarySong>> build() {
+    _sources = ref.watch(librarySourcesWithLocalProvider);
+    _aggregator = ref.watch(libraryAggregatorProvider);
+    return snapshotThenRefresh(
+      ref,
+      key: SnapshotKeys.randomSongs,
+      fetch: _fetch,
+      parse: (json) => LibrarySong.fromJson(json),
+      encode: (song) => song.toJson(),
+      publish: (value) => state = value,
+    );
+  }
+
+  List<LibrarySource> _sources = const [];
+  LibraryAggregator? _aggregator;
 
   Future<List<LibrarySong>> _fetch() async {
-    if (ref.watch(librarySourcesWithLocalProvider).isEmpty) return const [];
-    return ref.watch(libraryAggregatorProvider).randomSongs(size: 40);
+    if (_sources.isEmpty) return const [];
+    return _aggregator!.randomSongs(size: 40);
   }
 
   Future<void> refresh() async {
@@ -217,11 +340,25 @@ class RandomSongs extends AsyncNotifier<List<LibrarySong>> {
 @Riverpod(keepAlive: true)
 class Playlists extends AsyncNotifier<List<LibraryPlaylist>> {
   @override
-  Future<List<LibraryPlaylist>> build() => _fetch();
+  Future<List<LibraryPlaylist>> build() {
+    _sources = ref.watch(librarySourcesWithLocalProvider);
+    _aggregator = ref.watch(libraryAggregatorProvider);
+    return snapshotThenRefresh(
+      ref,
+      key: SnapshotKeys.playlists,
+      fetch: _fetch,
+      parse: SnapshotPlaylistJson.fromSnapshotJson,
+      encode: (playlist) => playlist.toSnapshotJson(),
+      publish: (value) => state = value,
+    );
+  }
+
+  List<LibrarySource> _sources = const [];
+  LibraryAggregator? _aggregator;
 
   Future<List<LibraryPlaylist>> _fetch() async {
-    if (ref.watch(librarySourcesWithLocalProvider).isEmpty) return const [];
-    return ref.watch(libraryAggregatorProvider).playlists();
+    if (_sources.isEmpty) return const [];
+    return _aggregator!.playlists();
   }
 
   Future<void> refresh() async {
@@ -239,11 +376,23 @@ class Playlists extends AsyncNotifier<List<LibraryPlaylist>> {
 @Riverpod(keepAlive: true)
 class LandingShelves extends AsyncNotifier<List<LandingShelf>> {
   @override
-  Future<List<LandingShelf>> build() => _fetch();
+  Future<List<LandingShelf>> build() {
+    _sources = ref.watch(librarySourcesWithLocalProvider);
+    return snapshotThenRefresh(
+      ref,
+      key: SnapshotKeys.landingShelves,
+      fetch: _fetch,
+      parse: SnapshotShelfJson.fromSnapshotJson,
+      encode: (shelf) => shelf.toSnapshotJson(),
+      publish: (value) => state = value,
+    );
+  }
+
+  List<LibrarySource> _sources = const [];
 
   Future<List<LandingShelf>> _fetch() async {
     final sources = [
-      for (final source in ref.watch(librarySourcesWithLocalProvider))
+      for (final source in _sources)
         if (source is CuratedSource) source,
     ];
     if (sources.isEmpty) return const [];
@@ -372,12 +521,29 @@ Future<List<TrackCopy>> songCopies(Ref ref, TrackLookup lookup) => findCopies(
   catalog: ref.watch(libraryCatalogProvider),
 );
 
-/// Songs of one album, read straight from its own source./// Songs of one album, read straight from its own source.
+/// Songs of one album, read straight from its own source.
+///
+/// A stored copy answers first: a record page is often opened on a cold start
+/// (a share link, a shelf drawn off a snapshot), and its own source is the one
+/// call the page cannot do without.
 @riverpod
-Future<List<LibrarySong>> albumSongs(Ref ref, LibraryRef album) async {
-  final source = ref.watch(librarySourceByIdProvider)[album.sourceId];
-  if (source == null) return const [];
-  return source.albumSongs(album.id);
+class AlbumSongs extends _$AlbumSongs {
+  LibrarySource? _source;
+
+  @override
+  Future<List<LibrarySong>> build(LibraryRef album) {
+    final source = ref.watch(librarySourceByIdProvider)[album.sourceId];
+    _source = source;
+    return snapshotThenRefresh(
+      ref,
+      key: SnapshotKeys.albumSongs(album),
+      fetch: () async =>
+          _source == null ? const [] : await _source!.albumSongs(album.id),
+      parse: LibrarySong.fromJson,
+      encode: (song) => song.toJson(),
+      publish: (value) => state = value,
+    );
+  }
 }
 
 /// One album as its own source describes it, independent of its tracks.
@@ -446,11 +612,27 @@ Future<List<LibrarySong>> albumTracks(Ref ref, AlbumTracksTarget target) async {
 }
 
 /// Songs of one playlist, read straight from its own source.
+///
+/// Pinned playlists are dashboard sections, so this is one of the reads that
+/// has to answer before the page does.
 @riverpod
-Future<List<LibrarySong>> playlistSongs(Ref ref, LibraryRef playlist) async {
-  final source = ref.watch(librarySourceByIdProvider)[playlist.sourceId];
-  if (source == null) return const [];
-  return source.playlistSongs(playlist.id);
+class PlaylistSongs extends _$PlaylistSongs {
+  LibrarySource? _source;
+
+  @override
+  Future<List<LibrarySong>> build(LibraryRef playlist) {
+    _source = ref.watch(librarySourceByIdProvider)[playlist.sourceId];
+    return snapshotThenRefresh(
+      ref,
+      key: SnapshotKeys.playlistSongs(playlist),
+      fetch: () async => _source == null
+          ? const []
+          : await _source!.playlistSongs(playlist.id),
+      parse: LibrarySong.fromJson,
+      encode: (song) => song.toJson(),
+      publish: (value) => state = value,
+    );
+  }
 }
 
 /// Every artist the connected libraries list, merged in source order.
@@ -459,14 +641,75 @@ Future<List<LibrarySong>> playlistSongs(Ref ref, LibraryRef playlist) async {
 /// source — so the artist page is addressed by [LibraryRef], and the same
 /// name on two servers stays two rows rather than collapsing into one the
 /// way a merged album list would want it to.
+///
+/// The portrait an artist listing carries is whatever the service filed
+/// *for the artist*, and servers commonly file none: Jellyfin only tags an
+/// artist with a primary image when somebody uploaded one, so a library whose
+/// portraits were never filled in lists hundreds of acts that draw a person
+/// icon forever. The recordings are filed under the act, though, and their
+/// covers are already on this device — so a row with no portrait borrows the
+/// newest cover its own tracks carry, by name. That is a picture of the music
+/// rather than of the person, and a tile with one is legible where a wall of
+/// identical placeholders is not.
 @Riverpod(keepAlive: true)
 class LibraryArtists extends AsyncNotifier<List<LibraryArtist>> {
   @override
-  Future<List<LibraryArtist>> build() => _fetch();
+  Future<List<LibraryArtist>> build() {
+    _sources = ref.watch(librarySourcesWithLocalProvider);
+    _aggregator = ref.watch(libraryAggregatorProvider);
+    // Watched rather than read inside the fetch: a database that appears (or
+    // is replaced) after the first build is what makes the fallback possible,
+    // and rebuilding on it is how the list learns that.
+    _catalog = ref.watch(libraryCatalogProvider);
+    return snapshotThenRefresh(
+      ref,
+      key: SnapshotKeys.artists,
+      fetch: _fetch,
+      parse: SnapshotArtistJson.fromSnapshotJson,
+      encode: (artist) => artist.toSnapshotJson(),
+      publish: (value) => state = value,
+    );
+  }
+
+  List<LibrarySource> _sources = const [];
+  LibraryAggregator? _aggregator;
+  LibraryCatalog? _catalog;
 
   Future<List<LibraryArtist>> _fetch() async {
-    if (ref.watch(librarySourcesWithLocalProvider).isEmpty) return const [];
-    return ref.watch(libraryAggregatorProvider).artists();
+    if (_sources.isEmpty) return const [];
+    final artists = await _aggregator!.artists();
+    if (artists.every((artist) => artist.artId != null)) return artists;
+    final covers =
+        await _catalog?.artistCoversByName() ??
+        const <String, ({String sourceId, String artId})>{};
+    if (covers.isEmpty) return artists;
+    return [
+      for (final artist in artists)
+        // A source with nothing under the name, or a name two acts share, is
+        // ordinary: the keyed lookup is a fallback, so a miss changes nothing.
+        _withCoverFallback(artist, covers[artist.name.trim().toLowerCase()]),
+    ];
+  }
+
+  /// [artist], or one whose art handle is its own recordings' cover.
+  ///
+  /// The artist's own [LibraryArtist.sourceId] and id are untouched: they
+  /// address the page, and a borrowed portrait must not send a tap to the
+  /// library that happens to hold the picture. Only the handle and the source
+  /// able to resolve it are added.
+  static LibraryArtist _withCoverFallback(
+    LibraryArtist artist,
+    ({String sourceId, String artId})? cover,
+  ) {
+    if (artist.artId != null || cover == null) return artist;
+    return LibraryArtist(
+      sourceId: artist.sourceId,
+      id: artist.id,
+      name: artist.name,
+      artId: cover.artId,
+      artSourceId: cover.sourceId,
+      albumCount: artist.albumCount,
+    );
   }
 
   Future<void> refresh() async {

@@ -163,6 +163,10 @@ class CatalogItem {
     if (caption != null) 'caption': caption,
     if (artworkUrl != null) 'artwork_url': artworkUrl,
     if (durationSeconds != null) 'duration_seconds': durationSeconds,
+    if (creators.isNotEmpty)
+      'creators': [
+        for (final creator in creators) creator.toJson(),
+      ],
   };
 
   factory CatalogItem.fromJson(Map<String, dynamic> json) => CatalogItem(
@@ -197,6 +201,14 @@ class PlaylistItem {
   /// What the entry is. Only the favourites list fills it meaningfully; a
   /// playlist's items are always tracks.
   final FavouriteKind kind;
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    if (catalogId != null) 'catalog_id': catalogId,
+    if (position != null) 'position': position,
+    if (kind != FavouriteKind.track) 'kind': kind.value,
+    if (catalogItem != null) 'catalog_item': catalogItem!.toJson(),
+  };
 
   factory PlaylistItem.fromJson(Map<String, dynamic> json) => PlaylistItem(
     id: json['id']?.toString() ?? '',
@@ -240,6 +252,9 @@ class PulsarPlaylist {
     if (description != null) 'description': description,
     'is_public': isPublic,
     if (artworkUrl != null) 'artwork_url': artworkUrl,
+    // Only a detail read fills these; the list response is a bare array. A
+    // snapshot of a detail page needs them, and an empty list writes nothing.
+    if (items.isNotEmpty) 'items': [for (final item in items) item.toJson()],
   };
 
   factory PulsarPlaylist.fromJson(Map<String, dynamic> json) => PulsarPlaylist(
@@ -279,6 +294,13 @@ class FriendListening {
     return live.firstOrNull;
   }
 
+  /// The fleet's own shape, so a snapshot of the shelf is restored by the same
+  /// parser that read the wire.
+  Map<String, dynamic> toJson() => {
+    'account': account.toJson(),
+    'activities': [for (final activity in activities) activity.toJson()],
+  };
+
   factory FriendListening.fromJson(Map<String, dynamic> json) =>
       FriendListening(
         account: FriendAccount.fromJson(
@@ -307,6 +329,16 @@ class FriendAccount {
 
   String get displayName =>
       (nick != null && nick!.trim().isNotEmpty) ? nick!.trim() : name;
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    if (nick != null) 'nick': nick,
+    if (avatarUrl != null)
+      'profile': {
+        'picture': {'url': avatarUrl},
+      },
+  };
 
   factory FriendAccount.fromJson(Map<String, dynamic> json) {
     String? avatar;
@@ -354,6 +386,19 @@ class PresenceActivity {
     return expiry != null && expiry.isBefore(DateTime.now());
   }
 
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    if (type != null) 'type': type,
+    'account_id': accountId,
+    if (title != null) 'title': title,
+    if (subtitle != null) 'subtitle': subtitle,
+    if (caption != null) 'caption': caption,
+    if (artworkUrl != null) 'artwork_url': artworkUrl,
+    if (startedAt != null) 'started_at': startedAt!.toUtc().toIso8601String(),
+    if (leaseExpiresAt != null)
+      'lease_expires_at': leaseExpiresAt!.toUtc().toIso8601String(),
+  };
+
   factory PresenceActivity.fromJson(Map<String, dynamic> json) =>
       PresenceActivity(
         id: json['id']?.toString() ?? '',
@@ -391,6 +436,7 @@ class PulsarTopEntity {
     this.subtitle,
     required this.count,
     required this.seconds,
+    this.artworkUrl,
   });
 
   final String name;
@@ -398,12 +444,23 @@ class PulsarTopEntity {
   final int count;
   final int seconds;
 
+  /// The cover the fleet's aggregated scrobbles carried, when it sent one.
+  ///
+  /// Null is the honest answer for a creator, and for a track whose plays all
+  /// came from a client that could not resolve a cover when it scrobbled. The
+  /// row draws its placeholder then, not an empty box.
+  final String? artworkUrl;
+
   factory PulsarTopEntity.fromJson(Map<String, dynamic> json) =>
       PulsarTopEntity(
         name: json['name'] as String? ?? '',
         subtitle: json['subtitle'] as String?,
         count: (json['count'] as num?)?.toInt() ?? 0,
         seconds: (json['seconds'] as num?)?.toInt() ?? 0,
+        artworkUrl: switch (json['artwork_url']) {
+          final String url when url.isNotEmpty => url,
+          _ => null,
+        },
       );
 }
 
@@ -449,6 +506,8 @@ class PulsarCreatorCredit {
 
   final String name;
   final String role;
+
+  Map<String, dynamic> toJson() => {'name': name, 'role': role};
 
   static List<PulsarCreatorCredit> listOf(Object? raw) => [
     for (final entry in (raw as List<dynamic>? ?? const []))

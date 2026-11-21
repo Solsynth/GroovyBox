@@ -76,7 +76,10 @@ class _ArtistCardState extends State<ArtistCard> {
                               ),
                             ),
                             LibraryArtwork(
-                              sourceId: widget.artist.sourceId,
+                              // A borrowed cover is resolved through the
+                              // library that minted its handle; the artist's
+                              // own source may never have seen the picture.
+                              sourceId: widget.artist.coverSourceId,
                               artId: widget.artist.artId,
                               radius: 0,
                               fallbackIcon: Symbols.person_rounded,

@@ -285,19 +285,32 @@ class LibraryAlbum {
 }
 
 class LibraryArtist {
+  /// The library that listed the act, and whose id addresses its page.
   final String sourceId;
   final String id;
   final String name;
   final String? artId;
   final int? albumCount;
 
+  /// Which library can resolve [artId], when it is not [sourceId].
+  ///
+  /// A listing answers a portrait only where the service filed one, so an act
+  /// with none borrows the cover of a record it made — and a cover handle means
+  /// nothing outside the library that minted it. Null says the handle is this
+  /// source's own, which is the ordinary case.
+  final String? artSourceId;
+
   const LibraryArtist({
     required this.sourceId,
     required this.id,
     required this.name,
     this.artId,
+    this.artSourceId,
     this.albumCount,
   });
+
+  /// The source a cover is resolved through: the one that minted the handle.
+  String get coverSourceId => artSourceId ?? sourceId;
 }
 
 class LibraryPlaylist {

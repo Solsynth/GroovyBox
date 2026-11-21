@@ -18,6 +18,14 @@ class _Idle extends Playback {
   PlaybackState build() => const PlaybackState();
 }
 
+/// A tracklist that does not ask a library or a database.
+class _StubAlbumSongs extends AlbumSongs {
+  _StubAlbumSongs(this.songs);
+  final List<LibrarySong> songs;
+  @override
+  Future<List<LibrarySong>> build(LibraryRef album) async => songs;
+}
+
 class _Source extends LibrarySource {
   @override
   final String id = 'a';
@@ -125,8 +133,9 @@ void main() {
       [
         artistAlbumsProvider((sourceId: 'a', id: 'artist-1'))
             .overrideWith((ref) async => const [_album]),
-        albumSongsProvider((sourceId: 'a', id: 'album-1'))
-            .overrideWith((ref) async => const [_song]),
+        albumSongsProvider(
+          (sourceId: 'a', id: 'album-1'),
+        ).overrideWith(() => _StubAlbumSongs(const [_song])),
         pulsarArtistProfileProvider(
           'Radiohead',
           language: 'en',
@@ -170,8 +179,9 @@ void main() {
       tester,
       const AlbumDetailScreen(sourceId: 'a', albumId: 'album-1'),
       [
-        albumSongsProvider((sourceId: 'a', id: 'album-1'))
-            .overrideWith((ref) async => const [_song]),
+        albumSongsProvider(
+          (sourceId: 'a', id: 'album-1'),
+        ).overrideWith(() => _StubAlbumSongs(const [_song])),
         pulsarAlbumProfileProvider(
           title: 'OK Computer',
           artist: 'Radiohead',

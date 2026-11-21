@@ -150,7 +150,7 @@ final class PulsarPlaylistsProvider
   PulsarPlaylists create() => PulsarPlaylists();
 }
 
-String _$pulsarPlaylistsHash() => r'bc3265705daf12866e2db200fa285ee894e33cd4';
+String _$pulsarPlaylistsHash() => r'a2eaec104bfe7d3ad297157a5bf342d1825d6578';
 
 /// The account's playlists, as Pulsar holds them. Empty without a session:
 /// a signed-out window has no cloud playlists and that is not an error.
@@ -181,20 +181,13 @@ abstract class _$PulsarPlaylists extends $AsyncNotifier<List<PulsarPlaylist>> {
 /// One cloud playlist as the detail page reads it: the collection itself
 /// with its items preloaded, from the one endpoint that returns both.
 
-@ProviderFor(pulsarPlaylistDetail)
+@ProviderFor(PulsarPlaylistDetail)
 final pulsarPlaylistDetailProvider = PulsarPlaylistDetailFamily._();
 
 /// One cloud playlist as the detail page reads it: the collection itself
 /// with its items preloaded, from the one endpoint that returns both.
-
 final class PulsarPlaylistDetailProvider
-    extends
-        $FunctionalProvider<
-          AsyncValue<PulsarPlaylist>,
-          PulsarPlaylist,
-          FutureOr<PulsarPlaylist>
-        >
-    with $FutureModifier<PulsarPlaylist>, $FutureProvider<PulsarPlaylist> {
+    extends $AsyncNotifierProvider<PulsarPlaylistDetail, PulsarPlaylist> {
   /// One cloud playlist as the detail page reads it: the collection itself
   /// with its items preloaded, from the one endpoint that returns both.
   PulsarPlaylistDetailProvider._({
@@ -220,15 +213,7 @@ final class PulsarPlaylistDetailProvider
 
   @$internal
   @override
-  $FutureProviderElement<PulsarPlaylist> $createElement(
-    $ProviderPointer pointer,
-  ) => $FutureProviderElement(pointer);
-
-  @override
-  FutureOr<PulsarPlaylist> create(Ref ref) {
-    final argument = this.argument as String;
-    return pulsarPlaylistDetail(ref, argument);
-  }
+  PulsarPlaylistDetail create() => PulsarPlaylistDetail();
 
   @override
   bool operator ==(Object other) {
@@ -242,13 +227,20 @@ final class PulsarPlaylistDetailProvider
 }
 
 String _$pulsarPlaylistDetailHash() =>
-    r'42d08798baf0d9190d0dbf15a721caac56aa8c32';
+    r'2f77ab173498520e6bdf4d5e0c94887a4cbe7031';
 
 /// One cloud playlist as the detail page reads it: the collection itself
 /// with its items preloaded, from the one endpoint that returns both.
 
 final class PulsarPlaylistDetailFamily extends $Family
-    with $FunctionalFamilyOverride<FutureOr<PulsarPlaylist>, String> {
+    with
+        $ClassFamilyOverride<
+          PulsarPlaylistDetail,
+          AsyncValue<PulsarPlaylist>,
+          PulsarPlaylist,
+          FutureOr<PulsarPlaylist>,
+          String
+        > {
   PulsarPlaylistDetailFamily._()
     : super(
         retry: null,
@@ -266,6 +258,30 @@ final class PulsarPlaylistDetailFamily extends $Family
 
   @override
   String toString() => r'pulsarPlaylistDetailProvider';
+}
+
+/// One cloud playlist as the detail page reads it: the collection itself
+/// with its items preloaded, from the one endpoint that returns both.
+
+abstract class _$PulsarPlaylistDetail extends $AsyncNotifier<PulsarPlaylist> {
+  late final _$args = ref.$arg as String;
+  String get playlistId => _$args;
+
+  FutureOr<PulsarPlaylist> build(String playlistId);
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<AsyncValue<PulsarPlaylist>, PulsarPlaylist>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<AsyncValue<PulsarPlaylist>, PulsarPlaylist>,
+              AsyncValue<PulsarPlaylist>,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, () => build(_$args));
+  }
 }
 
 /// One cover URL per cloud playlist, for lists that draw the item.
@@ -347,7 +363,7 @@ String _$pulsarPlaylistCoversHash() =>
 /// no library holds the track: the playlist's order is the server's, and a
 /// dropped entry would shift every row after it onto the wrong track.
 
-@ProviderFor(pulsarPlaylistSongs)
+@ProviderFor(PulsarPlaylistSongs)
 final pulsarPlaylistSongsProvider = PulsarPlaylistSongsFamily._();
 
 /// The songs of one Pulsar playlist, resolved against the connected library
@@ -357,17 +373,8 @@ final pulsarPlaylistSongsProvider = PulsarPlaylistSongsFamily._();
 /// The result is index-aligned with [PulsarPlaylist.items], with null where
 /// no library holds the track: the playlist's order is the server's, and a
 /// dropped entry would shift every row after it onto the wrong track.
-
 final class PulsarPlaylistSongsProvider
-    extends
-        $FunctionalProvider<
-          AsyncValue<List<LibrarySong?>>,
-          List<LibrarySong?>,
-          FutureOr<List<LibrarySong?>>
-        >
-    with
-        $FutureModifier<List<LibrarySong?>>,
-        $FutureProvider<List<LibrarySong?>> {
+    extends $AsyncNotifierProvider<PulsarPlaylistSongs, List<LibrarySong?>> {
   /// The songs of one Pulsar playlist, resolved against the connected library
   /// sources. A catalog entry is a record of a track, not a playable stream:
   /// matching is on title + artist, which is how the server dedupes too.
@@ -398,15 +405,7 @@ final class PulsarPlaylistSongsProvider
 
   @$internal
   @override
-  $FutureProviderElement<List<LibrarySong?>> $createElement(
-    $ProviderPointer pointer,
-  ) => $FutureProviderElement(pointer);
-
-  @override
-  FutureOr<List<LibrarySong?>> create(Ref ref) {
-    final argument = this.argument as PulsarPlaylist;
-    return pulsarPlaylistSongs(ref, argument);
-  }
+  PulsarPlaylistSongs create() => PulsarPlaylistSongs();
 
   @override
   bool operator ==(Object other) {
@@ -420,7 +419,7 @@ final class PulsarPlaylistSongsProvider
 }
 
 String _$pulsarPlaylistSongsHash() =>
-    r'8500782a54e7995982346df9449c37f8b02445d7';
+    r'f55ad6e0bdea4aca7412f3e5598e8882b3a6525a';
 
 /// The songs of one Pulsar playlist, resolved against the connected library
 /// sources. A catalog entry is a record of a track, not a playable stream:
@@ -432,7 +431,10 @@ String _$pulsarPlaylistSongsHash() =>
 
 final class PulsarPlaylistSongsFamily extends $Family
     with
-        $FunctionalFamilyOverride<
+        $ClassFamilyOverride<
+          PulsarPlaylistSongs,
+          AsyncValue<List<LibrarySong?>>,
+          List<LibrarySong?>,
           FutureOr<List<LibrarySong?>>,
           PulsarPlaylist
         > {
@@ -458,6 +460,37 @@ final class PulsarPlaylistSongsFamily extends $Family
 
   @override
   String toString() => r'pulsarPlaylistSongsProvider';
+}
+
+/// The songs of one Pulsar playlist, resolved against the connected library
+/// sources. A catalog entry is a record of a track, not a playable stream:
+/// matching is on title + artist, which is how the server dedupes too.
+///
+/// The result is index-aligned with [PulsarPlaylist.items], with null where
+/// no library holds the track: the playlist's order is the server's, and a
+/// dropped entry would shift every row after it onto the wrong track.
+
+abstract class _$PulsarPlaylistSongs
+    extends $AsyncNotifier<List<LibrarySong?>> {
+  late final _$args = ref.$arg as PulsarPlaylist;
+  PulsarPlaylist get playlist => _$args;
+
+  FutureOr<List<LibrarySong?>> build(PulsarPlaylist playlist);
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref =
+        this.ref as $Ref<AsyncValue<List<LibrarySong?>>, List<LibrarySong?>>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<AsyncValue<List<LibrarySong?>>, List<LibrarySong?>>,
+              AsyncValue<List<LibrarySong?>>,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, () => build(_$args));
+  }
 }
 
 /// What the account's friends are listening to. Empty without a session.
@@ -489,7 +522,7 @@ final class FriendListeningFeedProvider
 }
 
 String _$friendListeningFeedHash() =>
-    r'e816562d7ba511cb1b4b198d5f636ca9113fd1f1';
+    r'8085dae0a75d938c053308006f6fec02b68e3b9b';
 
 /// What the account's friends are listening to. Empty without a session.
 
@@ -880,7 +913,7 @@ final class SolarFavouriteSongsProvider
 }
 
 String _$solarFavouriteSongsHash() =>
-    r'392572d8a485ef28983f32c0e3ca6228d517b575';
+    r'5d207cb11ff1132099a1b6be3787ad78191ae13c';
 
 /// The account's favourite albums and playlists, newest decision first.
 ///

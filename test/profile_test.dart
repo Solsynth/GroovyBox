@@ -386,4 +386,69 @@ void main() {
     expect(find.text('Coldplay'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('a ranked track draws the cover the fleet carried', (
+    tester,
+  ) async {
+    final db = LibraryDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+
+    tester.view.physicalSize = const Size(420, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          libraryDatabaseProvider.overrideWithValue(db),
+          playbackProvider.overrideWith(_Idle.new),
+          solarpassSessionProvider.overrideWith(_SignedInSession.new),
+          solarpassAccountProvider.overrideWith(_SignedInAccount.new),
+          pulsarTasteProvider.overrideWith(
+            (ref, window) async => const PulsarMediaStats(
+              totalScrobbles: 42,
+              totalSeconds: 3600,
+              daysActive: 7,
+              topItems: [
+                PulsarTopEntity(
+                  name: 'Yellow',
+                  subtitle: 'Coldplay',
+                  count: 9,
+                  seconds: 2100,
+                  artworkUrl: 'https://covers.example/yellow.jpg',
+                ),
+              ],
+              // A creator has no cover; its row must still draw its square.
+              topCreators: [
+                PulsarTopEntity(name: 'Coldplay', count: 12, seconds: 2800),
+              ],
+            ),
+          ),
+        ],
+        child: MaterialApp(
+          theme: createAppThemeSet().light,
+          home: const Scaffold(body: ProfileScreen()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // The cover is drawn, and both rows keep their slot: a missing URL is a
+    // placeholder, not a row that starts further left than the one above it.
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Image &&
+            widget.image is NetworkImage &&
+            (widget.image as NetworkImage).url ==
+                'https://covers.example/yellow.jpg',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byIcon(Symbols.person_rounded), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

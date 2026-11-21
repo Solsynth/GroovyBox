@@ -470,6 +470,7 @@ class _TasteBody extends StatelessWidget {
                     rank: i + 1,
                     name: stats.topItems[i].name,
                     subtitle: stats.topItems[i].subtitle,
+                    artworkUrl: stats.topItems[i].artworkUrl,
                     trailing:
                         '${formatPlayCount(stats.topItems[i].count)}  ·  '
                         '${formatListeningTime(Duration(seconds: stats.topItems[i].seconds))}',
@@ -489,6 +490,10 @@ class _TasteBody extends StatelessWidget {
                   _RankRow(
                     rank: i + 1,
                     name: stats.topCreators[i].name,
+                    // A creator's cover, when the fleet has one: the row is a
+                    // name to a person, and a portrait beats a note glyph.
+                    artworkUrl: stats.topCreators[i].artworkUrl,
+                    artworkFallback: Symbols.person_rounded,
                     trailing: formatPlayCount(stats.topCreators[i].count),
                   ),
               ],
@@ -544,18 +549,31 @@ class _TasteTile extends StatelessWidget {
   }
 }
 
-/// One ranked row of the taste lists: rank, name, optional artist under it.
+/// One ranked row of the taste lists: rank, cover, name, optional artist under
+/// it.
+///
+/// The cover is drawn from the fleet's own `artwork_url`, which the stats
+/// aggregate now carries per row: these rows name things no connected library
+/// necessarily holds — another device's Apple Music play, a store recording —
+/// so there is no art handle to resolve through a source, and a row without a
+/// picture is the row the reader cannot recognise. Rows with no URL (a creator,
+/// an old scrobbler's play) keep the rank in the same slot, so the list stays
+/// aligned instead of jumping.
 class _RankRow extends StatelessWidget {
   final int rank;
   final String name;
   final String? subtitle;
   final String trailing;
+  final String? artworkUrl;
+  final IconData artworkFallback;
 
   const _RankRow({
     required this.rank,
     required this.name,
     this.subtitle,
     required this.trailing,
+    this.artworkUrl,
+    this.artworkFallback = Symbols.music_note_rounded,
   });
 
   @override
@@ -578,6 +596,8 @@ class _RankRow extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(width: SolSpace.sm),
+          _RankArtwork(url: artworkUrl, fallbackIcon: artworkFallback),
           const SizedBox(width: SolSpace.sm),
           Expanded(
             child: Column(
@@ -611,6 +631,65 @@ class _RankRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The square a ranked row draws before its name.
+///
+/// A bare URL rather than a [LibraryArtwork]: the fleet's cover is a picture,
+/// not one library's art handle, and it may name a recording no library here
+/// can resolve. A row without a URL still reserves the square, so ranks and
+/// names of a mixed list stay in one column instead of stepping.
+class _RankArtwork extends StatelessWidget {
+  final String? url;
+  final IconData fallbackIcon;
+
+  static const _size = 36.0;
+
+  const _RankArtwork({required this.url, required this.fallbackIcon});
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback = _placeholder(context);
+    final cover = url;
+    return SizedBox.square(
+      dimension: _size,
+      child: cover == null || cover.isEmpty
+          ? fallback
+          : ClipRRect(
+              borderRadius: BorderRadius.circular(SolRadius.xs),
+              // The placeholder sits under the image, so a cover that is still
+              // loading (or that fails) reads as a note, not a hole; the
+              // errorBuilder keeps the framework's error glyph out of the list.
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  fallback,
+                  Image.network(
+                    cover,
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                    errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _placeholder(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(SolRadius.xs),
+      child: ColoredBox(
+        color: scheme.surfaceContainerHighest,
+        child: Icon(
+          fallbackIcon,
+          size: _size * 0.5,
+          color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+        ),
       ),
     );
   }

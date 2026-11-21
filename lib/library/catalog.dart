@@ -397,6 +397,15 @@ class LibraryCatalog {
   /// Songs the app knows about, whether or not a source still serves them.
   Future<int> trackCount() => _db.trackCount();
 
+  /// The cover each artist's own recordings already carry, keyed by the
+  /// lowercased name the tags spell.
+  ///
+  /// The fallback for an artist listing whose service has no portrait for the
+  /// act. Reading it costs one query over links this device already stored, and
+  /// covers the case a single album's worth of the artist is on the device.
+  Future<Map<String, ({String sourceId, String artId})>>
+  artistCoversByName() => _db.artistCoversByName();
+
   /// Tracks no currently connected source can reach.
   Future<int> orphanCount() => _db.orphanCount();
 
