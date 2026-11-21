@@ -72,10 +72,7 @@ class SnapshotCache {
   ///
   /// The two failures are one thing to a caller: a snapshot that cannot be
   /// restored is simply not a snapshot.
-  Future<T?> restore<T>(
-    String key,
-    T Function(Object? json) parse,
-  ) async {
+  Future<T?> restore<T>(String key, T Function(Object? json) parse) async {
     final body = await read(key);
     if (body == null) return null;
     try {
@@ -117,10 +114,11 @@ class SnapshotCache {
   }
 
   /// Stores a list of models, using the model's own JSON form.
-  Future<void> storeSongs(String key, List<LibrarySong> songs) =>
-      store(key, songs, (value) => [
-        for (final song in value! as List<LibrarySong>) song.toJson(),
-      ]);
+  Future<void> storeSongs(String key, List<LibrarySong> songs) => store(
+    key,
+    songs,
+    (value) => [for (final song in value! as List<LibrarySong>) song.toJson()],
+  );
 
   /// Restores a list of models from a snapshot, or null when there is none.
   ///

@@ -74,9 +74,11 @@ Future<List<T>> snapshotThenRefresh<T>(
   final cache = ref.watch(snapshotCacheProvider);
   Future<void> remember(List<T> value) async {
     if (cache == null) return;
-    await cache.store(key, value, (raw) => [
-      for (final item in raw! as List<T>) encode(item),
-    ]);
+    await cache.store(
+      key,
+      value,
+      (raw) => [for (final item in raw! as List<T>) encode(item)],
+    );
   }
 
   final cached = ref.isFirstBuild && cache != null
