@@ -13,6 +13,7 @@ import Combine
 import Flutter
 #else
 import FlutterMacOS
+import MediaPlayer
 #endif
 
 let kErrorPlay = "ERR_PLAYER_PLAY"
@@ -142,6 +143,18 @@ extension MusicKitPlugin {
   }
 
   func play(_ result: @escaping FlutterResult) {
+    #if os(macOS)
+    // `audio_service`'s `stopService` clears `nowPlayingInfo` but leaves
+    // `MPNowPlayingInfoCenter.default().playbackState` as `.paused` on macOS,
+    // which keeps a stale app entry in Control Center alongside MusicKit's
+    // own `ApplicationMusicPlayer` session. Retiring the app's center before
+    // MusicKit starts leaves only one Now Playing session in Control Center.
+    DispatchQueue.main.async {
+      let center = MPNowPlayingInfoCenter.default()
+      center.nowPlayingInfo = nil
+      center.playbackState = .stopped
+    }
+    #endif
     Task {
       do {
         try await musicPlayer.play()
@@ -294,7 +307,7 @@ extension MusicKitPlugin {
 }
 
 @available(macOS 14.0, iOS 15.0, *)
-extension MusicPlayer.State: JSONEncodable {
+extension MusicKit.MusicPlayer.State: JSONEncodable {
   enum CodingKeys: String, CodingKey {
     case playbackRate
     case playbackStatus
@@ -312,7 +325,7 @@ extension MusicPlayer.State: JSONEncodable {
 }
 
 @available(macOS 14.0, iOS 15.0, *)
-extension MusicPlayer.PlaybackStatus {
+extension MusicKit.MusicPlayer.PlaybackStatus {
   public var intValue: Int {
     switch self {
     case .stopped: return 0
@@ -328,7 +341,7 @@ extension MusicPlayer.PlaybackStatus {
 }
 
 @available(macOS 14.0, iOS 15.0, *)
-extension MusicPlayer.RepeatMode {
+extension MusicKit.MusicPlayer.RepeatMode {
   public var intValue: Int {
     switch self {
     case .none: return 0
@@ -354,7 +367,7 @@ extension MusicPlayer.RepeatMode {
 }
 
 @available(macOS 14.0, iOS 15.0, *)
-extension MusicPlayer.ShuffleMode {
+extension MusicKit.MusicPlayer.ShuffleMode {
   public var intValue: Int {
     switch self {
     case .off: return 0

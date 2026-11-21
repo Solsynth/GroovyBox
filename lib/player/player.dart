@@ -266,7 +266,10 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
         state = state.copyWith(buffering: buffering);
         _publish();
       }),
-      _player.stream.position.listen(_onPosition),
+      _player.stream.position.listen((position) {
+        if (_appleMode) return;
+        _onPosition(position);
+      }),
       _player.stream.duration.listen((duration) {
         if (_appleMode) return;
         state = state.copyWith(duration: duration);
@@ -435,9 +438,6 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     if (songs.isEmpty || startIndex < 0 || startIndex >= songs.length) return;
 
     unawaited(_ensureNotificationPermission());
-    if (!_appleMode && !songs[startIndex].isRadio) {
-      await _activateAudioSession();
-    }
 
     _order = List.of(songs);
     _sourceOrder = List.of(songs);
@@ -459,21 +459,16 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
   @override
   Future<void> play() async {
     unawaited(_ensureNotificationPermission());
-    // The system player runs its own audio session; activating the app's on
-    // top of it is the duplicate session that made Apple playback fight
-    // itself. Everything streamed still needs it.
-    if (!_appleMode) await _activateAudioSession();
 
     if (_appleMode) {
-      final apple = _apple;
       if (!_hasOpenedCurrent && state.current != null) {
         final resumePosition = state.position;
         // A newer open — a skip that landed while this one was opening —
         // owns playback now, and seeking into it would move the wrong track.
         if (!await _openCurrent()) return;
-        if (resumePosition > Duration.zero) await apple?.seek(resumePosition);
+        if (resumePosition > Duration.zero) await _apple?.seek(resumePosition);
       } else {
-        await apple?.play();
+        await _apple?.play();
       }
       _publish();
       _saveSession();
@@ -484,9 +479,16 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       final resumePosition = state.position;
       if (!await _openCurrent()) return;
       if (resumePosition > Duration.zero) {
-        await _player.seek(resumePosition);
+        if (_appleMode) {
+          await _apple?.seek(resumePosition);
+        } else {
+          await _player.seek(resumePosition);
+        }
       }
     } else {
+      // The system player runs its own audio session; only a streamed track
+      // needs the app's session activated here.
+      await _activateAudioSession();
       await _player.play();
     }
     _publish();
@@ -785,6 +787,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
     // playback. Awaited, not fired off: the platform's `stop()` is queued,
     // and an open that walked on before it landed is one of the ways two
     // players end up sounding at once.
+    final wasAppleMode = _appleMode;
     if (_appleMode) {
       _appleMode = false;
       state = state.copyWith(volumeIsSystemControlled: false);
@@ -888,7 +891,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       // sounding must be stopped, or media-kit keeps playing under the system
       // player and two tracks are audible at once. The stop is awaited before
       // the system player is started, so the two never overlap.
-      if (!_appleMode) {
+      if (!wasAppleMode) {
         await _player.stop();
         _hasOpenedCurrent = true;
       }
@@ -905,9 +908,14 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
       if (_superseded(ticket)) return false;
       _appleMode = true;
       state = state.copyWith(volumeIsSystemControlled: true);
+      // Retire the app's own media session *before* MusicKit starts playing,
+      // so Control Center never briefly holds both the app's now-playing entry
+      // and MusicKit's at the same time.
+      _publish();
       _apple ??= ApplePlayer(
         ref.read(musicKitClientProvider),
         onStatus: (status) {
+          if (!_appleMode) return;
           switch (status) {
             case ApplePlayerStatus.playing:
               state = state.copyWith(playing: true);
@@ -921,7 +929,10 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
           }
           _publish();
         },
-        onPosition: _onPosition,
+        onPosition: (position) {
+          if (!_appleMode) return;
+          _onPosition(position);
+        },
         onAdvance: _onAppleAdvance,
         onTrack: _onAppleTrack,
         onQueue: _onAppleQueue,
@@ -1131,6 +1142,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
   /// The play history is closed and restarted here rather than through
   /// [next], which would push the queue again and start the track twice.
   Future<void> _onAppleAdvance(int index) async {
+    if (!_appleMode) return;
     if (index < 0 || index >= state.queue.length) return;
     if (index == state.currentIndex) return;
     // Inside a station the system advances through its *own* run, which the
@@ -1157,6 +1169,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
   /// first and only description of what is actually playing, and the queue
   /// row is rewritten to carry it.
   void _onAppleTrack(AppleQueueEntry entry) {
+    if (!_appleMode) return;
     final index = state.currentIndex;
     if (index == null || index >= state.queue.length) return;
     final station = state.queue[index];
@@ -1223,6 +1236,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
   /// know what is coming without being told. The entries are shaped into the
   /// app's own song model so the queue panel draws them like any other row.
   void _onAppleQueue(AppleQueue queue) {
+    if (!_appleMode) return;
     final row = state.queueRow;
     if (row == null || !row.isRadio) {
       if (state.stationTracks.isNotEmpty) {
@@ -1484,6 +1498,10 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
           ? restoredDuration
           : songDuration;
 
+      final restoredSource =
+          ref.read(librarySourceByIdProvider)[_order[index].sourceId];
+      final restoredIsPlatform = restoredSource is PlatformPlayedSource;
+      _appleMode = restoredIsPlatform;
       state = state.copyWith(
         queue: _order,
         currentIndex: index,
@@ -1492,6 +1510,7 @@ class Playback extends Notifier<PlaybackState> implements AudioTransport {
         shuffle: session.shuffle,
         repeatMode: repeat,
         playing: false,
+        volumeIsSystemControlled: restoredIsPlatform,
       );
       _publish();
     } catch (_) {

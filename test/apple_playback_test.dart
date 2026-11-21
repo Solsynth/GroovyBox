@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:audio_service/audio_service.dart' as audio_service;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:groovy_box/core/app.dart';
@@ -10,6 +11,7 @@ import 'package:groovy_box/library/providers.dart';
 import 'package:groovy_box/library/source.dart';
 import 'package:groovy_box/player/apple_player.dart';
 import 'package:groovy_box/player/player.dart';
+import 'package:groovy_box/player/session.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -95,6 +97,9 @@ class _PlatformSource extends Fake
   Future<LibrarySong?> describe(LibrarySong song) async => null;
 
   @override
+  Uri? artworkUri(String? artId, {int size = 600}) => null;
+
+  @override
   Uri streamUri(LibrarySong song) =>
       throw StateError('a platform-played item has no stream URL');
 }
@@ -126,6 +131,9 @@ class _NamedSource extends Fake implements LibrarySource {
   @override
   Uri streamUri(LibrarySong song) =>
       Uri.parse('https://$id.example.com/${song.id}.mp3');
+
+  @override
+  Map<String, String> streamHeaders(LibrarySong song) => const {};
 
   @override
   Uri? artworkUri(String? artId, {int size = 600}) => null;
@@ -237,8 +245,10 @@ class _RecordingKit extends Fake implements MusicKitClient {
   @override
   Stream<AppleQueue> get queue => playedQueues.stream;
 
+  final statuses = StreamController<ApplePlayerStatus>.broadcast();
+
   @override
-  Stream<ApplePlayerStatus> get status => const Stream.empty();
+  Stream<ApplePlayerStatus> get status => statuses.stream;
 }
 
 void main() {
@@ -268,6 +278,7 @@ void main() {
     addTearDown(kit.queueIndices.close);
     addTearDown(kit.tracks.close);
     addTearDown(kit.playedQueues.close);
+    addTearDown(kit.statuses.close);
   });
 
   const song = LibrarySong(
@@ -773,4 +784,95 @@ void main() {
     );
     expect(local.read(playbackProvider).current?.id, 'i.1');
   });
+
+  test(
+    'MusicKit playback keeps the app audio_service handler stood down across tracks',
+    () async {
+      final handler = GroovyBoxAudioHandler();
+      final emitted = <audio_service.PlaybackState>[];
+      final sub = handler.playbackState.skip(1).listen(emitted.add);
+      addTearDown(sub.cancel);
+
+      final streamed = _NamedSource(id: 'subsonic-1', songs: const []);
+      final prefs = await SharedPreferences.getInstance();
+      final local = ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          libraryDatabaseProvider.overrideWithValue(db),
+          librarySourcesProvider.overrideWithValue([_PlatformSource(), streamed]),
+          musicKitClientProvider.overrideWithValue(kit),
+          audioHandlerProvider.overrideWithValue(handler),
+          playbackProvider.overrideWith(() => Playback(player)),
+        ],
+      );
+      addTearDown(local.dispose);
+      final transport = local.read(playbackProvider.notifier);
+
+      // 1. Fresh start with an Apple Music track: audio_service must never be
+      // woken with `playing: true` or a non-idle state.
+      await transport.playQueue([song]);
+      kit.statuses.add(ApplePlayerStatus.playing);
+      await pumpEventQueue();
+
+      expect(local.read(playbackProvider).playing, isTrue);
+      expect(
+        emitted,
+        isEmpty,
+        reason: 'audio_service stays untouched while MusicKit owns playback',
+      );
+      expect(
+        handler.playbackState.value.processingState,
+        audio_service.AudioProcessingState.idle,
+      );
+      expect(handler.playbackState.value.playing, isFalse);
+
+      // 2. Switching to a second Apple Music track: a trailing `stopped` event
+      // from retiring the previous queue must not leak a platformOwned=false
+      // publish into audio_service.
+      const second = LibrarySong(
+        sourceId: 'apple-1',
+        id: 'i.2',
+        title: 'Second',
+        duration: Duration(minutes: 2),
+      );
+      final nextOpen = transport.playQueue([second]);
+      kit.statuses.add(ApplePlayerStatus.stopped);
+      await nextOpen;
+      kit.statuses.add(ApplePlayerStatus.playing);
+      await pumpEventQueue();
+
+      expect(
+        emitted,
+        isEmpty,
+        reason: 'switching between MusicKit tracks must not wake audio_service',
+      );
+
+      // 3. Handing over to a streamed track wakes audio_service, and handing
+      // back to MusicKit retires it with idle + playing: false.
+      await transport.playQueue([
+        const LibrarySong(
+          sourceId: 'subsonic-1',
+          id: 's.1',
+          title: 'Streamed',
+          duration: Duration(minutes: 2),
+        ),
+      ]);
+      await pumpEventQueue();
+      expect(
+        handler.playbackState.value.processingState,
+        audio_service.AudioProcessingState.ready,
+      );
+
+      await transport.playQueue([song]);
+      kit.statuses.add(ApplePlayerStatus.playing);
+      await pumpEventQueue();
+
+      expect(
+        handler.playbackState.value.processingState,
+        audio_service.AudioProcessingState.idle,
+      );
+      expect(handler.playbackState.value.playing, isFalse);
+      expect(handler.mediaItem.value, isNull);
+    },
+  );
 }

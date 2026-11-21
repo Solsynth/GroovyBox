@@ -91,18 +91,32 @@ class GroovyBoxAudioHandler extends BaseAudioHandler with SeekHandler {
   void publish(AudioSnapshot snapshot) {
     if (snapshot.platformOwned) {
       // Stand down rather than describe playback somebody else is
-      // publishing: an idle state retires the app's now-playing entry, and
-      // the item is dropped so the system has nothing of the app's to show
-      // next to MusicKit's own.
-      queue.add(const []);
-      mediaItem.add(null);
-      playbackState.add(
-        PlaybackState(
-          processingState: AudioProcessingState.idle,
-          playing: snapshot.playing,
-          controls: const <MediaControl>[],
-        ),
-      );
+      // publishing: an idle, non-playing state retires the app's now-playing
+      // entry, and the item is dropped so the system has nothing of the app's
+      // to show next to MusicKit's own.
+      //
+      // `playing` must be `false` here (not `snapshot.playing`): on Darwin,
+      // `audio_service` activates `MPRemoteCommandCenter` and sets
+      // `MPNowPlayingInfoCenter.playbackState = .playing` whenever `setState`
+      // arrives with `playing: true`, and only invokes `stopService` on the
+      // transition from non-idle to idle. Once already stood down, further
+      // platform-owned snapshots are suppressed so the native plugin is never
+      // woken back up while MusicKit owns playback.
+      if (queue.value.isNotEmpty) queue.add(const []);
+      if (mediaItem.value != null) mediaItem.add(null);
+      final current = playbackState.value;
+      if (current.processingState != AudioProcessingState.idle ||
+          current.playing ||
+          current.controls.isNotEmpty ||
+          current.systemActions.isNotEmpty) {
+        playbackState.add(
+          PlaybackState(
+            processingState: AudioProcessingState.idle,
+            playing: false,
+            controls: const <MediaControl>[],
+          ),
+        );
+      }
       return;
     }
 

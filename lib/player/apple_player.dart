@@ -226,6 +226,7 @@ class ApplePlayer {
   void _listen() {
     _statusSub ??= _client.status.listen(
       (status) {
+        if (!_started) return;
         _wasPlaying =
             status == ApplePlayerStatus.playing ||
             status == ApplePlayerStatus.seeking;
@@ -250,6 +251,7 @@ class ApplePlayer {
       onQueue?.call(queue);
     }, onError: (Object error) => logAppleFailure(error));
     _queueSub ??= _client.queueIndex.listen((index) {
+      if (!_started) return;
       // The first notification describes the queue just pushed, so it says
       // nothing new; anything later is the system having advanced.
       if (index == _systemIndex) return;
